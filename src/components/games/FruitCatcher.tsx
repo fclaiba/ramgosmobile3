@@ -1,0 +1,486 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Animated, Vibration, useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Play, RotateCcw, AlertOctagon, Heart, Trophy, Coins } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// const { width } = Dimensions.get('window'); // Removed static width
+const GAME_HEIGHT = 450;
+const BASKET_WIDTH = 80;
+const FRUIT_SIZE = 40;
+
+interface FallingItem {
+    id: number;
+    x: number;
+    y: number;
+    type: 'fruit' | 'bomb' | 'magnet' | 'speed' | 'slow' | 'heart';
+    emoji: string;
+    speed: number;
+}
+
+const FRUITS = ['🍎', '🍌', '🍇', '🍊', '🍓', '🍑'];
+
+interface FruitCatcherProps {
+    onGameEnd?: (score: number) => void;
+    onClose?: () => void;
+}
+
+export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
+    const { width } = useWindowDimensions();
+    // Width Ref to access current width inside closures (game loop, pan responder) w/o re-creating everything constantly
+    const widthRef = useRef(width);
+
+    useEffect(() => {
+        widthRef.current = width;
+    }, [width]);
+
+    // ... (state lines 27+)
+    const [highScore, setHighScore] = useState(0);
+    const [lives, setLives] = useState(3);
+    const [items, setItems] = useState<FallingItem[]>([]);
+
+    // Game State
+    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+    const [score, setScore] = useState(0);
+
+    // difficulty
+    const difficultyRef = useRef(1);
+    // Game State Ref to avoid stale closures in loop
+    const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+
+    // Powerup Refs
+    const magnetActive = useRef(false);
+    const speedEffect = useRef(1); // 1 = normal, >1 fast, <1 slow
+    const powerupTimer = useRef<NodeJS.Timeout | null>(null);
+
+    // Basket Position
+    // We initialize centrally, but if width changes, we rely on the clamp logic to keep it in screen
+    const basketX = useRef(new Animated.Value(width / 2 - BASKET_WIDTH / 2)).current;
+    const basketXVal = useRef(width / 2 - BASKET_WIDTH / 2); // Mirror for logic
+
+    // Refs
+    const gameLoopRef = useRef<number | null>(null);
+    const lastTimeRef = useRef<number>(0);
+
+    // Load High Score
+    useEffect(() => {
+        AsyncStorage.getItem('fruitHighScore').then(val => {
+            if (val) setHighScore(parseInt(val));
+        });
+    }, []);
+
+    // Save High Score
+    useEffect(() => {
+        if (score > highScore) {
+            setHighScore(score);
+            AsyncStorage.setItem('fruitHighScore', score.toString());
+        }
+    }, [score]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+            if (powerupTimer.current) clearTimeout(powerupTimer.current);
+        };
+    }, []);
+
+    // Pan Responder for Dragging Basket
+    // Using useMemo to recreate if dependencies change, or check widthRef inside
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onPanResponderMove: (_, gestureState) => {
+                const currentWidth = widthRef.current;
+                let newX = gestureState.moveX - BASKET_WIDTH / 2;
+                // Clamp within bounds
+                if (newX < 0) newX = 0;
+                if (newX > currentWidth - BASKET_WIDTH) newX = currentWidth - BASKET_WIDTH;
+
+                basketX.setValue(newX);
+                basketXVal.current = newX;
+            },
+        })
+    ).current;
+
+    const startGame = () => {
+        setScore(0);
+        setLives(3);
+        setItems([]);
+        difficultyRef.current = 1;
+        setGameState('PLAYING');
+        gameStateRef.current = 'PLAYING';
+        magnetActive.current = false;
+        speedEffect.current = 1;
+
+        const currentWidth = widthRef.current;
+        basketX.setValue(currentWidth / 2 - BASKET_WIDTH / 2);
+        basketXVal.current = currentWidth / 2 - BASKET_WIDTH / 2;
+
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        lastTimeRef.current = performance.now();
+        gameLoopRef.current = requestAnimationFrame(update);
+    };
+
+    const endGame = () => {
+        setGameState('GAMEOVER');
+        gameStateRef.current = 'GAMEOVER';
+        Vibration.vibrate(500);
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        // Manual save required now
+    };
+
+    const activatePowerup = (type: 'magnet' | 'speed' | 'slow') => {
+        if (powerupTimer.current) clearTimeout(powerupTimer.current);
+
+        // Reset previous effects
+        magnetActive.current = false;
+        speedEffect.current = 1;
+
+        if (type === 'magnet') {
+            magnetActive.current = true;
+        } else if (type === 'speed') {
+            speedEffect.current = 1.5;
+        } else if (type === 'slow') {
+            speedEffect.current = 0.5;
+        }
+
+        // Lasts 5 seconds
+        powerupTimer.current = setTimeout(() => {
+            magnetActive.current = false;
+            speedEffect.current = 1;
+        }, 5000);
+    };
+
+    const update = (time: number) => {
+        if (gameStateRef.current !== 'PLAYING') return;
+
+        const deltaTime = time - lastTimeRef.current;
+        if (deltaTime > 100) lastTimeRef.current = time;
+        lastTimeRef.current = time;
+
+        difficultyRef.current += 0.0005;
+
+        // Spawn Items
+        // Chance Logic
+        if (Math.random() < 0.03 * difficultyRef.current) {
+            const rand = Math.random();
+            let type: FallingItem['type'] = 'fruit';
+            let emoji = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+
+            // Weights: 
+            // Bomb: 15%
+            // Heart: (lives < 3 ? 5% : 1%)
+            // Powerups: 10% total
+
+            if (rand < 0.15) {
+                type = 'bomb';
+                emoji = '💣';
+            } else if (rand < 0.25) {
+                // Powerups
+                const pRand = Math.random();
+                if (pRand < 0.33) { type = 'magnet'; emoji = '🧲'; }
+                else if (pRand < 0.66) { type = 'speed'; emoji = '⚡'; }
+                else { type = 'slow'; emoji = '❄️'; }
+            } else if (rand < 0.30) {
+                // Heart logic
+                if (lives < 3 || Math.random() < 0.2) {
+                    type = 'heart';
+                    emoji = '❤️';
+                }
+            }
+
+            setItems(prev => [...prev, {
+                id: Date.now() + Math.random(),
+                x: Math.random() * (widthRef.current - FRUIT_SIZE),
+                y: -50,
+                type,
+                emoji,
+                speed: (Math.random() * 3 + 3) * (difficultyRef.current * 0.8)
+            }]);
+        }
+
+        setItems(prev => {
+            const nextItems: FallingItem[] = [];
+            const basketLeft = basketXVal.current;
+            const basketRight = basketLeft + BASKET_WIDTH;
+            const basketY = GAME_HEIGHT - 60;
+
+            for (const item of prev) {
+                // Magnet Effect: Pull towards basket center
+                let moveX = item.x;
+                if (item.type === 'fruit' && magnetActive.current) {
+                    const basketCenter = basketLeft + BASKET_WIDTH / 2;
+                    const itemCenter = item.x + FRUIT_SIZE / 2;
+                    moveX += (basketCenter - itemCenter) * 0.05;
+                }
+
+                // Speed Effect
+                const moveY = item.y + (item.speed * speedEffect.current);
+
+                let kept = true;
+
+                // Collision
+                if (moveY > basketY && moveY < basketY + 50 &&
+                    moveX + FRUIT_SIZE > basketLeft && moveX < basketRight) {
+
+                    if (item.type === 'bomb') {
+                        Vibration.vibrate(200);
+                        setLives(l => {
+                            const newLives = l - 1;
+                            if (newLives <= 0) {
+                                setGameState('GAMEOVER');
+                                gameStateRef.current = 'GAMEOVER';
+                                Vibration.vibrate(500);
+                            }
+                            return newLives;
+                        });
+                    } else if (item.type === 'heart') {
+                        setLives(l => Math.min(3, l + 1));
+                    } else if (['magnet', 'speed', 'slow'].includes(item.type)) {
+                        activatePowerup(item.type as any);
+                    } else {
+                        // Fruit
+                        Vibration.vibrate(10);
+                        setScore(s => s + 10);
+                    }
+                    kept = false;
+                }
+                else if (moveY > GAME_HEIGHT) {
+                    kept = false;
+                }
+
+                if (kept) {
+                    nextItems.push({ ...item, x: moveX, y: moveY });
+                }
+            }
+            return nextItems;
+        });
+
+        if (gameStateRef.current === 'PLAYING') {
+            gameLoopRef.current = requestAnimationFrame(update);
+        }
+    };
+
+    return (
+        <View style={styles.container}>
+            {/* HUD */}
+            <View style={styles.header}>
+                <View style={styles.lives}>
+                    {[...Array(3)].map((_, i) => (
+                        <Heart
+                            key={i}
+                            size={20}
+                            color={i < lives ? "#EF4444" : "#E5E7EB"}
+                            fill={i < lives ? "#EF4444" : "none"}
+                        />
+                    ))}
+                </View>
+                {highScore > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Trophy size={14} color="#F59E0B" />
+                        <Text style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: 12 }}>HI: {highScore}</Text>
+                    </View>
+                )}
+                <View style={styles.scoreBox}>
+                    <Text style={styles.scoreTitle}>PUNTOS</Text>
+                    <Text style={styles.scoreText}>{score}</Text>
+                </View>
+            </View>
+
+            {/* Game Area */}
+            <View
+                style={styles.gameArea}
+                {...panResponder.panHandlers}
+            >
+                <LinearGradient
+                    colors={['#EC4899', '#FECDD3']}
+                    style={StyleSheet.absoluteFill}
+                />
+
+                {/* Falling Items */}
+                {items.map(item => (
+                    <View
+                        key={item.id}
+                        style={[
+                            styles.item,
+                            {
+                                left: item.x,
+                                top: item.y
+                            }
+                        ]}
+                    >
+                        <Text style={{ fontSize: 32 }}>{item.emoji}</Text>
+                    </View>
+                ))}
+
+                {/* Basket */}
+                <Animated.View
+                    style={[
+                        styles.basket,
+                        { transform: [{ translateX: basketX }] }
+                    ]}
+                >
+                    <Text style={{ fontSize: 50 }}>🧺</Text>
+                </Animated.View>
+
+                {/* IDLE Overlay */}
+                {gameState === 'IDLE' && (
+                    <View style={styles.overlay}>
+                        <TouchableOpacity style={styles.playBtn} onPress={startGame}>
+                            <Play size={32} color="#fff" fill="#fff" />
+                            <Text style={styles.playText}>JUGAR</Text>
+                        </TouchableOpacity>
+                        <View style={styles.instructions}>
+                            <Text style={styles.instructionText}>Arrastra la canasta para atrapar frutas</Text>
+                        </View>
+                    </View>
+                )}
+
+                {/* GAME OVER Overlay */}
+                {gameState === 'GAMEOVER' && (
+                    <View style={styles.centerContainer}>
+                        <Text style={styles.gameOverText}>GAME OVER</Text>
+                        <Text style={styles.finalScore}>Score: {score}</Text>
+                        <View style={{ gap: 10 }}>
+                            <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
+                                if (onGameEnd) onGameEnd(score);
+                                if (onClose) onClose();
+                            }}>
+                                <Coins size={24} color="#fff" />
+                                <Text style={styles.btnText}>GUARDAR {Math.floor(score / 5)} MONEDAS</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.startBtn} onPress={startGame}>
+                                <RotateCcw size={24} color="#fff" />
+                                <Text style={styles.btnText}>JUGAR DE NUEVO</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+            </View>
+        </View>
+    );
+};
+
+const styles = StyleSheet.create({
+    container: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#FFF1F2',
+        borderBottomWidth: 1,
+        borderBottomColor: '#FECDD3',
+    },
+    lives: {
+        flexDirection: 'row',
+        gap: 4,
+    },
+    scoreBox: {
+        alignItems: 'flex-end',
+    },
+    scoreTitle: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#BE185D',
+    },
+    scoreText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#9D174D',
+    },
+    gameArea: {
+        height: GAME_HEIGHT,
+        width: '100%',
+        backgroundColor: '#FECDD3',
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    item: {
+        position: 'absolute',
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    basket: {
+        position: 'absolute',
+        bottom: 20,
+        width: BASKET_WIDTH,
+        height: 60,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 20,
+    },
+    centerContainer: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 30,
+    },
+    playBtn: {
+        backgroundColor: '#DB2777',
+        paddingHorizontal: 32,
+        paddingVertical: 16,
+        borderRadius: 32,
+        alignItems: 'center',
+        gap: 8,
+        elevation: 5,
+        shadowColor: '#DB2777',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    playText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    instructions: {
+        alignItems: 'center',
+        backgroundColor: '#FFF1F2',
+    },
+    instructionText: {
+        color: '#BE185D',
+        fontSize: 12,
+    },
+    gameOverText: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 8,
+    },
+    finalScore: {
+        fontSize: 18,
+        color: '#fff',
+        marginBottom: 20
+    },
+    startBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#DB2777',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 24,
+        gap: 8,
+    },
+    btnText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+});

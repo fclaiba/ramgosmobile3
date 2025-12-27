@@ -1,0 +1,196 @@
+
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Dimensions } from 'react-native';
+import { ShoppingBag, Store, Zap, ArrowRight, Check } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../contexts/AuthContext';
+
+const { width } = Dimensions.get('window');
+
+interface RoleOption {
+    id: 'consumer' | 'business' | 'influencer';
+    title: string;
+    description: string;
+    icon: any;
+    color: string;
+    benefits: string[];
+}
+
+const roles: RoleOption[] = [
+    {
+        id: 'consumer',
+        title: 'Usuario / Comprador',
+        description: 'Compra productos, gana puntos y descubre ofertas increíbles.',
+        icon: ShoppingBag,
+        color: '#3B82F6',
+        benefits: ['Gana puntos por cada compra', 'Acceso a ofertas exclusivas', 'Sin costos de mantenimiento']
+    },
+    {
+        id: 'business',
+        title: 'Negocio / Vendedor',
+        description: 'Vende tus productos, gestiona tu inventario y llega a más clientes.',
+        icon: Store,
+        color: '#10B981',
+        benefits: ['Publica productos y servicios', 'Panel de administración completo', 'Verificación KYC requerida']
+    },
+    {
+        id: 'influencer',
+        title: 'Influencer / Creador',
+        description: 'Monetiza tu contenido y promociona marcas exclusivas.',
+        icon: Zap,
+        color: '#8B5CF6',
+        benefits: ['Gana comisiones por referidos', 'Colaboraciones con marcas', 'Verificación KYC requerida']
+    }
+];
+
+export default function RoleSelectionScreen({ navigation }: any) {
+    const { updateRole, user } = useAuth();
+    const [selectedRole, setSelectedRole] = React.useState<string | null>(null);
+
+    const handleContinue = async () => {
+        if (!selectedRole) return;
+
+        try {
+            if (user) {
+                await updateRole(selectedRole as any);
+            }
+            // Navigate to basic profile setup with the selected role context
+            navigation.navigate('BasicProfileSetup', { role: selectedRole });
+        } catch (error) {
+            console.error('Error selecting role:', error);
+        }
+    };
+
+    return (
+        <SafeAreaView style={styles.container}>
+            <View style={styles.header}>
+                <Text style={styles.headerTitle}>Hola, {user?.name?.split(' ')[0] || 'Viajero'}</Text>
+                <Text style={styles.headerSubtitle}>¿Cómo quieres usar Ramgos?</Text>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                {roles.map((role) => {
+                    const isSelected = selectedRole === role.id;
+                    return (
+                        <TouchableOpacity
+                            key={role.id}
+                            style={[
+                                styles.card,
+                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: '#fff' }
+                            ]}
+                            onPress={() => setSelectedRole(role.id)}
+                            activeOpacity={0.9}
+                        >
+                            <View style={[styles.iconContainer, { backgroundColor: isSelected ? role.color : '#F3F4F6' }]}>
+                                <role.icon size={24} color={isSelected ? '#fff' : '#6B7280'} />
+                            </View>
+
+                            <View style={styles.cardContent}>
+                                <Text style={[styles.cardTitle, isSelected && { color: role.color }]}>{role.title}</Text>
+                                <Text style={styles.cardDesc}>{role.description}</Text>
+
+                                {isSelected && (
+                                    <View style={styles.benefitsContainer}>
+                                        {role.benefits.map((benefit, index) => (
+                                            <View key={index} style={styles.benefitRow}>
+                                                <Check size={12} color={role.color} />
+                                                <Text style={styles.benefitText}>{benefit}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
+
+                            {isSelected && (
+                                <View style={[styles.checkCircle, { backgroundColor: role.color }]}>
+                                    <Check size={16} color="#fff" />
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    );
+                })}
+            </ScrollView>
+
+            <View style={styles.footer}>
+                <TouchableOpacity
+                    style={[styles.btn, !selectedRole && styles.btnDisabled]}
+                    onPress={handleContinue}
+                    disabled={!selectedRole}
+                >
+                    <LinearGradient
+                        colors={selectedRole ? ['#7C3AED', '#EC4899'] : ['#E5E7EB', '#E5E7EB']}
+                        style={styles.btnGradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
+                        <Text style={[styles.btnText, !selectedRole && { color: '#9CA3AF' }]}>Continuar</Text>
+                        {selectedRole && <ArrowRight size={20} color="#fff" />}
+                    </LinearGradient>
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#FAFAFA' },
+    header: { padding: 24, paddingTop: 40 },
+    headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
+    headerSubtitle: { fontSize: 16, color: '#6B7280' },
+
+    scrollContent: { padding: 16, paddingBottom: 100 },
+
+    card: {
+        flexDirection: 'row',
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        shadowColor: '#000',
+        shadowOpacity: 0.03,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 2,
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    iconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16
+    },
+    cardContent: { flex: 1 },
+    cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
+    cardDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+
+    benefitsContainer: { marginTop: 12, gap: 4 },
+    benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    benefitText: { fontSize: 12, color: '#4B5563' },
+
+    checkCircle: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+
+    footer: {
+        padding: 24,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#F3F4F6'
+    },
+    btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
+    btnDisabled: { backgroundColor: '#F3F4F6' },
+    btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+});
