@@ -4,8 +4,10 @@ import { Heart, Users, Globe, Award, Target, Shield, Zap, Mail, Phone, MapPin, F
 import { Card, CardContent } from '../components/ui/card';
 import { MobileHeader } from '../components/MobileHeader';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useToast } from '../contexts/ToastContext';
 
 export default function AboutScreen({ navigation }: any) {
+    const { show } = useToast();
 
     const stats = [
         { label: 'Usuarios', value: '50K+', icon: Users, colors: ['#3b82f6', '#06b6d4'] },
@@ -95,8 +97,8 @@ export default function AboutScreen({ navigation }: any) {
                 <View style={[styles.section, { alignItems: 'center', marginTop: 32, marginBottom: 32 }]}>
                     <Text style={styles.copyright}>© 2025 Ramgos App. Todos los derechos reservados.</Text>
                     <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
-                        <Text style={styles.legalLink} onPress={() => Alert.alert('Legal', 'Términos')}>Términos</Text>
-                        <Text style={styles.legalLink} onPress={() => Alert.alert('Legal', 'Privacidad')}>Privacidad</Text>
+                        <Text style={styles.legalLink} onPress={() => show('Términos y Condiciones pronto', 'info')}>Términos</Text>
+                        <Text style={styles.legalLink} onPress={() => show('Política de Privacidad pronto', 'info')}>Privacidad</Text>
                     </View>
                     <Text style={[styles.copyright, { marginTop: 12 }]}>Made with ❤️ in Miami</Text>
                 </View>

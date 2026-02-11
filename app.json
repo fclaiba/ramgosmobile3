@@ -4,11 +4,11 @@
     "slug": "ramgos-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./logo.jpeg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./logo.jpeg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,14 +17,19 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./logo.jpeg",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.fclaiba.ramgosmobile"
+      "package": "com.fclaiba.ramgosmobile",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDfd3Eto5_NnPaPKj69l0BSytUhCDqUZVs"
+        }
+      }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./logo.jpeg"
     },
     "extra": {
       "eas": {

@@ -1,51 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { ChevronLeft, Star, MapPin, Share2, Heart, ShoppingBag, Plus as PlusIcon, Minus, Check, Truck, ShieldCheck, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCart } from '../contexts/CartContext';
-
-// Mock Reviews
-
-// Mock Reviews
-const REVIEWS = [
-    { id: 1, user: 'Maria G.', rating: 5, comment: '¡Excelente producto! Superó mis expectativas.', date: 'Hace 2 días' },
-    { id: 2, user: 'Carlos R.', rating: 4, comment: 'Muy buena calidad, envío rápido.', date: 'Hace 1 semana' },
-];
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { ReviewsList } from '../components/ReviewsList';
+import { AddReviewModal } from '../components/AddReviewModal';
 
 export default function ItemDetailScreen({ navigation, route }: any) {
-    const item = route.params?.itemData || route.params?.item;
+    // 1. Resolve Item (Deep Link support)
+    const { slug } = route.params || {};
+    const listingFromSlug = useQuery(api.listings.getListingBySlug, slug ? { slug } : "skip");
+
+    // Priority: Passed Item -> Slug Fetch
+    const passedItem = route.params?.itemData || route.params?.item;
+    const item = passedItem || listingFromSlug;
+
     const { addItem, openCart } = useCart();
     const [quantity, setQuantity] = useState(1);
     const [activeSection, setActiveSection] = useState<'details' | 'reviews'>('details');
+    const [isReviewOpen, setIsReviewOpen] = useState(false);
+    const recordView = useMutation(api.listings.recordView);
 
-    if (!item) return null;
+    // 2. Record View on Mount
+    useEffect(() => {
+        if (item) {
+            const id = item._id || item.id;
+            if (id) {
+                const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
+                recordView({
+                    listingId: String(id),
+                    sessionId,
+                    userId: undefined // TODO: user ID
+                }).catch(e => console.log("View record failed", e));
+            }
+        }
+    }, [item?._id, item?.id]);
 
     const handleAddToCart = () => {
+        if (!item) return;
         addItem({ ...item, quantity });
         openCart();
     };
 
-    const renderReview = ({ item }: any) => (
-        <View style={styles.reviewCard}>
-            <View style={styles.reviewHeader}>
-                <View style={styles.reviewUser}>
-                    <View style={styles.userAvatar}>
-                        <Text style={styles.userInitials}>{item.user.charAt(0)}</Text>
-                    </View>
-                    <View>
-                        <Text style={styles.userName}>{item.user}</Text>
-                        <View style={styles.reviewRating}>
-                            {[...Array(5)].map((_, i) => (
-                                <Star key={i} size={12} color={i < item.rating ? "#FBBF24" : "#E5E7EB"} fill={i < item.rating ? "#FBBF24" : "none"} />
-                            ))}
-                        </View>
-                    </View>
-                </View>
-                <Text style={styles.reviewDate}>{item.date}</Text>
-            </View>
-            <Text style={styles.reviewText}>{item.comment}</Text>
-        </View>
-    );
+    if (slug && !item) return <View style={styles.container}><Text style={{ padding: 20 }}>Cargando...</Text></View>;
+    if (!item) return <View style={styles.container}><Text style={{ padding: 20 }}>Producto no encontrado</Text></View>;
 
     return (
         <View style={styles.container}>
@@ -61,11 +61,9 @@ export default function ItemDetailScreen({ navigation, route }: any) {
                             <ChevronLeft size={24} color="#111827" />
                         </TouchableOpacity>
                         <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <TouchableOpacity style={styles.roundBtn} onPress={useCart().openCart}>
+                            <TouchableOpacity style={styles.roundBtn} onPress={openCart}>
                                 <ShoppingBag size={22} color="#111827" />
-                                {useCart().items.length > 0 && (
-                                    <View style={{ position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
-                                )}
+                                {/* Cart Badge logic if available from context */}
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.roundBtn}>
                                 <Heart size={22} color="#EF4444" />
@@ -86,9 +84,9 @@ export default function ItemDetailScreen({ navigation, route }: any) {
                         <View style={styles.ratingRow}>
                             <View style={styles.badge}>
                                 <Star size={14} color="#fff" fill="#fff" />
-                                <Text style={styles.badgeText}>{item.rating || '4.8'}</Text>
+                                <Text style={styles.badgeText}>{item.averageRating ? item.averageRating.toFixed(1) : 'Nuevo'}</Text>
                             </View>
-                            <Text style={styles.reviewCount}>(128 reseñas)</Text>
+                            <Text style={styles.reviewCount}>({item.reviewCount || 0} reseñas)</Text>
                             <View style={styles.dot} />
                             <MapPin size={14} color="#6B7280" />
                             <Text style={styles.location}>{item.location?.name || item.location || 'Ubicación'}</Text>
@@ -129,19 +127,12 @@ export default function ItemDetailScreen({ navigation, route }: any) {
                         </Text>
                     </View>
 
-                    {/* Reviews Preview */}
+                    {/* Reviews */}
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <Text style={styles.sectionTitle}>Reseñas</Text>
-                            <TouchableOpacity>
-                                <Text style={styles.seeAll}>Ver todas</Text>
-                            </TouchableOpacity>
                         </View>
-                        {REVIEWS.map((r) => (
-                            <View key={r.id} style={{ marginBottom: 12 }}>
-                                {renderReview({ item: r })}
-                            </View>
-                        ))}
+                        <ReviewsList listingId={String(item._id || item.id)} onWriteReview={() => setIsReviewOpen(true)} />
                     </View>
 
                 </View>
@@ -170,6 +161,12 @@ export default function ItemDetailScreen({ navigation, route }: any) {
                     </LinearGradient>
                 </TouchableOpacity>
             </View>
+
+            <AddReviewModal
+                visible={isReviewOpen}
+                onClose={() => setIsReviewOpen(false)}
+                listingId={String(item._id || item.id)}
+            />
         </View>
     );
 }

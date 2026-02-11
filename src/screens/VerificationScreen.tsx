@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Animated, Dimensions, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Dimensions, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { Mail, CheckCircle2, RefreshCw, ArrowLeft, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth, type AuthFlowDecision } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 
 export default function VerificationScreen({ navigation, route }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
+
     const email = route.params?.email || 'tu@email.com';
     const [code, setCode] = useState(['', '', '', '', '', '']); // 6 digits
     const [timer, setTimer] = useState(60);
@@ -32,6 +40,8 @@ export default function VerificationScreen({ navigation, route }: any) {
         navigation.reset({ index: 0, routes: [{ name: destination.screen, params: destination.params }] });
     };
 
+    const accountType = route.params?.accountType || 'consumer';
+
     const handleVerify = async () => {
         const codeValue = code.join('');
         if (codeValue.length < 6) return;
@@ -39,11 +49,32 @@ export default function VerificationScreen({ navigation, route }: any) {
         setIsLoading(true);
         try {
             const decision = await verifyEmailCode(codeValue);
+
+            // Check if we need to setup profile first
+            const nextScreen = decision.nextRoute?.screen;
+            if (nextScreen === 'BasicProfileSetup') {
+                navigateFromDecision(decision);
+                return;
+            }
+
+            // Force KYC only for signup flow
+            const isSignup = route.params?.isSignup;
+
+            if (isSignup) {
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'KYC', params: { accountType: accountType || 'consumer' } }]
+                });
+                return;
+            }
+
             navigateFromDecision(decision);
+
+
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'Código inválido o expirado.';
-            Alert.alert('Verificación', message);
+            show(message, 'error');
         } finally {
             setIsLoading(false);
         }
@@ -57,7 +88,7 @@ export default function VerificationScreen({ navigation, route }: any) {
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'No pudimos reenviar el código.';
-            Alert.alert('Código', message);
+            show(message, 'error');
         }
     };
 
@@ -105,7 +136,7 @@ export default function VerificationScreen({ navigation, route }: any) {
                         <Text style={styles.title}>Verifica tu cuenta</Text>
                         <Text style={styles.subtitle}>
                             Hemos enviado un código de 6 dígitos a {'\n'}
-                            <Text style={{ fontWeight: '600', color: '#4B5563' }}>{displayEmail}</Text>
+                            <Text style={{ fontWeight: '600', color: isDark ? '#D1D5DB' : '#4B5563' }}>{displayEmail}</Text>
                         </Text>
 
                         {/* OTP Inputs */}
@@ -189,25 +220,25 @@ export default function VerificationScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
 
     card: {
         width: '100%',
         maxWidth: 400,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.8)',
         borderRadius: 24,
         padding: 32,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(139, 92, 246, 0.2)',
+        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
         ...Platform.select({
-            web: { boxShadow: '0 10px 20px rgba(139, 92, 246, 0.1)' } as any,
+            web: { boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0 10px 20px rgba(139, 92, 246, 0.1)' } as any,
             default: {
-                shadowColor: '#8B5CF6',
+                shadowColor: isDark ? '#000' : '#8B5CF6',
                 shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.1,
+                shadowOpacity: isDark ? 0.3 : 0.1,
                 shadowRadius: 20,
                 elevation: 10,
             },
@@ -217,14 +248,14 @@ const styles = StyleSheet.create({
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
     iconGlowWrapper: { position: 'absolute', width: 70, height: 70 },
     iconGlow: { flex: 1, borderRadius: 20, opacity: 0.5, transform: [{ scale: 1.2 }] },
-    mainIcon: { width: 80, height: 80, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#fff' },
+    mainIcon: { width: 80, height: 80, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#374151' : '#fff' },
 
-    title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: '#111827', marginBottom: 8 },
-    subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 32, lineHeight: 20 },
+    title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 },
+    subtitle: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 32, lineHeight: 20 },
 
     otpContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 24 },
-    otpInput: { width: 44, height: 56, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', fontSize: 20, fontWeight: '600', color: '#111827' },
-    otpInputFilled: { borderColor: '#7C3AED', backgroundColor: '#F5F3FF' },
+    otpInput: { width: 44, height: 56, backgroundColor: isDark ? '#374151' : '#fff', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', fontSize: 20, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    otpInputFilled: { borderColor: '#7C3AED', backgroundColor: isDark ? '#2E1065' : '#F5F3FF' },
 
     verifyBtnContainer: {
         width: '100%',
@@ -237,18 +268,18 @@ const styles = StyleSheet.create({
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
     resendContainer: { marginTop: 24, alignItems: 'center', gap: 8 },
-    resendLabel: { fontSize: 14, color: '#6B7280' },
-    resendBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: '#F5F3FF', borderRadius: 12, borderWidth: 1, borderColor: '#DDD6FE' },
+    resendLabel: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' },
+    resendBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: isDark ? '#374151' : '#F5F3FF', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
     resendTextEnabled: { color: '#7C3AED', fontSize: 14, fontWeight: '600' },
 
     timerContainer: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#8B5CF6' },
-    resendTextDisabled: { color: '#6B7280', fontSize: 14 },
+    resendTextDisabled: { color: isDark ? '#6B7280' : '#6B7280', fontSize: 14 },
 
-    divider: { width: '100%', height: 1, backgroundColor: '#E5E7EB', marginVertical: 24 },
+    divider: { width: '100%', height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginVertical: 24 },
     backLink: {},
-    backLinkText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
+    backLinkText: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14, fontWeight: '500' },
 
     footerWarning: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
-    footerText: { fontSize: 12, color: '#6B7280' },
+    footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
 });

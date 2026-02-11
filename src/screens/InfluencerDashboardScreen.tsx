@@ -1,26 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Share, Modal, TextInput } from 'react-native';
-import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck } from 'lucide-react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Share, Modal, TextInput, useWindowDimensions } from 'react-native';
+import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck, X, Wrench } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { useRewards } from '../contexts/RewardsContext';
+import { useReferral } from '../contexts/ReferralContext';
 import { useFintech, PaymentRecord } from '../contexts/FintechContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { useWallet } from '../contexts/WalletContext';
 
-export default function InfluencerDashboardScreen({ navigation, isTabMode, onMenuPress }: any) {
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
+    const navigation = useNavigation<any>();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = useMemo(() => getStyles(isDark), [isDark]);
+    const { show } = useToast();
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+
     const [modalVisible, setModalVisible] = useState(false);
     const [transferEmail, setTransferEmail] = useState('');
     const [selectedFollower, setSelectedFollower] = useState<string | null>(null);
     const [bonusAmount, setBonusAmount] = useState('25');
     const [bonusNote, setBonusNote] = useState('Gracias por compartir el cupón esta semana.');
-    const { referralCode, referralLink, referralSummary } = useRewards();
+    const { referralCode, referralLink, referralSummary } = useReferral();
     const { user } = useAuth();
     const influencerId = user?.id ?? 'influencer_demo';
     const influencerName = user?.name ?? 'Influencer Demo';
     const { ensureWalletAccount, getWalletByOwner, requestWithdrawal, payments, getKycStatus } = useFintech();
+    const { campaigns, contracts, createCampaign, createContract, endContract } = useWallet();
 
     useEffect(() => {
         ensureWalletAccount(influencerId, 'influencer', influencerName);
@@ -32,7 +47,7 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
     // Level System Logic
     const referrals = referralSummary.registrations;
     const getLevelInfo = (count: number) => {
-        if (count < 50) return { current: 'Silver', next: 'Gold', min: 0, max: 50, color: '#9CA3AF' };
+        if (count < 50) return { current: 'Silver', next: 'Gold', min: 0, max: 50, color: isDark ? '#9CA3AF' : '#9CA3AF' };
         if (count < 200) return { current: 'Gold', next: 'Platinum', min: 50, max: 200, color: '#FBBF24' };
         return { current: 'Platinum', next: 'Diamond', min: 200, max: 500, color: '#7C3AED' };
     };
@@ -47,6 +62,25 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
         conversion: { rate: 4.2, trend: 1.1 },
         referrals,
     };
+
+    const metricsLayout = useMemo(() => {
+        // Keep cards readable on wide web screens and predictable on mobile.
+        const pagePadding = 16; // matches styles.content padding
+        const maxWidth = 980;
+        const containerWidth = Math.min(Math.max(windowWidth - pagePadding * 2, 280), maxWidth);
+        const gap = 12;
+
+        // 1 col on small phones, 2 cols on most widths, 4 cols on large web.
+        const cols = containerWidth < 460 ? 1 : containerWidth < 920 ? 2 : 4;
+        const cardWidth = Math.floor((containerWidth - gap * (cols - 1)) / cols);
+        const headerStack = containerWidth < 640;
+
+        const stackTwoColSections = containerWidth < 720;
+        // Bottom padding must account for bottom tabs / navbar overlays (web + native).
+        const scrollBottomPadding = Math.max(16, insets.bottom) + (isTabMode ? 96 : 24);
+
+        return { containerWidth, maxWidth, gap, cols, cardWidth, headerStack, stackTwoColSections, scrollBottomPadding };
+    }, [windowWidth, insets.bottom, isTabMode]);
 
     const commissionStats = useMemo(() => {
         if (!wallet) {
@@ -66,17 +100,63 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
         };
     }, [wallet, metrics.commissions]);
 
-    const products = [
-        { id: '1', name: 'Curso React Native Master', commission: 30, earnings: 600, image: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=200' },
-        { id: '2', name: '50% OFF Restaurante', commission: 20, earnings: 280, image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=200' },
-        { id: '3', name: 'Suscripción Premium Gimnasio', commission: 25, earnings: 410, image: 'https://images.unsplash.com/photo-1517964106620-9082b0ae7f63?w=200' },
-    ];
-
     const followerSegments = [
         { id: '1', name: 'Top Fans', email: 'andrea.lopez@email.com' },
         { id: '2', name: 'Nuevos Leads', email: 'nicolás.ramirez@email.com' },
         { id: '3', name: 'Clientes VIP', email: 'luis.maestre@email.com' },
     ];
+
+    const myCampaigns = useMemo(() => campaigns.filter((c) => c.influencerId === influencerId), [campaigns, influencerId]);
+    const myContracts = useMemo(() => contracts.filter((c) => c.influencerId === influencerId), [contracts, influencerId]);
+
+    const [codeModalVisible, setCodeModalVisible] = useState(false);
+    const [contractModalVisible, setContractModalVisible] = useState(false);
+    const [newStoreName, setNewStoreName] = useState('');
+    const [newCode, setNewCode] = useState('');
+    const [newSplit, setNewSplit] = useState('5');
+    const [newCommissionRate, setNewCommissionRate] = useState('0.05');
+
+    const handleCreateCode = () => {
+        const storeName = newStoreName.trim();
+        const code = newCode.trim().toUpperCase();
+        const split = Number(newSplit);
+
+        if (!storeName || !code) {
+            show('Completa tienda y código.', 'warning');
+            return;
+        }
+        if (!Number.isFinite(split) || split <= 0 || split > 50) {
+            show('Split inválido (1–50%).', 'warning');
+            return;
+        }
+
+        const storeId = `store_${storeName.toLowerCase().replace(/\s+/g, '_')}`;
+        createCampaign(influencerId, storeId, storeName, code, split);
+        setCodeModalVisible(false);
+        setNewStoreName('');
+        setNewCode('');
+        setNewSplit('5');
+        show('Código creado y listo para usar en checkout.', 'success');
+    };
+
+    const handleCreateContract = () => {
+        const storeName = newStoreName.trim();
+        const rate = Number(newCommissionRate);
+        if (!storeName) {
+            show('Ingresa el nombre de la tienda.', 'warning');
+            return;
+        }
+        if (!Number.isFinite(rate) || rate <= 0 || rate > 0.5) {
+            show('Comisión inválida (0.01–0.50).', 'warning');
+            return;
+        }
+        const storeId = `store_${storeName.toLowerCase().replace(/\s+/g, '_')}`;
+        createContract(influencerId, storeId, storeName, rate);
+        setContractModalVisible(false);
+        setNewStoreName('');
+        setNewCommissionRate('0.05');
+        show('Contrato creado (demo).', 'success');
+    };
 
     const monthlyGoals = useMemo(() => [
         { id: 'sales', title: 'Ventas generadas', target: 400, current: metrics.sales.total, unit: 'ventas', color: '#4f46e5' },
@@ -103,7 +183,7 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
         }
 
         if (!wallet) {
-            Alert.alert('Error', 'Billetera no encontrada.');
+            show('Error: Billetera no encontrada.', 'error');
             return;
         }
 
@@ -116,18 +196,18 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                 message: `¡Únete a Ramgos usando mi código ${referralCode} y obtén beneficios exclusivos! ${referralLink}`,
             });
         } catch (error) {
-            Alert.alert('Error', 'No se pudo compartir');
+            show('No se pudo compartir', 'error');
         }
     };
 
     const handleTransferBonus = () => {
         if (!transferEmail) {
-            Alert.alert('Error', 'Ingresa el email del usuario');
+            show('Ingresa el email del usuario', 'warning');
             return;
         }
         const parsedAmount = Number(bonusAmount);
         if (!bonusAmount || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-            Alert.alert('Error', 'Ingresa un monto válido para el bono');
+            show('Ingresa un monto válido para el bono', 'warning');
             return;
         }
         setModalVisible(false);
@@ -135,10 +215,8 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
         setSelectedFollower(null);
         setBonusAmount('25');
         setBonusNote('Gracias por compartir el cupón esta semana.');
-        Alert.alert(
-            '¡Transferencia Exitosa!',
-            `Has enviado un bono de ${formatCurrency(parsedAmount)} a ${transferEmail}${bonusNote ? `.\nMensaje: ${bonusNote}` : ''}`
-        );
+
+        show(`¡Bono de ${formatCurrency(parsedAmount)} enviado a ${transferEmail}!`, 'success');
     };
 
     const formatCurrency = (value: number) => {
@@ -171,7 +249,7 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                     <View style={styles.levelContainer}>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={{ fontSize: 10, fontWeight: 'bold', color: level.color }}>{level.current}</Text>
-                            <Text style={{ fontSize: 9, color: '#666' }}>{referrals} / {level.max} Refs</Text>
+                            <Text style={{ fontSize: 9, color: isDark ? '#9CA3AF' : '#666' }}>{referrals} / {level.max} Refs</Text>
                         </View>
                         <Award size={18} color={level.color} style={{ marginLeft: 4 }} />
                     </View>
@@ -179,62 +257,134 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
             />
 
             {/* Progress Bar (Global) */}
-            <View style={{ height: 4, backgroundColor: '#E5E7EB', width: '100%' }}>
+            <View style={{ height: 4, backgroundColor: isDark ? '#374151' : '#E5E7EB', width: '100%' }}>
                 <View style={{ height: '100%', backgroundColor: level.color, width: `${progress}%` }} />
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView
+                contentContainerStyle={[
+                    styles.content,
+                    { paddingBottom: metricsLayout.scrollBottomPadding },
+                ]}
+            >
+                {/* QUICK ACTIONS */}
+                <View style={{ width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center', marginBottom: 16 }}>
+                    <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                        <Button
+                            style={{ flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' }}
+                            onPress={() => navigation.navigate('CreateListing', { allowedTypes: ['product'] })}
+                        >
+                            <ShoppingCart size={18} color={isDark ? '#D1D5DB' : '#111827'} style={{ marginRight: 8 }} />
+                            <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '600' }}>Nuevo Producto</Text>
+                        </Button>
+                        <Button
+                            style={{ flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' }}
+                            onPress={() => navigation.navigate('CreateListing', { allowedTypes: ['service'] })}
+                        >
+                            <Wrench size={18} color={isDark ? '#D1D5DB' : '#111827'} style={{ marginRight: 8 }} />
+                            <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '600' }}>Nuevo Servicio</Text>
+                        </Button>
+                    </View>
+                </View>
+
                 {/* METRICS DASHBOARD */}
-                <Card style={styles.metricsWrapper}>
-                    <View style={styles.metricsHeader}>
-                        <View>
-                            <Text style={styles.metricsTitle}>Dashboard de Métricas</Text>
-                            <Text style={styles.metricsSubtitle}>Últimos 30 días | rendimiento global de la cuenta</Text>
+                <Card
+                    style={[
+                        styles.metricsWrapper,
+                        {
+                            width: '100%',
+                            maxWidth: metricsLayout.containerWidth,
+                            alignSelf: 'center',
+                        },
+                    ]}
+                >
+                    <View
+                        style={[
+                            styles.metricsHeader,
+                            metricsLayout.headerStack
+                                ? { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }
+                                : { flexDirection: 'row', alignItems: 'flex-start' },
+                        ]}
+                    >
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.metricsTitle, metricsLayout.headerStack ? { fontSize: 18 } : { fontSize: 20 }]}>
+                                Dashboard de Métricas
+                            </Text>
+                            <Text style={styles.metricsSubtitle} numberOfLines={2}>
+                                Últimos 30 días | rendimiento global de la cuenta
+                            </Text>
                         </View>
-                        <Badge variant="secondary" style={styles.metricsBadge}>
-                            <TrendingUp size={14} color="#4f46e5" />
-                            <Text style={styles.metricsBadgeText}>+12% vs. mes anterior</Text>
-                        </Badge>
+                        <View style={{ alignSelf: metricsLayout.headerStack ? 'flex-start' : 'flex-end' }}>
+                            <Badge variant="secondary" style={styles.metricsBadge} textStyle={styles.metricsBadgeText}>
+                                <TrendingUp size={14} color="#4f46e5" />
+                                <Text style={styles.metricsBadgeText}>+12% vs. mes anterior</Text>
+                            </Badge>
+                        </View>
                     </View>
 
-                    <View style={styles.metricsRow}>
-                        <View style={styles.metricCard}>
-                            <View style={styles.metricIcon}>
-                                <MousePointer2 size={18} color="#111827" />
-                            </View>
-                            <Text style={styles.metricValue}>{metrics.clicks.total.toLocaleString('es-ES')}</Text>
-                            <Text style={styles.metricLabel}>Clics en enlaces</Text>
-                            <MetricTrend value={metrics.clicks.growth} />
-                        </View>
-                        <View style={styles.metricCard}>
-                            <View style={styles.metricIcon}>
-                                <ShoppingCart size={18} color="#111827" />
-                            </View>
-                            <Text style={styles.metricValue}>{metrics.sales.total.toLocaleString('es-ES')}</Text>
-                            <Text style={styles.metricLabel}>Ventas generadas</Text>
-                            <MetricTrend value={metrics.sales.growth} />
-                        </View>
-                        <View style={styles.metricCard}>
-                            <View style={styles.metricIcon}>
-                                <DollarSign size={18} color="#111827" />
-                            </View>
-                            <Text style={styles.metricValue}>{formatCurrency(commissionStats.total)}</Text>
-                            <Text style={styles.metricLabel}>Comisiones acumuladas</Text>
-                            <MetricTrend value={metrics.commissions.growth} />
-                        </View>
-                        <View style={styles.metricCard}>
-                            <View style={styles.metricIcon}>
-                                <Users size={18} color="#111827" />
-                            </View>
-                            <Text style={styles.metricValue}>{metrics.conversion.rate}%</Text>
-                            <Text style={styles.metricLabel}>Tasa de conversión</Text>
-                            <MetricTrend value={metrics.conversion.trend} />
-                        </View>
+                    <View style={[styles.metricsRow, { flexDirection: 'row', flexWrap: 'wrap' }]}>
+                        {[
+                            {
+                                key: 'clicks',
+                                Icon: MousePointer2,
+                                label: 'Clics en enlaces',
+                                value: metrics.clicks.total.toLocaleString('es-ES'),
+                                trend: metrics.clicks.growth,
+                            },
+                            {
+                                key: 'sales',
+                                Icon: ShoppingCart,
+                                label: 'Ventas generadas',
+                                value: metrics.sales.total.toLocaleString('es-ES'),
+                                trend: metrics.sales.growth,
+                            },
+                            {
+                                key: 'commissions',
+                                Icon: DollarSign,
+                                label: 'Comisiones acumuladas',
+                                value: formatCurrency(commissionStats.total),
+                                trend: metrics.commissions.growth,
+                            },
+                            {
+                                key: 'conversion',
+                                Icon: Users,
+                                label: 'Tasa de conversión',
+                                value: `${metrics.conversion.rate}%`,
+                                trend: metrics.conversion.trend,
+                            },
+                        ].map((m, index) => {
+                            const isEndOfRow = metricsLayout.cols === 1 ? true : (index + 1) % metricsLayout.cols === 0;
+                            return (
+                                <View
+                                    key={m.key}
+                                    style={[
+                                        styles.metricCard,
+                                        {
+                                            width: metricsLayout.cardWidth,
+                                            marginRight: isEndOfRow ? 0 : metricsLayout.gap,
+                                            marginBottom: metricsLayout.gap,
+                                        },
+                                    ]}
+                                >
+                                    <View style={styles.metricIcon}>
+                                        <m.Icon size={18} color={isDark ? "#D1D5DB" : "#111827"} />
+                                    </View>
+                                    <Text style={styles.metricValue} numberOfLines={1}>
+                                        {m.value}
+                                    </Text>
+                                    <Text style={styles.metricLabel} numberOfLines={2}>
+                                        {m.label}
+                                    </Text>
+                                    <MetricTrend value={m.trend} />
+                                </View>
+                            );
+                        })}
                     </View>
                 </Card>
 
                 {/* REFERRAL CODE CARD */}
-                <Card style={styles.codeCard}>
+                <Card style={[styles.codeCard, { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }]}>
                     <View style={{ marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                             <Share2 size={20} color="#fff" />
@@ -243,7 +393,11 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                         <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Comparte y gana comisiones por venta</Text>
                     </View>
                     <View style={styles.codeBox}>
-                        <Text style={styles.codeText}>{referralCode}</Text>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.codeText} numberOfLines={1}>
+                                {referralCode}
+                            </Text>
+                        </View>
                         <TouchableOpacity onPress={handleShare} style={styles.copyBtn}>
                             <Copy size={16} color="#4f46e5" />
                         </TouchableOpacity>
@@ -251,44 +405,55 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                 </Card>
 
                 {/* STATS OVERVIEW */}
-                <View style={styles.statsRow}>
-                    <Card style={[styles.statCard, { flex: 1, backgroundColor: '#fff' }]}>
+                <View
+                    style={[
+                        styles.statsRow,
+                        {
+                            width: '100%',
+                            maxWidth: metricsLayout.containerWidth,
+                            alignSelf: 'center',
+                            flexDirection: metricsLayout.stackTwoColSections ? 'column' : 'row',
+                            gap: metricsLayout.gap,
+                        },
+                    ]}
+                >
+                    <Card style={[styles.statCard, { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <View style={[styles.iconBox, { backgroundColor: '#ecfdf5' }]}>
-                                <DollarSign size={20} color="#059669" />
+                            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(5, 150, 105, 0.2)' : '#ecfdf5' }]}>
+                                <DollarSign size={20} color={isDark ? '#34D399' : '#059669'} />
                             </View>
-                            <Badge variant="secondary" style={{ backgroundColor: '#ecfdf5' }}>
-                                <Text style={{ color: '#059669', fontSize: 10 }}>Disponible</Text>
+                            <Badge variant="secondary" style={{ backgroundColor: isDark ? 'rgba(5, 150, 105, 0.2)' : '#ecfdf5' }}>
+                                <Text style={{ color: isDark ? '#34D399' : '#059669', fontSize: 10 }}>Disponible</Text>
                             </Badge>
                         </View>
                         <Text style={styles.statValue}>{formatCurrency(commissionStats.available)}</Text>
                         <TouchableOpacity onPress={handleWithdrawPress} style={{ marginTop: 8 }}>
-                            <Text style={{ color: '#059669', fontSize: 12, fontWeight: 'bold' }}>
+                            <Text style={{ color: isDark ? '#34D399' : '#059669', fontSize: 12, fontWeight: 'bold' }}>
                                 {kycStatus === 'approved' ? 'Solicitar Retiro →' : 'Completar KYC →'}
                             </Text>
                         </TouchableOpacity>
                     </Card>
-                    <Card style={[styles.statCard, { flex: 1, backgroundColor: '#fff' }]}>
+                    <Card style={[styles.statCard, { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <View style={[styles.iconBox, { backgroundColor: '#fff7ed' }]}>
-                                <TrendingUp size={20} color="#ea580c" />
+                            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(234, 88, 12, 0.2)' : '#fff7ed' }]}>
+                                <TrendingUp size={20} color={isDark ? '#FB923C' : '#ea580c'} />
                             </View>
-                            <Badge variant="secondary" style={{ backgroundColor: '#fff7ed' }}>
-                                <Text style={{ color: '#ea580c', fontSize: 10 }}>Pendiente</Text>
+                            <Badge variant="secondary" style={{ backgroundColor: isDark ? 'rgba(234, 88, 12, 0.2)' : '#fff7ed' }}>
+                                <Text style={{ color: isDark ? '#FB923C' : '#ea580c', fontSize: 10 }}>Pendiente</Text>
                             </Badge>
                         </View>
                         <Text style={styles.statValue}>{formatCurrency(commissionStats.pending)}</Text>
-                        <Text style={{ fontSize: 10, color: '#666', marginTop: 4 }}>
+                        <Text style={{ fontSize: 10, color: isDark ? '#9CA3AF' : '#666', marginTop: 4 }}>
                             Próx. pago: {latestCommission ? new Date(latestCommission.createdAt).toLocaleDateString('es-ES') : '30 Oct'}
                         </Text>
                     </Card>
                 </View>
 
                 {wallet && (
-                    <Card style={styles.walletCard}>
+                    <Card style={[styles.walletCard, { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }]}>
                         <View style={styles.walletHeader}>
                             <View style={styles.walletIcon}>
-                                <Wallet size={18} color="#0f172a" />
+                                <Wallet size={18} color={isDark ? "#F9FAFB" : "#0f172a"} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.walletTitle}>Billetera de comisiones</Text>
@@ -338,7 +503,7 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                 )}
 
                 {/* GOALS & ACHIEVEMENTS */}
-                <Card style={styles.goalsCard}>
+                <Card style={[styles.goalsCard, { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }]}>
                     <View style={styles.goalsHeader}>
                         <View>
                             <Text style={styles.sectionTitle}>Metas y logros</Text>
@@ -365,7 +530,7 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                 </Card>
 
                 {/* BONUS TRANSFER SECTION */}
-                <Card style={styles.transferCard}>
+                <Card style={[styles.transferCard, { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }]}>
                     <View style={styles.transferHeader}>
                         <View style={styles.transferIconWrapper}>
                             <Gift size={24} color="#fff" />
@@ -406,34 +571,196 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                 </Card>
 
                 {/* TABS simplified */}
-                <View style={{ marginTop: 20 }}>
-                    <Text style={styles.sectionTitle}>Productos para Referir</Text>
-                    {products.map(prod => (
-                        <Card key={prod.id} style={{ marginBottom: 12, padding: 12 }}>
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <ImageWithFallback src={prod.image} style={{ width: 60, height: 60, borderRadius: 8 }} />
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontWeight: 'bold' }} numberOfLines={1}>{prod.name}</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                                        <Badge variant="secondary">{prod.commission}% Com.</Badge>
-                                        <Text style={{ fontSize: 12, color: '#16a34a' }}>+{formatCurrency(prod.earnings)} ganados</Text>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', marginTop: 8, gap: 8 }}>
-                                        <Button size="sm" variant="outline" style={{ height: 32, flex: 1 }} onPress={() => Alert.alert('Link Generado', `https://ramgos.app/p/${prod.id}?ref=${referralCode}`)}>
-                                            <Link size={14} color="#000" style={{ marginRight: 4 }} />
-                                            <Text>Generar Link</Text>
-                                        </Button>
-                                    </View>
+                <View style={{ marginTop: 20, width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }}>
+                    <View
+                        style={[
+                            {
+                                flexDirection: metricsLayout.headerStack ? 'column' : 'row',
+                                alignItems: metricsLayout.headerStack ? 'flex-start' : 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                            },
+                        ]}
+                    >
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Códigos por tienda</Text>
+                            <Text style={[styles.sectionSubtitle, { marginTop: 6 }]}>
+                                Genera códigos por comercio para que tus seguidores los ingresen en checkout.
+                            </Text>
+                        </View>
+                        <Button
+                            size="sm"
+                            onPress={() => setCodeModalVisible(true)}
+                            style={[
+                                { backgroundColor: '#4f46e5' },
+                                metricsLayout.headerStack && { alignSelf: 'stretch' },
+                            ]}
+                        >
+                            <Link size={16} color="#fff" style={{ marginRight: 8 }} />
+                            <Text style={{ color: '#fff', fontWeight: '700' }}>Nuevo código</Text>
+                        </Button>
+                    </View>
+
+                    {myCampaigns.length === 0 ? (
+                        <Card
+                            style={{
+                                marginTop: 12,
+                                padding: 14,
+                                borderRadius: 14,
+                                borderWidth: 1,
+                                borderColor: isDark ? '#374151' : '#E5E7EB',
+                                backgroundColor: isDark ? '#111827' : '#fff',
+                            }}
+                        >
+                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                                <View
+                                    style={{
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 10,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: isDark ? 'rgba(79, 70, 229, 0.25)' : '#eef2ff',
+                                        borderWidth: 1,
+                                        borderColor: isDark ? 'rgba(129, 140, 248, 0.25)' : '#c7d2fe',
+                                    }}
+                                >
+                                    <Link size={18} color={isDark ? '#A5B4FC' : '#4f46e5'} />
+                                </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>
+                                        Aún no tienes códigos
+                                    </Text>
+                                    <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                                        Crea tu primer código para empezar a medir usos, ventas y ganancias por tienda.
+                                    </Text>
                                 </View>
                             </View>
                         </Card>
-                    ))}
+                    ) : (
+                        myCampaigns.map((camp) => (
+                            <Card key={camp.id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
+                                <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
+                                    {camp.targetStoreName}
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                    <Badge variant="secondary">{camp.code}</Badge>
+                                    <Badge variant="secondary">{camp.splitPercentage}% split</Badge>
+                                    <Badge variant="outline">{camp.isActive ? 'Activo' : 'Pausado'}</Badge>
+                                </View>
+                                <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                                    Usos: {camp.stats.uses} • Ventas: {formatCurrency(camp.stats.totalSales)} • Ganancias: {formatCurrency(camp.stats.totalEarnings)}
+                                </Text>
+                            </Card>
+                        ))
+                    )}
+                </View>
+
+                <View style={{ marginTop: 16, width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }}>
+                    <View
+                        style={[
+                            {
+                                flexDirection: metricsLayout.headerStack ? 'column' : 'row',
+                                alignItems: metricsLayout.headerStack ? 'flex-start' : 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                            },
+                        ]}
+                    >
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Contratos (demo)</Text>
+                            <Text style={[styles.sectionSubtitle, { marginTop: 6 }]}>
+                                Simula acuerdos de comisión con tiendas (útil para demos y pruebas internas).
+                            </Text>
+                        </View>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onPress={() => setContractModalVisible(true)}
+                            style={[
+                                {
+                                    borderColor: isDark ? 'rgba(209, 213, 219, 0.25)' : 'rgba(17, 24, 39, 0.18)',
+                                    backgroundColor: isDark ? 'rgba(17, 24, 39, 0.4)' : '#fff',
+                                },
+                                metricsLayout.headerStack && { alignSelf: 'stretch' },
+                            ]}
+                        >
+                            <ShieldCheck size={16} color={isDark ? '#E5E7EB' : '#111827'} style={{ marginRight: 8 }} />
+                            <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>Crear contrato</Text>
+                        </Button>
+                    </View>
+
+                    {myContracts.length === 0 ? (
+                        <Card
+                            style={{
+                                marginTop: 12,
+                                padding: 14,
+                                borderRadius: 14,
+                                borderWidth: 1,
+                                borderColor: isDark ? '#374151' : '#E5E7EB',
+                                backgroundColor: isDark ? '#111827' : '#fff',
+                            }}
+                        >
+                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                                <View
+                                    style={{
+                                        width: 36,
+                                        height: 36,
+                                        borderRadius: 10,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: isDark ? 'rgba(5, 150, 105, 0.20)' : '#ecfdf5',
+                                        borderWidth: 1,
+                                        borderColor: isDark ? 'rgba(52, 211, 153, 0.20)' : '#bbf7d0',
+                                    }}
+                                >
+                                    <ShieldCheck size={18} color={isDark ? '#34D399' : '#059669'} />
+                                </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>
+                                        No hay contratos todavía
+                                    </Text>
+                                    <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                                        Crea uno para simular acuerdos por comisión y validar el flujo.
+                                    </Text>
+                                </View>
+                            </View>
+                        </Card>
+                    ) : (
+                        myContracts.map((c) => (
+                            <Card key={c.id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }}>{c.storeName}</Text>
+                                    <Badge variant="secondary">{Math.round(c.commissionRate * 100)}%</Badge>
+                                </View>
+                                <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                                    Estado: {c.status} • Inicio: {new Date(c.startsAt).toLocaleDateString('es-ES')}
+                                </Text>
+                                {c.status === 'active' && (
+                                    <TouchableOpacity onPress={() => endContract(c.id)} style={{ marginTop: 8 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Finalizar contrato</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </Card>
+                        ))
+                    )}
                 </View>
 
                 {/* TIPS */}
-                <Card style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd', borderWidth: 1, marginTop: 10, padding: 16 }}>
-                    <Text style={{ fontWeight: 'bold', color: '#0284c7', marginBottom: 4 }}>💡 Tip para crecer</Text>
-                    <Text style={{ fontSize: 12, color: '#0c4a6e' }}>Comparte tus enlaces en historias de Instagram y grupos de WhatsApp para aumentar tus clics un 40%.</Text>
+                <Card
+                    style={[
+                        {
+                            backgroundColor: isDark ? '#1e3a8a' : '#f0f9ff',
+                            borderColor: isDark ? '#1e40af' : '#bae6fd',
+                            borderWidth: 1,
+                            marginTop: 10,
+                            padding: 16,
+                        },
+                        { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' },
+                    ]}
+                >
+                    <Text style={{ fontWeight: 'bold', color: isDark ? '#60A5FA' : '#0284c7', marginBottom: 4 }}>💡 Tip para crecer</Text>
+                    <Text style={{ fontSize: 12, color: isDark ? '#BFDBFE' : '#0c4a6e' }}>Comparte tus enlaces en historias de Instagram y grupos de WhatsApp para aumentar tus clics un 40%.</Text>
                 </Card>
 
             </ScrollView>
@@ -445,47 +772,210 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
                 visible={modalVisible}
                 onRequestClose={() => setModalVisible(false)}
             >
-                <View style={styles.centeredView}>
-                    <View style={styles.modalView}>
-                        <Text style={styles.modalTitle}>Enviar Bono a Seguidor</Text>
-                        <Text style={styles.modalText}>Ingresa el email del usuario al que deseas regalar un bono de descuento exclusivo.</Text>
+                <View style={[styles.centeredView, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+                    <View style={[styles.modalView, { maxHeight: windowHeight * 0.86 }]}>
+                        <View style={styles.modalHeaderRow}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={styles.modalTitle}>Enviar bono</Text>
+                                <Text style={styles.modalText}>Regala beneficios a seguidores específicos.</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setModalVisible(false)}
+                                style={styles.modalCloseBtn}
+                                accessibilityRole="button"
+                            >
+                                <X size={18} color={isDark ? '#CBD5E1' : '#64748b'} />
+                            </TouchableOpacity>
+                        </View>
 
-                        <Text style={styles.modalLabel}>Email del seguidor</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="email@usuario.com"
-                            value={transferEmail}
-                            onChangeText={setTransferEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                        />
+                        <ScrollView
+                            contentContainerStyle={styles.modalScroll}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Email del seguidor</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="email@usuario.com"
+                                    value={transferEmail}
+                                    onChangeText={setTransferEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
 
-                        <Text style={styles.modalLabel}>Monto del bono (USD)</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="25"
-                            value={bonusAmount}
-                            onChangeText={setBonusAmount}
-                            keyboardType="numeric"
-                        />
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Monto del bono (USD)</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="25"
+                                    value={bonusAmount}
+                                    onChangeText={setBonusAmount}
+                                    keyboardType="numeric"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
 
-                        <Text style={styles.modalLabel}>Mensaje personalizado</Text>
-                        <TextInput
-                            style={[styles.input, { height: 90, paddingTop: 12 }]}
-                            placeholder="Agradece o da instrucciones específicas para usar el bono"
-                            value={bonusNote}
-                            onChangeText={setBonusNote}
-                            multiline
-                        />
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Mensaje personalizado</Text>
+                                <TextInput
+                                    style={[styles.input, styles.inputMultiline]}
+                                    placeholder="Agradece o da instrucciones específicas para usar el bono"
+                                    value={bonusNote}
+                                    onChangeText={setBonusNote}
+                                    multiline
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+                        </ScrollView>
 
-                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-                            <Button variant="outline" onPress={() => setModalVisible(false)} style={{ flex: 1 }}>
-                                <Text>Cancelar</Text>
-                            </Button>
-                            <Button onPress={handleTransferBonus} style={{ flex: 1, backgroundColor: '#4f46e5' }}>
-                                <Send size={16} color="#fff" style={{ marginRight: 8 }} />
-                                <Text style={{ color: '#fff', fontWeight: '600' }}>Enviar bono</Text>
-                            </Button>
+                        <View style={styles.modalFooter}>
+                            <View style={[styles.modalActionsRow, windowWidth < 420 && { flexDirection: 'column' }]}>
+                                <Button variant="outline" onPress={() => setModalVisible(false)} style={windowWidth < 420 ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>Cancelar</Text>
+                                </Button>
+                                <Button onPress={handleTransferBonus} style={[windowWidth < 420 ? { width: '100%' } : { flex: 1 }, { backgroundColor: '#4f46e5' }]}>
+                                    <Send size={16} color="#fff" style={{ marginRight: 8 }} />
+                                    <Text style={{ color: '#fff', fontWeight: '800' }}>Enviar bono</Text>
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Create Code Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={codeModalVisible}
+                onRequestClose={() => setCodeModalVisible(false)}
+            >
+                <View style={[styles.centeredView, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+                    <View style={[styles.modalView, { maxHeight: windowHeight * 0.86 }]}>
+                        <View style={styles.modalHeaderRow}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={styles.modalTitle}>Nuevo código</Text>
+                                <Text style={styles.modalText}>Asócialo a una tienda y define el split.</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setCodeModalVisible(false)}
+                                style={styles.modalCloseBtn}
+                                accessibilityRole="button"
+                            >
+                                <X size={18} color={isDark ? '#CBD5E1' : '#64748b'} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Tienda</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Ej: Nike Official"
+                                    value={newStoreName}
+                                    onChangeText={setNewStoreName}
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Código</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Ej: JORGE10"
+                                    value={newCode}
+                                    onChangeText={setNewCode}
+                                    autoCapitalize="characters"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Split (%)</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="5"
+                                    value={newSplit}
+                                    onChangeText={setNewSplit}
+                                    keyboardType="numeric"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalFooter}>
+                            <View style={[styles.modalActionsRow, windowWidth < 420 && { flexDirection: 'column' }]}>
+                                <Button variant="outline" onPress={() => setCodeModalVisible(false)} style={windowWidth < 420 ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>Cancelar</Text>
+                                </Button>
+                                <Button onPress={handleCreateCode} style={[windowWidth < 420 ? { width: '100%' } : { flex: 1 }, { backgroundColor: '#4f46e5' }]}>
+                                    <Text style={{ color: '#fff', fontWeight: '800' }}>Crear</Text>
+                                </Button>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Create Contract Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={contractModalVisible}
+                onRequestClose={() => setContractModalVisible(false)}
+            >
+                <View style={[styles.centeredView, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+                    <View style={[styles.modalView, { maxHeight: windowHeight * 0.86 }]}>
+                        <View style={styles.modalHeaderRow}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={styles.modalTitle}>Nuevo contrato</Text>
+                                <Text style={styles.modalText}>Simula acuerdos por comisión con tiendas.</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setContractModalVisible(false)}
+                                style={styles.modalCloseBtn}
+                                accessibilityRole="button"
+                            >
+                                <X size={18} color={isDark ? '#CBD5E1' : '#64748b'} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Tienda</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Ej: Nike Official"
+                                    value={newStoreName}
+                                    onChangeText={setNewStoreName}
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Comisión (rate)</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="0.05"
+                                    value={newCommissionRate}
+                                    onChangeText={setNewCommissionRate}
+                                    keyboardType="numeric"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+                        </ScrollView>
+
+                        <View style={styles.modalFooter}>
+                            <View style={[styles.modalActionsRow, windowWidth < 420 && { flexDirection: 'column' }]}>
+                                <Button variant="outline" onPress={() => setContractModalVisible(false)} style={windowWidth < 420 ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>Cancelar</Text>
+                                </Button>
+                                <Button onPress={handleCreateContract} style={[windowWidth < 420 ? { width: '100%' } : { flex: 1 }, { backgroundColor: '#4f46e5' }]}>
+                                    <Text style={{ color: '#fff', fontWeight: '800' }}>Crear</Text>
+                                </Button>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -494,78 +984,126 @@ export default function InfluencerDashboardScreen({ navigation, isTabMode, onMen
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f9f9f9' },
-    levelContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#f9f9f9' },
+    content: { padding: 16 },
+    levelContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
     codeCard: { backgroundColor: '#6366f1', padding: 20, borderRadius: 16, marginBottom: 16 },
     codeBox: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, paddingLeft: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'space-between' },
     codeText: { color: '#fff', fontSize: 16, fontFamily: 'monospace', fontWeight: 'bold' },
     copyBtn: { backgroundColor: '#fff', padding: 8, borderRadius: 6 },
     statsRow: { flexDirection: 'row', gap: 12 },
-    statCard: { padding: 16, borderRadius: 12 },
+    statCard: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb' },
     iconBox: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    statValue: { fontSize: 24, fontWeight: 'bold', marginTop: 8, color: '#111827' },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, marginTop: 4, color: '#111827' },
-    sectionSubtitle: { fontSize: 12, color: '#6b7280', marginTop: 4 },
-    centeredView: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalView: { margin: 20, backgroundColor: "white", borderRadius: 20, padding: 35, width: '90%', maxWidth: 400, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 },
-    modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15, textAlign: "center", color: '#111827' },
-    modalText: { marginBottom: 15, textAlign: "center", color: '#666' },
-    modalLabel: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4, marginTop: 12 },
-    input: { height: 50, width: '100%', borderColor: '#E5E7EB', borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, backgroundColor: '#fff' },
-    metricsWrapper: { backgroundColor: '#fff', padding: 18, borderRadius: 16, marginBottom: 16 },
+    statValue: { fontSize: 24, fontWeight: 'bold', marginTop: 8, color: isDark ? '#F9FAFB' : '#111827' },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, marginTop: 4, color: isDark ? '#F9FAFB' : '#111827' },
+    sectionSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 4 },
+    centeredView: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 16 },
+    modalView: {
+        backgroundColor: isDark ? '#0B1220' : "#fff",
+        borderRadius: 20,
+        width: '100%',
+        maxWidth: 520,
+        alignSelf: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.24,
+        shadowRadius: 12,
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#E5E7EB',
+        overflow: 'hidden',
+    },
+    modalHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', padding: 18, paddingBottom: 12, gap: 12 },
+    modalCloseBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: isDark ? 'rgba(148, 163, 184, 0.08)' : '#F1F5F9',
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(148, 163, 184, 0.12)' : '#E2E8F0',
+    },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: isDark ? '#F9FAFB' : '#111827' },
+    modalText: { marginTop: 6, fontSize: 12, color: isDark ? '#94A3B8' : '#6b7280' },
+    modalLabel: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 4, marginTop: 12 },
+    modalScroll: { paddingHorizontal: 18, paddingBottom: 12 },
+    modalFooter: { padding: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#E5E7EB', backgroundColor: isDark ? '#0B1220' : '#fff' },
+    modalActionsRow: { flexDirection: 'row', gap: 12 },
+    formGroup: { gap: 6 },
+    input: {
+        height: 48,
+        width: '100%',
+        borderColor: isDark ? 'rgba(148, 163, 184, 0.22)' : '#E5E7EB',
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        backgroundColor: isDark ? 'rgba(148, 163, 184, 0.06)' : '#fff',
+        color: isDark ? '#F9FAFB' : '#111827'
+    },
+    inputMultiline: {
+        height: 110,
+        paddingTop: 12,
+        textAlignVertical: 'top',
+    },
+    metricsWrapper: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
     metricsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-    metricsTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-    metricsSubtitle: { fontSize: 12, color: '#6b7280', marginTop: 4 },
-    metricsBadge: { backgroundColor: '#eef2ff', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
-    metricsBadgeText: { color: '#4338ca', fontSize: 11, fontWeight: '600' },
+    metricsTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    metricsSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 4 },
+    metricsBadge: { backgroundColor: isDark ? '#312E81' : '#eef2ff', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    metricsBadgeText: { color: isDark ? '#818CF8' : '#4338ca', fontSize: 11, fontWeight: '600' },
     metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    metricCard: { backgroundColor: '#f9fafb', padding: 14, borderRadius: 12, flexBasis: '48%', alignItems: 'flex-start', gap: 6 },
-    metricIcon: { backgroundColor: '#e5e7eb', padding: 6, borderRadius: 10 },
-    metricValue: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-    metricLabel: { fontSize: 12, color: '#6b7280' },
+    metricCard: { backgroundColor: isDark ? '#374151' : '#f9fafb', padding: 14, borderRadius: 12, flexBasis: '48%', alignItems: 'flex-start', gap: 6 },
+    metricIcon: { backgroundColor: isDark ? '#4B5563' : '#e5e7eb', padding: 6, borderRadius: 10 },
+    metricValue: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    metricLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' },
     metricTrend: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     metricTrendArrow: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
     metricTrendText: { fontSize: 11, fontWeight: '600' },
-    goalsCard: { backgroundColor: '#fff', padding: 18, borderRadius: 16, marginTop: 16 },
+    goalsCard: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, marginTop: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
     goalsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    goalBadge: { backgroundColor: '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
-    goalBadgeText: { color: '#047857', fontSize: 11, fontWeight: '600' },
+    goalBadge: { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.2)' : '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    goalBadgeText: { color: isDark ? '#4ADE80' : '#047857', fontSize: 11, fontWeight: '600' },
     goalRow: { marginBottom: 14 },
     goalTextWrapper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    goalTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
-    goalDetails: { fontSize: 12, color: '#6b7280' },
-    goalProgressBar: { height: 10, backgroundColor: '#e5e7eb', borderRadius: 999, overflow: 'hidden' },
+    goalTitle: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    goalDetails: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' },
+    goalProgressBar: { height: 10, backgroundColor: isDark ? '#374151' : '#e5e7eb', borderRadius: 999, overflow: 'hidden' },
     goalProgressFill: { height: '100%', borderRadius: 999 },
-    walletCard: { backgroundColor: '#fff', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', marginTop: 16 },
+    walletCard: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#e2e8f0', marginTop: 16 },
     walletHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-    walletIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
-    walletTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-    walletSubtitle: { fontSize: 12, color: '#475569', marginTop: 2 },
-    walletBadge: { borderColor: '#0f172a', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'transparent' },
-    walletBadgeText: { fontSize: 10, fontWeight: '600', color: '#0f172a' },
+    walletIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? '#374151' : '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
+    walletTitle: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#0f172a' },
+    walletSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#475569', marginTop: 2 },
+    walletBadge: { borderColor: isDark ? '#F9FAFB' : '#0f172a', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'transparent' },
+    walletBadgeText: { fontSize: 10, fontWeight: '600', color: isDark ? '#F9FAFB' : '#0f172a' },
     walletRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
-    walletLabel: { fontSize: 12, color: '#64748b' },
-    walletValue: { fontSize: 12, fontWeight: '600', color: '#0f172a' },
-    walletSplit: { marginTop: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 12, gap: 6 },
-    walletSplitTitle: { fontSize: 12, fontWeight: '700', color: '#0f172a' },
+    walletLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#64748b' },
+    walletValue: { fontSize: 12, fontWeight: '600', color: isDark ? '#F9FAFB' : '#0f172a' },
+    walletSplit: { marginTop: 16, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#e2e8f0', paddingTop: 12, gap: 6 },
+    walletSplitTitle: { fontSize: 12, fontWeight: '700', color: isDark ? '#F9FAFB' : '#0f172a' },
     walletSplitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    walletSplitLabel: { fontSize: 11, color: '#64748b' },
-    walletSplitValue: { fontSize: 11, fontWeight: '600', color: '#0f172a' },
-    transferCard: { backgroundColor: '#fff', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#fcd34d', marginTop: 16 },
+    walletSplitLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#64748b' },
+    walletSplitValue: { fontSize: 11, fontWeight: '600', color: isDark ? '#F9FAFB' : '#0f172a' },
+    transferCard: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#fcd34d', marginTop: 16 },
     transferHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     transferIconWrapper: { backgroundColor: '#f59e0b', padding: 10, borderRadius: 12 },
-    transferTitle: { fontSize: 16, fontWeight: 'bold', color: '#78350f' },
-    transferSubtitle: { fontSize: 12, color: '#92400e', marginTop: 4 },
+    transferTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#FCD34D' : '#78350f' },
+    transferSubtitle: { fontSize: 12, color: isDark ? '#FDE68A' : '#92400e', marginTop: 4 },
     transferButton: { backgroundColor: '#ea580c', paddingHorizontal: 16, height: 36, borderRadius: 12 },
     transferFollowers: { flexDirection: 'row', gap: 10, marginTop: 16, flexWrap: 'wrap' },
-    transferFollowerPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d' },
-    transferFollowerPillActive: { backgroundColor: '#fde68a', borderColor: '#f59e0b' },
-    transferFollowerText: { fontSize: 12, fontWeight: '600', color: '#92400e' },
-    transferFollowerTextActive: { color: '#78350f' },
+    transferFollowerPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: isDark ? '#78350F' : '#fef3c7', borderWidth: 1, borderColor: '#fcd34d' },
+    transferFollowerPillActive: { backgroundColor: isDark ? '#92400E' : '#fde68a', borderColor: '#f59e0b' },
+    transferFollowerText: { fontSize: 12, fontWeight: '600', color: isDark ? '#FDE68A' : '#92400e' },
+    transferFollowerTextActive: { color: isDark ? '#FEF3C7' : '#78350f' },
 });
 
 const MetricTrend = ({ value }: { value: number }) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
     const positive = value >= 0;
     return (
         <View style={styles.metricTrend}>

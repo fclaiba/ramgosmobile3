@@ -1,0 +1,16 @@
+
+// Generic Input with Label - Extracted to prevent re-renders
+const FormInput = ({ label, value, onChange, placeholder, keyboardType = 'default', multiline = false, validate, styles }: any) => (
+    <View style={styles.formGroup}>
+        <Text style={styles.label}>{label}</Text>
+        <TextInput
+            style={[styles.input, multiline && styles.inputMultiline]}
+            placeholder={placeholder}
+            placeholderTextColor="#9CA3AF"
+            value={value}
+            onChangeText={onChange}
+            keyboardType={keyboardType}
+            multiline={multiline}
+        />
+    </View>
+);

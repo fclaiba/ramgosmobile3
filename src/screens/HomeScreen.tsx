@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions } from 'react-native';
-import { Sparkles, MapPin, Zap, ShoppingBag, Gift, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp } from 'lucide-react-native';
+import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 import { MobileHeader } from '../components/MobileHeader';
-import { MobileNav, type NavSection } from '../components/MobileNav';
+import { MobileNav, type NavSection, NAV_CONTENT_HEIGHT } from '../components/MobileNav';
 import { SidebarMenu } from '../components/SidebarMenu';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { PointsManager } from '../components/PointsManager';
@@ -80,7 +82,7 @@ const consumptionData = [
     {
         id: 2,
         category: 'Bonos',
-        icon: Gift,
+        icon: Tag,
         color: ['#8B5CF6', '#A855F7'],
         items: [
             { name: 'Descuento 20%', date: '14 Oct 2025', amount: '-$260', status: 'Aplicado', statusColor: '#7C3AED', image: 'https://images.unsplash.com/photo-1703206390947-24130b2eaf9d?w=1080', description: 'Bono exclusivo' }
@@ -88,16 +90,27 @@ const consumptionData = [
     }
 ];
 
-export default function HomeScreen({ navigation }: any) {
+export default function HomeScreen({ navigation, route }: any) {
     const { user } = useAuth();
     const { openCart, items: cartItems } = useCart();
     const { width: windowWidth } = useWindowDimensions();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const insets = useSafeAreaInsets();
+    const styles = getStyles(isDark);
 
     // UI State
     const [activeTab, setActiveTab] = useState<NavSection>('home');
     const [view, setView] = useState<'home' | 'consumos' | 'puntos'>('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [marketplaceParams, setMarketplaceParams] = useState<any>(null);
+
+    // Initial Tab from Params
+    useEffect(() => {
+        if (route.params?.initialTab) {
+            setActiveTab(route.params.initialTab);
+        }
+    }, [route.params]);
 
     // Carousel State
     const [currentSlide, setCurrentSlide] = useState(0);
@@ -157,7 +170,7 @@ export default function HomeScreen({ navigation }: any) {
                             else console.log(action.action);
                         }}
                     >
-                        <View style={[styles.actionIcon, { backgroundColor: action.bg }]}>
+                        <View style={[styles.actionIcon, { backgroundColor: isDark ? 'rgba(31, 41, 55, 0.5)' : action.bg }]}>
                             <Icon size={24} color={action.color} />
                         </View>
                         <Text style={styles.actionTitle}>{action.title}</Text>
@@ -170,7 +183,10 @@ export default function HomeScreen({ navigation }: any) {
     // --- MAIN RENDER ---
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#F9FAFB', '#F3F4F6']} style={StyleSheet.absoluteFill} />
+            <LinearGradient
+                colors={isDark ? ['#111827', '#000'] : ['#F9FAFB', '#F3F4F6']}
+                style={StyleSheet.absoluteFill}
+            />
 
             <View style={{ flex: 1 }}>
                 {activeTab === 'home' && (
@@ -185,7 +201,7 @@ export default function HomeScreen({ navigation }: any) {
                                         style={[styles.headerBtn, view === 'puntos' && styles.headerBtnActive]}
                                         onPress={() => setView(view === 'puntos' ? 'home' : 'puntos')}
                                     >
-                                        <Star size={16} color={view === 'puntos' ? '#fff' : '#374151'} fill={view === 'puntos' ? '#fff' : 'none'} />
+                                        <Star size={16} color={view === 'puntos' ? '#fff' : (isDark ? '#D1D5DB' : '#374151')} fill={view === 'puntos' ? '#fff' : 'none'} />
                                         <Text style={[styles.headerBtnText, view === 'puntos' && { color: '#fff' }]}>Puntos</Text>
                                     </TouchableOpacity>
 
@@ -193,7 +209,7 @@ export default function HomeScreen({ navigation }: any) {
                                         style={styles.headerIconBtn}
                                         onPress={openCart}
                                     >
-                                        <ShoppingBag size={20} color="#374151" />
+                                        <ShoppingCart size={20} color={isDark ? '#D1D5DB' : '#374151'} />
                                         {cartItems.length > 0 && <View style={styles.badge} />}
                                     </TouchableOpacity>
                                 </View>
@@ -206,19 +222,19 @@ export default function HomeScreen({ navigation }: any) {
                                 onPress={() => setView('home')}
                                 style={[styles.viewTab, view === 'home' && styles.viewTabActive]}
                             >
-                                <Sparkles size={16} color={view === 'home' ? '#111827' : '#6B7280'} />
+                                <Sparkles size={16} color={view === 'home' ? (isDark ? '#F9FAFB' : '#111827') : '#6B7280'} />
                                 <Text style={[styles.viewTabText, view === 'home' && styles.viewTabTextActive]}>Principal</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setView('consumos')}
                                 style={[styles.viewTab, view === 'consumos' && styles.viewTabActive]}
                             >
-                                <TrendingUp size={16} color={view === 'consumos' ? '#111827' : '#6B7280'} />
+                                <TrendingUp size={16} color={view === 'consumos' ? (isDark ? '#F9FAFB' : '#111827') : '#6B7280'} />
                                 <Text style={[styles.viewTabText, view === 'consumos' && styles.viewTabTextActive]}>Actividad</Text>
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                        <ScrollView contentContainerStyle={{ paddingBottom: NAV_CONTENT_HEIGHT + insets.bottom + 30 }} showsVerticalScrollIndicator={false}>
 
                             {/* HOME VIEW */}
                             {view === 'home' && (
@@ -438,7 +454,7 @@ export default function HomeScreen({ navigation }: any) {
                     </>
                 )}
 
-                {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={marketplaceParams} />}
+                {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={{ ...marketplaceParams, isTabMode: true }} />}
                 {activeTab === 'social' && <SocialScreen />}
                 {activeTab === 'dashboard' && (
                     user?.role === 'business' ? <BusinessDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :
@@ -449,28 +465,28 @@ export default function HomeScreen({ navigation }: any) {
             </View>
 
             <MobileNav activeSection={activeTab} onSectionChange={handleTabChange} />
-            <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} navigation={navigation} />
+            <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         </View>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    headerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-    headerBtnActive: { backgroundColor: '#111827' },
-    headerBtnText: { fontSize: 13, fontWeight: '600', color: '#374151', marginLeft: 6 },
-    headerIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+    headerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#e5e7eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    headerBtnActive: { backgroundColor: isDark ? '#4B5563' : '#111827' },
+    headerBtnText: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#374151', marginLeft: 6 },
+    headerIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? '#374151' : '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
     badge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
 
-    viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: '#E5E7EB', borderRadius: 16 },
+    viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: isDark ? '#1F2937' : '#E5E7EB', borderRadius: 16 },
     viewTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 12 },
-    viewTabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-    viewTabText: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginLeft: 6 },
-    viewTabTextActive: { color: '#111827' },
+    viewTabActive: { backgroundColor: isDark ? '#374151' : '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+    viewTabText: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 6 },
+    viewTabTextActive: { color: isDark ? '#F9FAFB' : '#111827' },
 
     contentContainer: { paddingHorizontal: 16 },
-    heroContainer: { height: 380, borderRadius: 24, overflow: 'hidden', marginBottom: 20, backgroundColor: '#E5E7EB' },
+    heroContainer: { height: 380, borderRadius: 24, overflow: 'hidden', marginBottom: 20, backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     heroImage: { width: '100%', height: '100%', justifyContent: 'flex-end' },
     heroContent: { padding: 24 },
     heroTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
@@ -482,23 +498,23 @@ const styles = StyleSheet.create({
     indicatorDotActive: { width: 32, backgroundColor: '#fff' },
 
     quickActionsGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    actionBtn: { flex: 1, alignItems: 'center', padding: 16, backgroundColor: '#fff', borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05 },
+    actionBtn: { flex: 1, alignItems: 'center', padding: 16, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05 },
     actionIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    actionTitle: { fontSize: 12, fontWeight: '500', color: '#374151' },
+    actionTitle: { fontSize: 12, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151' },
 
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     seeAll: { fontSize: 13, color: '#4F46E5', fontWeight: '600' },
 
     grid3: { flexDirection: 'row', gap: 10 },
-    featuredRef: { flex: 1, height: 128, borderRadius: 16, overflow: 'hidden', backgroundColor: '#E5E7EB' },
+    featuredRef: { flex: 1, height: 128, borderRadius: 16, overflow: 'hidden', backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     featuredImg: { width: '100%', height: '100%' },
     featuredOverlay: { position: 'absolute', inset: 0, padding: 12, justifyContent: 'space-between' },
     featuredTitle: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
     featuredSub: { color: 'rgba(255,255,255,0.9)', fontSize: 9 },
 
     grid2: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    catCard: { height: 180, borderRadius: 16, overflow: 'hidden', backgroundColor: '#E5E7EB' },
+    catCard: { height: 180, borderRadius: 16, overflow: 'hidden', backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     catImg: { width: '100%', height: '100%' },
     catOverlay: { position: 'absolute', inset: 0, padding: 16, justifyContent: 'space-between' },
     catTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
@@ -525,22 +541,22 @@ const styles = StyleSheet.create({
     statValue: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
     statSub: { color: 'rgba(255,255,255,0.8)', fontSize: 10, marginTop: 2 },
 
-    statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 12, elevation: 1 },
+    statCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 12, elevation: 1 },
     statIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    catLabel: { fontSize: 11, color: '#6B7280', marginBottom: 2 },
-    catValue: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
+    catLabel: { fontSize: 11, color: isDark ? '#D1D5DB' : '#6B7280', marginBottom: 2 },
+    catValue: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     catCount: { fontSize: 10, color: '#9CA3AF' },
 
-    pillBadge: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-    pillText: { fontSize: 11, color: '#374151' },
+    pillBadge: { borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+    pillText: { fontSize: 11, color: isDark ? '#D1D5DB' : '#374151' },
 
-    historyItem: { flexDirection: 'row', backgroundColor: '#fff', padding: 10, borderRadius: 16, gap: 12 },
-    historyImg: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#F3F4F6' },
+    historyItem: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 10, borderRadius: 16, gap: 12 },
+    historyImg: { width: 64, height: 64, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#F3F4F6' },
     historyInfo: { flex: 1, justifyContent: 'center' },
-    historyName: { fontSize: 13, fontWeight: '600', color: '#111827' },
-    historyDesc: { fontSize: 11, color: '#6B7280', marginVertical: 2 },
+    historyName: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    historyDesc: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginVertical: 2 },
     historyDate: { fontSize: 11, color: '#9CA3AF' },
-    historyAmount: { fontSize: 13, fontWeight: '600', color: '#111827' },
+    historyAmount: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     statusBadge: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
     statusText: { fontSize: 9, fontWeight: 'bold' }
 });

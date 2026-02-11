@@ -1,22 +1,26 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
     View,
     Text,
-    Modal,
     TouchableOpacity,
     StyleSheet,
     ScrollView,
-    SafeAreaView,
 } from 'react-native';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { X, ShieldCheck, Package, Truck, Info, AlertTriangle, Star } from 'lucide-react-native';
 import type { Product } from '../contexts/MarketplaceContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { ReviewsList } from './ReviewsList';
+import { AddReviewModal } from './AddReviewModal';
 
 interface ItemPreview {
     id: string | number;
-    type: 'product' | 'bono' | 'event' | 'business';
+    type: 'product' | 'bono' | 'event' | 'service' | 'business';
     name: string;
     price: number;
     originalPrice?: number;
@@ -40,9 +44,35 @@ interface ItemDetailViewProps {
 }
 
 export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, onClose, onAddToCart, onOpenCart }) => {
-    if (!item) return null;
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
+    // If no item, sheet logic handles "open" state, but here we likely rely on parent passing item
+    // Ideally, sheet open state should comprise parent passing an active item or null.
+    // For now, we assume if item exists, open is true.
+    const open = !!item;
+
+    const [isReviewOpen, setIsReviewOpen] = useState(false);
+    const recordView = useMutation(api.listings.recordView);
+
+    useEffect(() => {
+        if (open && item) {
+            // Simple session ID for MVP (random per mount or persisted if needed)
+            const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
+            // Ensure ID is defined
+            if (!item.id) return;
+            
+            recordView({
+                listingId: String(item.id),
+                sessionId,
+                userId: undefined, // TODO: Pass userId if logged in
+            }).catch(e => console.log("View record failed", e));
+        }
+    }, [open, item]);
 
     const gallery = useMemo(() => {
+        if (!item) return [];
         if (product?.images?.length) {
             return product.images.map((img) => img.url);
         }
@@ -50,12 +80,28 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
             return item.gallery;
         }
         return [item.image];
-    }, [item.image, item.gallery, product?.images]);
+    }, [item, product?.images]);
+
+    if (!item) return null;
 
     const sellerName = product?.seller.name ?? item.sellerName ?? 'Vendedor';
     const sellerType = product?.seller.type === 'business' ? 'Comercio verificado' : 'Vendedor particular';
-    const conditionLabel = item.condition === 'used' ? 'Usado verificado' : 'Nuevo';
-    const conditionColor = item.condition === 'used' ? '#F59E0B' : '#16A34A';
+    const conditionLabel =
+        item.type === 'event'
+            ? 'Evento'
+            : item.type === 'service'
+                ? 'Servicio'
+                : item.condition === 'used'
+                    ? 'Usado verificado'
+                    : 'Nuevo';
+    const conditionColor =
+        item.type === 'event'
+            ? '#F59E0B'
+            : item.type === 'service'
+                ? '#38BDF8'
+                : item.condition === 'used'
+                    ? '#F59E0B'
+                    : '#16A34A';
 
     const shippingProfile = product?.shippingProfile;
 
@@ -65,14 +111,16 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
     };
 
     return (
-        <Modal animationType="slide" presentationStyle="pageSheet" visible onRequestClose={onClose}>
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detalle del artículo</Text>
-                    <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                        <X size={20} color="#111827" />
-                    </TouchableOpacity>
-                </View>
+        <Sheet open={open} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <SheetHeader style={styles.header}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <SheetTitle style={styles.headerTitle}>Detalle del artículo</SheetTitle>
+                        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                            <X size={20} color={isDark ? '#F9FAFB' : '#111827'} />
+                        </TouchableOpacity>
+                    </View>
+                </SheetHeader>
 
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
@@ -91,7 +139,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                                 <Text style={[styles.badgeText, { color: conditionColor }]}>{conditionLabel}</Text>
                             </Badge>
                             {product?.seller.type === 'business' && (
-                                <Badge style={[styles.badge, { backgroundColor: '#F3F4F6' }]}>
+                                <Badge style={[styles.badge, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}>
                                     <ShieldCheck size={12} color="#2563EB" />
                                     <Text style={[styles.badgeText, { color: '#1D4ED8', marginLeft: 4 }]}>Escrow protegido</Text>
                                 </Badge>
@@ -154,7 +202,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Envío y logística</Text>
                         <View style={styles.featureCard}>
-                            <Package size={18} color="#111827" style={styles.featureIcon} />
+                            <Package size={18} color={isDark ? '#D1D5DB' : '#111827'} style={styles.featureIcon} />
                             <View style={styles.featureContent}>
                                 <Text style={styles.featureTitle}>Peso estimado</Text>
                                 <Text style={styles.featureSubtitle}>
@@ -163,18 +211,18 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                             </View>
                         </View>
                         <View style={styles.featureCard}>
-                            <Truck size={18} color="#111827" style={styles.featureIcon} />
+                            <Truck size={18} color={isDark ? '#D1D5DB' : '#111827'} style={styles.featureIcon} />
                             <View style={styles.featureContent}>
                                 <Text style={styles.featureTitle}>Dimensiones del paquete</Text>
                                 <Text style={styles.featureSubtitle}>
-                                    {shippingProfile
+                                    {shippingProfile?.dimensionsCm
                                         ? `${shippingProfile.dimensionsCm.length} x ${shippingProfile.dimensionsCm.width} x ${shippingProfile.dimensionsCm.height} cm`
                                         : 'No especificado'}
                                 </Text>
                             </View>
                         </View>
                         <View style={styles.featureCard}>
-                            <Info size={18} color="#111827" style={styles.featureIcon} />
+                            <Info size={18} color={isDark ? '#D1D5DB' : '#111827'} style={styles.featureIcon} />
                             <View style={styles.featureContent}>
                                 <Text style={styles.featureTitle}>Retiro en persona</Text>
                                 <Text style={styles.featureSubtitle}>
@@ -184,12 +232,17 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                         </View>
                     </View>
 
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Reseñas y Opiniones</Text>
+                        <ReviewsList listingId={String(item.id)} onWriteReview={() => setIsReviewOpen(true)} />
+                    </View>
+
                     <View style={[styles.section, styles.escrowCard]}>
                         <ShieldCheck size={20} color="#2563EB" style={{ marginRight: 12 }} />
                         <View style={{ flex: 1 }}>
                             <Text style={styles.escrowTitle}>Pagos protegidos con escrow</Text>
                             <Text style={styles.escrowText}>
-                                Congelamos el pago durante 15 días después de confirmar la entrega. Si existe una disputa, los fondos permanecen retenidos hasta su resolución.
+                                Congelamos el pago durante 10 días después de confirmar la entrega. Si existe una disputa, los fondos permanecen retenidos hasta su resolución.
                             </Text>
                         </View>
                     </View>
@@ -203,47 +256,54 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                         <Text style={styles.secondaryButtonText}>Cerrar</Text>
                     </Button>
                 </View>
-            </SafeAreaView>
-        </Modal>
+
+                {/* Render Modal */}
+                <AddReviewModal 
+                    visible={isReviewOpen} 
+                    onClose={() => setIsReviewOpen(false)} 
+                    listingId={String(item.id)}
+                />
+            </SheetContent>
+        </Sheet>
     );
 };
 
-const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: { backgroundColor: isDark ? '#111827' : '#FFFFFF', height: '90%' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
-    headerTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
-    closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? '#374151' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
     scrollContent: { padding: 20, paddingBottom: 40 },
     galleryRow: { gap: 12 },
-    galleryImage: { width: 240, height: 200, borderRadius: 16, backgroundColor: '#F3F4F6' },
+    galleryImage: { width: 240, height: 200, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6' },
     titleBlock: { marginTop: 20 },
     chipsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     badgeText: { fontSize: 12, fontWeight: '600' },
-    title: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 6 },
+    title: { fontSize: 24, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 6 },
     category: { fontSize: 13, color: '#6B7280' },
     priceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
-    price: { fontSize: 28, fontWeight: '800', color: '#111827' },
+    price: { fontSize: 28, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
     originalPrice: { fontSize: 16, color: '#9CA3AF', textDecorationLine: 'line-through' },
     section: { marginTop: 24 },
-    sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 },
-    sectionText: { fontSize: 14, color: '#4B5563', lineHeight: 20 },
-    warningCard: { flexDirection: 'row', alignItems: 'flex-start', padding: 16, backgroundColor: '#FFFBEB', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' },
-    sellerCard: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF', gap: 4 },
-    sellerName: { fontSize: 15, fontWeight: '600', color: '#111827' },
+    sectionTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 },
+    sectionText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#4B5563', lineHeight: 20 },
+    warningCard: { flexDirection: 'row', alignItems: 'flex-start', padding: 16, backgroundColor: isDark ? '#422006' : '#FFFBEB', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#92400E' : '#FDE68A' },
+    sellerCard: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', gap: 4 },
+    sellerName: { fontSize: 15, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     sellerType: { fontSize: 13, color: '#6B7280' },
     sellerMeta: { fontSize: 12, color: '#9CA3AF', marginTop: 6 },
-    featureCard: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#F9FAFB', borderRadius: 12, marginBottom: 8 },
+    featureCard: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderRadius: 12, marginBottom: 8 },
     featureIcon: { marginRight: 12 },
     featureContent: { flex: 1 },
-    featureTitle: { fontSize: 13, fontWeight: '600', color: '#111827' },
+    featureTitle: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     featureSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-    escrowCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#DBEAFE', marginTop: 24 },
-    escrowTitle: { fontSize: 14, fontWeight: '600', color: '#1D4ED8', marginBottom: 4 },
-    escrowText: { fontSize: 12, color: '#1E3A8A', lineHeight: 18 },
-    footer: { padding: 20, paddingTop: 12, borderTopWidth: 1, borderColor: '#F3F4F6', backgroundColor: '#FFFFFF', gap: 12 },
-    primaryButton: { width: '100%', borderRadius: 16, backgroundColor: '#111827', paddingVertical: 14 },
+    escrowCard: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: isDark ? '#172554' : '#EFF6FF', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#1E40AF' : '#DBEAFE', marginTop: 24 },
+    escrowTitle: { fontSize: 14, fontWeight: '600', color: isDark ? '#60A5FA' : '#1D4ED8', marginBottom: 4 },
+    escrowText: { fontSize: 12, color: isDark ? '#93C5FD' : '#1E3A8A', lineHeight: 18 },
+    footer: { padding: 20, paddingTop: 12, borderTopWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6', backgroundColor: isDark ? '#111827' : '#FFFFFF', gap: 12 },
+    primaryButton: { width: '100%', borderRadius: 16, backgroundColor: isDark ? '#374151' : '#111827', paddingVertical: 14 },
     primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-    secondaryButton: { width: '100%', borderRadius: 16, borderColor: '#E5E7EB' },
-    secondaryButtonText: { color: '#111827', fontSize: 15, fontWeight: '600' },
+    secondaryButton: { width: '100%', borderRadius: 16, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? 'transparent' : 'white' },
+    secondaryButtonText: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 15, fontWeight: '600' },
 });

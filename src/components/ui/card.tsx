@@ -1,11 +1,17 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 
-export const Card = ({ children, style }: any) => (
-    <View style={[styles.card, style]}>
-        {children}
-    </View>
-);
+import { useTheme } from '../../contexts/ThemeContext';
+
+export const Card = ({ children, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    return (
+        <View style={[styles.card, { backgroundColor: isDark ? '#1F2937' : 'white' }, style]}>
+            {children}
+        </View>
+    );
+};
 
 export const CardContent = ({ children, style }: any) => (
     <View style={[styles.content, style]}>
@@ -15,8 +21,7 @@ export const CardContent = ({ children, style }: any) => (
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: 'white',
-        borderRadius: 16,
+        borderRadius: 16, // bg color handled dynamically
         marginVertical: 8,
         shadowColor: '#000',
         shadowOpacity: 0.1,
@@ -35,7 +40,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#1a1a1a'
+        // color handled dynamically
     },
     footer: {
         padding: 16,
@@ -44,5 +49,9 @@ const styles = StyleSheet.create({
 });
 
 export const CardHeader = ({ children, style }: any) => <View style={[styles.header, style]}>{children}</View>;
-export const CardTitle = ({ children, style }: any) => <Text style={[styles.title, style]}>{children}</Text>;
+export const CardTitle = ({ children, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    return <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#1a1a1a' }, style]}>{children}</Text>;
+};
 export const CardFooter = ({ children, style }: any) => <View style={[styles.footer, style]}>{children}</View>;

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     Plus as PlusIcon,
     QrCode,
@@ -20,8 +21,10 @@ import {
 import { MobileHeader } from '../components/MobileHeader';
 import { Badge } from '../components/ui/badge';
 import { useBusiness, Coupon } from '../contexts/BusinessContext';
-import { useFintech, PaymentRecord } from '../contexts/FintechContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useFintech } from '../contexts/FintechContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { useActionGate } from '../utils/useActionGate';
 
 type DashboardTab = 'overview' | 'bonos' | 'reviews';
 
@@ -42,21 +45,29 @@ const formatDateShort = (value: string) => {
     });
 };
 
-const couponStatusStyles: Record<Coupon['status'], { background: string; color: string; label: string }> = {
-    active: { background: '#DCFCE7', color: '#166534', label: 'Activo' },
-    scheduled: { background: '#E0F2FE', color: '#1D4ED8', label: 'Programado' },
-    expired: { background: '#FEE2E2', color: '#B91C1C', label: 'Vencido' },
-    paused: { background: '#F3F4F6', color: '#6B7280', label: 'Pausado' },
-    draft: { background: '#F5F3FF', color: '#7C3AED', label: 'Borrador' },
+const getCouponStatusStyles = (status: Coupon['status'], isDark: boolean) => {
+    const styles: Record<Coupon['status'], { background: string; color: string; label: string }> = {
+        active: { background: isDark ? 'rgba(22, 101, 52, 0.2)' : '#DCFCE7', color: isDark ? '#4ADE80' : '#166534', label: 'Activo' },
+        scheduled: { background: isDark ? 'rgba(29, 78, 216, 0.2)' : '#E0F2FE', color: isDark ? '#60A5FA' : '#1D4ED8', label: 'Programado' },
+        expired: { background: isDark ? 'rgba(185, 28, 28, 0.2)' : '#FEE2E2', color: isDark ? '#F87171' : '#B91C1C', label: 'Vencido' },
+        paused: { background: isDark ? 'rgba(107, 114, 128, 0.2)' : '#F3F4F6', color: isDark ? '#9CA3AF' : '#6B7280', label: 'Pausado' },
+        draft: { background: isDark ? 'rgba(124, 58, 237, 0.2)' : '#F5F3FF', color: isDark ? '#A78BFA' : '#7C3AED', label: 'Borrador' },
+    };
+    return styles[status];
 };
 
 export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route }: any) {
     const navigation = useNavigation<any>();
     const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
     const { businessInfo, metrics, coupons, reviews } = useBusiness();
     const { ensureWalletAccount, getWalletByOwner, requestWithdrawal, payments, getKycStatus } = useFintech();
-    const { requireKycFor } = useAuth();
+    const { gateWithdraw } = useActionGate();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
 
     useEffect(() => {
         ensureWalletAccount(businessInfo.id, 'business', businessInfo.name);
@@ -85,21 +96,16 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
 
     const handleWithdrawal = () => {
         if (!wallet) {
-            Alert.alert('Error', 'Billetera no encontrada.');
+            show('Error: Billetera no encontrada.', 'error');
             return;
         }
 
-        const proceed = () => {
-            navigation.navigate('Withdrawal', { ownerId: wallet.ownerId });
-        };
-
-        const authorized = requireKycFor('withdraw', proceed, {
-            onBlocked: () => navigation.navigate('BusinessKYC'),
-            message: 'Requiere KYC aprobado.',
+        const ok = gateWithdraw({
+            onAllowed: () => navigation.navigate('Withdrawal', { ownerId: wallet.ownerId }),
         });
 
-        if (!authorized && kycStatus === 'rejected') {
-            Alert.alert('KYC Rechazado', 'Corrige tus datos para retirar.');
+        if (!ok && kycStatus === 'rejected') {
+            show('KYC Rechazado: Corrige tus datos para retirar.', 'error');
         }
     };
 
@@ -145,6 +151,17 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         }));
     }, [metrics.revenueSeries]);
 
+    const layout = useMemo(() => {
+        const pagePadding = 16;
+        const maxWidth = 980;
+        const containerWidth = Math.min(Math.max(width - pagePadding * 2, 280), maxWidth);
+        const gap = 16;
+        const summaryCols = containerWidth < 360 ? 1 : containerWidth < 920 ? 2 : 4;
+        const summaryCardWidth = Math.floor((containerWidth - gap * (summaryCols - 1)) / summaryCols);
+        const contentPaddingBottom = Math.max(16, insets.bottom) + (isTabMode ? 96 : 24);
+        return { containerWidth, gap, summaryCols, summaryCardWidth, contentPaddingBottom };
+    }, [width, insets.bottom, isTabMode]);
+
     return (
         <View style={styles.container}>
             <MobileHeader
@@ -156,7 +173,7 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                 actions={
                     <View style={styles.headerActions}>
                         <TouchableOpacity
-                            onPress={() => navigation.navigate('BusinessQRScanner')}
+                            onPress={() => navigation.navigate('BusinessQR')}
                             style={styles.scanBtn}
                         >
                             <QrCode size={20} color="#fff" />
@@ -172,275 +189,294 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                 }
             />
 
-            <ScrollView contentContainerStyle={styles.content}>
-                {/* KYC Warning */}
-                {!isVerified && (
-                    <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={() => !verificationPending && navigation.navigate('BusinessKYC')}
-                        style={[styles.kycBanner, { borderColor: kycStatus === 'rejected' ? '#FECACA' : '#FEF3C7', backgroundColor: kycStatus === 'rejected' ? '#FEF2F2' : '#FFFBEB' }]}
-                    >
-                        <View style={[styles.kycIcon, { backgroundColor: kycStatus === 'rejected' ? '#FEE2E2' : '#FDE68A' }]}>
-                            {verificationPending ? <ShieldAlert size={18} color="#B45309" /> : <AlertTriangle size={18} color="#B91C1C" />}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.kycTitle, { color: kycStatus === 'rejected' ? '#991B1B' : '#92400E' }]}>{kycCardTitle}</Text>
-                            <Text style={[styles.kycDesc, { color: kycStatus === 'rejected' ? '#B91C1C' : '#B45309' }]}>{kycCardDescription}</Text>
-                        </View>
-                        {!verificationPending && <ChevronRight size={18} color="#9CA3AF" />}
-                    </TouchableOpacity>
-                )}
-
-                {/* Tabs */}
-                <View style={styles.tabsContainer}>
-                    {TABS.map((tab) => (
+            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: layout.contentPaddingBottom }]}>
+                <View style={[styles.page, { maxWidth: layout.containerWidth }]}>
+                    {/* KYC Warning */}
+                    {!isVerified && (
                         <TouchableOpacity
-                            key={tab.id}
-                            style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-                            onPress={() => setActiveTab(tab.id)}
+                            activeOpacity={0.9}
+                            onPress={() => !verificationPending && navigation.navigate('VerifyBusiness')}
+                            style={[
+                                styles.kycBanner,
+                                {
+                                    borderColor: kycStatus === 'rejected' ? (isDark ? '#7F1D1D' : '#FECACA') : (isDark ? '#78350F' : '#FEF3C7'),
+                                    backgroundColor: kycStatus === 'rejected' ? (isDark ? 'rgba(127, 29, 29, 0.2)' : '#FEF2F2') : (isDark ? 'rgba(120, 53, 15, 0.2)' : '#FFFBEB')
+                                }
+                            ]}
                         >
-                            <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-                                {tab.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* --- OVERVIEW TAB --- */}
-                {activeTab === 'overview' && (
-                    <View style={styles.sectionGap}>
-                        {/* Summary Grid */}
-                        <View style={styles.grid}>
-                            {summaryCards.map((card) => (
-                                <View key={card.id} style={[styles.summaryCard, { width: (width - 48) / 2 }]}>
-                                    <LinearGradient
-                                        colors={card.colors}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 1 }}
-                                        style={StyleSheet.absoluteFill}
-                                    />
-                                    <View style={styles.summaryContent}>
-                                        <View style={styles.summaryIconCircle}>
-                                            <card.icon size={18} color={card.colors[0]} />
-                                        </View>
-                                        <Text style={styles.summaryValue}>{card.value}</Text>
-                                        <Text style={styles.summaryLabel}>{card.label}</Text>
-                                    </View>
-                                </View>
-                            ))}
-                        </View>
-
-                        {/* Balance Card */}
-                        <View style={styles.balanceCard}>
-                            <LinearGradient
-                                colors={['#111827', '#1F2937']}
-                                style={styles.balanceHeader}
-                            >
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View>
-                                        <Text style={styles.balanceLabelLight}>Saldo Disponible</Text>
-                                        <Text style={styles.balanceValueMain}>{formatCurrency(availableBalance)}</Text>
-                                    </View>
-                                    <View style={styles.walletIcon}>
-                                        <Wallet size={20} color="#fff" />
-                                    </View>
-                                </View>
-                                <View style={styles.balanceStatsRow}>
-                                    <View>
-                                        <Text style={styles.balanceStatLabel}>Pendiente</Text>
-                                        <Text style={styles.balanceStatValue}>{formatCurrency(pendingBalance)}</Text>
-                                    </View>
-                                    <View style={styles.dividerVertical} />
-                                    <View>
-                                        <Text style={styles.balanceStatLabel}>Retenido</Text>
-                                        <Text style={styles.balanceStatValue}>{formatCurrency(withheldBalance)}</Text>
-                                    </View>
-                                </View>
-                            </LinearGradient>
-
-                            <View style={styles.balanceActions}>
-                                <TouchableOpacity
-                                    style={[styles.withdrawBtn, (!isVerified || (wallet?.balances?.available ?? 0) < 10) && styles.withdrawBtnDisabled]}
-                                    onPress={handleWithdrawal}
-                                    disabled={!isVerified || !wallet || (wallet?.balances?.available ?? 0) < 10}
+                            <View style={[styles.kycIcon, { backgroundColor: kycStatus === 'rejected' ? (isDark ? '#991B1B' : '#FEE2E2') : (isDark ? '#92400E' : '#FDE68A') }]}>
+                                {verificationPending ? <ShieldAlert size={18} color={isDark ? '#FEF3C7' : '#B45309'} /> : <AlertTriangle size={18} color={isDark ? '#FECACA' : '#B91C1C'} />}
+                            </View>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text
+                                    style={[styles.kycTitle, { color: kycStatus === 'rejected' ? (isDark ? '#F87171' : '#991B1B') : (isDark ? '#FCD34D' : '#92400E') }]}
+                                    numberOfLines={1}
                                 >
-                                    <Text style={[styles.withdrawBtnText, (!isVerified || (wallet?.balances?.available ?? 0) < 10) && styles.withdrawBtnTextDisabled]}>
-                                        Solicitar retiro
-                                    </Text>
-                                </TouchableOpacity>
-                                {metrics.payoutProjection.nextPayoutDate && (
-                                    <Text style={styles.payoutDate}>Próximo pago: {formatDateShort(metrics.payoutProjection.nextPayoutDate)}</Text>
-                                )}
+                                    {kycCardTitle}
+                                </Text>
+                                <Text
+                                    style={[styles.kycDesc, { color: kycStatus === 'rejected' ? (isDark ? '#FECACA' : '#B91C1C') : (isDark ? '#FDE68A' : '#B45309') }]}
+                                    numberOfLines={2}
+                                >
+                                    {kycCardDescription}
+                                </Text>
                             </View>
-                        </View>
+                            {!verificationPending && <ChevronRight size={18} color={isDark ? '#9CA3AF' : '#9CA3AF'} />}
+                        </TouchableOpacity>
+                    )}
 
-                        {/* Revenue Chart */}
-                        <View style={styles.chartCard}>
-                            <View style={styles.cardHeader}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <BarChart3 size={20} color="#374151" />
-                                    <Text style={styles.cardTitle}>Resultados Semanales</Text>
-                                </View>
-                                <Badge variant="secondary"><Text style={{ fontSize: 10 }}>7 Días</Text></Badge>
-                            </View>
+                    {/* Tabs */}
+                    <View style={styles.tabsContainer}>
+                        {TABS.map((tab) => (
+                            <TouchableOpacity
+                                key={tab.id}
+                                style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+                                onPress={() => setActiveTab(tab.id)}
+                            >
+                                <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
+                                    {tab.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
 
-                            <View style={styles.chartArea}>
-                                {chartData.map((d, i) => (
-                                    <View key={i} style={styles.barGroup}>
-                                        <View style={styles.barTrack}>
-                                            <LinearGradient
-                                                colors={['#8B5CF6', '#Ec4899']}
-                                                style={[styles.barFill, { height: `${d.heightPercent}%` }]}
-                                            />
+                    {/* --- OVERVIEW TAB --- */}
+                    {activeTab === 'overview' && (
+                        <View style={styles.sectionGap}>
+                            {/* Summary Grid */}
+                            <View style={[styles.grid, { gap: layout.gap }]}>
+                                {summaryCards.map((card) => (
+                                    <View key={card.id} style={[styles.summaryCard, { width: layout.summaryCardWidth }]}>
+                                        <LinearGradient
+                                            colors={card.colors}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={StyleSheet.absoluteFill}
+                                        />
+                                        <View style={styles.summaryContent}>
+                                            <View style={styles.summaryIconCircle}>
+                                                <card.icon size={18} color={card.colors[0]} />
+                                            </View>
+                                            <Text style={styles.summaryValue}>{card.value}</Text>
+                                            <Text style={styles.summaryLabel}>{card.label}</Text>
                                         </View>
-                                        <Text style={styles.barLabel}>{d.label}</Text>
+                                    </View>
+                                ))}
+                            </View>
+
+                            {/* Balance Card */}
+                            <View style={styles.balanceCard}>
+                                <LinearGradient
+                                    colors={isDark ? ['#111827', '#000000'] : ['#111827', '#1F2937']}
+                                    style={styles.balanceHeader}
+                                >
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View>
+                                            <Text style={styles.balanceLabelLight}>Saldo Disponible</Text>
+                                            <Text style={styles.balanceValueMain}>{formatCurrency(availableBalance)}</Text>
+                                        </View>
+                                        <View style={styles.walletIcon}>
+                                            <Wallet size={20} color="#fff" />
+                                        </View>
+                                    </View>
+                                    <View style={styles.balanceStatsRow}>
+                                        <View>
+                                            <Text style={styles.balanceStatLabel}>Pendiente</Text>
+                                            <Text style={styles.balanceStatValue}>{formatCurrency(pendingBalance)}</Text>
+                                        </View>
+                                        <View style={styles.dividerVertical} />
+                                        <View>
+                                            <Text style={styles.balanceStatLabel}>Retenido</Text>
+                                            <Text style={styles.balanceStatValue}>{formatCurrency(withheldBalance)}</Text>
+                                        </View>
+                                    </View>
+                                </LinearGradient>
+
+                                <View style={styles.balanceActions}>
+                                    <TouchableOpacity
+                                        style={[styles.withdrawBtn, (!isVerified || (wallet?.balances?.available ?? 0) < 10) && styles.withdrawBtnDisabled]}
+                                        onPress={handleWithdrawal}
+                                        disabled={!isVerified || !wallet || (wallet?.balances?.available ?? 0) < 10}
+                                    >
+                                        <Text style={[styles.withdrawBtnText, (!isVerified || (wallet?.balances?.available ?? 0) < 10) && styles.withdrawBtnTextDisabled]}>
+                                            Solicitar retiro
+                                        </Text>
+                                    </TouchableOpacity>
+                                    {metrics.payoutProjection.nextPayoutDate && (
+                                        <Text style={styles.payoutDate}>Próximo pago: {formatDateShort(metrics.payoutProjection.nextPayoutDate)}</Text>
+                                    )}
+                                </View>
+                            </View>
+
+                            {/* Revenue Chart */}
+                            <View style={styles.chartCard}>
+                                <View style={styles.cardHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <BarChart3 size={20} color={isDark ? '#D1D5DB' : '#374151'} />
+                                        <Text style={styles.cardTitle}>Resultados Semanales</Text>
+                                    </View>
+                                    <Badge variant="secondary"><Text style={{ fontSize: 10, color: isDark ? '#D1D5DB' : '#000' }}>7 Días</Text></Badge>
+                                </View>
+
+                                <View style={styles.chartArea}>
+                                    {chartData.map((d, i) => (
+                                        <View key={i} style={styles.barGroup}>
+                                            <View style={styles.barTrack}>
+                                                <LinearGradient
+                                                    colors={['#8B5CF6', '#Ec4899']}
+                                                    style={[styles.barFill, { height: `${d.heightPercent}%` }]}
+                                                />
+                                            </View>
+                                            <Text style={styles.barLabel}>{d.label}</Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+
+                            {/* Top Coupons */}
+                            <View style={styles.listCard}>
+                                <View style={[styles.cardHeader, { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Trophy size={20} color="#F59E0B" />
+                                        <Text style={styles.cardTitle}>Bonos Destacados</Text>
+                                    </View>
+                                </View>
+                                {metrics.couponLeaders.map((item, index) => (
+                                    <View key={item.id} style={[styles.listItem, index === metrics.couponLeaders.length - 1 && { borderBottomWidth: 0 }]}>
+                                        <View style={styles.rankBadge}>
+                                            <Text style={styles.rankText}>#{index + 1}</Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.itemTitle}>{item.name}</Text>
+                                            <Text style={styles.itemSub}>{item.redeemed} canjes • {item.stockLeft} disponibles</Text>
+                                        </View>
+                                        <Text style={styles.itemValue}>{formatCurrency(item.revenue)}</Text>
                                     </View>
                                 ))}
                             </View>
                         </View>
+                    )}
 
-                        {/* Top Coupons */}
-                        <View style={styles.listCard}>
-                            <View style={[styles.cardHeader, { borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }]}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <Trophy size={20} color="#F59E0B" />
-                                    <Text style={styles.cardTitle}>Bonos Destacados</Text>
+                    {/* --- COUPONS TAB --- */}
+                    {activeTab === 'bonos' && (
+                        <View style={styles.sectionGap}>
+                            <TouchableOpacity
+                                style={styles.bigCreateBtn}
+                                onPress={() => navigation.navigate('BusinessCreate', { type: 'bonus' })}
+                            >
+                                <LinearGradient colors={['#2563EB', '#1D4ED8']} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+                                <PlusIcon size={24} color="#fff" />
+                                <Text style={styles.bigCreateText}>Crear Nuevo Bono</Text>
+                            </TouchableOpacity>
+
+                            {coupons.length === 0 ? (
+                                <View style={styles.emptyState}>
+                                    <Tag size={48} color={isDark ? '#4B5563' : '#E5E7EB'} />
+                                    <Text style={styles.emptyTitle}>Aún no tienes bonos</Text>
+                                    <Text style={styles.emptyDesc}>Crea tu primer bono para atraer clientes.</Text>
+                                </View>
+                            ) : (
+                                coupons.map((coupon) => {
+                                    const style = getCouponStatusStyles(coupon.status, isDark);
+                                    const percent = coupon.stock > 0 ? (coupon.redeemed / coupon.stock) * 100 : 0;
+
+                                    return (
+                                        <View key={coupon.id} style={styles.couponCard}>
+                                            <View style={styles.couponHeader}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.couponTitle}>{coupon.name}</Text>
+                                                    <Text style={styles.couponCode}>{coupon.code}</Text>
+                                                </View>
+                                                <View style={[styles.statusTag, { backgroundColor: style.background }]}>
+                                                    <Text style={[styles.statusText, { color: style.color }]}>{style.label}</Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.progressSection}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                    <Text style={styles.progressLabel}>Progreso de canjes</Text>
+                                                    <Text style={styles.progressValue}>{coupon.redeemed} / {coupon.stock}</Text>
+                                                </View>
+                                                <View style={styles.progressBarBg}>
+                                                    <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: style.color }]} />
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.couponFooter}>
+                                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                                                    <View style={styles.metaItem}>
+                                                        <Tag size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                                        <Text style={styles.metaText}>
+                                                            {coupon.discountType === 'percentage' ? `${coupon.value}% OFF` : formatCurrency(coupon.value)}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={styles.metaItem}>
+                                                        <Users size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                                        <Text style={styles.metaText}>Max {coupon.maxPerUser}/usr</Text>
+                                                    </View>
+                                                </View>
+                                                <TouchableOpacity onPress={() => {/* Edit Action */ }}>
+                                                    <MoreHorizontal size={20} color={isDark ? '#9CA3AF' : '#9CA3AF'} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    );
+                                })
+                            )}
+                        </View>
+                    )}
+
+                    {/* --- REVIEWS TAB --- */}
+                    {activeTab === 'reviews' && (
+                        <View style={styles.sectionGap}>
+                            <View style={styles.ratingCard}>
+                                <View style={styles.ratingLeft}>
+                                    <Text style={styles.ratingBig}>{businessInfo.overallRating.toFixed(1)}</Text>
+                                    <View style={{ flexDirection: 'row' }}>
+                                        {[1, 2, 3, 4, 5].map(i => (
+                                            <TrendingUp key={i} size={14} color={i <= Math.round(businessInfo.overallRating) ? "#F59E0B" : (isDark ? "#4B5563" : "#E5E7EB")} fill={i <= Math.round(businessInfo.overallRating) ? "#F59E0B" : "none"} />
+                                        ))}
+                                    </View>
+                                    <Text style={styles.ratingCount}>{reviews.length} reseñas</Text>
+                                </View>
+                                <View style={styles.ratingRight}>
+                                    <Text style={styles.ratingMsg}>
+                                        Mantén una calificación alta para aparecer en "Recomendados".
+                                    </Text>
                                 </View>
                             </View>
-                            {metrics.couponLeaders.map((item, index) => (
-                                <View key={item.id} style={[styles.listItem, index === metrics.couponLeaders.length - 1 && { borderBottomWidth: 0 }]}>
-                                    <View style={styles.rankBadge}>
-                                        <Text style={styles.rankText}>#{index + 1}</Text>
+
+                            {reviews.map((review) => (
+                                <View key={review.id} style={styles.reviewItem}>
+                                    <View style={styles.reviewHeader}>
+                                        <Text style={styles.reviewerName}>{review.user}</Text>
+                                        <Text style={styles.reviewDate}>{formatDateShort(review.createdAt)}</Text>
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.itemTitle}>{item.name}</Text>
-                                        <Text style={styles.itemSub}>{item.redeemed} canjes • {item.stockLeft} disponibles</Text>
+                                    <View style={styles.starsRow}>
+                                        {[1, 2, 3, 4, 5].map(i => (
+                                            <View key={i} style={[styles.starDot, i <= review.rating && styles.starDotActive]} />
+                                        ))}
                                     </View>
-                                    <Text style={styles.itemValue}>{formatCurrency(item.revenue)}</Text>
+                                    <Text style={styles.reviewText}>{review.comment}</Text>
                                 </View>
                             ))}
                         </View>
-                    </View>
-                )}
-
-                {/* --- COUPONS TAB --- */}
-                {activeTab === 'bonos' && (
-                    <View style={styles.sectionGap}>
-                        <TouchableOpacity
-                            style={styles.bigCreateBtn}
-                            onPress={() => navigation.navigate('BusinessCreate', { type: 'bonus' })}
-                        >
-                            <LinearGradient colors={['#2563EB', '#1D4ED8']} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
-                            <PlusIcon size={24} color="#fff" />
-                            <Text style={styles.bigCreateText}>Crear Nuevo Bono</Text>
-                        </TouchableOpacity>
-
-                        {coupons.length === 0 ? (
-                            <View style={styles.emptyState}>
-                                <Tag size={48} color="#E5E7EB" />
-                                <Text style={styles.emptyTitle}>Aún no tienes bonos</Text>
-                                <Text style={styles.emptyDesc}>Crea tu primer bono para atraer clientes.</Text>
-                            </View>
-                        ) : (
-                            coupons.map((coupon) => {
-                                const style = couponStatusStyles[coupon.status];
-                                const percent = coupon.stock > 0 ? (coupon.redeemed / coupon.stock) * 100 : 0;
-
-                                return (
-                                    <View key={coupon.id} style={styles.couponCard}>
-                                        <View style={styles.couponHeader}>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.couponTitle}>{coupon.name}</Text>
-                                                <Text style={styles.couponCode}>{coupon.code}</Text>
-                                            </View>
-                                            <View style={[styles.statusTag, { backgroundColor: style.background }]}>
-                                                <Text style={[styles.statusText, { color: style.color }]}>{style.label}</Text>
-                                            </View>
-                                        </View>
-
-                                        <View style={styles.progressSection}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                                                <Text style={styles.progressLabel}>Progreso de canjes</Text>
-                                                <Text style={styles.progressValue}>{coupon.redeemed} / {coupon.stock}</Text>
-                                            </View>
-                                            <View style={styles.progressBarBg}>
-                                                <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: style.color }]} />
-                                            </View>
-                                        </View>
-
-                                        <View style={styles.couponFooter}>
-                                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                                <View style={styles.metaItem}>
-                                                    <Tag size={14} color="#6B7280" />
-                                                    <Text style={styles.metaText}>
-                                                        {coupon.discountType === 'percentage' ? `${coupon.value}% OFF` : formatCurrency(coupon.value)}
-                                                    </Text>
-                                                </View>
-                                                <View style={styles.metaItem}>
-                                                    <Users size={14} color="#6B7280" />
-                                                    <Text style={styles.metaText}>Max {coupon.maxPerUser}/usr</Text>
-                                                </View>
-                                            </View>
-                                            <TouchableOpacity onPress={() => {/* Edit Action */ }}>
-                                                <MoreHorizontal size={20} color="#9CA3AF" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                );
-                            })
-                        )}
-                    </View>
-                )}
-
-                {/* --- REVIEWS TAB --- */}
-                {activeTab === 'reviews' && (
-                    <View style={styles.sectionGap}>
-                        <View style={styles.ratingCard}>
-                            <View style={styles.ratingLeft}>
-                                <Text style={styles.ratingBig}>{businessInfo.overallRating.toFixed(1)}</Text>
-                                <View style={{ flexDirection: 'row' }}>
-                                    {[1, 2, 3, 4, 5].map(i => (
-                                        <TrendingUp key={i} size={14} color={i <= Math.round(businessInfo.overallRating) ? "#F59E0B" : "#E5E7EB"} fill={i <= Math.round(businessInfo.overallRating) ? "#F59E0B" : "none"} />
-                                    ))}
-                                </View>
-                                <Text style={styles.ratingCount}>{reviews.length} reseñas</Text>
-                            </View>
-                            <View style={styles.ratingRight}>
-                                <Text style={styles.ratingMsg}>
-                                    Mantén una calificación alta para aparecer en "Recomendados".
-                                </Text>
-                            </View>
-                        </View>
-
-                        {reviews.map((review) => (
-                            <View key={review.id} style={styles.reviewItem}>
-                                <View style={styles.reviewHeader}>
-                                    <Text style={styles.reviewerName}>{review.user}</Text>
-                                    <Text style={styles.reviewDate}>{formatDateShort(review.createdAt)}</Text>
-                                </View>
-                                <View style={styles.starsRow}>
-                                    {[1, 2, 3, 4, 5].map(i => (
-                                        <View key={i} style={[styles.starDot, i <= review.rating && styles.starDotActive]} />
-                                    ))}
-                                </View>
-                                <Text style={styles.reviewText}>{review.comment}</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
+                    )}
+                </View>
             </ScrollView>
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#F9FAFB' },
     content: { padding: 16, paddingBottom: 100 },
+    page: { width: '100%', alignSelf: 'center', maxWidth: 980 },
 
     headerActions: { flexDirection: 'row', gap: 8 },
     scanBtn: {
         width: 36, height: 36, borderRadius: 18,
-        backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center'
+        backgroundColor: isDark ? '#1F2937' : '#111827', alignItems: 'center', justifyContent: 'center'
     },
     createBtn: {
         flexDirection: 'row', alignItems: 'center',
@@ -461,14 +497,14 @@ const styles = StyleSheet.create({
 
     /* Tabs */
     tabsContainer: {
-        flexDirection: 'row', backgroundColor: '#fff',
+        flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRadius: 12, padding: 4, marginBottom: 20,
         shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 4, elevation: 1
     },
     tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-    tabActive: { backgroundColor: '#F3F4F6' },
-    tabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-    tabTextActive: { color: '#111827' },
+    tabActive: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
+    tabText: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280' },
+    tabTextActive: { color: isDark ? '#F9FAFB' : '#111827' },
 
     sectionGap: { gap: 16 },
 
@@ -480,7 +516,7 @@ const styles = StyleSheet.create({
     },
     summaryContent: { flex: 1, padding: 16, justifyContent: 'space-between' },
     summaryIconCircle: {
-        width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff',
+        width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#fff',
         alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start'
     },
     summaryValue: { fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 8 },
@@ -488,8 +524,8 @@ const styles = StyleSheet.create({
 
     /* Balance Card */
     balanceCard: {
-        backgroundColor: '#fff', borderRadius: 24, overflow: 'hidden',
-        borderWidth: 1, borderColor: '#E5E7EB'
+        backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 24, overflow: 'hidden',
+        borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB'
     },
     balanceHeader: { padding: 20 },
     balanceLabelLight: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
@@ -503,30 +539,30 @@ const styles = StyleSheet.create({
 
     balanceActions: {
         padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        borderTopWidth: 1, borderTopColor: '#F3F4F6'
+        borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#F3F4F6'
     },
-    withdrawBtn: { backgroundColor: '#111827', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-    withdrawBtnDisabled: { backgroundColor: '#F3F4F6' },
+    withdrawBtn: { backgroundColor: isDark ? '#111827' : '#111827', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+    withdrawBtnDisabled: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
     withdrawBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
     withdrawBtnTextDisabled: { color: '#9CA3AF' },
     payoutDate: { fontSize: 11, color: '#6B7280' },
 
     /* Chart Card */
-    chartCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#E5E7EB' },
+    chartCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+    cardTitle: { fontSize: 16, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
     chartArea: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 140 },
     barGroup: { alignItems: 'center', gap: 6, flex: 1 },
-    barTrack: { width: 8, height: '100%', backgroundColor: '#F3F4F6', borderRadius: 4, justifyContent: 'flex-end' },
+    barTrack: { width: 8, height: '100%', backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 4, justifyContent: 'flex-end' },
     barFill: { width: '100%', borderRadius: 4 },
     barLabel: { fontSize: 10, color: '#6B7280' },
 
     /* List Card */
-    listCard: { backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB' },
-    listItem: { flexDirection: 'row', padding: 16, alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    rankBadge: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
-    rankText: { fontSize: 12, fontWeight: '700', color: '#D97706' },
-    itemTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
+    listCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    listItem: { flexDirection: 'row', padding: 16, alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    rankBadge: { width: 28, height: 28, borderRadius: 8, backgroundColor: isDark ? 'rgba(217, 119, 6, 0.2)' : '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+    rankText: { fontSize: 12, fontWeight: '700', color: isDark ? '#FCD34D' : '#D97706' },
+    itemTitle: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     itemSub: { fontSize: 12, color: '#6B7280' },
     itemValue: { fontSize: 14, fontWeight: '700', color: '#059669' },
 
@@ -539,38 +575,38 @@ const styles = StyleSheet.create({
     bigCreateText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
     emptyState: { alignItems: 'center', padding: 40, gap: 12 },
-    emptyTitle: { fontSize: 18, fontWeight: '700', color: '#374151' },
+    emptyTitle: { fontSize: 18, fontWeight: '700', color: isDark ? '#F9FAFB' : '#374151' },
     emptyDesc: { fontSize: 14, color: '#9CA3AF' },
 
-    couponCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+    couponCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
     couponHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-    couponTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 2 },
+    couponTitle: { fontSize: 16, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 2 },
     couponCode: { fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#6B7280' },
     statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
     statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
     progressSection: { marginBottom: 16 },
     progressLabel: { fontSize: 12, color: '#6B7280' },
-    progressValue: { fontSize: 12, fontWeight: '600', color: '#111827' },
-    progressBarBg: { height: 6, backgroundColor: '#F3F4F6', borderRadius: 3, marginTop: 4 },
+    progressValue: { fontSize: 12, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    progressBarBg: { height: 6, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 3, marginTop: 4 },
     progressBarFill: { height: '100%', borderRadius: 3 },
-    couponFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F9FAFB' },
+    couponFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#F9FAFB' },
     metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    metaText: { fontSize: 12, color: '#4B5563', fontWeight: '500' },
+    metaText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#4B5563', fontWeight: '500' },
 
     /* Reviews Tab */
-    ratingCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-    ratingLeft: { alignItems: 'center', paddingRight: 20, borderRightWidth: 1, borderRightColor: '#F3F4F6' },
-    ratingBig: { fontSize: 36, fontWeight: '800', color: '#111827' },
+    ratingCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    ratingLeft: { alignItems: 'center', paddingRight: 20, borderRightWidth: 1, borderRightColor: isDark ? '#374151' : '#F3F4F6' },
+    ratingBig: { fontSize: 36, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
     ratingCount: { fontSize: 12, color: '#6B7280', marginTop: 4 },
     ratingRight: { flex: 1, paddingLeft: 20, justifyContent: 'center' },
-    ratingMsg: { fontSize: 13, color: '#4B5563', fontStyle: 'italic' },
+    ratingMsg: { fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563', fontStyle: 'italic' },
 
-    reviewItem: { backgroundColor: '#fff', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+    reviewItem: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
     reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    reviewerName: { fontSize: 14, fontWeight: '700', color: '#111827' },
+    reviewerName: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
     reviewDate: { fontSize: 11, color: '#9CA3AF' },
     starsRow: { flexDirection: 'row', gap: 2, marginBottom: 8 },
-    starDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E5E7EB' },
+    starDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     starDotActive: { backgroundColor: '#F59E0B' },
-    reviewText: { fontSize: 13, color: '#4B5563', lineHeight: 20 },
+    reviewText: { fontSize: 13, color: isDark ? '#D1D5DB' : '#4B5563', lineHeight: 20 },
 });

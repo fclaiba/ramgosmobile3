@@ -4,7 +4,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
+import { useTheme } from '../../contexts/ThemeContext';
+
 export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+
     // Animation values
     const blob1Anim = useRef(new Animated.Value(0)).current;
     const blob2Anim = useRef(new Animated.Value(0)).current;
@@ -44,10 +49,19 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
     const blob3Scale = blob3Anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] });
     const blob3Opacity = blob3Anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.6] });
 
+    // Dynamic Colors
+    const gradientColors = isDark
+        ? ['#111827', '#1F2937', '#0F172A'] // Dark gray/blue gradient
+        : ['#F3E8FF', '#FAF5FF', '#FCE7F3']; // Original light gradient
+
+    const blob1Color = isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(167, 139, 250, 0.2)';
+    const blob2Color = isDark ? 'rgba(124, 58, 237, 0.15)' : 'rgba(192, 132, 252, 0.2)';
+    const blob3Color = isDark ? 'rgba(236, 72, 153, 0.15)' : 'rgba(244, 114, 182, 0.2)';
+
     return (
         <View style={styles.container}>
             <LinearGradient
-                colors={['#F3E8FF', '#FAF5FF', '#FCE7F3']} // violet-100 via purple-50 to pink-100
+                colors={gradientColors as any}
                 style={StyleSheet.absoluteFill}
             />
 
@@ -58,7 +72,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
                         styles.blob,
                         {
                             top: 80, left: 40,
-                            backgroundColor: 'rgba(167, 139, 250, 0.2)', // violet-400/20
+                            backgroundColor: blob1Color,
                             transform: [{ scale: blob1Scale }],
                             opacity: blob1Opacity,
                             width: 288, height: 288, // w-72 h-72
@@ -72,7 +86,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
                         styles.blob,
                         {
                             bottom: 80, right: 40,
-                            backgroundColor: 'rgba(192, 132, 252, 0.2)', // purple-400/20
+                            backgroundColor: blob2Color,
                             transform: [{ scale: blob2Scale }],
                             opacity: blob2Opacity,
                             width: 384, height: 384, // w-96 h-96
@@ -86,7 +100,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
                         styles.blob,
                         {
                             top: height / 2 - 160, left: width / 2 - 160,
-                            backgroundColor: 'rgba(244, 114, 182, 0.2)', // pink-400/20
+                            backgroundColor: blob3Color,
                             transform: [{ scale: blob3Scale }],
                             opacity: blob3Opacity,
                             width: 320, height: 320, // w-80 h-80

@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, PanResponder, Animated, Vibration, Image, TouchableWithoutFeedback } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, PanResponder, Animated, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Play, RotateCcw, AlertOctagon, Trophy, Coins, ArrowRight, ArrowDown } from 'lucide-react-native';
+import { Play, RotateCcw, ArrowDown, Coins } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useGameLevel } from './useGameLevel';
+import { GAME_LEVEL_THRESHOLDS, getArcadeParams } from './gameDifficultyConfig';
+import type { GameActionSignal } from './GameWrapper';
+import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
 
 const { width } = Dimensions.get('window');
-const GAME_HEIGHT = 450;
-const DINO_SIZE = 48;
-const DINO_WIDTH = 48;
-const DINO_HEIGHT = 48;
-const OBSTACLE_SIZE = 40;
-const GRAVITY = 0.8;
-const JUMP_FORCE = -14;
+// GAME_HEIGHT removed, we will use flex
 const GAME_SPEED_START = 6;
 const GROUND_HEIGHT = 80;
 
@@ -27,10 +25,28 @@ interface Obstacle {
 interface DinoGameProps {
     onGameEnd?: (score: number) => void;
     onClose?: () => void;
+    // Wrapper integration (optional)
+    actionSignal?: GameActionSignal;
+    uiMode?: 'standalone' | 'wrapped';
+    onEvent?: (event: GameEvent) => void;
+    onEnd?: (summary: GameEndSummary) => void;
+    gameId?: GameAdapterProps['gameId'];
+    family?: GameAdapterProps['family'];
 }
 
-export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
-    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+export const DinoGame = (props: DinoGameProps) => {
+    const {
+        onGameEnd,
+        onClose,
+        actionSignal,
+        uiMode = 'standalone',
+        onEvent,
+        onEnd,
+        gameId = 'dino',
+        family = 'arcade',
+    } = props;
+
+    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(0);
     const [isCrouching, setIsCrouching] = useState(false);
@@ -39,19 +55,70 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
     const [tick, setTick] = useState(0);
 
     // Refs
+    // Dino Physics
     const dinoY = useRef(new Animated.Value(0)).current;
     const dinoYVal = useRef(0);
     const dinoVel = useRef(0);
     const isJumping = useRef(false);
+
+    // Game Logic
     const obstacles = useRef<Obstacle[]>([]);
     const gameLoopRef = useRef<number | null>(null);
     const scoreRef = useRef(0);
+    const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const gameSpeed = useRef(GAME_SPEED_START);
     const crouchTimer = useRef<NodeJS.Timeout | null>(null);
     const isCrouchingRef = useRef(false);
 
+    const GRAVITY = 0.8;
+    const JUMP_FORCE = -14;
+
     // Sync Ref
     useEffect(() => { scoreRef.current = score; }, [score]);
+    useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+
+    const levelState = useGameLevel({
+        mode: 'score',
+        score,
+        baseLevel: 1,
+        thresholds: GAME_LEVEL_THRESHOLDS.dino,
+    });
+    const params = getArcadeParams('dino', levelState.level);
+    const lastActionNonce = useRef(0);
+    const lastLevelReported = useRef(levelState.level);
+
+    const emitStatus = useCallback((status: 'start' | 'playing' | 'paused' | 'gameover' | 'levelup') => {
+        onEvent?.({ type: 'status', status });
+    }, [onEvent]);
+
+    const emitMetrics = useCallback(() => {
+        onEvent?.({
+            type: 'metrics',
+            patch: {
+                score,
+                lives: 1,
+                level: levelState.level,
+                progressToNext: levelState.progress,
+            }
+        });
+    }, [levelState.level, levelState.progress, onEvent, score]);
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped') return;
+        emitMetrics();
+        if (levelState.level > lastLevelReported.current) {
+            lastLevelReported.current = levelState.level;
+            onEvent?.({ type: 'levelup', level: levelState.level });
+        }
+    }, [uiMode, emitMetrics, levelState.level, onEvent]);
+
+    useEffect(() => {
+        if (uiMode === 'wrapped') {
+            emitStatus('start');
+            emitMetrics();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [uiMode]);
 
     // Load High Score
     useEffect(() => {
@@ -80,6 +147,7 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
         setScore(0);
         scoreRef.current = 0;
         setGameState('PLAYING');
+        gameStateRef.current = 'PLAYING';
         obstacles.current = [];
         dinoY.setValue(0);
         dinoYVal.current = 0;
@@ -91,13 +159,52 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
 
         if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
         gameLoopRef.current = requestAnimationFrame(update);
+        if (uiMode === 'wrapped') emitStatus('playing');
     };
 
     const endGame = () => {
         setGameState('GAMEOVER');
-        Vibration.vibrate(500);
+        gameStateRef.current = 'GAMEOVER';
         if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        if (uiMode === 'wrapped') {
+            const final = {
+                score: scoreRef.current,
+                lives: 1,
+                level: levelState.level,
+                progressToNext: levelState.progress,
+            };
+            onEvent?.({ type: 'gameover', final, reason: 'collision' });
+            onEnd?.({ gameId, family, score: scoreRef.current, finalMetrics: final, reason: 'collision' });
+        }
     };
+
+    const pauseGame = () => {
+        if (gameStateRef.current !== 'PLAYING') return;
+        setGameState('PAUSED');
+        gameStateRef.current = 'PAUSED';
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        if (uiMode === 'wrapped') emitStatus('paused');
+    };
+
+    const resumeGame = () => {
+        if (gameStateRef.current !== 'PAUSED') return;
+        setGameState('PLAYING');
+        gameStateRef.current = 'PLAYING';
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = requestAnimationFrame(update);
+        if (uiMode === 'wrapped') emitStatus('playing');
+    };
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped' || !actionSignal) return;
+        if (actionSignal.nonce === lastActionNonce.current) return;
+        lastActionNonce.current = actionSignal.nonce;
+        if (actionSignal.type === 'start') startGame();
+        if (actionSignal.type === 'restart') startGame();
+        if (actionSignal.type === 'pause') pauseGame();
+        if (actionSignal.type === 'resume') resumeGame();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [actionSignal, uiMode]);
 
     const jump = () => {
         if (!isJumping.current && !isCrouchingRef.current) {
@@ -142,10 +249,12 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
     ).current;
 
     const update = () => {
-        if (gameState === 'GAMEOVER') return;
+        if (gameStateRef.current !== 'PLAYING') return;
 
         // Difficulty
-        gameSpeed.current = GAME_SPEED_START + (scoreRef.current / 500);
+        const speedMult = params?.gameId === 'dino' ? params.speedMultiplier : 1;
+        const spawnMult = params?.gameId === 'dino' ? params.obstacleSpawnMultiplier : 1;
+        gameSpeed.current = GAME_SPEED_START * speedMult;
 
         // Physics
         dinoYVal.current += dinoVel.current;
@@ -161,7 +270,7 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
         dinoY.setValue(dinoYVal.current);
 
         // Spawn Obstacles
-        if (Math.random() < 0.015 + (scoreRef.current * 0.00001)) {
+        if (Math.random() < (0.015 + (scoreRef.current * 0.00001)) * spawnMult) {
             const lastObs = obstacles.current[obstacles.current.length - 1];
             if (!lastObs || lastObs.x < width - 200) {
                 const type = Math.random() > 0.7 ? 'bird' : 'cactus';
@@ -246,31 +355,33 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
             <View style={{ position: 'absolute', top: 80, left: 250, opacity: 0.5 }}><Text style={{ fontSize: 40 }}>☁️</Text></View>
 
             {/* HUD */}
-            <View style={styles.hud}>
-                <View style={styles.scoreBox}>
-                    <Text style={styles.scoreText}>HI: {highScore}</Text>
-                    <Text style={styles.scoreText}>SCORE: {score}</Text>
+            {uiMode !== 'wrapped' && (
+                <View style={styles.hud}>
+                    <View style={styles.scoreBox}>
+                        <Text style={styles.scoreText}>HI: {highScore}</Text>
+                        <Text style={styles.scoreText}>SCORE: {score}</Text>
+                    </View>
+                    <View style={styles.instructions}>
+                        <ArrowDown size={16} color="#B45309" />
+                        <Text style={styles.instText}>Desliza para agacharte</Text>
+                    </View>
                 </View>
-                <View style={styles.instructions}>
-                    <ArrowDown size={16} color="#B45309" />
-                    <Text style={styles.instText}>Swipe Down to Crouch</Text>
-                </View>
-            </View>
+            )}
 
-            {gameState === 'IDLE' && (
+            {uiMode !== 'wrapped' && gameState === 'IDLE' && (
                 <View style={styles.centerContainer}>
                     <Text style={styles.title}>Dino Run</Text>
                     <TouchableOpacity style={styles.startBtn} onPress={startGame}>
                         <Play size={24} color="#fff" />
-                        <Text style={styles.btnText}>START</Text>
+                        <Text style={styles.btnText}>COMENZAR</Text>
                     </TouchableOpacity>
                 </View>
             )}
 
-            {gameState === 'GAMEOVER' && (
+            {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && (
                 <View style={styles.centerContainer}>
                     <Text style={styles.gameOverText}>GAME OVER</Text>
-                    <Text style={styles.finalScore}>Score: {score}</Text>
+                    <Text style={styles.finalScore}>Puntos: {score}</Text>
                     <View style={{ gap: 10 }}>
                         <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
                             if (onGameEnd) onGameEnd(score); // Save Coins
@@ -281,7 +392,7 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.startBtn} onPress={startGame}>
                             <RotateCcw size={24} color="#fff" />
-                            <Text style={styles.btnText}>TRY AGAIN</Text>
+                            <Text style={styles.btnText}>JUGAR OTRA VEZ</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -324,10 +435,8 @@ export const DinoGame = ({ onGameEnd, onClose }: DinoGameProps) => {
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         width: '100%',
-        height: GAME_HEIGHT,
-        borderRadius: 16,
-        overflow: 'hidden',
         backgroundColor: '#FEF3C7',
     },
     ground: {
@@ -343,7 +452,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         padding: 16,
-        zIndex: 10
+        zIndex: 10,
+        paddingTop: Platform.OS === 'ios' ? 0 : 10,
     },
     scoreBox: {
         backgroundColor: 'rgba(255,255,255,0.8)',

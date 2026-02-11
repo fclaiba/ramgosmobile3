@@ -14,6 +14,7 @@ interface StoredUser {
     email: string;
     emailVerified: boolean;
     status: 'active' | 'banned' | 'suspended';
+    termsAcceptedVersion: number;
     passwordHash?: string;
     role: AuthUserRole;
     name: string;
@@ -39,7 +40,16 @@ interface StoredUser {
         nickname?: string;
         tier: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
     };
+    subscription: {
+        status: SubscriptionStatus;
+        tier: SubscriptionTier;
+        expiresAt?: string;
+    };
 }
+
+export type SubscriptionStatus = 'active' | 'inactive';
+export type SubscriptionTier = 'free' | 'pro' | 'business';
+
 export interface PublicUser {
     id: string;
     email: string;
@@ -53,9 +63,13 @@ export interface PublicUser {
     kycMetadata?: Record<string, unknown>;
     nickname?: string;
     tier: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
+    termsAcceptedVersion: number;
+    subscriptionStatus: SubscriptionStatus;
+    subscriptionTier: SubscriptionTier;
     createdAt: string;
     lastLoginAt?: string;
     providers: string[];
+    isTest?: boolean;
 }
 
 // ... existing code ...
@@ -109,6 +123,7 @@ const DEFAULT_STORE: PersistedStore = {
             email: 'test@ramgos.com',
             emailVerified: true,
             status: 'active',
+            termsAcceptedVersion: 0,
             passwordHash: 'mock$4$321drowssap:pbuvwptg135:11', // password: 'password123'
             role: 'consumer',
             name: 'Usuario Test',
@@ -120,7 +135,7 @@ const DEFAULT_STORE: PersistedStore = {
                 failedLogins: 0,
             },
             kyc: {
-                status: 'unverified',
+                status: 'approved',
                 required: false,
                 updatedAt: new Date('2025-01-01').toISOString(),
             },
@@ -128,12 +143,17 @@ const DEFAULT_STORE: PersistedStore = {
                 nickname: 'Test',
                 tier: 'Bronze',
             },
+            subscription: {
+                status: 'inactive',
+                tier: 'free',
+            },
         },
         user_test_business: {
             id: 'user_test_business',
             email: 'business@ramgos.com',
             emailVerified: true,
             status: 'active',
+            termsAcceptedVersion: 0,
             passwordHash: 'mock$4$321drowssap:pbuvwptg135:11', // password: 'password123'
             role: 'business',
             name: 'Negocio Test',
@@ -154,12 +174,17 @@ const DEFAULT_STORE: PersistedStore = {
                 nickname: 'TestBiz',
                 tier: 'Silver',
             },
+            subscription: {
+                status: 'active',
+                tier: 'business',
+            },
         },
         user_test_influencer: {
             id: 'user_test_influencer',
             email: 'influencer@ramgos.com',
             emailVerified: true,
             status: 'active',
+            termsAcceptedVersion: 0,
             passwordHash: 'mock$4$321drowssap:pbuvwptg135:11', // password: 'password123'
             role: 'influencer',
             name: 'Influencer Test',
@@ -180,12 +205,17 @@ const DEFAULT_STORE: PersistedStore = {
                 nickname: 'TestInflu',
                 tier: 'Gold',
             },
+            subscription: {
+                status: 'active',
+                tier: 'pro',
+            },
         },
         user_test_admin: {
             id: 'user_test_admin',
             email: 'admin@ramgos.com',
             emailVerified: true,
             status: 'active',
+            termsAcceptedVersion: 0,
             passwordHash: 'mock$4$321drowssap:pbuvwptg135:11', // password: 'password123'
             role: 'admin',
             name: 'Admin Test',
@@ -204,6 +234,10 @@ const DEFAULT_STORE: PersistedStore = {
             profile: {
                 nickname: 'Admin',
                 tier: 'Platinum',
+            },
+            subscription: {
+                status: 'active',
+                tier: 'pro',
             },
         },
     },
@@ -267,7 +301,11 @@ const sanitizeUser = (user: StoredUser): PublicUser => ({
     requiresKyc: user.kyc.required,
     kycStatus: user.kyc.status,
     kycMetadata: user.kyc.metadata,
+    nickname: user.profile.nickname,
     tier: user.profile.tier,
+    termsAcceptedVersion: user.termsAcceptedVersion ?? 0,
+    subscriptionStatus: user.subscription?.status ?? 'inactive',
+    subscriptionTier: user.subscription?.tier ?? 'free',
     createdAt: user.createdAt,
     lastLoginAt: user.security.lastLoginAt,
     providers: user.providers.map((p) => p.type),
@@ -303,6 +341,49 @@ const loadStore = async () => {
 const ensureBootstrapped = async () => {
     if (bootstrapped) return;
     await loadStore();
+
+    // FORCE FIX: Ensure test users are always approved/validated for demo purposes regardless of old data
+    const TEST_IDS = ['user_test_consumer', 'user_test_business', 'user_test_influencer', 'user_test_admin'];
+    let changed = false;
+    TEST_IDS.forEach(id => {
+        let user = memoryStore.users[id];
+        let userChanged = false;
+
+        // 0. Restore if missing (Crucial for Admin Panel visibility)
+        if (!user && DEFAULT_STORE.users[id]) {
+            console.log('[MockStore] Restoring missing test user:', id);
+            user = JSON.parse(JSON.stringify(DEFAULT_STORE.users[id]));
+            memoryStore.users[id] = user;
+            userChanged = true;
+        }
+
+        if (user) {
+            // 1. Force KYC Approved
+            if (user.kyc.status !== 'approved') {
+                user.kyc.status = 'approved';
+                userChanged = true;
+            }
+            // 2. Force Email Verified
+            if (!user.emailVerified) {
+                user.emailVerified = true;
+                userChanged = true;
+            }
+            // 3. Bring old 2025 test users to top of list (Freshness)
+            if (user.createdAt.startsWith('2025')) {
+                const now = new Date().toISOString();
+                user.createdAt = now;
+                user.updatedAt = now;
+                userChanged = true;
+            }
+
+            if (userChanged) changed = true;
+        }
+    });
+
+    if (changed) {
+        await persistStore();
+    }
+
     bootstrapped = true;
 };
 
@@ -390,7 +471,9 @@ const createVerificationRecord = async (email: string, purpose: VerificationPurp
     const record: VerificationRecord = {
         id: randomId('verify'),
         email: email.trim().toLowerCase(),
-        code: generateCode(),
+        // Mock: always issue 111111 so demo users can verify easily (6 digits).
+        // Any other code should fail verification.
+        code: '111111',
         purpose,
         createdAt: now(),
         expiresAt: now() + VERIFICATION_TTL_MS,
@@ -403,8 +486,10 @@ const createVerificationRecord = async (email: string, purpose: VerificationPurp
 
 const consumeVerificationCode = (email: string, code: string): VerificationRecord | null => {
     const normalized = email.trim().toLowerCase();
+    // Mock rule: only 111111 is accepted
+    if (code !== '111111') return null;
     const record = Object.values(memoryStore.verifications).find(
-        (v) => v.email === normalized && v.code === code,
+        (v) => v.email === normalized && v.code === '111111',
     );
     if (!record) return null;
     if (record.expiresAt < now()) {
@@ -483,7 +568,7 @@ const signUpWithEmail = async (input: SignUpInput): Promise<SignUpResult> => {
         throw new Error('El email ya está registrado. Intenta iniciar sesión.');
     }
 
-    const requiresKyc = input.role === 'business' || input.role === 'influencer';
+    const requiresKyc = true; // ALL users must verify identity now
     const timestamp = new Date().toISOString();
     const user: StoredUser = {
         id: randomId('user'),
@@ -492,6 +577,7 @@ const signUpWithEmail = async (input: SignUpInput): Promise<SignUpResult> => {
         passwordHash: hashPassword(input.password),
         role: input.role,
         status: 'active',
+        termsAcceptedVersion: 0,
         name: input.name,
         avatar:
             input.avatar ??
@@ -504,13 +590,17 @@ const signUpWithEmail = async (input: SignUpInput): Promise<SignUpResult> => {
             failedLogins: 0,
         },
         kyc: {
-            status: requiresKyc ? 'unverified' : 'approved',
-            required: requiresKyc,
+            status: 'unverified',
+            required: true,
             updatedAt: timestamp,
         },
         profile: {
             nickname: input.name.split(' ')[0] ?? input.name,
             tier: 'Bronze',
+        },
+        subscription: {
+            status: 'inactive',
+            tier: 'free',
         },
     };
 
@@ -550,7 +640,7 @@ const verifyEmailCode = async (email: string, code: string): Promise<AuthResult>
     const session = createSessionRecord(user.id, deviceId);
     memoryStore.sessions[session.id] = session;
     user.security.lastLoginAt = new Date(session.createdAt).toISOString();
-    await storage.setItem(CURRENT_SESSION_KEY, session.id);
+    await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
     await persistStore();
 
     return buildAuthPayload(user, session);
@@ -560,9 +650,32 @@ const loginWithEmail = async (email: string, password: string): Promise<AuthResu
     await ensureBootstrapped();
     await removeExpiredSessions();
 
-    const user = findUserByEmail(email);
+    let user = findUserByEmail(email);
+
+    // DEV FIX: Auto-restore missing test users (e.g. if persistence was cleared or empty)
+    const normalizedEmail = email.trim().toLowerCase();
+    const DEV_ACCOUNTS = ['test@ramgos.com', 'business@ramgos.com', 'influencer@ramgos.com', 'admin@ramgos.com'];
+    if (!user && DEV_ACCOUNTS.includes(normalizedEmail)) {
+        const defaultUser = Object.values(DEFAULT_STORE.users).find(u => u.email.toLowerCase() === normalizedEmail);
+        if (defaultUser) {
+            console.log('[MockStore] Restoring missing dev user:', defaultUser.email);
+            memoryStore.users[defaultUser.id] = { ...defaultUser };
+            await persistStore();
+            user = memoryStore.users[defaultUser.id];
+        }
+    }
+
     const legacyPassword = getLegacyPassword(user?.passwordHash);
-    const passwordMatches = user ? verifyPassword(user.passwordHash, password) : false;
+    let passwordMatches = user ? verifyPassword(user.passwordHash, password) : false;
+
+    // DEV FIX: Allow standard test accounts to login even if hash is stale/mismatched from refactors
+    // This prevents "Invalid Credentials" errors when switching roles during development
+    if (user && !passwordMatches && password === 'password123' && DEV_ACCOUNTS.includes(user.email)) {
+        console.log('[MockStore] Dev account login fallback triggered');
+        passwordMatches = true;
+        user.passwordHash = hashPassword(password); // Repair hash
+    }
+
     if (!user || !passwordMatches) {
         throw new Error('Credenciales inválidas.');
     }
@@ -583,7 +696,7 @@ const loginWithEmail = async (email: string, password: string): Promise<AuthResu
         user.passwordHash = hashPassword(password);
     }
     user.security.lastLoginAt = new Date(session.createdAt).toISOString();
-    await storage.setItem(CURRENT_SESSION_KEY, session.id);
+    await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
     await persistStore();
 
     return buildAuthPayload(user, session);
@@ -613,7 +726,7 @@ const socialLogin = async (
     if (!user) {
         const timestamp = new Date().toISOString();
         const role: AuthUserRole = fallbackRole;
-        const requiresKyc = role === 'business' || role === 'influencer';
+        const requiresKyc = true; // ALL users must verify identity
         user = {
             id: randomId('user'),
             email:
@@ -622,6 +735,7 @@ const socialLogin = async (
             emailVerified: true,
             role,
             status: 'active',
+            termsAcceptedVersion: 0,
             name: profile.name ?? `${provider.toUpperCase()} User`,
             avatar:
                 profile.avatar ??
@@ -637,13 +751,17 @@ const socialLogin = async (
                 lastLoginAt: timestamp,
             },
             kyc: {
-                status: requiresKyc ? 'unverified' : 'approved',
-                required: requiresKyc,
+                status: 'unverified',
+                required: true,
                 updatedAt: timestamp,
             },
             profile: {
                 nickname: profile.name?.split(' ')[0] ?? provider,
                 tier: 'Silver',
+            },
+            subscription: {
+                status: 'inactive',
+                tier: 'free',
             },
         };
         memoryStore.users[user.id] = user;
@@ -661,7 +779,7 @@ const socialLogin = async (
     const session = createSessionRecord(user.id, deviceId);
     memoryStore.sessions[session.id] = session;
     user.security.lastLoginAt = new Date(session.createdAt).toISOString();
-    await storage.setItem(CURRENT_SESSION_KEY, session.id);
+    await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
     await persistStore();
 
     return buildAuthPayload(user, session);
@@ -746,10 +864,26 @@ const updateRole = async (userId: string, role: AuthUserRole): Promise<PublicUse
     }
     user.role = role;
     user.updatedAt = new Date().toISOString();
-    user.kyc.required = role === 'business' || role === 'influencer';
+    user.kyc.required = true; // Always true now
     if (!user.kyc.required && user.kyc.status !== 'approved') {
         user.kyc.status = 'approved';
     }
+    await persistStore();
+    return sanitizeUser(user);
+};
+
+const updateSubscription = async (userId: string, tier: SubscriptionTier, status: SubscriptionStatus): Promise<PublicUser> => {
+    await ensureBootstrapped();
+    const user = memoryStore.users[userId];
+    if (!user) {
+        throw new Error('Usuario no encontrado');
+    }
+    user.subscription = { tier, status, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() };
+    user.updatedAt = new Date().toISOString();
+
+    // If business plan, ensure role is business (optional safeguard)
+    // if (tier === 'business' && user.role !== 'business') user.role = 'business';
+
     await persistStore();
     return sanitizeUser(user);
 };
@@ -777,11 +911,17 @@ const markKycSubmitted = async (userId: string, data?: Record<string, unknown>) 
 const updateKycStatus = async (userId: string, status: AuthKycStatus, notes?: string) => {
     await ensureBootstrapped();
     const user = memoryStore.users[userId];
-    if (!user) return;
+    if (!user) {
+        // User might not exist if it's a pure fintech generic record, but for Ramgos it should match
+        return null;
+    }
     user.kyc.status = status;
     user.kyc.updatedAt = new Date().toISOString();
-    user.kyc.reviewerNotes = notes;
+    if (notes) {
+        user.kyc.reviewerNotes = notes;
+    }
     await persistStore();
+    return sanitizeUser(user);
 };
 
 const updateProfile = async (userId: string, updates: { nickname?: string; avatar?: string }) => {
@@ -843,6 +983,25 @@ const getPendingKycUsers = async (): Promise<PublicUser[]> => {
         .map(sanitizeUser);
 };
 
+const acceptTerms = async (userId: string, version: number): Promise<PublicUser> => {
+    await ensureBootstrapped();
+    const user = memoryStore.users[userId];
+    if (!user) throw new Error('Usuario no encontrado');
+    user.termsAcceptedVersion = version;
+    user.updatedAt = new Date().toISOString();
+    await persistStore();
+    return sanitizeUser(user);
+};
+
+const deleteAccount = async (userId: string) => {
+    await ensureBootstrapped();
+    if (memoryStore.users[userId]) {
+        delete memoryStore.users[userId];
+    }
+    await revokeAllSessionsForUser(userId);
+    await persistStore();
+};
+
 export const mockConvexStore = {
     init: ensureBootstrapped,
     ensureDeviceId,
@@ -855,9 +1014,14 @@ export const mockConvexStore = {
     revokeAllSessionsForUser,
     getSessionById,
     updateRole,
+    updateSubscription,
     markKycSubmitted,
     updateKycStatus,
     updateProfile,
+    acceptTerms,
+    deleteAccount,
+
+
     listSessionsForUser,
     getStoreSnapshot,
     resendVerification,

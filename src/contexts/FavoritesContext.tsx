@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 // We will store the data as it comes from Marketplace but adapter might be needed for SavedScreen
 export interface FavoriteItem {
     id: string | number;
-    type: 'product' | 'bono' | 'event' | 'bonus'; // handling both 'bono' and 'bonus' just in case
+    type: 'product' | 'bono' | 'event' | 'service' | 'bonus'; // handling both 'bono' and 'bonus' just in case
     name: string; // Title
     price: number;
     image: string;

@@ -29,22 +29,25 @@ export const Button = ({ onPress, children, style, variant = 'default', size = '
         activeOpacity={disabled ? 1 : 0.7}
         disabled={disabled}
     >
-        {typeof children === 'string' ? (
-            <Text
-                style={[
-                    styles.text,
-                    variant === 'ghost' && styles.ghostText,
-                    variant === 'outline' && styles.outlineText,
-                    size === 'sm' && styles.textSm,
-                    size === 'lg' && styles.textLg,
-                    disabled && styles.disabledText,
-                ]}
-            >
-                {children}
-            </Text>
-        ) : (
-            children
-        )}
+        {React.Children.map(children, (child) => {
+            if (typeof child === 'string' || typeof child === 'number') {
+                return (
+                    <Text
+                        style={[
+                            styles.text,
+                            variant === 'ghost' && styles.ghostText,
+                            variant === 'outline' && styles.outlineText,
+                            size === 'sm' && styles.textSm,
+                            size === 'lg' && styles.textLg,
+                            disabled && styles.disabledText,
+                        ]}
+                    >
+                        {child}
+                    </Text>
+                );
+            }
+            return child;
+        })}
     </TouchableOpacity>
 );
 

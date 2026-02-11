@@ -1,0 +1,5 @@
+{"sessionId":"debug-session","runId":"pre-fix","hypothesisId":"H1","location":"MarketplaceContext.tsx:after-exports","message":"MarketplaceContext module evaluated","data":{"releaseDays":10},"timestamp":1768825748204}
+{"sessionId":"debug-session","runId":"post-fix","hypothesisId":"H3","location":"MarketplaceContext.tsx:runtime-env","message":"Runtime env snapshot","data":{"hasWindow":true,"hasDocument":true,"hasNavigator":true},"timestamp":1768826014748}
+{"sessionId":"debug-session","runId":"pre-fix","hypothesisId":"H1","location":"MarketplaceContext.tsx:after-exports","message":"MarketplaceContext module evaluated","data":{"releaseDays":10},"timestamp":1768826014745}
+{"sessionId":"debug-session","runId":"pre-fix","hypothesisId":"H1","location":"MarketplaceContext.tsx:after-exports","message":"MarketplaceContext module evaluated","data":{"releaseDays":10},"timestamp":1768827932245}
+{"sessionId":"debug-session","runId":"post-fix","hypothesisId":"H3","location":"MarketplaceContext.tsx:runtime-env","message":"Runtime env snapshot","data":{"hasWindow":true,"hasDocument":true,"hasNavigator":true},"timestamp":1768827932245}

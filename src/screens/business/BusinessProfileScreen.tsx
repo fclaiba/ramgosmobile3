@@ -6,7 +6,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     TextInput,
-    Modal,
+    useWindowDimensions,
 } from 'react-native';
 import { Store, MapPin, Phone, Clock4, Factory, Sparkles, Pause, Play } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
@@ -14,11 +14,16 @@ import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { useBusiness, BranchInput, CatalogItemInput } from '../../contexts/BusinessContext';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const formatCurrency = (value: number) =>
     `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function BusinessProfileScreen({ navigation }: any) {
+    const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+    const isNarrow = width < 420;
     const {
         businessInfo,
         updateBusinessInfo,
@@ -323,11 +328,21 @@ export default function BusinessProfileScreen({ navigation }: any) {
                 </Card>
             </ScrollView>
 
-            <Modal visible={infoModalVisible} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>Editar información del negocio</Text>
-                        <View style={styles.formGroup}>
+            {/* Info Modal */}
+            <Sheet open={infoModalVisible} onOpenChange={setInfoModalVisible}>
+                <SheetContent side="bottom" style={styles.sheetContent}>
+                    <View style={styles.sheetInner}>
+                        <SheetHeader>
+                            <SheetTitle>Editar información del negocio</SheetTitle>
+                        </SheetHeader>
+                        <ScrollView
+                            contentContainerStyle={[
+                                styles.scrollForm,
+                                { paddingBottom: Math.max(24, insets.bottom + 96) },
+                            ]}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <View style={styles.formGroup}>
                             <Text style={styles.inputLabel}>Nombre comercial</Text>
                             <TextInput
                                 style={styles.input}
@@ -352,7 +367,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 onChangeText={(value) => setInfoDraft((prev) => ({ ...prev, description: value }))}
                             />
                         </View>
-                        <View style={styles.formRow}>
+                        <View style={[styles.formRow, isNarrow && { flexDirection: 'column' }]}>
                             <View style={styles.formColumn}>
                                 <Text style={styles.inputLabel}>Correo</Text>
                                 <TextInput
@@ -373,7 +388,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 />
                             </View>
                         </View>
-                        <View style={styles.formRow}>
+                        <View style={[styles.formRow, isNarrow && { flexDirection: 'column' }]}>
                             <View style={styles.formColumn}>
                                 <Text style={styles.inputLabel}>WhatsApp</Text>
                                 <TextInput
@@ -399,23 +414,36 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 onChangeText={(value) => setInfoDraft((prev) => ({ ...prev, instagram: value }))}
                             />
                         </View>
-                        <View style={styles.modalActions}>
-                            <Button variant="outline" onPress={() => setInfoModalVisible(false)}>
-                                <Text style={styles.buttonTextDark}>Cancelar</Text>
-                            </Button>
-                            <Button onPress={handleSaveBusinessInfo}>
-                                <Text style={styles.buttonTextLight}>Guardar cambios</Text>
-                            </Button>
+                        </ScrollView>
+                        <View style={[styles.sheetFooter, { paddingBottom: Math.max(16, insets.bottom + 12) }]}>
+                            <View style={[styles.modalActions, isNarrow && { flexDirection: 'column' }]}>
+                                <Button variant="outline" onPress={() => setInfoModalVisible(false)} style={isNarrow ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={styles.buttonTextDark}>Cancelar</Text>
+                                </Button>
+                                <Button onPress={handleSaveBusinessInfo} style={isNarrow ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={styles.buttonTextLight}>Guardar cambios</Text>
+                                </Button>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </SheetContent>
+            </Sheet>
 
-            <Modal visible={branchModalVisible} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>Nueva sucursal</Text>
-                        <View style={styles.formGroup}>
+            {/* Branch Modal */}
+            <Sheet open={branchModalVisible} onOpenChange={setBranchModalVisible}>
+                <SheetContent side="bottom" style={styles.sheetContent}>
+                    <View style={styles.sheetInner}>
+                        <SheetHeader>
+                            <SheetTitle>Nueva sucursal</SheetTitle>
+                        </SheetHeader>
+                        <ScrollView
+                            contentContainerStyle={[
+                                styles.scrollForm,
+                                { paddingBottom: Math.max(24, insets.bottom + 96) },
+                            ]}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <View style={styles.formGroup}>
                             <Text style={styles.inputLabel}>Nombre</Text>
                             <TextInput
                                 style={styles.input}
@@ -431,7 +459,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 onChangeText={(value) => setBranchDraft((prev) => ({ ...prev, address: value }))}
                             />
                         </View>
-                        <View style={styles.formRow}>
+                        <View style={[styles.formRow, isNarrow && { flexDirection: 'column' }]}>
                             <View style={styles.formColumn}>
                                 <Text style={styles.inputLabel}>Ciudad</Text>
                                 <TextInput
@@ -457,23 +485,36 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 onChangeText={(value) => setBranchDraft((prev) => ({ ...prev, schedule: value }))}
                             />
                         </View>
-                        <View style={styles.modalActions}>
-                            <Button variant="outline" onPress={() => setBranchModalVisible(false)}>
-                                <Text style={styles.buttonTextDark}>Cancelar</Text>
-                            </Button>
-                            <Button onPress={handleCreateBranch}>
-                                <Text style={styles.buttonTextLight}>Guardar sucursal</Text>
-                            </Button>
+                        </ScrollView>
+                        <View style={[styles.sheetFooter, { paddingBottom: Math.max(16, insets.bottom + 12) }]}>
+                            <View style={[styles.modalActions, isNarrow && { flexDirection: 'column' }]}>
+                                <Button variant="outline" onPress={() => setBranchModalVisible(false)} style={isNarrow ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={styles.buttonTextDark}>Cancelar</Text>
+                                </Button>
+                                <Button onPress={handleCreateBranch} style={isNarrow ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={styles.buttonTextLight}>Guardar sucursal</Text>
+                                </Button>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </SheetContent>
+            </Sheet>
 
-            <Modal visible={catalogModalVisible} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>Nuevo producto</Text>
-                        <View style={styles.formGroup}>
+            {/* Catalog Modal */}
+            <Sheet open={catalogModalVisible} onOpenChange={setCatalogModalVisible}>
+                <SheetContent side="bottom" style={styles.sheetContent}>
+                    <View style={styles.sheetInner}>
+                        <SheetHeader>
+                            <SheetTitle>Nuevo producto</SheetTitle>
+                        </SheetHeader>
+                        <ScrollView
+                            contentContainerStyle={[
+                                styles.scrollForm,
+                                { paddingBottom: Math.max(24, insets.bottom + 96) },
+                            ]}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <View style={styles.formGroup}>
                             <Text style={styles.inputLabel}>Nombre del producto</Text>
                             <TextInput
                                 style={styles.input}
@@ -489,7 +530,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 onChangeText={(value) => setCatalogDraft((prev) => ({ ...prev, category: value }))}
                             />
                         </View>
-                        <View style={styles.formRow}>
+                        <View style={[styles.formRow, isNarrow && { flexDirection: 'column' }]}>
                             <View style={styles.formColumn}>
                                 <Text style={styles.inputLabel}>Precio</Text>
                                 <TextInput
@@ -522,17 +563,20 @@ export default function BusinessProfileScreen({ navigation }: any) {
                                 onChangeText={(value) => setCatalogDraft((prev) => ({ ...prev, description: value }))}
                             />
                         </View>
-                        <View style={styles.modalActions}>
-                            <Button variant="outline" onPress={() => setCatalogModalVisible(false)}>
-                                <Text style={styles.buttonTextDark}>Cancelar</Text>
-                            </Button>
-                            <Button onPress={handleCreateCatalogItem}>
-                                <Text style={styles.buttonTextLight}>Guardar producto</Text>
-                            </Button>
+                        </ScrollView>
+                        <View style={[styles.sheetFooter, { paddingBottom: Math.max(16, insets.bottom + 12) }]}>
+                            <View style={[styles.modalActions, isNarrow && { flexDirection: 'column' }]}>
+                                <Button variant="outline" onPress={() => setCatalogModalVisible(false)} style={isNarrow ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={styles.buttonTextDark}>Cancelar</Text>
+                                </Button>
+                                <Button onPress={handleCreateCatalogItem} style={isNarrow ? { width: '100%' } : { flex: 1 }}>
+                                    <Text style={styles.buttonTextLight}>Guardar producto</Text>
+                                </Button>
+                            </View>
                         </View>
                     </View>
-                </View>
-            </Modal>
+                </SheetContent>
+            </Sheet>
         </View>
     );
 }
@@ -604,6 +648,22 @@ const styles = StyleSheet.create({
         borderRadius: 999,
     },
     catalogToggleText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    sheetContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        height: '90%',
+    },
+    sheetInner: {
+        flex: 1,
+        width: '100%',
+        maxWidth: 720,
+        alignSelf: 'center',
+    },
+    scrollForm: {
+        padding: 24,
+        gap: 16
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(15, 23, 42, 0.6)',
@@ -632,6 +692,13 @@ const styles = StyleSheet.create({
         color: '#111827',
     },
     inputMultiline: { height: 90, textAlignVertical: 'top' },
-    modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 },
+    sheetFooter: {
+        borderTopWidth: 1,
+        borderTopColor: '#e2e8f0',
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        backgroundColor: '#fff',
+    },
+    modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
 });
 

@@ -22,6 +22,7 @@ import {
     PaymentProviderKey,
 } from '../services/fintech/paymentProviders';
 import { useAuth } from './AuthContext';
+import { mockConvexStore } from '../services/auth/mockConvexStore';
 
 type WalletOwnerType = 'ramgos' | 'business' | 'influencer' | 'consumer';
 type WalletBalanceKey = 'available' | 'pending' | 'reserved';
@@ -160,6 +161,7 @@ interface FintechContextType {
     submitKyc: (payload: SubmitKycPayload) => KycRecord;
     updateKycStatus: (ownerId: string, status: KycStatus, notes?: string) => void;
     releasePayment: (paymentId: string) => boolean;
+    refreshKyc: () => Promise<void>;
 }
 
 const FintechContext = createContext<FintechContextType | undefined>(undefined);
@@ -313,6 +315,8 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
         kycRef.current = kycRecords;
     }, [kycRecords]);
 
+
+
     const ensureWalletAccount = useCallback(
         (ownerId: string, ownerType: WalletOwnerType, ownerName: string, currency = 'USD'): WalletAccount => {
             const existing = walletRef.current[ownerId];
@@ -408,6 +412,7 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
     const processPayment = useCallback(
         async (input: ProcessPaymentInput): Promise<PaymentRecord> => {
             const amount = roundCurrency(input.amount);
+
             if (amount <= 0) {
                 throw new Error('El monto del pago debe ser mayor a 0');
             }
@@ -665,6 +670,7 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const updateKycStatus = useCallback((ownerId: string, status: KycStatus, notes?: string) => {
+        console.log('[FintechContext] updateKycStatus called for:', ownerId, status);
         setKycRecords((prev) => {
             const existing = prev[ownerId] ?? {
                 ownerId,
@@ -681,17 +687,57 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
             kycRef.current = next;
             return next;
         });
+
+
+        // Sync with central Auth Store so the user sees the update immediately
+        mockConvexStore.updateKycStatus(ownerId, status, notes).catch(err => {
+            console.error('[FintechContext] Failed to sync KYC status to auth store', err);
+        });
     }, []);
+
+    const refreshKyc = useCallback(async () => {
+        try {
+            await mockConvexStore.init();
+            const snapshot = await mockConvexStore.getStoreSnapshot();
+            const loadedRecords: Record<string, KycRecord> = {};
+
+            Object.values(snapshot.users).forEach((u: any) => {
+                if (u.kyc) {
+                    loadedRecords[u.id] = {
+                        ownerId: u.id,
+                        ownerType: u.role as WalletOwnerType,
+                        status: u.kyc.status as KycStatus,
+                        submittedAt: u.kyc.submittedAt || u.createdAt,
+                        updatedAt: u.kyc.updatedAt || u.updatedAt,
+                        reviewerNotes: u.kyc.reviewerNotes,
+                        dataSnapshot: {
+                            ownerName: u.name,
+                            ...u.kyc.metadata
+                        }
+                    };
+                }
+            });
+
+            setKycRecords(prev => ({ ...prev, ...loadedRecords }));
+        } catch (err) {
+            console.error('[FintechContext] Failed to refresh KYC records', err);
+        }
+    }, []);
+
+    // Hydrate initially
+    useEffect(() => {
+        refreshKyc();
+    }, [refreshKyc]);
 
     const providers = useMemo(() => listPaymentProviders(), []);
 
     const contextValue = useMemo<FintechContextType>(
         () => ({
             providers,
-            wallets: Object.values(walletRef.current),
-            payments: paymentsRef.current,
-            withdrawals: withdrawalsRef.current,
-            kycRecords: kycRef.current,
+            wallets: Object.values(walletMap),
+            payments,
+            withdrawals,
+            kycRecords,
             processPayment,
             previewSplit,
             requestWithdrawal,
@@ -701,18 +747,24 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
             submitKyc,
             updateKycStatus,
             releasePayment,
+            refreshKyc,
         }),
         [
-            ensureWalletAccount,
-            getKycStatus,
-            getWalletByOwner,
-            previewSplit,
-            processPayment,
             providers,
+            walletMap,
+            payments,
+            withdrawals,
+            kycRecords,
+            processPayment,
+            previewSplit,
             requestWithdrawal,
+            ensureWalletAccount,
+            getWalletByOwner,
+            getKycStatus,
             submitKyc,
             updateKycStatus,
             releasePayment,
+            refreshKyc,
         ],
     );
 

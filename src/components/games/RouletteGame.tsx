@@ -1,82 +1,82 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Vibration } from 'react-native';
-import { AlertOctagon, RotateCcw, X } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
+import { useRewards } from '../../contexts/RewardsContext';
 
 const WHEEL_SIZE = 300;
-const SEGMENTS = [
-    { label: '100', color: '#EF4444', value: 100 },
-    { label: '50', color: '#F59E0B', value: 50 },
-    { label: '20', color: '#10B981', value: 20 },
-    { label: '10', color: '#3B82F6', value: 10 },
-    { label: '500', color: '#8B5CF6', value: 500 },
-    { label: 'PERDER', color: '#6B7280', value: 0 },
-    { label: '200', color: '#EC4899', value: 200 },
-    { label: 'BOOM', color: '#1F2937', value: -100 },
-];
-const SEGMENT_ANGLE = 360 / SEGMENTS.length;
 
 interface RouletteGameProps {
-    coins: number;
-    onCoinsChange?: (coins: number) => void; // Optional/Deprecated
     onClose: () => void;
-    onGameEnd?: (score: number) => void;
+    // Wrapper integration (optional)
+    uiMode?: 'standalone' | 'wrapped';
+    onEvent?: (event: GameEvent) => void;
+    onEnd?: (summary: GameEndSummary) => void;
+    gameId?: GameAdapterProps['gameId'];
+    family?: GameAdapterProps['family'];
 }
 
-export const RouletteGame = ({ coins, onCoinsChange, onClose, onGameEnd }: RouletteGameProps) => {
+export const RouletteGame = (props: RouletteGameProps) => {
+    const {
+        onClose,
+        uiMode = 'standalone',
+        onEvent,
+        onEnd,
+        gameId = 'roulette',
+        family = 'casino',
+    } = props;
+    const { spinLuckyWheel, getLuckyWheelStatus } = useRewards();
     const [spinning, setSpinning] = useState(false);
-    const [result, setResult] = useState<string | null>(null);
+    const [result, setResult] = useState<number | null>(null);
     const rotation = useSharedValue(0);
 
-    const SEARCH_COST = 50;
+    useEffect(() => {
+        if (uiMode !== 'wrapped') return;
+        onEvent?.({ type: 'status', status: 'playing' });
+        onEvent?.({ type: 'metrics', patch: { score: 0, level: 1, progressToNext: 0, lives: 0 } });
+    }, [onEvent, uiMode]);
 
     const spin = () => {
         if (spinning) return;
-        if (coins < SEARCH_COST) return; // Prop check, though parent usually handles too
+        const status = getLuckyWheelStatus();
+        if (!status.available) return;
 
         setSpinning(true);
         setResult(null);
 
-        // Deduct cost visually or wait for end? 
-        // Better to wait for end to send "Net Change" to parent, 
-        // BUT visually user might want to see coins drop. 
-        // Let's rely on parent handling the transaction at the end for simplicity in this architecture.
-
         const randomSpin = Math.random() * 360 + 1800;
-        const finalAngle = randomSpin % 360;
 
         rotation.value = withTiming(randomSpin, {
             duration: 4000,
             easing: Easing.out(Easing.cubic),
         }, (finished?: boolean) => {
             if (finished) {
-                const normalizedAngle = randomSpin % 360;
-                const index = Math.floor(((360 - normalizedAngle + (SEGMENT_ANGLE / 2)) % 360) / SEGMENT_ANGLE);
-                const winningSegment = SEGMENTS[index] || SEGMENTS[0];
-                runOnJS(handleResult)(winningSegment.label);
+                runOnJS(handleResult)();
             }
         });
     };
 
-    const handleResult = (label: string) => {
+    const handleResult = () => {
         setSpinning(false);
-        setResult(label);
-
-        const segment = SEGMENTS.find(s => s.label === label);
-        if (segment) {
-            const val = segment.value;
-            const netChange = val - SEARCH_COST;
-
-            if (val > 0) Vibration.vibrate([0, 50, 50, 50]); // Win pattern
-            else Vibration.vibrate(200); // Bad result or lose
-
-            // We pass the NET change to the parent.
-            if (onGameEnd) onGameEnd(netChange);
-
-            // Update visual if standalone (legacy support)
-            // onCoinsChange(Math.max(0, coins + netChange)); 
+        const outcome = spinLuckyWheel();
+        if (outcome.status !== 'awarded') {
+            onEvent?.({ type: 'status', status: 'start' });
+            return;
         }
+
+        const pts = outcome.pointsAwarded ?? 0;
+        setResult(pts);
+
+        onEvent?.({ type: 'currencyDelta', delta: pts, currency: 'points', reason: 'wheel_spin' });
+        onEnd?.({
+            gameId,
+            family,
+            score: 0,
+            currencyDelta: { currency: 'points', delta: pts },
+            finalMetrics: { score: 0, level: 1, progressToNext: 0, lives: 0 },
+            reason: 'wheel_spin',
+        });
     };
 
     const animatedStyle = useAnimatedStyle(() => {
@@ -87,47 +87,28 @@ export const RouletteGame = ({ coins, onCoinsChange, onClose, onGameEnd }: Roule
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                <X size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-
             <View style={styles.wheelContainer}>
                 {/* Pointer */}
                 <View style={styles.pointer} />
 
                 {/* Wheel */}
                 <Animated.View style={[styles.wheel, animatedStyle]}>
-                    {SEGMENTS.map((seg, i) => (
-                        <View
-                            key={i}
-                            style={[
-                                styles.segment,
-                                { transform: [{ rotate: `${i * SEGMENT_ANGLE}deg` }] }
-                            ]}
-                        >
-                            <View style={[styles.segmentColor, { backgroundColor: seg.color }]} />
-                            <Text style={styles.segmentText}>{seg.label}</Text>
-                        </View>
-                    ))}
                     <View style={styles.centerKnob} />
                 </Animated.View>
             </View>
 
             <TouchableOpacity
-                style={[styles.spinBtn, (spinning || coins < 50) && styles.disabledBtn]}
+                style={[styles.spinBtn, (spinning || !getLuckyWheelStatus().available) && styles.disabledBtn]}
                 onPress={spin}
-                disabled={spinning || coins < 50}
+                disabled={spinning || !getLuckyWheelStatus().available}
             >
-                <Text style={styles.spinText}>{spinning ? 'GIRANDO...' : 'GIRAR (-50)'}</Text>
+                <Text style={styles.spinText}>{spinning ? 'GIRANDO...' : 'GIRAR'}</Text>
             </TouchableOpacity>
 
-            {result && (
+            {result !== null && (
                 <View style={styles.resultBox}>
                     <Text style={styles.resultLabel}>Resultado:</Text>
-                    <Text style={styles.resultValue}>{result}</Text>
-                    <TouchableOpacity onPress={onClose} style={{ marginTop: 16, padding: 8 }}>
-                        <Text style={{ color: '#EF4444' }}>Cerrar</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.resultValue}>+{result} pts</Text>
                 </View>
             )}
         </View>
@@ -136,20 +117,11 @@ export const RouletteGame = ({ coins, onCoinsChange, onClose, onGameEnd }: Roule
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 16,
         padding: 24,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        position: 'relative', // Ensure relative positioning for absolute children
-    },
-    closeBtn: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        zIndex: 10,
-        padding: 5,
+        justifyContent: 'center',
     },
     wheelContainer: {
         width: WHEEL_SIZE,
@@ -165,36 +137,6 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         position: 'relative',
         backgroundColor: '#f3f4f6',
-    },
-    segment: {
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        alignItems: 'center',
-        paddingTop: 10,
-    },
-    segmentColor: {
-        position: 'absolute',
-        top: 0,
-        left: '50%', // This drawing is tricky in pure styling in RN without SVG.
-        // Using a simplified rect for visual cue or just verifying SVG usage if needed.
-        // For pure RN styling, often use triangular Views or Svg.
-        // IMPORTANT: Since I am not using SVG here to keep it simple, 
-        // I will trust the user won't mind a simplified "Blocky" wheel or I should have used simple blocks.
-        // Actually, achieving a pie chart without SVG is hard.
-        // I will assume for now this visual approximation is enough or I should use simple boxes.
-        // Let's use a simpler "list" visualization if Wheel is too hard?
-        // No, I'll stick to a rotating container but maybe just use colored squares to denote segments for now,
-        // as implementing a true Pie Chart with `View` borders is hacky.
-        width: 2,
-        height: '50%',
-        backgroundColor: '#fff', // Separator
-    },
-    segmentText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#000', // Text color might need adjustment against background
-        marginTop: 20,
     },
     centerKnob: {
         position: 'absolute',
@@ -239,6 +181,7 @@ const styles = StyleSheet.create({
     resultBox: {
         marginTop: 24,
         alignItems: 'center',
+        height: 60,
     },
     resultLabel: {
         color: '#6B7280',

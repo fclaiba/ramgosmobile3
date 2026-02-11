@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { X, Send, Heart, Trash2 } from 'lucide-react-native';
 import { useSocial, Post, Comment } from '../../contexts/SocialContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 
 interface PostCommentsModalProps {
     postId: string;
@@ -14,6 +16,10 @@ interface PostCommentsModalProps {
 export const PostCommentsModal = ({ postId, visible, onClose, isInstagram = false }: PostCommentsModalProps) => {
     const { posts, instagramPosts, addComment, currentUser, deleteComment } = useSocial();
     const [commentText, setCommentText] = useState('');
+
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     const post = isInstagram
         ? instagramPosts.find(p => p.id === postId)
@@ -45,21 +51,21 @@ export const PostCommentsModal = ({ postId, visible, onClose, isInstagram = fals
             {/* Delete option for own comments */}
             {item.userId === currentUser.id && (
                 <TouchableOpacity onPress={() => deleteComment(postId, item.id, isInstagram)}>
-                    <Trash2 size={16} color="#9CA3AF" />
+                    <Trash2 size={16} color={isDark ? "#9CA3AF" : "#9CA3AF"} />
                 </TouchableOpacity>
             )}
         </View>
     );
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Comentarios</Text>
+        <Sheet open={visible} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <SheetHeader style={styles.header}>
+                    <SheetTitle style={styles.headerTitle}>Comentarios</SheetTitle>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <X size={24} color="#111" />
+                        <X size={24} color={isDark ? "#F9FAFB" : "#111"} />
                     </TouchableOpacity>
-                </View>
+                </SheetHeader>
 
                 <FlatList
                     data={post.comments}
@@ -99,29 +105,34 @@ export const PostCommentsModal = ({ postId, visible, onClose, isInstagram = fals
                         </TouchableOpacity>
                     </View>
                 </KeyboardAvoidingView>
-            </SafeAreaView>
-        </Modal>
+            </SheetContent>
+        </Sheet>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: {
+        backgroundColor: isDark ? '#111827' : '#fff',
+        height: '85%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+    },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111' },
     closeBtn: { padding: 4 },
     listContent: { padding: 16 },
     commentItem: { flexDirection: 'row', marginBottom: 16 },
     commentAvatar: { width: 36, height: 36, marginRight: 12 },
-    commentContent: { flex: 1, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 10, marginRight: 8 },
+    commentContent: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderRadius: 12, padding: 10, marginRight: 8 },
     commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-    commentUser: { fontWeight: '600', fontSize: 13, color: '#111' },
+    commentUser: { fontWeight: '600', fontSize: 13, color: isDark ? '#F9FAFB' : '#111' },
     commentTime: { fontSize: 11, color: '#9CA3AF' },
-    commentText: { fontSize: 14, color: '#374151' },
+    commentText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151' },
     emptyState: { alignItems: 'center', paddingVertical: 40 },
     emptyText: { color: '#9CA3AF', fontSize: 15 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#fff' },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#F3F4F6', backgroundColor: isDark ? '#1F2937' : '#fff' },
     inputAvatar: { width: 32, height: 32, marginRight: 10 },
-    input: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, maxHeight: 100, fontSize: 15, color: '#111' },
-    sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-    sendBtnDisabled: { backgroundColor: '#E5E7EB' },
+    input: { flex: 1, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, maxHeight: 100, fontSize: 15, color: isDark ? '#F9FAFB' : '#111' },
+    sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? '#4F46E5' : '#000', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+    sendBtnDisabled: { backgroundColor: isDark ? '#374151' : '#E5E7EB' },
 });

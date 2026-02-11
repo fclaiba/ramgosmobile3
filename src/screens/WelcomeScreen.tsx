@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Animated, Platform, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, Alert, ScrollView, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { UserPlus, LogIn, UserCircle, Sparkles } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { useAuth } from '../contexts/AuthContext';
-
-// Social Icons Components
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 
 // Social Icons Components
 const GoogleIcon = () => (
@@ -24,14 +25,19 @@ const FacebookIcon = () => (
     </Svg>
 );
 
-const AppleIcon = () => (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="#000">
+const AppleIcon = ({ isDark }: { isDark: boolean }) => (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill={isDark ? "#fff" : "#000"}>
         <Path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
     </Svg>
 );
 
 export default function WelcomeScreen({ navigation }: any) {
     const { loginWithSocial, isProcessing } = useAuth();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
+
     const [isLoading, setIsLoading] = useState(false);
     const busy = isProcessing || isLoading;
 
@@ -117,7 +123,7 @@ export default function WelcomeScreen({ navigation }: any) {
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'No pudimos iniciar sesión con esa cuenta.';
-            Alert.alert('Inicio social', message);
+            show(message, 'error');
         } finally {
             setIsLoading(false);
         }
@@ -126,7 +132,7 @@ export default function WelcomeScreen({ navigation }: any) {
     return (
         <AuthBackground>
             <SafeAreaView style={styles.container}>
-                <View style={styles.scrollContainer}>
+                <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
                     <View style={styles.content}>
 
                         {/* Card Container */}
@@ -146,7 +152,11 @@ export default function WelcomeScreen({ navigation }: any) {
                                     end={{ x: 1, y: 1 }}
                                     style={styles.mainIcon}
                                 >
-                                    <Text style={{ fontSize: 48 }}>🐾</Text>
+                                    <Image
+                                        source={require('../../logo.jpeg')}
+                                        style={styles.logoImage}
+                                        resizeMode="contain"
+                                    />
                                 </LinearGradient>
 
                                 <Animated.View style={[styles.sparkle, { transform: [{ scale: sparkleScale }] }]}>
@@ -231,12 +241,15 @@ export default function WelcomeScreen({ navigation }: any) {
                                         onPress={() => handleSocialLogin('apple')}
                                         disabled={busy}
                                     >
-                                        <AppleIcon />
+                                        <AppleIcon isDark={isDark} />
                                     </TouchableOpacity>
                                 </View>
 
                                 <Text style={styles.footerText}>
-                                    Al continuar, aceptas nuestros <Text style={styles.link}>Términos</Text> y <Text style={styles.link}>Privacidad</Text>
+                                    Al continuar, aceptas nuestros{' '}
+                                    <Text style={styles.link} onPress={() => navigation.navigate('Terms')}>Términos</Text>{' '}
+                                    y{' '}
+                                    <Text style={styles.link} onPress={() => navigation.navigate('Privacy')}>Privacidad</Text>
                                 </Text>
                             </Animated.View>
                         </View>
@@ -249,35 +262,35 @@ export default function WelcomeScreen({ navigation }: any) {
                         </Animated.View>
 
                     </View>
-                </View>
+                </ScrollView>
             </SafeAreaView>
         </AuthBackground>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
-    scrollContainer: { flex: 1, justifyContent: 'center', padding: 16 },
+    scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: 16 },
     content: { alignItems: 'center', justifyContent: 'center' },
 
     // Card Glass Effect
     card: {
         width: '100%',
         maxWidth: 400,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.8)',
         borderRadius: 24,
         padding: 32,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(139, 92, 246, 0.2)', // violet-200/50
+        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
         ...Platform.select({
             web: {
-                boxShadow: '0px 10px 20px rgba(139, 92, 246, 0.1)',
+                boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0px 10px 20px rgba(139, 92, 246, 0.1)',
             },
             default: {
-                shadowColor: '#8B5CF6',
+                shadowColor: isDark ? '#000' : '#8B5CF6',
                 shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.1,
+                shadowOpacity: isDark ? 0.3 : 0.1,
                 shadowRadius: 20,
                 elevation: 10,
             },
@@ -288,12 +301,13 @@ const styles = StyleSheet.create({
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
     iconGlowWrapper: { position: 'absolute', width: 100, height: 100 },
     iconGlow: { flex: 1, borderRadius: 30, opacity: 0.5, transform: [{ scale: 1.2 }] },
-    mainIcon: { width: 112, height: 112, borderRadius: 28, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#fff' },
+    mainIcon: { width: 112, height: 112, borderRadius: 28, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#374151' : '#fff' },
+    logoImage: { width: 72, height: 72 },
     sparkle: { position: 'absolute', top: -8, right: -8 },
 
     // Text
-    title: { fontSize: 32, fontWeight: 'bold', color: '#7C3AED', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', paddingHorizontal: 4, lineHeight: 22 },
+    title: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#7C3AED', marginBottom: 8, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: isDark ? '#D1D5DB' : '#6B7280', textAlign: 'center', paddingHorizontal: 4, lineHeight: 22 },
 
     // Buttons
     buttonGroup: { width: '100%', gap: 12, marginBottom: 24 },
@@ -313,24 +327,24 @@ const styles = StyleSheet.create({
     gradientBtn: { flexDirection: 'row', height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
     primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: '#fff', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#DDD6FE' },
-    secondaryBtnText: { color: '#111827', fontSize: 16, fontWeight: '600' },
+    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: isDark ? '#374151' : '#fff', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
+    secondaryBtnText: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 16, fontWeight: '600' },
 
     ghostBtn: { flexDirection: 'row', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    ghostBtnText: { color: '#6B7280', fontSize: 16, fontWeight: '500' },
+    ghostBtnText: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 16, fontWeight: '500' },
 
     // Footer
     divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 24 },
-    line: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-    orText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 12 },
+    line: { flex: 1, height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
+    orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
 
     socialRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
-    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
+    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
 
-    footerText: { fontSize: 12, color: '#9CA3AF', textAlign: 'center' },
+    footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', textAlign: 'center' },
     link: { color: '#7C3AED', fontWeight: '500' },
 
     // Bottom Deco
     bottomDeco: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
-    bottomDecoText: { fontSize: 14, color: '#6B7280', fontWeight: '500' },
+    bottomDecoText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
 });

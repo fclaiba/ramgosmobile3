@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, ZoomIn, useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming } from 'react-native-reanimated';
 import { CreditCard, Lock, CheckCircle, ShieldCheck, User, Calendar, Cctv, ChevronRight, X, Wallet, Building, ArrowRightLeft, Home, Trophy, Coins } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,13 +11,26 @@ import { useMarketplace, ShippingMethod } from '../contexts/MarketplaceContext';
 import { useFintech, PaymentRecord } from '../contexts/FintechContext';
 import { PaymentSplit } from '../services/fintech/paymentSplitter';
 import { PaymentProviderKey } from '../services/fintech/paymentProviders';
+import { POINT_VALUE_USD } from '../contexts/RewardsContext';
+import { useReferral } from '../contexts/ReferralContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { useActionGate } from '../utils/useActionGate';
 
 export default function PaymentScreen({ route, navigation }: any) {
     const { width } = useWindowDimensions();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
+    const { gateCheckout } = useActionGate();
+    const safeMoney = (value?: number) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
     const params = route.params || {};
     const amount: number = params.amount ?? 0;
     const discountUsedPoints: number = params.discountUsedPoints ?? 0;
     const discountAmount: number = params.discountAmount ?? 0;
+    const referralDiscount: number = params.referralDiscount ?? 0;
     const currency: string = params.currency ?? 'USD';
     const shippingMethod: string = params.shippingMethod ?? 'pickup';
     const shippingCost: number = params.shippingCost ?? 0;
@@ -32,7 +46,8 @@ export default function PaymentScreen({ route, navigation }: any) {
     const influencerRate: number | undefined = params.influencerRate;
 
     const { clearCart } = useCart();
-    const { redeemPoints, trackPurchase, points } = usePoints();
+    const { redeemPoints, trackPurchase, points, previewPurchasePoints } = usePoints();
+    const { notifyMyFirstPurchase } = useReferral();
     const { placeOrder } = useMarketplace();
     const { processPayment, previewSplit, providers } = useFintech();
 
@@ -64,7 +79,16 @@ export default function PaymentScreen({ route, navigation }: any) {
     const [pointsInput, setPointsInput] = useState('');
 
     // Calculate final totals with local discount
-    const finalAmount = Math.max(0, amount - localDiscountAmount);
+    const finalAmount = Math.max(0, amount - localDiscountAmount - referralDiscount);
+    const pointsPreview = useMemo(() => previewPurchasePoints(finalAmount), [finalAmount, previewPurchasePoints]);
+    const subtotal = useMemo(() => {
+        if (!Array.isArray(cartSnapshot)) return amount;
+        return cartSnapshot.reduce((sum: number, item: any) => sum + item.price * (item.quantity || 1), 0);
+    }, [cartSnapshot, amount]);
+    const itemCount = useMemo(() => {
+        if (!Array.isArray(cartSnapshot)) return 0;
+        return cartSnapshot.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
+    }, [cartSnapshot]);
 
     useEffect(() => {
         setLocalAppliedPoints(discountUsedPoints);
@@ -75,28 +99,24 @@ export default function PaymentScreen({ route, navigation }: any) {
         const pointsToUse = parseInt(pointsInput.replace(/\D/g, ''), 10);
 
         if (isNaN(pointsToUse) || pointsToUse <= 0) {
-            Alert.alert('Error', 'Ingresa una cantidad válida de puntos (mínimo 1).');
+            show('Ingresa una cantidad válida de puntos (mínimo 1)', 'error');
             return;
         }
 
         if (pointsToUse > points) {
-            Alert.alert('Saldo insuficiente', `Solo tienes ${points} puntos disponibles.`);
+            show(`Solo tienes ${points} puntos disponibles`, 'error');
             return;
         }
 
-        // Conversion: 100 points = $1.00 => 1 point = $0.01
-        const discountValue = pointsToUse * 0.01;
+        // Constitución: 1 punto = $0.01
+        const discountValue = pointsToUse * POINT_VALUE_USD;
 
         if (discountValue > amount) {
-            // Cap it to the amount if they try to overpay
-            // Actually, usually we alert, or auto-cap?
-            // User said "totality", so maybe auto-cap.
-            // But let's alert to be safe, or just cap it? Use cap for better UX.
-            const maxPoints = Math.floor(amount * 100);
+            const maxPoints = Math.floor(amount / POINT_VALUE_USD);
             if (pointsToUse > maxPoints) {
-                Alert.alert('Aviso', `El descuento máximo posible es de $${amount.toFixed(2)} (${maxPoints} pts). Se ajustará a este valor.`);
+                show(`Descuento ajustado al máximo: $${amount.toFixed(2)} (${maxPoints} pts)`, 'info');
                 setLocalAppliedPoints(maxPoints);
-                setLocalDiscountAmount(maxPoints * 0.01);
+                setLocalDiscountAmount(maxPoints * POINT_VALUE_USD);
                 setPointsInput(maxPoints.toString());
                 return;
             }
@@ -105,19 +125,18 @@ export default function PaymentScreen({ route, navigation }: any) {
         setLocalAppliedPoints(pointsToUse);
         setLocalDiscountAmount(discountValue);
         setPointsInput('');
-        Alert.alert('Puntos aplicados', `Se descontaron $${discountValue.toFixed(2)} del total.`);
+        show(`Se descontaron $${discountValue.toFixed(2)} del total.`, 'success');
     };
 
     const handleUseMaxPoints = () => {
         if (points <= 0) {
-            Alert.alert('Sin puntos', 'No tienes puntos para canjear.');
+            show('No tienes puntos para canjear.', 'warning');
             return;
         }
-        // Calculate max usable points (limited by total amount or total balance)
-        const maxPointsForAmount = Math.floor(amount * 100);
+        const maxPointsForAmount = Math.floor(amount / POINT_VALUE_USD);
         const pointsToUse = Math.min(points, maxPointsForAmount);
 
-        const discountValue = pointsToUse * 0.01;
+        const discountValue = pointsToUse * POINT_VALUE_USD;
 
         setLocalAppliedPoints(pointsToUse);
         setLocalDiscountAmount(discountValue);
@@ -131,15 +150,12 @@ export default function PaymentScreen({ route, navigation }: any) {
     };
 
     const splitPreview = useMemo<PaymentSplit | null>(() => {
-        if (!amount || amount <= 0) {
+        if (!finalAmount || finalAmount <= 0) {
             return null;
         }
         try {
             return previewSplit({
-                total: finalAmount, // Use final amount for split calculation? Or original? Usually split is on what is moved. 
-                // Important: If points cover everything, moved money is 0. 
-                // But commission is usually on the *Transaction*. 
-                // Let's assume split is based on the actual money moved (finalAmount).
+                total: finalAmount,
                 currency,
                 sellerId,
                 sellerName,
@@ -169,25 +185,32 @@ export default function PaymentScreen({ route, navigation }: any) {
     }, [amount]);
 
     const handlePayment = async () => {
-        if (!cardNumber || !expiry || !cvc || !name) {
-            Alert.alert('Campos incompletos', 'Por favor completa todos los detalles de la tarjeta.');
+        if (!gateCheckout()) {
+            return;
+        }
+
+        // If amount is 0 (fully paid with points), skip card validation
+        const requiresCard = finalAmount > 0;
+
+        if (requiresCard && (!cardNumber || !expiry || !cvc || !name)) {
+            show('Por favor completa todos los detalles de la tarjeta.', 'warning');
             return;
         }
 
         if (finalAmount < 0) {
-            Alert.alert('Error', 'El monto a pagar no puede ser negativo.');
+            show('El monto a pagar no puede ser negativo.', 'error');
             return;
         }
 
         const cleanedCardNumber = cardNumber.replace(/\D/g, '');
-        if (cleanedCardNumber.length < 12) {
-            Alert.alert('Número de tarjeta inválido', 'Revisa que el número de tarjeta sea correcto.');
+        if (requiresCard && cleanedCardNumber.length < 12) {
+            show('Revisa que el número de tarjeta sea correcto.', 'warning');
             return;
         }
 
         const [expMonthRaw, expYearRaw] = expiry.split('/');
-        if (!expMonthRaw || !expYearRaw) {
-            Alert.alert('Fecha inválida', 'Ingresa una fecha de expiración en formato MM/YY.');
+        if (requiresCard && (!expMonthRaw || !expYearRaw)) {
+            show('Ingresa una fecha de expiración en formato MM/YY.', 'warning');
             return;
         }
 
@@ -195,38 +218,98 @@ export default function PaymentScreen({ route, navigation }: any) {
         setProcessingError(null);
 
         try {
-            const paymentMethod = {
-                brand: cardBrand,
-                last4: cleanedCardNumber.slice(-4).padStart(4, '•'),
-                expMonth: expMonthRaw,
-                expYear: expYearRaw,
-                ownerName: name.trim(),
-            };
+            let receipt: PaymentRecord;
+            if (finalAmount > 0) {
+                // Normal payment flow
+                const paymentMethod = {
+                    brand: cardBrand,
+                    last4: cleanedCardNumber.slice(-4).padStart(4, '•'),
+                    expMonth: expMonthRaw || '00',
+                    expYear: expYearRaw || '00',
+                    ownerName: name.trim(),
+                };
 
-            const receipt = await processPayment({
-                amount: finalAmount,
-                currency,
-                providerKey: selectedProvider,
-                sellerId,
-                sellerName,
-                influencerId,
-                influencerName,
-                commissionRate,
-                influencerRate,
-                paymentMethod,
-                metadata: {
-                    discountUsedPoints: localAppliedPoints,
-                    discountAmount: localDiscountAmount,
-                    cartItems: cartSnapshot,
-                    shippingMethod,
-                    shippingCost,
-                    saveCard,
-                },
-                description: params.description ?? `Compra en ${sellerName}`,
-            });
+                receipt = await processPayment({
+                    amount: finalAmount,
+                    currency,
+                    providerKey: selectedProvider,
+                    sellerId,
+                    sellerName,
+                    influencerId,
+                    influencerName,
+                    commissionRate,
+                    influencerRate,
+                    paymentMethod,
+                    metadata: {
+                        discountUsedPoints: localAppliedPoints,
+                        discountAmount: localDiscountAmount,
+                        cartItems: cartSnapshot,
+                        shippingMethod,
+                        shippingCost,
+                        saveCard,
+                    },
+                    description: params.description ?? `Compra en ${sellerName}`,
+                });
 
-            if (receipt.status !== 'succeeded') {
-                throw new Error('La pasarela requiere una acción adicional para completar el pago.');
+                if (receipt.status !== 'succeeded') {
+                    throw new Error('La pasarela requiere una acción adicional para completar el pago.');
+                }
+            } else {
+                // Fully paid with points - create a mock receipt
+                receipt = {
+                    id: `pts-${Date.now()}`,
+                    status: 'succeeded',
+                    amount: 0,
+                    currency,
+                    provider: selectedProvider,
+                    providerFee: 0,
+                    method: {
+                        brand: 'points',
+                        last4: '0000',
+                        expMonth: '00',
+                        expYear: '00',
+                        ownerName: name?.trim() || 'Puntos Ramgos',
+                    },
+                    split: {
+                        total: 0,
+                        currency,
+                        sellerId,
+                        sellerName,
+                        sellerGross: 0,
+                        sellerNet: 0,
+                        ramgosCommission: 0,
+                        influencerAmount: 0,
+                        influencerId,
+                        influencerName,
+                        commissionRate: commissionRate ?? 0,
+                        influencerRate: influencerRate ?? 0,
+                        appliedMinimumCommission: 0,
+                    },
+                    gateway: {
+                        id: `pts_gateway_${Date.now()}`,
+                        status: 'succeeded',
+                        authorizationCode: 'POINTS',
+                        providerFee: 0,
+                        netAmount: 0,
+                        currency,
+                        processedAt: new Date().toISOString(),
+                        provider: selectedProvider,
+                        riskLevel: 'low',
+                        rawResponse: {
+                            paidWithPoints: true,
+                        },
+                    },
+                    metadata: {
+                        paidWithPoints: true,
+                        discountUsedPoints: localAppliedPoints,
+                        discountAmount: localDiscountAmount,
+                        cartItems: cartSnapshot,
+                        shippingMethod,
+                        shippingCost,
+                    },
+                    description: params.description ?? `Compra en ${sellerName}`,
+                    createdAt: new Date().toISOString(),
+                } as PaymentRecord;
             }
 
             setProcessingError(null);
@@ -247,12 +330,12 @@ export default function PaymentScreen({ route, navigation }: any) {
                     phone: undefined,
                 };
 
-                const orderResult = placeOrder({
+                const orderResult = await placeOrder({
                     cartItems: cartSnapshot,
                     shippingMethod: safeShippingMethod,
                     shippingDestination: fallbackDestination,
-                    appliedDiscount: localDiscountAmount,
-                    discountAmount: localDiscountAmount,
+                    appliedDiscount: localDiscountAmount + referralDiscount,
+                    discountAmount: localDiscountAmount + referralDiscount,
                     shippingQuote,
                 });
 
@@ -267,13 +350,9 @@ export default function PaymentScreen({ route, navigation }: any) {
                 redeemPoints(localAppliedPoints, `Descuento de $${localDiscountAmount.toFixed(2)}`);
             }
             trackPurchase(finalAmount);
+            await notifyMyFirstPurchase(finalAmount);
             clearCart();
 
-            // Removed auto-navigation to let user see the success screen
-            // setTimeout(() => {
-            //     navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
-            //     navigation.navigate('History');
-            // }, 2500);
         } catch (error: any) {
             console.error('Payment error', error);
             const message = typeof error?.message === 'string' ? error.message : 'No pudimos procesar tu pago. Intenta nuevamente.';
@@ -308,123 +387,128 @@ export default function PaymentScreen({ route, navigation }: any) {
             return undefined;
         }
         const providerMatch = providers.find((provider) => provider.key === paymentReceipt.provider);
-        return providerMatch?.displayName ?? paymentReceipt.provider.toUpperCase();
+        return providerMatch?.displayName ?? paymentReceipt.provider?.toUpperCase?.() ?? 'Puntos';
     }, [paymentReceipt, providers]);
 
     if (success && paymentReceipt) {
         return (
-            <View style={styles.successContainer}>
-                <LinearGradient colors={['#fff', '#f0fdf4']} style={StyleSheet.absoluteFill} />
+            <SafeAreaView style={styles.successContainer}>
+                <LinearGradient colors={isDark ? ['#111827', '#064E3B'] : ['#fff', '#f0fdf4']} style={StyleSheet.absoluteFill} />
                 <ScrollView contentContainerStyle={styles.successScroll}>
-                    <Animated.View
-                        entering={ZoomIn.springify().damping(12)}
-                        style={styles.successHeader}
-                    >
-                        <View style={styles.successCircle}>
-                            <CheckCircle size={64} color="#fff" />
-                        </View>
-                        <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
-                        <Text style={styles.successSubtitle}>
-                            Tu compra fue confirmada vía {receiptProviderName}.
-                        </Text>
-                    </Animated.View>
+                    <View style={styles.successContent}>
+                        <Animated.View
+                            entering={ZoomIn.springify().damping(12)}
+                            style={styles.successHeader}
+                        >
+                            <View style={styles.successCircle}>
+                                <CheckCircle size={width * 0.15} color="#fff" />
+                            </View>
+                            <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
+                            <Text style={styles.successSubtitle}>
+                                Tu compra fue confirmada vía {receiptProviderName}.
+                            </Text>
+                        </Animated.View>
 
-                    <Animated.View entering={FadeInDown.delay(200).springify()}>
-                        <Text style={styles.successAmount}>${paymentReceipt.amount.toFixed(2)}</Text>
+                        <Animated.View entering={FadeInDown.delay(200).springify()} style={{ width: '100%', alignItems: 'center' }}>
+                            <Text style={styles.successAmount}>${safeMoney(paymentReceipt.amount).toFixed(2)}</Text>
 
-                        <View style={styles.breakdownCard}>
-                            <View style={styles.breakdownRow}>
-                                <Building size={16} color="#111827" />
-                                <Text style={styles.breakdownLabel}>Negocio (pendiente)</Text>
-                                <Text style={styles.breakdownValue}>${paymentReceipt.split.sellerNet.toFixed(2)}</Text>
-                            </View>
-                            <View style={styles.breakdownRow}>
-                                <ShieldCheck size={16} color="#2563EB" />
-                                <Text style={styles.breakdownLabel}>
-                                    Ramgos {Math.round(paymentReceipt.split.commissionRate * 100)}%
-                                </Text>
-                                <Text style={styles.breakdownValue}>${paymentReceipt.split.ramgosCommission.toFixed(2)}</Text>
-                            </View>
-                            <View style={styles.breakdownRow}>
-                                <CreditCard size={16} color="#6b7280" />
-                                <Text style={styles.breakdownLabel}>Fee pasarela</Text>
-                                <Text style={styles.breakdownValue}>${paymentReceipt.providerFee.toFixed(2)}</Text>
-                            </View>
-                            {paymentReceipt.split.influencerAmount > 0 && paymentReceipt.split.influencerId && (
+                            <View style={styles.breakdownCard}>
                                 <View style={styles.breakdownRow}>
-                                    <Wallet size={16} color="#047857" />
-                                    <Text style={styles.breakdownLabel}>Influencer</Text>
-                                    <Text style={styles.breakdownValue}>${paymentReceipt.split.influencerAmount.toFixed(2)}</Text>
+                                    <Building size={16} color={isDark ? "#D1D5DB" : "#111827"} />
+                                    <Text style={styles.breakdownLabel}>Negocio (pendiente)</Text>
+                                    <Text style={styles.breakdownValue}>${safeMoney(paymentReceipt.split?.sellerNet).toFixed(2)}</Text>
+                                </View>
+                                <View style={styles.breakdownRow}>
+                                    <ShieldCheck size={16} color="#2563EB" />
+                                    <Text style={styles.breakdownLabel}>
+                                        Ramgos {Math.round((paymentReceipt.split?.commissionRate ?? 0) * 100)}%
+                                    </Text>
+                                    <Text style={styles.breakdownValue}>${safeMoney(paymentReceipt.split?.ramgosCommission).toFixed(2)}</Text>
+                                </View>
+                                <View style={styles.breakdownRow}>
+                                    <CreditCard size={16} color="#6b7280" />
+                                    <Text style={styles.breakdownLabel}>Fee pasarela</Text>
+                                    <Text style={styles.breakdownValue}>${safeMoney(paymentReceipt.providerFee).toFixed(2)}</Text>
+                                </View>
+                                {safeMoney(paymentReceipt.split?.influencerAmount) > 0 && paymentReceipt.split?.influencerId && (
+                                    <View style={styles.breakdownRow}>
+                                        <Wallet size={16} color="#047857" />
+                                        <Text style={styles.breakdownLabel}>Influencer</Text>
+                                        <Text style={styles.breakdownValue}>${safeMoney(paymentReceipt.split?.influencerAmount).toFixed(2)}</Text>
+                                    </View>
+                                )}
+                            </View>
+                            <Text style={styles.breakdownNote}>
+                                Los fondos del vendedor se liberan al confirmar la entrega o al finalizar la ventana de disputa.
+                            </Text>
+
+                            {createdOrders.length > 0 && (
+                                <View style={styles.orderSummary}>
+                                    <Text style={styles.orderSummaryTitle}>Órdenes generadas</Text>
+                                    {createdOrders.map((id) => (
+                                        <Text key={id} style={styles.orderSummaryItem}>#{id}</Text>
+                                    ))}
+                                    <Text style={styles.orderSummaryHint}>Puedes monitorear el estado desde Historial &gt; Compras.</Text>
                                 </View>
                             )}
-                        </View>
-                        <Text style={styles.breakdownNote}>
-                            Los fondos del vendedor se liberan al confirmar la entrega o al finalizar la ventana de disputa.
-                        </Text>
+                        </Animated.View>
+                    </View>
 
-                        {createdOrders.length > 0 && (
-                            <View style={styles.orderSummary}>
-                                <Text style={styles.orderSummaryTitle}>Órdenes generadas</Text>
-                                {createdOrders.map((id) => (
-                                    <Text key={id} style={styles.orderSummaryItem}>#{id}</Text>
-                                ))}
-                                <Text style={styles.orderSummaryHint}>Puedes monitorear el estado desde Historial &gt; Compras.</Text>
-                            </View>
-                        )}
-
-                        <TouchableOpacity
-                            style={styles.homeButton}
-                            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-                        >
-                            <Home size={20} color="#374151" style={{ marginRight: 8 }} />
-                            <Text style={styles.homeButtonText}>Volver al Inicio</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
+                    <TouchableOpacity
+                        style={styles.homeButton}
+                        onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+                    >
+                        <Home size={20} color={isDark ? '#F9FAFB' : '#374151'} style={{ marginRight: 8 }} />
+                        <Text style={styles.homeButtonText}>Volver al Inicio</Text>
+                    </TouchableOpacity>
                 </ScrollView>
-            </View>
+            </SafeAreaView>
         );
     }
 
     if (success) {
         return (
-            <View style={styles.successContainer}>
-                <LinearGradient colors={['#fff', '#f0fdf4']} style={StyleSheet.absoluteFill} />
+            <SafeAreaView style={styles.successContainer}>
+                <LinearGradient colors={isDark ? ['#111827', '#064E3B'] : ['#fff', '#f0fdf4']} style={StyleSheet.absoluteFill} />
                 <ScrollView contentContainerStyle={styles.successScroll}>
-                    <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.successHeader}>
-                        <View style={styles.successCircle}>
-                            <CheckCircle size={64} color="#fff" />
-                        </View>
-                        <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
-                        <Text style={styles.successSubtitle}>Tu compra ha sido procesada.</Text>
-                    </Animated.View>
-
-                    <Animated.View entering={FadeInDown.delay(200).springify()}>
-                        <Text style={styles.successAmount}>${amount.toFixed(2)}</Text>
-                        {createdOrders.length > 0 && (
-                            <View style={styles.orderSummary}>
-                                <Text style={styles.orderSummaryTitle}>Órdenes generadas</Text>
-                                {createdOrders.map((id) => (
-                                    <Text key={id} style={styles.orderSummaryItem}>#{id}</Text>
-                                ))}
-                                <Text style={styles.orderSummaryHint}>Los pagos permanecerán en escrow por 15 días.</Text>
+                    <View style={styles.successContent}>
+                        <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.successHeader}>
+                            <View style={styles.successCircle}>
+                                <CheckCircle size={width * 0.15} color="#fff" />
                             </View>
-                        )}
-                        <TouchableOpacity
-                            style={styles.homeButton}
-                            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
-                        >
-                            <Home size={20} color="#374151" style={{ marginRight: 8 }} />
-                            <Text style={styles.homeButtonText}>Volver al Inicio</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
+                            <Text style={styles.successTitle}>¡Pago Exitoso!</Text>
+                            <Text style={styles.successSubtitle}>Tu compra ha sido procesada.</Text>
+                        </Animated.View>
+
+                        <Animated.View entering={FadeInDown.delay(200).springify()} style={{ width: '100%', alignItems: 'center' }}>
+                            <Text style={styles.successAmount}>${amount.toFixed(2)}</Text>
+                            {createdOrders.length > 0 && (
+                                <View style={styles.orderSummary}>
+                                    <Text style={styles.orderSummaryTitle}>Órdenes generadas</Text>
+                                    {createdOrders.map((id) => (
+                                        <Text key={id} style={styles.orderSummaryItem}>#{id}</Text>
+                                    ))}
+                                    <Text style={styles.orderSummaryHint}>Los pagos permanecerán en escrow por 10 días.</Text>
+                                </View>
+                            )}
+                        </Animated.View>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.homeButton}
+                        onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+                    >
+                        <Home size={20} color={isDark ? '#F9FAFB' : '#374151'} style={{ marginRight: 8 }} />
+                        <Text style={styles.homeButtonText}>Volver al Inicio</Text>
+                    </TouchableOpacity>
                 </ScrollView>
-            </View>
+            </SafeAreaView>
         );
     }
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#F3F4F6', '#E5E7EB']} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={isDark ? ['#111827', '#1F2937'] : ['#F3F4F6', '#E5E7EB']} style={StyleSheet.absoluteFill} />
             <MobileHeader title="Pago Seguro" backButton={true} onBack={() => navigation.goBack()} />
 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
@@ -432,24 +516,56 @@ export default function PaymentScreen({ route, navigation }: any) {
 
                     {/* Amount Summary */}
                     <View style={styles.summaryContainer}>
-                        <Text style={styles.summaryLabel}>Total a Pagar</Text>
-                        <Text style={styles.summaryAmount}>${finalAmount.toFixed(2)}</Text>
+                        <View style={styles.summaryHeader}>
+                            <Text style={styles.summaryTitle}>Resumen de compra</Text>
+                            <Text style={styles.summaryMeta}>{itemCount} ítems</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Subtotal</Text>
+                            <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Envío</Text>
+                            <Text style={styles.summaryValue}>
+                                {shippingMethod === 'pickup' ? '$0.00' : `$${shippingCost.toFixed(2)}`}
+                            </Text>
+                        </View>
                         {localDiscountAmount > 0 && (
-                            <View style={styles.discountBadge}>
-                                <Text style={styles.discountText}>Ahorraste ${localDiscountAmount.toFixed(2)} ({localAppliedPoints} pts)</Text>
+                            <View style={styles.summaryRow}>
+                                <Text style={[styles.summaryLabel, { color: '#16a34a' }]}>Descuento (Puntos)</Text>
+                                <Text style={[styles.summaryValue, { color: '#16a34a' }]}>
+                                    -${localDiscountAmount.toFixed(2)} ({localAppliedPoints} pts)
+                                </Text>
                             </View>
                         )}
-                        {/* Original Amount Strikethrough if discounted */}
-                        {localDiscountAmount > 0 && (
-                            <Text style={{ textDecorationLine: 'line-through', color: '#9CA3AF', marginTop: 4 }}>
-                                Total: ${amount.toFixed(2)}
+                        {referralDiscount > 0 && (
+                            <View style={styles.summaryRow}>
+                                <Text style={[styles.summaryLabel, { color: '#3B82F6' }]}>Descuento (Referido)</Text>
+                                <Text style={[styles.summaryValue, { color: '#3B82F6' }]}>
+                                    -${referralDiscount.toFixed(2)}
+                                </Text>
+                            </View>
+                        )}
+                        <View style={styles.summarySeparator} />
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.totalLabel}>Total a pagar</Text>
+                            <Text style={styles.totalValue}>${finalAmount.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.summaryRow, { marginTop: 6 }]}>
+                            <Text style={[styles.summaryLabel, { color: '#F59E0B' }]}>Ganás en puntos</Text>
+                            <Text style={[styles.summaryValue, { color: '#F59E0B', fontWeight: '800' }]}>
+                                {pointsPreview.totalPoints} pts
+                            </Text>
+                        </View>
+                        {finalAmount === 0 && (
+                            <Text style={{ marginTop: 6, fontSize: 11, color: '#6b7280' }}>
+                                Los puntos se calculan sobre el monto pagado en efectivo.
                             </Text>
                         )}
-
                         <Text style={styles.summaryShipping}>
                             {shippingMethod === 'pickup'
                                 ? 'Retiro sin costo en punto acordado.'
-                                : `Incluye envío ${shippingLabel} ($${shippingCost.toFixed(2)})`}
+                                : `Envío ${shippingLabel} · ${shippingDestination?.city ?? 'Destino'}`}
                         </Text>
                     </View>
 
@@ -460,7 +576,7 @@ export default function PaymentScreen({ route, navigation }: any) {
                             <Text style={styles.pointsTitle}>Canjear Puntos Ramgos</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                            <Text style={styles.pointsBalance}>Disponible: <Text style={{ fontWeight: '700' }}>{points}</Text></Text>
+                            <Text style={styles.pointsBalance}>Disponible: <Text style={{ fontWeight: '700', color: isDark ? '#D1D5DB' : '#4B5563' }}>{points}</Text></Text>
                             <View style={styles.pointsConversionBadge}>
                                 <Coins size={12} color="#fff" />
                                 <Text style={styles.pointsConversionText}>100 pts = $1.00</Text>
@@ -499,24 +615,24 @@ export default function PaymentScreen({ route, navigation }: any) {
                     {splitPreview && (
                         <View style={styles.splitCard}>
                             <View style={styles.splitHeader}>
-                                <ArrowRightLeft size={16} color="#111827" />
+                                <ArrowRightLeft size={16} color={isDark ? '#F9FAFB' : '#111827'} />
                                 <Text style={styles.splitTitle}>Split de pagos Ramgos</Text>
                             </View>
                             <View style={styles.splitRow}>
-                                <Building size={16} color="#111827" style={{ marginRight: 8 }} />
+                                <Building size={16} color={isDark ? "#D1D5DB" : "#111827"} style={{ marginRight: 8 }} />
                                 <Text style={styles.splitRowLabel}>Negocio</Text>
-                                <Text style={styles.splitRowValue}>${splitPreview.sellerGross.toFixed(2)}</Text>
+                                <Text style={styles.splitRowValue}>${safeMoney(splitPreview?.sellerGross).toFixed(2)}</Text>
                             </View>
                             <View style={styles.splitRow}>
                                 <ShieldCheck size={16} color="#2563EB" style={{ marginRight: 8 }} />
                                 <Text style={styles.splitRowLabel}>Ramgos</Text>
-                                <Text style={styles.splitRowValue}>${splitPreview.ramgosCommission.toFixed(2)}</Text>
+                                <Text style={styles.splitRowValue}>${safeMoney(splitPreview?.ramgosCommission).toFixed(2)}</Text>
                             </View>
-                            {splitPreview.influencerAmount > 0 && splitPreview.influencerId && (
+                            {safeMoney(splitPreview?.influencerAmount) > 0 && splitPreview?.influencerId && (
                                 <View style={styles.splitRow}>
                                     <Wallet size={16} color="#047857" style={{ marginRight: 8 }} />
                                     <Text style={styles.splitRowLabel}>Influencer</Text>
-                                    <Text style={styles.splitRowValue}>${splitPreview.influencerAmount.toFixed(2)}</Text>
+                                    <Text style={styles.splitRowValue}>${safeMoney(splitPreview?.influencerAmount).toFixed(2)}</Text>
                                 </View>
                             )}
                             <Text style={styles.splitHint}>El fee de la pasarela se resta al confirmar el cobro.</Text>
@@ -546,7 +662,7 @@ export default function PaymentScreen({ route, navigation }: any) {
                                                         : 'Procesamiento estándar'}
                                                 </Text>
                                             </View>
-                                            {isSelected && <CheckCircle size={16} color="#111827" />}
+                                            {isSelected && <CheckCircle size={16} color={isDark ? "#F9FAFB" : "#111827"} />}
                                         </TouchableOpacity>
                                     );
                                 })}
@@ -685,7 +801,7 @@ export default function PaymentScreen({ route, navigation }: any) {
                             <ActivityIndicator color="#fff" />
                         ) : (
                             <>
-                                <Text style={styles.payButtonText}>Pagar ${amount.toFixed(2)}</Text>
+                                <Text style={styles.payButtonText}>Pagar ${finalAmount.toFixed(2)}</Text>
                                 <ChevronRight size={20} color="#fff" />
                             </>
                         )}
@@ -722,150 +838,125 @@ const detectCardBrand = (digits: string): string => {
     return 'Tarjeta';
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff' },
     scrollContent: { padding: 20, paddingBottom: 100 },
 
     // Success View Styles
-    successContainer: { flex: 1, backgroundColor: '#fff' },
-    successScroll: { flexGrow: 1, padding: 24, paddingBottom: 60, alignItems: 'center', justifyContent: 'center' },
-    successHeader: { alignItems: 'center', marginBottom: 24 },
+    successContainer: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff' },
+    successScroll: { flexGrow: 1, padding: 24, paddingBottom: 24 },
+    successContent: { flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%', marginBottom: 32 },
+    successHeader: { alignItems: 'center', marginBottom: 24, width: '100%' },
     successCircle: {
         width: 100, height: 100, borderRadius: 50, backgroundColor: '#22c55e',
         alignItems: 'center', justifyContent: 'center', marginBottom: 24,
         shadowColor: '#22c55e', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10
     },
-    successTitle: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 8 },
-    successSubtitle: { fontSize: 16, color: '#6b7280', textAlign: 'center', paddingHorizontal: 20 },
-    successAmount: { fontSize: 40, fontWeight: '800', color: '#111827', marginVertical: 24, textAlign: 'center' },
+    successTitle: { fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 },
+    successSubtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6b7280', textAlign: 'center', paddingHorizontal: 20 },
+    successAmount: { fontSize: 40, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', marginVertical: 24, textAlign: 'center' },
 
-    breakdownCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#e5e7eb', width: '100%', marginBottom: 16 },
+    breakdownCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb', width: '100%', marginBottom: 16 },
     breakdownRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    breakdownLabel: { flex: 1, marginLeft: 8, fontSize: 13, color: '#374151' },
-    breakdownValue: { fontWeight: '600', color: '#111827' },
+    breakdownLabel: { flex: 1, marginLeft: 8, fontSize: 13, color: isDark ? '#9CA3AF' : '#374151' },
+    breakdownValue: { fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     breakdownNote: { fontSize: 12, color: '#9ca3af', textAlign: 'center', fontStyle: 'italic', marginBottom: 24 },
 
-    orderSummary: { backgroundColor: '#f9fafb', padding: 16, borderRadius: 12, width: '100%', marginBottom: 24 },
-    orderSummaryTitle: { fontSize: 13, fontWeight: 'bold', color: '#374151', marginBottom: 8, textTransform: 'uppercase' },
-    orderSummaryItem: { fontSize: 15, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#111827', marginBottom: 4 },
+    orderSummary: { backgroundColor: isDark ? '#1F2937' : '#f9fafb', padding: 16, borderRadius: 12, width: '100%', marginBottom: 24 },
+    orderSummaryTitle: { fontSize: 13, fontWeight: 'bold', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8, textTransform: 'uppercase' },
+    orderSummaryItem: { fontSize: 15, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4 },
     orderSummaryHint: { fontSize: 11, color: '#6b7280', marginTop: 8 },
 
     homeButton: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: '#fff', paddingVertical: 14, paddingHorizontal: 24,
-        borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb',
+        backgroundColor: isDark ? '#374151' : '#fff', paddingVertical: 14, paddingHorizontal: 24,
+        borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e5e7eb',
         width: '100%', marginTop: 12,
         shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2
     },
-    homeButtonText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-    summaryContainer: { alignItems: 'center', marginBottom: 24, marginTop: 8 },
-    summaryLabel: { fontSize: 14, color: '#6b7280', marginBottom: 4, fontWeight: '500' },
-    summaryAmount: { fontSize: 36, fontWeight: 'bold', color: '#111827' },
+    homeButtonText: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#374151' },
+    summaryContainer: {
+        marginBottom: 24,
+        marginTop: 8,
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        borderRadius: 18,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#E5E7EB',
+    },
+    summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    summaryTitle: { fontSize: 15, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
+    summaryMeta: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    summaryLabel: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' },
+    summaryValue: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    summarySeparator: { height: 1, backgroundColor: isDark ? '#374151' : '#E5E7EB', marginVertical: 8 },
+    totalLabel: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
+    totalValue: { fontSize: 18, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
     discountBadge: { backgroundColor: '#dcfce7', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, marginTop: 8 },
     discountText: { color: '#166534', fontWeight: '600', fontSize: 12 },
-    summaryShipping: { marginTop: 8, fontSize: 13, color: '#4B5563', textAlign: 'center' },
+    summaryShipping: { marginTop: 8, fontSize: 12, color: '#6B7280' },
 
-    pointsCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F59E0B', marginBottom: 24, shadowColor: '#F59E0B', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    pointsCard: { backgroundColor: isDark ? '#1F2937' : '#FFF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: isDark ? '#B45309' : '#F59E0B', marginBottom: 24, shadowColor: '#F59E0B', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     pointsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-    pointsTitle: { fontWeight: '700', color: '#B45309', fontSize: 14 },
-    pointsBalance: { fontSize: 13, color: '#4B5563' },
+    pointsTitle: { fontWeight: '700', color: isDark ? '#D97706' : '#B45309', fontSize: 14 },
+    pointsBalance: { fontSize: 13, color: isDark ? '#D1D5DB' : '#4B5563' },
     pointsConversionBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
     pointsConversionText: { fontSize: 10, color: '#fff', fontWeight: '600' },
 
     pointsInputRow: { flexDirection: 'row', gap: 12 },
-    pointsInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 12, height: 48 },
-    pointsInput: { flex: 1, fontSize: 16, color: '#111827', height: '100%' },
+    pointsInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderRadius: 12, paddingHorizontal: 12, height: 48 },
+    pointsInput: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', height: '100%' },
     applyPointsBtn: { backgroundColor: '#F59E0B', borderRadius: 12, paddingHorizontal: 20, justifyContent: 'center', alignItems: 'center' },
     applyPointsText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 
-    splitCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 16 },
+    splitCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb', marginBottom: 16 },
     splitHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-    splitTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+    splitTitle: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
     splitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-    splitRowLabel: { flex: 1, color: '#374151', fontSize: 13 },
-    splitRowValue: { fontWeight: '600', color: '#111827', fontSize: 14 },
+    splitRowLabel: { flex: 1, color: isDark ? '#9CA3AF' : '#374151', fontSize: 13 },
+    splitRowValue: { fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827', fontSize: 14 },
     splitHint: { marginTop: 12, fontSize: 11, color: '#6b7280' },
 
     providerContainer: { marginBottom: 16 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 16, marginTop: 8 },
     providerRow: { flexDirection: 'column', gap: 8 },
-    providerOption: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 12, gap: 12, backgroundColor: '#fff' },
-    providerOptionActive: { borderColor: '#111827', backgroundColor: 'rgba(17,24,39,0.05)' },
-    providerName: { fontWeight: '600', color: '#4b5563', fontSize: 14 },
-    providerNameActive: { color: '#111827' },
+    providerOption: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e5e7eb', borderRadius: 12, padding: 12, gap: 12, backgroundColor: isDark ? '#1F2937' : '#fff' },
+    providerOptionActive: { borderColor: isDark ? '#F9FAFB' : '#111827', backgroundColor: isDark ? 'rgba(249, 250, 251, 0.1)' : 'rgba(17,24,39,0.05)' },
+    providerName: { fontWeight: '600', color: isDark ? '#D1D5DB' : '#4b5563', fontSize: 14 },
+    providerNameActive: { color: isDark ? '#F9FAFB' : '#111827' },
     providerCaption: { fontSize: 11, color: '#6b7280', marginTop: 4 },
     providerHelper: { marginTop: 8, fontSize: 11, color: '#6b7280' },
 
     errorBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fee2e2', borderRadius: 12, padding: 10, marginBottom: 16 },
     errorBannerText: { color: '#b91c1c', fontSize: 12, flex: 1 },
 
-    // Card Visual
-    cardVisualContainer: {
-        alignItems: 'center',
-        marginBottom: 32,
-        shadowColor: "#4f46e5",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 10,
-    },
-    cardVisual: {
-        height: 200,
-        borderRadius: 20,
-        padding: 24,
-        justifyContent: 'space-between',
-    },
+    cardVisualContainer: { alignItems: 'center', marginVertical: 24, shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+    cardVisual: { height: 200, borderRadius: 20, padding: 24, flexDirection: 'column', justifyContent: 'space-between' },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    cardBrand: { color: '#fff', fontSize: 18, fontWeight: 'bold', fontStyle: 'italic' },
-    cardNumberVisual: {
-        color: '#fff',
-        fontSize: 22,
-        letterSpacing: 2,
-        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-        ...Platform.select({
-            web: { textShadow: '0px 0px 2px rgba(0,0,0,0.3)' } as any,
-            default: { textShadowColor: 'rgba(0,0,0,0.3)', textShadowRadius: 2 }
-        })
-    },
-    cardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-    cardLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, marginBottom: 4, fontWeight: '600' },
-    cardValue: { color: '#fff', fontSize: 14, fontWeight: '600', minWidth: 60 },
+    cardBrand: { color: 'rgba(255,255,255,0.8)', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
+    cardNumberVisual: { color: '#fff', fontSize: 24, fontWeight: '700', letterSpacing: 2, marginVertical: 20, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+    cardLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '600', marginBottom: 4 },
+    cardValue: { color: '#fff', fontSize: 14, fontWeight: '600', textTransform: 'uppercase' },
 
-    // Form
-    formContainer: { backgroundColor: '#fff', borderRadius: 24, padding: 4, gap: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#374151', marginBottom: 8, marginLeft: 4 },
-    inputGroup: { gap: 12 },
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f9fafb',
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        height: 56
-    },
-    inputIcon: { marginRight: 12 },
-    input: { flex: 1, fontSize: 16, color: '#111827', height: '100%' },
+    formContainer: { backgroundColor: isDark ? '#1F2937' : '#f9fafb', borderRadius: 20, padding: 20, marginBottom: 24 },
+    inputGroup: { gap: 16 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e5e7eb', borderRadius: 12, height: 50, paddingHorizontal: 12 },
+    inputIcon: { marginRight: 10 },
+    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', height: '100%' },
 
-    saveCardRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingLeft: 4 },
-    checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: '#d1d5db', marginRight: 10, alignItems: 'center', justifyContent: 'center' },
+    saveCardRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
+    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#6b7280', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
     checkboxChecked: { backgroundColor: '#4f46e5', borderColor: '#4f46e5' },
-    saveCardText: { color: '#4b5563', fontSize: 14 },
+    saveCardText: { color: isDark ? '#D1D5DB' : '#4b5563', fontSize: 14, fontWeight: '500' },
 
-    securityBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 32, opacity: 0.8 },
-    securityText: { fontSize: 12, color: '#059669', fontWeight: '500' },
+    securityBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 40, gap: 8 },
+    securityText: { color: '#059669', fontSize: 12, fontWeight: '500' },
 
-    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: 'transparent' }, // Transparent to let linear gradient bg show through if needed, but safe area?
-    // Actually putting a white fade or just button is cleaner. 
-    // Let's make it sit on top with no background for clean look, button has shadow.
-    // Payment Button
-    payButton: {
-        borderRadius: 16, overflow: 'hidden',
-        shadowColor: '#4338ca', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5
-    },
+    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? '#111827' : '#fff', padding: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 20, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#e5e7eb' },
+    payButton: { height: 56, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
     payButtonDisabled: { opacity: 0.7 },
-    payButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 10 },
-    payButtonText: { color: '#fff', fontSize: 18, fontWeight: '600' },
-
-
+    payButtonGradient: { flex: 1, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+    payButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 });

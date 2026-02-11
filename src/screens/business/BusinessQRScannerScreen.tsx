@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Camera, CheckCircle, AlertTriangle, Building, User } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { useBusiness, RedeemResult } from '../../contexts/BusinessContext';
+import { useToast } from '../../contexts/ToastContext';
+import { CodeVerificationCard } from '../../components/business/CodeVerificationCard';
 
 export default function BusinessQRScannerScreen({ navigation }: any) {
     const { coupons, redeemCouponByCode, branches } = useBusiness();
+    const { show } = useToast();
     const [scannedPayload, setScannedPayload] = useState<{ code: string; user: string } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [result, setResult] = useState<RedeemResult | null>(null);
@@ -22,7 +25,7 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
 
     const handleSimulateScan = () => {
         if (!activeCoupons.length) {
-            Alert.alert('Sin bonos activos', 'Primero crea o activa un bono para poder canjearlo.');
+            show('Sin bonos activos: Primero crea o activa un bono.', 'info');
             return;
         }
         const randomCoupon = activeCoupons[Math.floor(Math.random() * activeCoupons.length)];
@@ -48,7 +51,7 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
         }
         const branchId = selectedBranch || branches[0]?.id;
         if (!branchId) {
-            Alert.alert('Selecciona una sucursal', 'Asigna la validación a una sucursal antes de continuar.');
+            show('Selecciona una sucursal para continuar.', 'info');
             return;
         }
         setIsProcessing(true);
@@ -104,63 +107,36 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
                         {isProcessing && <ActivityIndicator color="#fff" style={{ marginTop: 16 }} />}
                     </View>
                 ) : (
-                    <Card style={styles.resultCard}>
-                        <View style={styles.scanMeta}>
-                            <Text style={styles.scanMetaLabel}>Código detectado</Text>
-                            <Text style={styles.scanMetaValue}>{scannedPayload.code}</Text>
-                        </View>
-                        <View style={styles.scanMetaUser}>
-                            <User size={16} color="#475569" />
-                            <Text style={styles.scanMetaUserText}>{scannedPayload.user}</Text>
-                        </View>
-
-                        {isProcessing ? (
-                            <ActivityIndicator color="#16a34a" style={{ marginVertical: 24 }} />
-                        ) : result?.status === 'success' ? (
-                            <View style={styles.validationSuccess}>
-                                <CheckCircle size={48} color="#16A34A" style={{ alignSelf: 'center', marginBottom: 16 }} />
-                                <Text style={styles.resultTitle}>Canje confirmado</Text>
-                                <Text style={styles.resultDesc}>
-                                    {result.coupon.name} · Restan {result.remainingStock} unidades
-                                </Text>
-                                <Text style={styles.resultUser}>
-                                    Comisión abonada: ${result.redemption.amount.toFixed(2)}
-                                </Text>
-                                <Button
-                                    onPress={() => {
-                                        navigation.goBack();
-                                    }}
-                                    style={{ marginTop: 24, backgroundColor: '#16A34A' }}
-                                >
-                                    <Text style={{ color: '#fff' }}>Volver al panel</Text>
-                                </Button>
-                                <Button variant="outline" onPress={handleReset} style={{ marginTop: 12 }}>
-                                    <Text>Escanear otro</Text>
-                                </Button>
-                            </View>
-                        ) : result ? (
-                            <View style={styles.validationError}>
-                                <AlertTriangle size={48} color="#DC2626" style={{ alignSelf: 'center', marginBottom: 16 }} />
-                                <Text style={[styles.resultTitle, { color: '#b91c1c' }]}>No se pudo canjear</Text>
-                                <Text style={styles.resultDesc}>{result.message}</Text>
-                                <Button onPress={handleReset} style={{ marginTop: 24, backgroundColor: '#1f2937' }}>
-                                    <Text style={{ color: '#fff' }}>Intentar de nuevo</Text>
-                                </Button>
-                            </View>
-                        ) : (
-                            <View style={styles.validationPending}>
-                                <Text style={styles.pendingText}>
-                                    Verifica los datos y confirma el canje con el cliente presente.
-                                </Text>
-                                <Button onPress={handleValidate} style={{ marginTop: 16, backgroundColor: '#111827' }}>
-                                    <Text style={{ color: '#fff' }}>Validar y canjear</Text>
-                                </Button>
-                                <Button variant="outline" onPress={handleReset} style={{ marginTop: 12 }}>
-                                    <Text>Cancelar</Text>
-                                </Button>
-                            </View>
-                        )}
-                    </Card>
+                    <CodeVerificationCard
+                        code={scannedPayload.code}
+                        username={scannedPayload.user}
+                        status={
+                            isProcessing
+                                ? 'processing'
+                                : !result
+                                    ? 'pending'
+                                    : result.status === 'success'
+                                        ? 'success'
+                                        : 'error'
+                        }
+                        resultData={
+                            !result
+                                ? undefined
+                                : result.status === 'success'
+                                    ? {
+                                        title: '¡Canje Exitoso!',
+                                        message: `${result.coupon.name}`,
+                                        subMessage: `Restan ${result.remainingStock} unidades`,
+                                    }
+                                    : {
+                                        title: 'No se pudo canjear',
+                                        message: result.message,
+                                    }
+                        }
+                        onConfirm={handleValidate}
+                        onCancel={handleReset}
+                        onReset={handleReset}
+                    />
                 )}
             </View>
         </View>

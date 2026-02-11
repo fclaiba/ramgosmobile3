@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions, Animated, StatusBar, Platform } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useSocial, CommercialProduct, Post as PostType } from '../../contexts/SocialContext';
 import { ArrowLeft, MapPin, ShoppingBag, Heart, MessageCircle, CheckCircle2, MoreHorizontal, Grid, List, ShoppingCart } from 'lucide-react-native';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -7,6 +8,7 @@ import { Post } from './Post';
 import { InstagramPost } from './InstagramPost';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const COVER_HEIGHT = 200;
@@ -17,6 +19,7 @@ interface UserProfileProps {
 }
 
 export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
+    const navigation = useNavigation<any>();
     const { getUserById, getPostsByUser, getInstagramPostsByUser, getHighlightsByUser, getCommercialItemsByUser, currentUser, isFollowing, followUser, unfollowUser } = useSocial();
     const user = getUserById(userId);
     const userPosts = getPostsByUser(userId);
@@ -27,6 +30,10 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
     const [activeTab, setActiveTab] = useState<'posts' | 'instagram' | 'commercial'>('posts');
 
     const scrollY = useRef(new Animated.Value(0)).current;
+
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     if (!user) {
         return (
@@ -126,7 +133,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
 
             {/* Fixed Header */}
             <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
-                <BlurView intensity={90} tint="light" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={90} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
                 <View style={styles.headerContent}>
                     <Text style={styles.headerTitle}>{user.name}</Text>
                 </View>
@@ -175,7 +182,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                         {!isCurrentUser && (
                             <View style={styles.actionsContainer}>
                                 <TouchableOpacity style={styles.messageButton}>
-                                    <MessageCircle size={20} color="#374151" />
+                                    <MessageCircle size={20} color={isDark ? "#D1D5DB" : "#374151"} />
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.followButton, isUserFollowing && styles.followingButton]}
@@ -200,12 +207,18 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
 
                         {/* Stats */}
                         <View style={styles.statsRow}>
-                            <TouchableOpacity style={styles.statItem}>
+                            <TouchableOpacity
+                                style={styles.statItem}
+                                onPress={() => navigation.navigate('UserList', { type: 'following', userId: user.id })}
+                            >
                                 <Text style={styles.statValue}>{user.following}</Text>
                                 <Text style={styles.statLabel}>Siguiendo</Text>
                             </TouchableOpacity>
                             <View style={styles.statDivider} />
-                            <TouchableOpacity style={styles.statItem}>
+                            <TouchableOpacity
+                                style={styles.statItem}
+                                onPress={() => navigation.navigate('UserList', { type: 'followers', userId: user.id })}
+                            >
                                 <Text style={styles.statValue}>{user.followers}</Text>
                                 <Text style={styles.statLabel}>Seguidores</Text>
                             </TouchableOpacity>
@@ -233,16 +246,16 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                     {/* Tabs */}
                     <View style={styles.tabsContainer}>
                         <TouchableOpacity onPress={() => setActiveTab('posts')} style={[styles.tab, activeTab === 'posts' && styles.activeTab]}>
-                            <List size={20} color={activeTab === 'posts' ? '#7C3AED' : '#9CA3AF'} />
+                            <List size={20} color={activeTab === 'posts' ? '#7C3AED' : (isDark ? '#9CA3AF' : '#9CA3AF')} />
                             <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>Posts</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => setActiveTab('instagram')} style={[styles.tab, activeTab === 'instagram' && styles.activeTab]}>
-                            <Grid size={20} color={activeTab === 'instagram' ? '#7C3AED' : '#9CA3AF'} />
+                            <Grid size={20} color={activeTab === 'instagram' ? '#7C3AED' : (isDark ? '#9CA3AF' : '#9CA3AF')} />
                             <Text style={[styles.tabText, activeTab === 'instagram' && styles.activeTabText]}>Galería</Text>
                         </TouchableOpacity>
                         {user.isInfluencer && (
                             <TouchableOpacity onPress={() => setActiveTab('commercial')} style={[styles.tab, activeTab === 'commercial' && styles.activeTab]}>
-                                <ShoppingBag size={20} color={activeTab === 'commercial' ? '#7C3AED' : '#9CA3AF'} />
+                                <ShoppingBag size={20} color={activeTab === 'commercial' ? '#7C3AED' : (isDark ? '#9CA3AF' : '#9CA3AF')} />
                                 <Text style={[styles.tabText, activeTab === 'commercial' && styles.activeTabText]}>Tienda</Text>
                             </TouchableOpacity>
                         )}
@@ -258,15 +271,15 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff' },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    errorText: { color: '#6B7280' },
+    errorText: { color: isDark ? '#9CA3AF' : '#6B7280' },
 
     // Header
     header: { position: 'absolute', top: 0, left: 0, right: 0, height: Platform.OS === 'ios' ? 100 : 80, zIndex: 10, justifyContent: 'flex-end', paddingBottom: 12, overflow: 'hidden' },
     headerContent: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 50 },
-    headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' },
+    headerTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' },
     backButton: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 40, left: 16, zIndex: 20 },
     moreButton: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 40, right: 16, zIndex: 20 },
     iconBlur: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
@@ -277,46 +290,46 @@ const styles = StyleSheet.create({
     coverGradient: { ...StyleSheet.absoluteFillObject },
 
     // Body
-    profileBody: { flex: 1, backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30, paddingBottom: 40 },
+    profileBody: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30, paddingBottom: 40 },
 
     profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, marginTop: -45 },
-    avatarContainer: { borderWidth: 4, borderColor: '#fff', borderRadius: 50, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+    avatarContainer: { borderWidth: 4, borderColor: isDark ? '#111827' : '#fff', borderRadius: 50, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
     avatar: { width: 90, height: 90, borderRadius: 45 },
 
     actionsContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
-    messageButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+    messageButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#374151' : '#F3F4F6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
     followButton: { backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 24, shadowColor: '#7C3AED', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-    followingButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB', shadowOpacity: 0 },
+    followingButton: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', shadowOpacity: 0 },
     followButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-    followingButtonText: { color: '#374151', fontWeight: '600' },
+    followingButtonText: { color: isDark ? '#F9FAFB' : '#374151', fontWeight: '600' },
 
     // Info
     infoContainer: { paddingHorizontal: 20, marginTop: 16 },
     nameRow: { flexDirection: 'row', alignItems: 'center' },
-    displayName: { fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-    username: { fontSize: 15, color: '#6B7280', marginTop: 2, fontWeight: '500' },
-    bio: { fontSize: 15, color: '#374151', marginTop: 12, lineHeight: 22 },
+    displayName: { fontSize: 22, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', letterSpacing: -0.5 },
+    username: { fontSize: 15, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2, fontWeight: '500' },
+    bio: { fontSize: 15, color: isDark ? '#D1D5DB' : '#374151', marginTop: 12, lineHeight: 22 },
 
-    statsRow: { flexDirection: 'row', marginTop: 20, paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#F3F4F6' },
+    statsRow: { flexDirection: 'row', marginTop: 20, paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
     statItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    statValue: { fontWeight: '800', fontSize: 16, color: '#111827' },
-    statLabel: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
-    statDivider: { width: 1, height: '60%', backgroundColor: '#E5E7EB', marginHorizontal: 20, alignSelf: 'center' },
+    statValue: { fontWeight: '800', fontSize: 16, color: isDark ? '#F9FAFB' : '#111827' },
+    statLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14, fontWeight: '500' },
+    statDivider: { width: 1, height: '60%', backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginHorizontal: 20, alignSelf: 'center' },
 
     // Highlights
     highlightsSection: { marginTop: 20 },
     highlightsContent: { paddingHorizontal: 20 },
     highlightItem: { marginRight: 20, alignItems: 'center', width: 72 },
-    highlightCircle: { width: 68, height: 68, borderRadius: 34, padding: 2, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 6 },
-    highlightInnerParams: { flex: 1, borderRadius: 32, overflow: 'hidden', padding: 2, backgroundColor: '#fff', borderWidth: 1, borderColor: '#F3F4F6' },
+    highlightCircle: { width: 68, height: 68, borderRadius: 34, padding: 2, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', marginBottom: 6 },
+    highlightInnerParams: { flex: 1, borderRadius: 32, overflow: 'hidden', padding: 2, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
     highlightImage: { width: '100%', height: '100%', borderRadius: 32 },
-    highlightTitle: { fontSize: 11, color: '#374151', fontWeight: '500', textAlign: 'center' },
+    highlightTitle: { fontSize: 11, color: isDark ? '#D1D5DB' : '#374151', fontWeight: '500', textAlign: 'center' },
 
     // Tabs
-    tabsContainer: { flexDirection: 'row', marginHorizontal: 20, marginTop: 24, backgroundColor: '#F9FAFB', borderRadius: 16, padding: 4, marginBottom: 16 },
+    tabsContainer: { flexDirection: 'row', marginHorizontal: 20, marginTop: 24, backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderRadius: 16, padding: 4, marginBottom: 16 },
     tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, gap: 6 },
-    activeTab: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-    tabText: { fontSize: 13, color: '#6B7280', fontWeight: '600' },
+    activeTab: { backgroundColor: isDark ? '#374151' : '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    tabText: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600' },
     activeTabText: { color: '#7C3AED' },
 
     // Content
@@ -325,19 +338,19 @@ const styles = StyleSheet.create({
     emptyText: { color: '#9CA3AF', fontSize: 14 },
 
     postsContainer: { paddingHorizontal: 0 },
-    postWrapper: { marginBottom: 8, borderBottomWidth: 8, borderBottomColor: '#F3F4F6' },
+    postWrapper: { marginBottom: 8, borderBottomWidth: 8, borderBottomColor: isDark ? '#1F2937' : '#F3F4F6' },
 
     gridContainer: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', paddingHorizontal: 1 },
     gridItemWrapper: { padding: 1 },
 
     commercialContainer: { padding: 16, gap: 12 },
-    productCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 20, padding: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: '#F3F4F6' },
-    productImage: { width: 100, height: 100, borderRadius: 16, backgroundColor: '#F3F4F6' },
+    productCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, padding: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
+    productImage: { width: 100, height: 100, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6' },
     productInfo: { flex: 1, marginLeft: 16, justifyContent: 'space-between', paddingVertical: 4 },
-    productName: { fontWeight: '700', fontSize: 15, color: '#1F2937', marginBottom: 4 },
-    productCategory: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
+    productName: { fontWeight: '700', fontSize: 15, color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 4 },
+    productCategory: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
     productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
     productPrice: { color: '#7C3AED', fontWeight: '800', fontSize: 18 },
-    addButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#F3F4F6', borderRadius: 12 },
-    addButtonText: { fontSize: 12, fontWeight: '700', color: '#374151' },
+    addButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 12 },
+    addButtonText: { fontSize: 12, fontWeight: '700', color: isDark ? '#F9FAFB' : '#374151' },
 });

@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, SafeAreaView, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, TextInput, Image } from 'react-native';
 import { X, Image as ImageIcon, Check } from 'lucide-react-native';
 import { useSocial } from '../../contexts/SocialContext';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 
 export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const { createStory } = useSocial();
     const [imageUrl, setImageUrl] = useState('');
+
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     const handleCreate = () => {
         if (!imageUrl) return;
@@ -15,55 +21,63 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     };
 
     return (
-        <Modal animationType="slide" presentationStyle="pageSheet" visible={true} onRequestClose={onClose}>
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
-                <View style={styles.container}>
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={onClose}>
-                            <X size={28} color="#fff" />
-                        </TouchableOpacity>
-                        <Text style={styles.title}>Crear Historia</Text>
-                        <View style={{ width: 28 }} />
-                    </View>
+        <Sheet open={true} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <SafeAreaView style={{ flex: 1 }}>
+                    <View style={styles.container}>
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={onClose}>
+                                <X size={28} color="#fff" />
+                            </TouchableOpacity>
+                            <Text style={styles.title}>Crear Historia</Text>
+                            <View style={{ width: 28 }} />
+                        </View>
 
-                    <View style={styles.content}>
-                        {imageUrl ? (
-                            <ImageWithFallback src={imageUrl} style={styles.previewImage} />
-                        ) : (
-                            <View style={styles.placeholder}>
-                                <ImageIcon size={64} color="#666" />
-                                <Text style={styles.placeholderText}>Ingresa la URL de la imagen</Text>
+                        <View style={styles.content}>
+                            {imageUrl ? (
+                                <ImageWithFallback src={imageUrl} style={styles.previewImage} />
+                            ) : (
+                                <View style={styles.placeholder}>
+                                    <ImageIcon size={64} color="#666" />
+                                    <Text style={styles.placeholderText}>Ingresa la URL de la imagen</Text>
+                                </View>
+                            )}
+
+                            <View style={styles.inputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="URL de imagen..."
+                                    placeholderTextColor="#999"
+                                    value={imageUrl}
+                                    onChangeText={setImageUrl}
+                                    autoCapitalize="none"
+                                />
                             </View>
-                        )}
+                        </View>
 
-                        <View style={styles.inputContainer}>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="URL de imagen..."
-                                placeholderTextColor="#999"
-                                value={imageUrl}
-                                onChangeText={setImageUrl}
-                                autoCapitalize="none"
-                            />
+                        <View style={styles.footer}>
+                            <TouchableOpacity
+                                style={[styles.createBtn, !imageUrl && styles.disabledBtn]}
+                                onPress={handleCreate}
+                                disabled={!imageUrl}
+                            >
+                                <Text style={styles.createBtnText}>Compartir en tu historia</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
-
-                    <View style={styles.footer}>
-                        <TouchableOpacity
-                            style={[styles.createBtn, !imageUrl && styles.disabledBtn]}
-                            onPress={handleCreate}
-                            disabled={!imageUrl}
-                        >
-                            <Text style={styles.createBtnText}>Compartir en tu historia</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </SafeAreaView>
-        </Modal>
+                </SafeAreaView>
+            </SheetContent>
+        </Sheet>
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: {
+        backgroundColor: '#000',
+        height: '95%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+    },
     container: { flex: 1 },
     header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     title: { fontSize: 18, fontWeight: 'bold', color: '#fff' },

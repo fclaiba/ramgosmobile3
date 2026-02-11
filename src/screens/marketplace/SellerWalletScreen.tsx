@@ -1,18 +1,28 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { MobileHeader } from '../../components/MobileHeader';
-import { useMarketplace } from '../../contexts/MarketplaceContext';
+import { MARKETPLACE_ESCROW_RELEASE_DAYS, useMarketplace, Order } from '../../contexts/MarketplaceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFintech } from '../../contexts/FintechContext';
-import { DollarSign, Lock, AlertCircle, ArrowUpRight, ArrowDownLeft, ArrowUpRightFromSquare, Wallet, CheckCircle2 } from 'lucide-react-native';
+import { useEscrow } from '../../contexts/EscrowContext';
+import { DollarSign, Lock, AlertCircle, ArrowUpRight, ArrowDownLeft, ArrowUpRightFromSquare, Eye } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useActionGate } from '../../utils/useActionGate';
 
 export default function SellerWalletScreen({ navigation }: any) {
     const { orders } = useMarketplace();
     const { user } = useAuth();
     const { getWalletByOwner } = useFintech();
+    const { openEscrow } = useEscrow();
+    const { gateWithdraw } = useActionGate();
     const [activeTab, setActiveTab] = useState<'sales' | 'transactions'>('sales');
+    const insets = useSafeAreaInsets();
 
     const wallet = getWalletByOwner(user?.id ?? '');
+
+    const handleViewEscrow = (order: Order) => {
+        openEscrow(order.id, 'seller');
+    };
 
     // Filter seller orders
     const sales = orders.filter(o => o.sellerId === user?.id && o.paymentStatus === 'paid');
@@ -22,11 +32,20 @@ export default function SellerWalletScreen({ navigation }: any) {
     const heldBalance = wallet?.balances.reserved ?? 0;
     const pendingBalance = wallet?.balances.pending ?? 0;
 
+    const handleWithdraw = () => {
+        if (!wallet) return;
+        gateWithdraw({
+            onAllowed: () => navigation.navigate('Withdrawal', { ownerId: wallet.ownerId }),
+        });
+    };
+
     const renderTransaction = ({ item }: any) => {
         const isDisputed = item.status === 'disputed';
-        const releaseDate = item.deliveryConfirmedAt
-            ? new Date(new Date(item.deliveryConfirmedAt).getTime() + 15 * 24 * 60 * 60 * 1000)
-            : null;
+        const releaseDate = item.escrow?.releaseScheduledAt
+            ? new Date(item.escrow.releaseScheduledAt)
+            : item.deliveryConfirmedAt
+                ? new Date(new Date(item.deliveryConfirmedAt).getTime() + MARKETPLACE_ESCROW_RELEASE_DAYS * 24 * 60 * 60 * 1000)
+                : null;
 
         return (
             <View style={styles.card}>
@@ -57,6 +76,14 @@ export default function SellerWalletScreen({ navigation }: any) {
                         </Text>
                     </View>
                 )}
+
+                <TouchableOpacity
+                    style={styles.viewEscrowBtn}
+                    onPress={() => handleViewEscrow(item)}
+                >
+                    <Eye size={14} color="#7C3AED" />
+                    <Text style={styles.viewEscrowText}>Ver escrow</Text>
+                </TouchableOpacity>
             </View>
         );
     };
@@ -94,7 +121,7 @@ export default function SellerWalletScreen({ navigation }: any) {
                         <Text style={styles.balanceValue}>${availableBalance.toFixed(2)}</Text>
                         <TouchableOpacity
                             style={styles.withdrawBtn}
-                            onPress={() => navigation.navigate('Withdrawal', { ownerId: wallet?.ownerId })}
+                            onPress={handleWithdraw}
                         >
                             <Text style={styles.withdrawText}>Retirar</Text>
                             <ArrowUpRight size={14} color="#059669" />
@@ -107,7 +134,7 @@ export default function SellerWalletScreen({ navigation }: any) {
                         </View>
                         <Text style={styles.balanceLabel}>En Retención</Text>
                         <Text style={styles.balanceValue}>${heldBalance.toFixed(2)}</Text>
-                        <Text style={styles.heldHint}>Escrow 15 días</Text>
+                        <Text style={styles.heldHint}>Escrow {MARKETPLACE_ESCROW_RELEASE_DAYS} días</Text>
                     </View>
                 </View>
 
@@ -133,7 +160,7 @@ export default function SellerWalletScreen({ navigation }: any) {
                     data={sales.filter(o => o.escrow.state !== 'released')}
                     renderItem={renderTransaction}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
+                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 20) + 24 }}
                     showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
                         <Text style={styles.emptyText}>No tienes fondos pendientes.</Text>
@@ -144,7 +171,7 @@ export default function SellerWalletScreen({ navigation }: any) {
                     data={wallet?.transactions || []}
                     renderItem={renderWalletTransaction}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20 }}
+                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 20) + 24 }}
                     showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
                         <Text style={styles.emptyText}>No hay movimientos registrados.</Text>
@@ -202,5 +229,8 @@ const styles = StyleSheet.create({
     iconDebit: { backgroundColor: '#FEF2F2' },
     transactionDesc: { fontSize: 14, color: '#374151', fontWeight: '500' },
     transactionDate: { fontSize: 12, color: '#9CA3AF' },
-    transactionAmount: { fontSize: 15, fontWeight: 'bold' }
+    transactionAmount: { fontSize: 15, fontWeight: 'bold' },
+
+    viewEscrowBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#F5F3FF', borderRadius: 8, alignSelf: 'flex-start' },
+    viewEscrowText: { fontSize: 12, fontWeight: '600', color: '#7C3AED' },
 });

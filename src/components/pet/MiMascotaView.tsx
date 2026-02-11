@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Modal, Image } from 'react-native';
-import { Heart, Utensils, Zap, Sparkles, Moon, Play, Coins, ArrowRight, Trophy, Gamepad2, AlertCircle } from 'lucide-react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Modal, Image, ImageBackground, Platform } from 'react-native';
+import { Heart, Utensils, Zap, Sparkles, Moon, Play, Coins, ArrowRight, Trophy, Gamepad2, Info, Check, Shirt, HelpCircle, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming, runOnJS } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming, FadeInDown, FadeIn } from 'react-native-reanimated';
 import { usePoints } from '../../contexts/PointsContext';
 import { useRewards } from '../../contexts/RewardsContext';
 import { MobileHeader } from '../MobileHeader';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../contexts/ToastContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Game Imports
 import { FruitCatcher } from '../games/FruitCatcher';
@@ -16,9 +19,14 @@ import { MemoryGame } from '../games/MemoryGame';
 import { DinoGame } from '../games/DinoGame';
 import { RouletteGame } from '../games/RouletteGame';
 import { SlotMachine } from '../games/SlotMachine';
+import { GameWrapper } from '../games/GameWrapper';
+import type { GameId } from '../games/gameContracts';
+
+// Parte 0 (contrato): tipos/tokens para wrapper compartido (sin refactor aún).
+// Ver `src/components/games/gameContracts.ts` y `src/components/games/GAME_CONTRACT.md`.
 
 const { width } = Dimensions.get('window');
-const ARCADE_REWARD_GAMES = new Set<GameType>(['fruit', 'duck', 'memory', 'dino']);
+const ARCADE_REWARD_GAMES = new Set(['fruit', 'duck', 'memory', 'dino']);
 
 // --- Types ---
 interface PetStats {
@@ -27,7 +35,6 @@ interface PetStats {
     energy: number;
     level: number;
     exp: number;
-    // coins: number; // REMOVED (Global)
 }
 
 type PetMood = 'happy' | 'normal' | 'sad' | 'sleeping' | 'playing' | 'eating';
@@ -40,99 +47,141 @@ const GAMES = [
     { id: 'dino', name: 'Dino Run', icon: '🦖', gradient: ['#22C55E', '#10B981'] as const, description: 'Salta obstáculos sin parar', type: 'skill' },
     { id: 'roulette', name: 'Ruleta', icon: '🎰', gradient: ['#EAB308', '#F97316'] as const, description: 'Gira y prueba tu suerte', type: 'casino' },
     { id: 'slots', name: 'Tragamonedas', icon: '🎲', gradient: ['#9333EA', '#DB2777'] as const, description: 'Consigue el Jackpot', type: 'casino' },
-];
+] as const;
 
-// --- Simple Toast Component ---
-const Toast = ({ message, type, visible, onHide }: { message: string, type: 'success' | 'error', visible: boolean, onHide: () => void }) => {
-    const opacity = useSharedValue(0);
-
-    useEffect(() => {
-        if (visible) {
-            opacity.value = withSequence(
-                withTiming(1, { duration: 300 }),
-                withTiming(1, { duration: 2000 }), // Wait
-                withTiming(0, { duration: 300 }, (finished) => {
-                    if (finished) runOnJS(onHide)();
-                })
-            );
-        }
-    }, [visible]);
-
-    const style = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-        transform: [{ translateY: withSpring(visible ? 0 : -20) }]
-    }));
-
-    if (!visible && opacity.value === 0) return null;
-
-    return (
-        <Animated.View style={[styles.toast, type === 'error' ? styles.toastError : styles.toastSuccess, style]}>
-            <Text style={styles.toastText}>{message}</Text>
-        </Animated.View>
-    );
+const STAGE_CONFIG = {
+    EGG: { name: 'Huevo', minStreak: 0, next: 3, emoji: '🥚', desc: 'Incubando...' },
+    BABY: { name: 'Bebé', minStreak: 3, next: 8, emoji: '😺', desc: '¡Ha nacido!' },
+    YOUNG: { name: 'Joven', minStreak: 8, next: 30, emoji: '😼', desc: 'Creciendo fuerte' },
+    ADULT: { name: 'Adulto', minStreak: 30, next: 1000, emoji: '🦁', desc: 'Majestuoso' },
 };
 
-interface MiMascotaViewProps {
-    onNavigateToMascota?: () => void; // Kept for prop parity, likely processed by parent nav
-    navigation?: any; // Start using navigation from props check
-}
+const HATS = [
+    { id: 'none', icon: '❌', name: 'Nada', cost: 0 },
+    { id: 'party', icon: '🎉', name: 'Fiesta', cost: 50 },
+    { id: 'crown', icon: '👑', name: 'Rey', cost: 500 },
+    { id: 'viking', icon: '⚔️', name: 'Vikingo', cost: 200 },
+    { id: 'wizard', icon: '🧙‍♂️', name: 'Mago', cost: 300 },
+    { id: 'glasses', icon: '😎', name: 'Cool', cost: 100 },
+    { id: 'cowboy', icon: '🤠', name: 'Sheriff', cost: 150 },
+    { id: 'alien', icon: '👽', name: 'Alien', cost: 250 },
+];
 
 export function MiMascotaView({ navigation }: any) {
-    const { convertCoinsToPoints } = usePoints();
-    const { feedVirtualPet, registerArcadeReward, gameCoins, addGameCoins, spendGameCoins } = useRewards();
+    const { convertCoinsToPoints, conversionRate, petStage, challengeProgress, transactions } = usePoints();
+    const { feedVirtualPet, registerArcadeReward, gameCoins, addGameCoins, spendGameCoins, petConfig, unlockAccessory, equipAccessory } = useRewards();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
 
     // --- State ---
-    const [stats, setStats] = useState<PetStats>({
-        happiness: 80,
-        hunger: 60,
-        energy: 70,
-        level: 1,
-        exp: 0,
-    });
+    const [stats, setStats] = useState<PetStats>({ happiness: 80, hunger: 60, energy: 70, level: 1, exp: 0 });
     const [currentGame, setCurrentGame] = useState<GameType>(null);
     const [petMood, setPetMood] = useState<PetMood>('happy');
     const [isAnimating, setIsAnimating] = useState(false);
     const [catAnimation, setCatAnimation] = useState<string>('idle');
+    const [showWardrobe, setShowWardrobe] = useState(false);
+    const [showGuide, setShowGuide] = useState(false);
+    const [previewHat, setPreviewHat] = useState<string | null>(null);
+    const [purchaseRewards, setPurchaseRewards] = useState<{ processedPurchaseTxnIds: string[]; giftedHatIds: string[] }>({
+        processedPurchaseTxnIds: [],
+        giftedHatIds: [],
+    });
 
-    // Toast State
-    const [toast, setToast] = useState<{ visible: boolean, message: string, type: 'success' | 'error' }>({ visible: false, message: '', type: 'success' });
+    const PURCHASE_GIFT_HATS = useMemo(
+        () => ['party', 'glasses', 'cowboy', 'viking', 'wizard', 'alien', 'crown'] as const,
+        []
+    );
 
-    const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ visible: true, message, type });
-    };
+    // Sync preview
+    useEffect(() => {
+        if (showWardrobe) {
+            setPreviewHat(petConfig?.activeHat || null);
+        }
+    }, [showWardrobe, petConfig?.activeHat]);
 
-    // --- Effects ---
-    // Load Stats
+    // Load/Save Stats
     useEffect(() => {
         AsyncStorage.getItem('petStats').then(saved => {
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Migrate from old state if needed (remove coins)
-                const { coins, ...rest } = parsed;
+                const { coins, ...rest } = parsed; // Legacy clean
                 setStats(rest);
             }
         });
     }, []);
 
-    // Save Stats
     useEffect(() => {
         AsyncStorage.setItem('petStats', JSON.stringify(stats));
     }, [stats]);
 
-    // Stat Decay
+    // Load/Save Purchase-linked rewards (Sprint 4)
+    useEffect(() => {
+        AsyncStorage.getItem('petPurchaseRewards').then((saved) => {
+            if (!saved) return;
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed && typeof parsed === 'object') {
+                    setPurchaseRewards({
+                        processedPurchaseTxnIds: Array.isArray(parsed.processedPurchaseTxnIds) ? parsed.processedPurchaseTxnIds : [],
+                        giftedHatIds: Array.isArray(parsed.giftedHatIds) ? parsed.giftedHatIds : [],
+                    });
+                }
+            } catch {
+                // ignore
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        AsyncStorage.setItem('petPurchaseRewards', JSON.stringify(purchaseRewards));
+    }, [purchaseRewards]);
+
+    // Purchase -> Pet: each purchase unlocks a cosmetic (free hat) + pet grows (level++).
+    useEffect(() => {
+        const purchaseTxs = (transactions ?? []).filter((tx: any) => tx?.source === 'purchase' && tx?.amount > 0);
+        if (purchaseTxs.length === 0) return;
+
+        // Process oldest -> newest for deterministic ordering.
+        const ordered = [...purchaseTxs].reverse();
+        const newOnes = ordered.filter((tx: any) => !purchaseRewards.processedPurchaseTxnIds.includes(tx.id));
+        if (newOnes.length === 0) return;
+
+        setPurchaseRewards((prev) => {
+            let processed = [...prev.processedPurchaseTxnIds];
+            let gifted = [...prev.giftedHatIds];
+
+            newOnes.forEach(() => {
+                const nextHat = PURCHASE_GIFT_HATS.find((id) => !gifted.includes(id)) ?? null;
+                if (nextHat) {
+                    // Free unlock (0 coins)
+                    unlockAccessory('hat', nextHat, 0);
+                    gifted.push(nextHat);
+                    setStats((s) => ({ ...s, level: s.level + 1 }));
+                }
+            });
+
+            newOnes.forEach((tx: any) => processed.push(tx.id));
+            return { processedPurchaseTxnIds: processed, giftedHatIds: gifted };
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transactions]);
+
+    // Decay Loop
     useEffect(() => {
         const interval = setInterval(() => {
             setStats(prev => ({
                 ...prev,
-                happiness: Math.max(0, prev.happiness - 0.5),
-                hunger: Math.max(0, prev.hunger - 0.8),
-                energy: Math.max(0, prev.energy - 0.3),
+                happiness: Math.max(0, prev.happiness - 0.042),
+                hunger: Math.max(0, prev.hunger - 0.042),
+                energy: Math.max(0, prev.energy - 0.02),
             }));
         }, 30000);
         return () => clearInterval(interval);
     }, []);
 
-    // Determine Mood
+    // Mood Logic
     useEffect(() => {
         if (stats.energy < 20) setPetMood('sleeping');
         else if (stats.happiness > 70 && stats.hunger > 50) setPetMood('happy');
@@ -140,7 +189,7 @@ export function MiMascotaView({ navigation }: any) {
         else setPetMood('normal');
     }, [stats]);
 
-    // --- Cat Animation ---
+    // --- Animation ---
     const catScale = useSharedValue(1);
     const catRotate = useSharedValue(0);
     const catY = useSharedValue(0);
@@ -167,54 +216,43 @@ export function MiMascotaView({ navigation }: any) {
     }));
 
     const getCatEmoji = () => {
+        if (petStage === 'EGG') return '🥚';
         if (catAnimation === 'eating') return '😋';
         if (catAnimation === 'playing') return '😸';
         if (catAnimation === 'sleeping') return '😴';
 
+        // Adult/Young Logic
+        if (petStage === 'ADULT') return petMood === 'happy' ? '🦁' : '🦁';
+        if (petStage === 'YOUNG') return petMood === 'happy' ? '😼' : '😿';
+
+        // Baby Logic
         switch (petMood) {
             case 'happy': return '😺';
             case 'sad': return '😿';
             case 'sleeping': return '😴';
-            case 'playing': return '😸';
-            case 'eating': return '😋';
             default: return '😺';
         }
     };
 
     // --- Actions ---
     const feedPet = () => {
-        if (gameCoins < 5) {
-            showToast('Necesitas 5 monedas', 'error');
+        const result = feedVirtualPet();
+        if (result.status !== 'awarded') {
+            show(result.message, 'info');
             return;
         }
-
-        const paid = spendGameCoins(5);
-        if (!paid) return;
-
         setIsAnimating(true);
         setCatAnimation('eating');
         animateCat('jump');
-        setStats(prev => ({
-            ...prev,
-            hunger: Math.min(100, prev.hunger + 30),
-            happiness: Math.min(100, prev.happiness + 10),
-        }));
-        const reward = feedVirtualPet();
-        const toastMessage = reward.status === 'awarded' && reward.pointsAwarded
-            ? `¡Miau! Que rico 😋 +${reward.pointsAwarded} pts`
-            : reward.status === 'already_claimed'
-                ? '¡Miau! Ya reclamaste los puntos diarios'
-                : '¡Miau! Que rico 😋';
-        const toastType: 'success' | 'error' = reward.status === 'already_claimed' ? 'error' : 'success';
-        showToast(toastMessage, toastType);
+        setStats(prev => ({ ...prev, hunger: Math.min(100, prev.hunger + 30) }));
         setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 2000);
+        show(`¡Ñam ñam! +${result.pointsAwarded ?? 0} Puntos`);
     };
 
     const playWithPet = () => {
-        if (stats.energy < 15) {
-            showToast('Muy cansado para jugar 😴', 'error');
-            return;
-        }
+        if (petStage === 'EGG') return show('El huevo necesita calor, no juegos.', 'info');
+        if (stats.energy < 15) return show('Está muy cansado 😴', 'error');
+
         setIsAnimating(true);
         setCatAnimation('playing');
         animateCat('shake');
@@ -223,610 +261,803 @@ export function MiMascotaView({ navigation }: any) {
             happiness: Math.min(100, prev.happiness + 20),
             energy: Math.max(0, prev.energy - 15),
         }));
-        showToast('¡Ronroneo! 😸 +20 Felicidad');
+        show('¡Diversión total! +20 Felicidad');
         setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 2000);
     };
 
     const cleanPet = () => {
-        if (gameCoins < 3) {
-            showToast('Necesitas 3 monedas', 'error');
-            return;
+        if (petStage === 'EGG') return;
+        if (gameCoins < 3) return show('Necesitas 3 monedas para el baño', 'error');
+        if (spendGameCoins(3)) {
+            setIsAnimating(true);
+            animateCat('shake');
+            setStats(prev => ({ ...prev, happiness: Math.min(100, prev.happiness + 15) }));
+            show('¡Reluciente! ✨');
+            setTimeout(() => setIsAnimating(false), 1000);
         }
-
-        const paid = spendGameCoins(3);
-        if (!paid) return;
-
-        setIsAnimating(true);
-        animateCat('shake');
-        setStats(prev => ({
-            ...prev,
-            happiness: Math.min(100, prev.happiness + 15),
-        }));
-        showToast('¡Brillante y limpio! ✨');
-        setTimeout(() => setIsAnimating(false), 1000);
-    };
-
-    const restPet = () => {
-        setIsAnimating(true);
-        setCatAnimation('sleeping');
-        setStats(prev => ({
-            ...prev,
-            energy: Math.min(100, prev.energy + 40),
-            happiness: Math.min(100, prev.happiness + 5),
-        }));
-        showToast('Zzz... Recuperando energía 💤');
-        setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 3000);
     };
 
     const handleConvertCoins = () => {
-        if (gameCoins < 5) {
-            showToast('Mínimo 5 monedas', 'error');
-            return;
-        }
-        const points = convertCoinsToPoints(gameCoins);
-        if (points > 0) {
-            spendGameCoins(gameCoins); // Spend ALL coins
-            showToast(`¡${points} puntos canjeados! 🎉`);
-        }
-    };
-
-    // --- Game Logic ---
-    const handleCloseGame = () => setCurrentGame(null);
-
-    const handleGameEnd = (score: number) => {
-        const expGained = Math.floor(score / 10);
-        const coinsEarned = Math.floor(score / 5);
-
-        if (coinsEarned > 0) {
-            addGameCoins(coinsEarned);
-        }
-
-        setStats(prev => {
-            const newExp = prev.exp + expGained;
-            const newLevel = Math.floor(newExp / 100) + 1;
-            if (newLevel > prev.level) {
-                showToast(`¡SUBISTE A NIVEL ${newLevel}! 🎉`);
-            }
-            return {
-                ...prev,
-                exp: newExp,
-                level: newLevel,
-                happiness: Math.min(100, prev.happiness + 10),
-                energy: Math.max(0, prev.energy - 15),
-            };
-        });
-        const rewardOutcome = currentGame && ARCADE_REWARD_GAMES.has(currentGame)
-            ? registerArcadeReward(currentGame, score)
-            : null;
-        let summaryToast = `Fin: +${coinsEarned} Monedas, +${expGained} EXP`;
-        if (rewardOutcome) {
-            if (rewardOutcome.status === 'awarded' && rewardOutcome.pointsAwarded) {
-                summaryToast += ` · +${rewardOutcome.pointsAwarded} pts`;
-            } else if (rewardOutcome.status !== 'awarded') {
-                showToast(rewardOutcome.message, 'error');
-            }
-        }
-        showToast(summaryToast);
-        // Do NOT close game automatically. Let the game component handle "Play Again" or "Exit".
-        // setCurrentGame(null);
-    };
-
-    // --- Render Helpers ---
-    const renderGame = () => {
-        switch (currentGame) {
-            case 'fruit': return <FruitCatcher onGameEnd={handleGameEnd} onClose={handleCloseGame} />;
-            case 'duck': return <DuckHunt onGameEnd={handleGameEnd} onClose={handleCloseGame} />;
-            case 'memory': return <MemoryGame onGameEnd={handleGameEnd} onClose={handleCloseGame} />;
-            case 'dino': return <DinoGame onGameEnd={handleGameEnd} onClose={handleCloseGame} />;
-            case 'roulette': return (
-                <RouletteGame
-                    coins={gameCoins}
-                    onClose={handleCloseGame}
-                    onGameEnd={(val) => {
-                        if (val > 0) {
-                            addGameCoins(val);
-                            showToast(`¡Ganaste! +${val}`);
-                        } else if (val < 0) {
-                            spendGameCoins(Math.abs(val));
-                            // showToast(`Perdiste ${Math.abs(val)}`, 'error'); // Optional spam
-                        }
-                    }}
-                />
-            );
-            case 'slots': return (
-                <SlotMachine
-                    coins={gameCoins}
-                    onClose={handleCloseGame}
-                    onGameEnd={(val) => {
-                        if (val > 0) {
-                            addGameCoins(val);
-                            showToast(`Jackpot! +${val}`);
-                        } else if (val < 0) {
-                            spendGameCoins(Math.abs(val));
-                        }
-                    }}
-                />
-            );
-            default: return null;
+        const rate = conversionRate || 5;
+        if (gameCoins < rate) return show(`Mínimo ${rate} monedas para canjear`, 'error');
+        const points = Math.floor(gameCoins / rate);
+        const cost = points * rate;
+        if (spendGameCoins(cost)) {
+            convertCoinsToPoints(cost);
+            show(`¡Canjeado! ${cost} monedas -> ${points} puntos`);
         }
     };
 
-    const renderProgressBar = (value: number, color: string) => (
-        <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { width: `${Math.min(100, Math.max(0, value))}%`, backgroundColor: color }]} />
+    // --- Components ---
+    const renderProgressBar = (value: number, color: string, icon: any) => (
+        <View style={styles.statRow}>
+            <View style={[styles.statIconBox, { backgroundColor: `${color}20` }]}>
+                {icon}
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+                <View style={styles.statTrack}>
+                    <Animated.View style={[styles.statFill, { width: `${Math.max(5, value)}%`, backgroundColor: color }]} />
+                </View>
+            </View>
+            <Text style={styles.statValue}>{Math.round(value)}%</Text>
         </View>
     );
 
-    // --- Main Render ---
-    if (currentGame) {
+    const renderEvolutionTrack = () => {
+        const currentConfig = STAGE_CONFIG[petStage];
+        const nextStageGoal = currentConfig.next;
+        const currentStreak = challengeProgress.loginStreak || 0;
+        const progress = Math.min(100, (currentStreak / nextStageGoal) * 100);
+
         return (
-            <View style={styles.fullScreenContainer}>
-                <View style={styles.gameHeader}>
-                    <TouchableOpacity onPress={() => setCurrentGame(null)} style={styles.backButton}>
-                        <ArrowRight size={24} color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-                        <Text style={styles.backText}>Volver</Text>
-                    </TouchableOpacity>
-                    <View style={styles.coinBadge}>
-                        <Coins size={16} color="#CA8A04" />
-                        <Text style={styles.coinText}>{gameCoins}</Text>
+            <TouchableOpacity style={styles.evoCard} onPress={() => setShowGuide(true)}>
+                <View style={styles.evoHeader}>
+                    <Text style={styles.evoTitle}>Evolución ({currentConfig.name})</Text>
+                    <HelpCircle size={16} color="#9CA3AF" />
+                </View>
+                <View style={styles.evoTrackContainer}>
+                    <View style={styles.evoTrack}>
+                        <LinearGradient
+                            colors={['#8B5CF6', '#EC4899']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={[styles.evoFill, { width: `${progress}%` }]}
+                        />
                     </View>
+                    <Text style={styles.evoText}>
+                        Racha: {currentStreak} / {nextStageGoal} días
+                    </Text>
                 </View>
-                <View style={{ flex: 1, justifyContent: 'center' }}>
-                    {renderGame()}
+            </TouchableOpacity>
+        );
+    };
+
+    const renderWardrobeModal = () => (
+        <Modal visible={showWardrobe} animationType="slide" transparent>
+            <BlurView intensity={Platform.OS === 'ios' ? 40 : 100} tint={isDark ? "dark" : "light"} style={styles.modalOverlay}>
+                <SafeAreaView style={{ flex: 1 }}>
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => setShowWardrobe(false)} style={styles.roundBtn}>
+                            <X size={24} color={isDark ? "#FFF" : "#000"} />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>Vestidor</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+
+                    <View style={styles.previewStage}>
+                        <View style={styles.previewCircle}>
+                            {/* Hat Layer */}
+                            {previewHat && previewHat !== 'none' && (
+                                <Text style={styles.previewHatEmoji}>{HATS.find(h => h.id === previewHat)?.icon}</Text>
+                            )}
+                            <Text style={styles.previewPetEmoji}>{getCatEmoji()}</Text>
+                        </View>
+                        <View style={styles.coinBalance}>
+                            <Coins size={16} color="#CA8A04" />
+                            <Text style={styles.BalanceText}>{gameCoins}</Text>
+                        </View>
+                    </View>
+
+                    <ScrollView contentContainerStyle={styles.wardrobeGrid}>
+                        {HATS.map(hat => {
+                            const isUnlocked = petConfig.unlockedHats.includes(hat.id);
+                            const isActive = previewHat === hat.id;
+
+                            return (
+                                <TouchableOpacity
+                                    key={hat.id}
+                                    style={[styles.wardrobeItem, isActive && styles.wardrobeItemActive]}
+                                    onPress={() => setPreviewHat(hat.id)}
+                                >
+                                    <Text style={{ fontSize: 32 }}>{hat.icon}</Text>
+                                    <Text style={styles.hatName}>{hat.name}</Text>
+
+                                    {!isUnlocked ? (
+                                        <View style={styles.priceTag}>
+                                            <Text style={styles.priceText}>{hat.cost}</Text>
+                                            <Coins size={10} color="#FFF" />
+                                        </View>
+                                    ) : (
+                                        <View style={styles.ownedTag}><Check size={10} color="#FFF" /></View>
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+
+                    <View style={styles.modalFooter}>
+                        {(() => {
+                            const hat = HATS.find(h => h.id === previewHat) || HATS[0];
+                            const unlocked = petConfig.unlockedHats.includes(hat.id);
+
+                            if (unlocked) {
+                                return (
+                                    <TouchableOpacity style={[styles.mainBtn, { backgroundColor: '#10B981' }]}
+                                        onPress={() => { equipAccessory('hat', hat.id); setShowWardrobe(false); }}>
+                                        <Text style={styles.btnText}>Equipar</Text>
+                                    </TouchableOpacity>
+                                );
+                            } else {
+                                return (
+                                    <TouchableOpacity style={styles.mainBtn}
+                                        onPress={() => unlockAccessory('hat', hat.id, hat.cost)}>
+                                        <Text style={styles.btnText}>Comprar ({hat.cost})</Text>
+                                    </TouchableOpacity>
+                                );
+                            }
+                        })()}
+                    </View>
+                </SafeAreaView>
+            </BlurView>
+        </Modal>
+    );
+
+    const renderGuideModal = () => (
+        <Modal visible={showGuide} animationType="fade" transparent>
+            <View style={styles.guideOverlay}>
+                <BlurView intensity={20} style={StyleSheet.absoluteFill} />
+                <View style={styles.guideCard}>
+                    <Text style={styles.guideTitle}>Guía de Evolución</Text>
+                    <Text style={styles.guideText}>Tu mascota evoluciona manteniendo tu Racha Diaria (Login).</Text>
+
+                    <View style={styles.stageRow}>
+                        <Text style={{ fontSize: 24 }}>🥚</Text>
+                        <ArrowRight size={16} color="#9CA3AF" />
+                        <Text style={{ fontSize: 24 }}>😺</Text>
+                        <ArrowRight size={16} color="#9CA3AF" />
+                        <Text style={{ fontSize: 24 }}>😼</Text>
+                        <ArrowRight size={16} color="#9CA3AF" />
+                        <Text style={{ fontSize: 24 }}>🦁</Text>
+                    </View>
+
+                    <View style={styles.reqList}>
+                        <Text style={styles.reqItem}>• Bebé: 3 Días de Racha</Text>
+                        <Text style={styles.reqItem}>• Joven: 8 Días de Racha</Text>
+                        <Text style={styles.reqItem}>• Adulto: 30 Días de Racha</Text>
+                    </View>
+
+                    <TouchableOpacity style={styles.closeGuideBtn} onPress={() => setShowGuide(false)}>
+                        <Text style={styles.btnText}>Entendido</Text>
+                    </TouchableOpacity>
                 </View>
-                <Toast {...toast} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
+            </View>
+        </Modal>
+    );
+
+    // --- GAME RENDERER ---
+    if (currentGame) {
+        let ComponentToRender: any = null;
+        if (currentGame === 'fruit') ComponentToRender = FruitCatcher;
+        if (currentGame === 'duck') ComponentToRender = DuckHunt;
+        if (currentGame === 'memory') ComponentToRender = MemoryGame;
+        if (currentGame === 'dino') ComponentToRender = DinoGame;
+        if (currentGame === 'roulette') ComponentToRender = RouletteGame;
+        if (currentGame === 'slots') ComponentToRender = SlotMachine;
+
+        const gameId = currentGame as GameId;
+        const isCasino = currentGame === 'roulette' || currentGame === 'slots';
+
+        return (
+            <View style={[styles.gameContainer, { paddingTop: 0 }]}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+                    <GameWrapper
+                        gameId={gameId}
+                        GameComponent={ComponentToRender}
+                        coins={gameCoins}
+                        autoCloseOnSave
+                        onClose={() => setCurrentGame(null)}
+                        onLegacyGameEnd={(value: number) => {
+                            // Arcade: value is score. Casino: value is net delta.
+                            if (isCasino) {
+                                if (value >= 0) addGameCoins(value);
+                                else spendGameCoins(Math.abs(value));
+                                show(`Resultado: ${value >= 0 ? '+' : ''}${value} monedas`);
+                                return;
+                            }
+
+                            const score = value;
+                            const coins = Math.floor(score / 5);
+                            if (coins > 0) addGameCoins(coins);
+
+                            // Arcade Reward Logic (Points)
+                            if (ARCADE_REWARD_GAMES.has(currentGame)) {
+                                const result = registerArcadeReward(currentGame, score);
+                                if (result.status === 'awarded') show(`+${result.pointsAwarded} Pts Ramgos`);
+                            }
+                            show(`Fin de juego: Ganaste ${coins} monedas`);
+                        }}
+                        gameProps={{
+                            // Casino components currently require these props.
+                            ...(isCasino ? { coins: gameCoins, onClose: () => setCurrentGame(null) } : {}),
+                        }}
+                    />
+                </SafeAreaView>
             </View>
         );
     }
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            {/* Global Wallet Counter (Top Right) */}
-            <View style={styles.globalWallet}>
-                <Coins size={16} color="#854D0E" />
-                <Text style={styles.globalWalletText}>{gameCoins}</Text>
-            </View>
+        <View style={styles.container}>
+            <MobileHeader
+                title="Mi Mascota"
+                subtitle={STAGE_CONFIG[petStage].desc}
+                onBack={() => navigation?.goBack()}
+                backButton={true}
+                actions={
+                    <View style={styles.headerWallet}>
+                        <Coins size={14} color="#B45309" />
+                        <Text style={styles.headerWalletText}>{gameCoins}</Text>
+                    </View>
+                }
+            />
 
-            <MobileHeader title="Mi Mascota" subtitle="Cuida a tu gatito" backButton onBack={() => navigation?.goBack()} />
+            <ScrollView contentContainerStyle={styles.scroll}>
+                {/* HERO PET SECTION */}
+                <View style={styles.heroCard}>
+                    <LinearGradient colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#FAFAFA']} style={styles.heroGradient}>
+                        <View style={styles.petStageArea}>
+                            {petConfig?.activeHat && petConfig.activeHat !== 'none' && (
+                                <Animated.Text entering={FadeInDown} style={styles.hatEmoji}>
+                                    {HATS.find(h => h.id === petConfig.activeHat)?.icon}
+                                </Animated.Text>
+                            )}
+                            <Animated.Text style={[styles.mainPetEmoji, catStyle]}>
+                                {getCatEmoji()}
+                            </Animated.Text>
+                        </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-
-                {/* Pet Card */}
-                <View style={styles.petCard}>
-                    <LinearGradient colors={['rgba(236, 72, 153, 0.1)', 'rgba(59, 130, 246, 0.1)']} style={styles.petGradient}>
-                        <Animated.Text style={[styles.emojiDisplay, catStyle]}>
-                            {getCatEmoji()}
-                        </Animated.Text>
-
-                        <View style={styles.petInfo}>
-                            <Text style={styles.petLevel}>Gatito Nivel {stats.level}</Text>
-                            <Text style={styles.petStatus}>
-                                {petMood === 'happy' ? '¡Muy feliz!' : petMood === 'sad' ? 'Triste...' : 'Normal'}
-                            </Text>
-
-                            {/* Level Progress */}
-                            <View style={styles.levelBarContainer}>
-                                <Text style={styles.levelText}>EXP {stats.exp % 100}/100</Text>
-                                <View style={styles.levelTrack}>
-                                    <View style={[styles.levelFill, { width: `${stats.exp % 100}%` }]} />
-                                </View>
+                        {/* Status Bubbles */}
+                        <View style={styles.statusBubbles}>
+                            <View style={styles.bubble}>
+                                <Text style={styles.bubbleLabel}>Nivel {stats.level}</Text>
+                            </View>
+                            <View style={[styles.bubble, { backgroundColor: isDark ? '#374151' : '#FFF' }]}>
+                                <Text style={styles.bubbleLabel}>{petMood === 'happy' ? 'Muy Feliz' : 'Normal'}</Text>
                             </View>
                         </View>
                     </LinearGradient>
 
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Heart size={16} color="#EF4444" fill="#EF4444" />
-                            <Text style={styles.statLabel}>Felicidad</Text>
-                            {renderProgressBar(stats.happiness, '#EF4444')}
-                        </View>
-                        <View style={styles.statItem}>
-                            <Utensils size={16} color="#F97316" />
-                            <Text style={styles.statLabel}>Hambre</Text>
-                            {renderProgressBar(stats.hunger, '#F97316')}
-                        </View>
-                        <View style={styles.statItem}>
-                            <Zap size={16} color="#EAB308" fill="#EAB308" />
-                            <Text style={styles.statLabel}>Energía</Text>
-                            {renderProgressBar(stats.energy, '#EAB308')}
-                        </View>
+                    {/* Stats Grid */}
+                    <View style={styles.statsGrid}>
+                        {renderProgressBar(stats.happiness, '#EC4899', <Heart size={14} color="#EC4899" fill="#EC4899" />)}
+                        {renderProgressBar(stats.hunger, '#F97316', <Utensils size={14} color="#F97316" />)}
+                        {renderProgressBar(stats.energy, '#EAB308', <Zap size={14} color="#EAB308" fill="#EAB308" />)}
                     </View>
                 </View>
 
-                {/* Coins & Actions */}
-                <View style={styles.actionsGrid}>
-                    <BlurView intensity={20} style={styles.coinCard}>
-                        <View style={styles.coinHeader}>
-                            <Coins size={24} color="#CA8A04" fill="#CA8A04" />
-                            <Text style={styles.coinValue}>{gameCoins}</Text>
-                        </View>
-                        <TouchableOpacity style={styles.convertBtn} onPress={handleConvertCoins}>
-                            <Text style={styles.convertText}>Convertir a Puntos</Text>
-                        </TouchableOpacity>
-                    </BlurView>
+                {/* Evolution Progress */}
+                {renderEvolutionTrack()}
 
-                    <View style={styles.careButtons}>
-                        <TouchableOpacity style={styles.careBtn} onPress={feedPet}>
-                            <View style={[styles.iconCircle, { backgroundColor: '#FFF7ED' }]}>
-                                <Utensils size={20} color="#F97316" />
-                            </View>
-                            <Text style={styles.careLabel}>Comer</Text>
-                            <Text style={styles.costLabel}>5 🪙</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.careBtn} onPress={playWithPet}>
-                            <View style={[styles.iconCircle, { backgroundColor: '#FAF5FF' }]}>
-                                <Gamepad2 size={20} color="#A855F7" />
-                            </View>
-                            <Text style={styles.careLabel}>Jugar</Text>
-                            <Text style={styles.costLabel}>-15 ⚡</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.careBtn} onPress={cleanPet}>
-                            <View style={[styles.iconCircle, { backgroundColor: '#ECFEFF' }]}>
-                                <Sparkles size={20} color="#06B6D4" />
-                            </View>
-                            <Text style={styles.careLabel}>Limpiar</Text>
-                            <Text style={styles.costLabel}>3 🪙</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.careBtn} onPress={restPet}>
-                            <View style={[styles.iconCircle, { backgroundColor: '#EFF6FF' }]}>
-                                <Moon size={20} color="#3B82F6" />
-                            </View>
-                            <Text style={styles.careLabel}>Dormir</Text>
-                            <Text style={styles.costLabel}>+40 ⚡</Text>
-                        </TouchableOpacity>
-                    </View>
+                {/* Main Actions */}
+                <Text style={styles.sectionTitle}>Cuidados</Text>
+                <View style={styles.actionRow}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={feedPet}>
+                        <View style={[styles.actionIcon, { backgroundColor: '#FFF7ED' }]}>
+                            <Utensils size={24} color="#F97316" />
+                        </View>
+                        <Text style={styles.actionLabel}>Comer</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.actionBtn} onPress={playWithPet}>
+                        <View style={[styles.actionIcon, { backgroundColor: '#F0F9FF' }]}>
+                            <Gamepad2 size={24} color="#0EA5E9" />
+                        </View>
+                        <Text style={styles.actionLabel}>Jugar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.actionBtn} onPress={cleanPet}>
+                        <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4' }]}>
+                            <Sparkles size={24} color="#22C55E" />
+                        </View>
+                        <Text style={styles.actionLabel}>Baño</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => {
+                        if (petStage === 'EGG') return show('¡Eclosiona primero!', 'info');
+                        setShowWardrobe(true);
+                    }}>
+                        <View style={[styles.actionIcon, { backgroundColor: '#FAF5FF' }]}>
+                            <Shirt size={24} color="#A855F7" />
+                        </View>
+                        <Text style={styles.actionLabel}>Ropa</Text>
+                    </TouchableOpacity>
                 </View>
 
-                {/* Games Selection */}
-                <Text style={styles.sectionTitle}>Minijuegos</Text>
-                <View style={styles.gamesGrid}>
-                    {GAMES.map((game) => (
+                {/* Converter Card */}
+                <LinearGradient colors={['#F59E0B', '#B45309']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.converterCard}>
+                    <View>
+                        <Text style={styles.convTitle}>Bank</Text>
+                        <Text style={styles.convDesc}>Convierte tus monedas en Puntos Ramgos</Text>
+                    </View>
+                    <TouchableOpacity style={styles.convBtn} onPress={handleConvertCoins}>
+                        <Text style={styles.convBtnText}>Canjear</Text>
+                    </TouchableOpacity>
+                </LinearGradient>
+
+                {/* Mini Games */}
+                <Text style={styles.sectionTitle}>Arcade & Juegos</Text>
+                <View style={styles.gameGrid}>
+                    {GAMES.map(game => (
                         <TouchableOpacity
                             key={game.id}
-                            style={styles.gameCard}
+                            style={styles.gameItem}
                             onPress={() => setCurrentGame(game.id as GameType)}
-                            activeOpacity={0.9}
                         >
-                            <LinearGradient colors={game.gradient} style={styles.gameGradient}>
-                                <Text style={styles.gameIcon}>{game.icon}</Text>
+                            <LinearGradient colors={game.gradient} style={styles.gameIconBox}>
+                                <Text style={{ fontSize: 24 }}>{game.icon}</Text>
                             </LinearGradient>
-                            <View style={styles.gameInfo}>
-                                <Text style={styles.gameName}>{game.name}</Text>
-                                <Text style={styles.gameDesc}>{game.description}</Text>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.gameTitle}>{game.name}</Text>
+                                <Text style={styles.gameDesc} numberOfLines={1}>{game.type === 'casino' ? 'Gana Monedas' : 'Gana Puntos'}</Text>
                             </View>
+                            <ArrowRight size={16} color={isDark ? '#6B7280' : '#CBD5E1'} />
                         </TouchableOpacity>
                     ))}
                 </View>
 
-                {/* Tips */}
-                <View style={styles.tipsCard}>
-                    <View style={styles.tipIcon}>
-                        <Trophy size={20} color="#7C3AED" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.tipTitle}>Consejos Pro</Text>
-                        <Text style={styles.tipText}>• Juega minijuegos para ganar monedas.</Text>
-                        <Text style={styles.tipText}>• Mantén feliz a tu gatito para bonos.</Text>
-                    </View>
-                </View>
-
+                <View style={{ height: 40 }} />
             </ScrollView>
 
-            <Toast {...toast} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
+            {renderWardrobeModal()}
+            {renderGuideModal()}
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    scrollContent: {
-        padding: 20,
-        paddingBottom: 40,
-    },
-    fullScreenContainer: {
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: {
         flex: 1,
-        backgroundColor: '#F1F5F9',
-        paddingTop: 40, // Status bar safe area approx
+        backgroundColor: isDark ? '#111827' : '#F8FAFC',
     },
-    gameHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        marginBottom: 10,
+    scroll: {
+        padding: 16,
     },
-    backButton: {
+    headerWallet: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
     },
-    backText: {
-        fontSize: 16,
+    headerWalletText: {
+        color: '#B45309',
         fontWeight: 'bold',
-        color: '#1E293B',
+        fontSize: 12,
     },
-    coinBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FEF9C3',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        gap: 6,
-    },
-    coinText: {
-        fontWeight: 'bold',
-        color: '#854D0E',
-    },
-    // Pet Card
-    petCard: {
-        backgroundColor: '#fff',
+    // Hero
+    heroCard: {
         borderRadius: 24,
         overflow: 'hidden',
-        marginBottom: 20,
-        shadowColor: '#000',
+        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        marginBottom: 16,
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
+        shadowOpacity: 0.1,
         shadowRadius: 10,
-        elevation: 3,
+        elevation: 5,
     },
-    petGradient: {
+    heroGradient: {
         padding: 24,
         alignItems: 'center',
     },
-    emojiDisplay: {
-        fontSize: 80,
-        marginBottom: 16,
-    },
-    petInfo: {
+    petStageArea: {
+        height: 120,
+        justifyContent: 'center',
         alignItems: 'center',
-        width: '100%',
+        marginTop: 10,
     },
-    petLevel: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#1E293B',
+    mainPetEmoji: {
+        fontSize: 80,
     },
-    petStatus: {
-        fontSize: 14,
-        color: '#64748B',
-        marginBottom: 12,
+    hatEmoji: {
+        position: 'absolute',
+        top: -35,
+        fontSize: 50,
+        zIndex: 10,
     },
-    levelBarContainer: {
-        width: '100%',
-        marginTop: 8,
-    },
-    levelText: {
-        fontSize: 12,
-        color: '#94A3B8',
-        marginBottom: 4,
-        textAlign: 'right',
-    },
-    levelTrack: {
-        height: 6,
-        backgroundColor: '#E2E8F0',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    levelFill: {
-        height: '100%',
-        backgroundColor: '#3B82F6',
-        borderRadius: 3,
-    },
-    statsRow: {
+    statusBubbles: {
         flexDirection: 'row',
-        padding: 20,
-        gap: 12,
+        gap: 8,
+        marginTop: 10,
     },
-    statItem: {
-        flex: 1,
+    bubble: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
     },
-    statLabel: {
+    bubbleLabel: {
+        color: isDark ? '#E5E7EB' : '#4B5563',
         fontSize: 12,
         fontWeight: '600',
-        color: '#475569',
-        marginVertical: 4,
     },
-    progressContainer: {
-        height: 6,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 3,
-        overflow: 'hidden',
-    },
-    progressBar: {
-        height: '100%',
-        borderRadius: 3,
-    },
-    // Actions
-    actionsGrid: {
-        flexDirection: 'row',
-        gap: 16,
-        marginBottom: 24,
-    },
-    coinCard: {
-        flex: 1,
-        backgroundColor: '#fff',
-        borderRadius: 20,
+    statsGrid: {
         padding: 16,
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        gap: 12,
+        backgroundColor: isDark ? '#1F2937' : '#FFF',
     },
-    coinHeader: {
+    statRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
     },
-    coinValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#B45309',
-    },
-    convertBtn: {
-        backgroundColor: '#FCD34D',
-        paddingVertical: 8,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    convertText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#78350F',
-    },
-    careButtons: {
-        flex: 1,
-        gap: 8,
-        flexDirection: 'row', // Updated to Grid-like wrap if needed, but flex=1 means it takes half
-        flexWrap: 'wrap',
-    },
-    careBtn: {
-        width: '47%', // 2 cols
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 12,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        elevation: 1,
-    },
-    iconCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    statIconBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    statTrack: {
+        height: 8,
+        backgroundColor: isDark ? '#374151' : '#F1F5F9',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    statFill: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    statValue: {
+        width: 40,
+        textAlign: 'right',
+        fontSize: 12,
+        color: isDark ? '#9CA3AF' : '#64748B',
+    },
+    // Evolution
+    evoCard: {
+        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#E2E8F0',
+    },
+    evoHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: 8,
     },
-    careLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#334155',
+    evoTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: isDark ? '#F3F4F6' : '#1F2937',
     },
-    costLabel: {
-        fontSize: 10,
-        color: '#94A3B8',
-        marginTop: 2,
+    evoTrackContainer: {
+        gap: 6,
     },
-    // Games
+    evoTrack: {
+        height: 6,
+        backgroundColor: isDark ? '#374151' : '#E2E8F0',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    evoFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    evoText: {
+        fontSize: 11,
+        color: '#9CA3AF',
+        textAlign: 'right',
+    },
+    // Actions
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#1E293B',
-        marginBottom: 16,
+        color: isDark ? '#F3F4F6' : '#1F2937',
+        marginBottom: 12,
     },
-    gamesGrid: {
-        gap: 12,
+    actionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
         marginBottom: 24,
     },
-    gameCard: {
-        flexDirection: 'row',
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 6,
+    actionBtn: {
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        gap: 6,
     },
-    gameGradient: {
-        width: 60,
-        height: 60,
+    actionIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    actionLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: isDark ? '#D1D5DB' : '#4B5563',
+    },
+    // Converter
+    converterCard: {
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    convTitle: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    convDesc: {
+        color: 'rgba(255,255,255,0.8)',
+        fontSize: 12,
+    },
+    convBtn: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 12,
+    },
+    convBtnText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: 12,
+    },
+    // Games
+    gameGrid: {
+        gap: 12,
+    },
+    gameItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        padding: 12,
+        borderRadius: 16,
+        gap: 12,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#F1F5F9',
+    },
+    gameIconBox: {
+        width: 48,
+        height: 48,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    gameIcon: {
-        fontSize: 28,
-    },
-    gameInfo: {
-        flex: 1,
-        marginLeft: 12,
-    },
-    gameName: {
+    gameTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#1E293B',
+        color: isDark ? '#F3F4F6' : '#1F2937',
     },
     gameDesc: {
         fontSize: 12,
-        color: '#64748B',
+        color: '#9CA3AF',
     },
-    // Tips
-    tipsCard: {
+    // Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,23,42,0.25)',
+    },
+    modalHeader: {
         flexDirection: 'row',
-        backgroundColor: '#F5F3FF',
-        borderRadius: 16,
+        justifyContent: 'space-between',
+        alignItems: 'center',
         padding: 16,
-        gap: 12,
+        backgroundColor: isDark ? 'rgba(17,24,39,0.9)' : 'rgba(255,255,255,0.9)',
+        borderBottomWidth: 1,
+        borderBottomColor: isDark ? '#1F2937' : '#E5E7EB',
     },
-    tipIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        backgroundColor: '#EDE9FE',
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: isDark ? '#FFF' : '#000',
+    },
+    roundBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.08)',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    tipTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#5B21B6',
-        marginBottom: 4,
-    },
-    tipText: {
-        fontSize: 12,
-        color: '#6D28D9',
-        lineHeight: 18,
-    },
-    // Toast
-    toast: {
-        position: 'absolute',
-        bottom: 80,
-        left: 20,
-        right: 20,
-        padding: 16,
-        borderRadius: 12,
+    previewStage: {
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 10,
-        zIndex: 100,
+        paddingVertical: 20,
     },
-    toastSuccess: {
-        backgroundColor: '#10B981',
+    previewCircle: {
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
     },
-    toastError: {
-        backgroundColor: '#EF4444',
-    },
-    toastText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    globalWallet: {
+    previewHatEmoji: {
+        fontSize: 50,
         position: 'absolute',
-        top: 50, // Approx status bar + padding
-        right: 20,
-        zIndex: 100, // On top of header
-        backgroundColor: '#FEF9C3',
+        top: -20,
+        zIndex: 10,
+    },
+    previewPetEmoji: {
+        fontSize: 80,
+    },
+    coinBalance: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: isDark ? 'rgba(251,191,36,0.2)' : '#FEF3C7',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        gap: 6,
+    },
+    BalanceText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: isDark ? '#FCD34D' : '#B45309',
+    },
+    wardrobeGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        padding: 16,
+        gap: 12,
+    },
+    wardrobeItem: {
+        width: (width - 32 - 24) / 3, // 3 columns
+        aspectRatio: 1,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#FFF',
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB',
+    },
+    wardrobeItemActive: {
+        borderColor: '#8B5CF6',
+        backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : '#F5F3FF',
+    },
+    hatName: {
+        fontSize: 10,
+        color: isDark ? '#E5E7EB' : '#6B7280',
+        marginTop: 4,
+    },
+    priceTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F59E0B',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+        gap: 2,
+        marginTop: 4,
+    },
+    priceText: {
+        color: '#FFF',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    ownedTag: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        backgroundColor: '#10B981',
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalFooter: {
+        padding: 16,
+        borderTopWidth: 1,
+        borderColor: isDark ? '#374151' : '#E2E8F0',
+    },
+    mainBtn: {
+        backgroundColor: '#8B5CF6',
+        paddingVertical: 16,
+        borderRadius: 16,
+        alignItems: 'center',
+    },
+    btnText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    // Guide Modal
+    guideOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+        backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(15,23,42,0.35)',
+    },
+    guideCard: {
+        backgroundColor: isDark ? '#111827' : '#FFF',
+        borderRadius: 24,
+        padding: 24,
+        width: '100%',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: isDark ? '#1F2937' : '#E5E7EB',
+    },
+    guideTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 12,
+        color: isDark ? '#F9FAFB' : '#1F2937',
+    },
+    guideText: {
+        textAlign: 'center',
+        color: isDark ? '#D1D5DB' : '#6B7280',
+        marginBottom: 24,
+    },
+    stageRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 24,
+    },
+    reqList: {
+        width: '100%',
+        gap: 12,
+        marginBottom: 24,
+    },
+    reqItem: {
+        fontSize: 14,
+        color: isDark ? '#E5E7EB' : '#4B5563',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6',
+        padding: 12,
+        borderRadius: 12,
+    },
+    closeGuideBtn: {
+        backgroundColor: isDark ? '#0F172A' : '#1F2937',
+        paddingHorizontal: 32,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    // Games
+    gameContainer: {
+        flex: 1,
+        backgroundColor: '#000',
+    },
+    gameTopBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        padding: 16,
+    },
+    gameBackBtn: {
+        padding: 8,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 20,
+    },
+    gameCoinDisplay: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.2)',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
         gap: 6,
-        borderWidth: 1,
-        borderColor: '#EAB308',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 5,
     },
-    globalWalletText: {
-        fontWeight: 'bold',
-        color: '#854D0E',
-        fontSize: 14,
-    }
 });

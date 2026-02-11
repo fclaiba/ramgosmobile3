@@ -6,7 +6,8 @@ export interface CartItem {
     price: number;
     quantity: number;
     image: string;
-    type: 'product' | 'bono' | 'event';
+    type: 'product' | 'bono' | 'event' | 'subscription';
+    subscriptionTier?: 'pro' | 'business';
     location?: string;
     sellerId?: string;
     sellerName?: string;
@@ -14,6 +15,7 @@ export interface CartItem {
     shippingWeightKg?: number;
     shippingDimensionsCm?: { length: number; width: number; height: number };
     distanceKm?: number;
+    referralCode?: string;
 }
 
 type CartItemInput = Omit<CartItem, 'quantity'> & { quantity?: number };
@@ -39,10 +41,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const addItem = (item: CartItemInput) => {
         const quantityToAdd = item.quantity && item.quantity > 0 ? item.quantity : 1;
+
         setItems((prev) => {
-            const existingItem = prev.find((i) => i.id === item.id);
+            // Prevent multiple subscriptions: if adding a subscription, remove any existing one first
+            let newItems = [...prev];
+            if (item.type === 'subscription') {
+                newItems = newItems.filter(i => i.type !== 'subscription');
+            }
+
+            const existingItem = newItems.find((i) => i.id === item.id);
             if (existingItem) {
-                return prev.map((i) =>
+                // If it's a subscription, don't increase quantity beyond 1
+                if (item.type === 'subscription') {
+                    return newItems;
+                }
+                return newItems.map((i) =>
                     i.id === item.id
                         ? { ...i, quantity: i.quantity + quantityToAdd }
                         : i
@@ -50,11 +63,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
             }
             const newItem: CartItem = {
                 ...item,
-                quantity: quantityToAdd,
+                quantity: item.type === 'subscription' ? 1 : quantityToAdd,
             };
-            return [...prev, newItem];
+            return [...newItems, newItem];
         });
-        setIsOpen(true); // Auto-open cart when adding item for better feedback
+        setIsOpen(true);
     };
 
     const removeItem = (id: number | string) => {
@@ -67,7 +80,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
             return;
         }
         setItems((prev) =>
-            prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+            prev.map((item) => {
+                if (item.id === id) {
+                    if (item.type === 'subscription') return { ...item, quantity: 1 };
+                    return { ...item, quantity };
+                }
+                return item;
+            })
         );
     };
 

@@ -4,7 +4,7 @@ import { Map, Marker, Overlay } from 'pigeon-maps';
 import {
     MapPin,
     ShoppingCart,
-    Gift,
+    Tag,
     Ticket,
     Plus as PlusIcon,
     Minus,
@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ImageWithFallback } from '../figma/ImageWithFallback'; // Assuming this works on web or has web fallback
 import { useCart } from '../../contexts/CartContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // Types
 interface MapItem {
@@ -119,6 +120,10 @@ export const MapView = ({
 
     const { addItem } = useCart();
     const { isFavorite, toggleFavorite } = useFavorites();
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    // Dynamic styles for the component below, but we also pass isDark to getStyles if needed or use inline.
+    // Since styles are generally static, we can use conditional styling in render.
 
     const searchCenter = useMemo<[number, number]>(() => {
         // Reference point for the radius circle: GPS or Manual.
@@ -146,14 +151,14 @@ export const MapView = ({
     const getItemIcon = (type: string) => {
         switch (type) {
             case 'product': return ShoppingCart;
-            case 'bono': return Gift;
+            case 'bono': return Tag;
             case 'event': return Ticket;
             default: return ShoppingCart;
         }
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: isDark ? '#1F2937' : '#f3f4f6' }]}>
             {/* Map */}
             <View style={styles.mapContainer}>
                 <Map
@@ -194,6 +199,8 @@ export const MapView = ({
                                     borderRadius: radiusPx,
                                     marginLeft: -radiusPx,
                                     marginTop: -radiusPx,
+                                    borderColor: isDark ? 'rgba(139, 92, 246, 0.9)' : 'rgba(124, 58, 237, 0.9)',
+                                    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(124, 58, 237, 0.15)',
                                 },
                             ]}
                         />
@@ -232,16 +239,16 @@ export const MapView = ({
                     {/* Overlay for Selected Item (Popup) */}
                     {selectedItem && (
                         <Overlay anchor={[selectedItem.location.lat, selectedItem.location.lng]} offset={[0, 80]}>
-                            <View style={styles.popupContainer}>
+                            <View style={[styles.popupContainer, { backgroundColor: isDark ? '#374151' : 'white' }]}>
                                 <View style={styles.popupHeader}>
-                                    <Text style={styles.popupTitle} numberOfLines={1}>{selectedItem.name}</Text>
+                                    <Text style={[styles.popupTitle, { color: isDark ? 'white' : '#1F2937' }]} numberOfLines={1}>{selectedItem.name}</Text>
                                     <TouchableOpacity onPress={() => setSelectedItem(null)}>
-                                        <X size={16} color="#666" />
+                                        <X size={16} color={isDark ? '#9CA3AF' : '#666'} />
                                     </TouchableOpacity>
                                 </View>
                                 <Text style={styles.popupPrice}>${selectedItem.price}</Text>
                                 <TouchableOpacity
-                                    style={styles.popupBtn}
+                                    style={[styles.popupBtn, { backgroundColor: isDark ? '#111827' : '#1F2937' }]}
                                     onPress={() => onItemClick(selectedItem)}
                                 >
                                     <Text style={styles.popupBtnText}>Ver Detalle</Text>
@@ -253,11 +260,11 @@ export const MapView = ({
 
                 {/* Controls Overlay */}
                 <View style={styles.controlsContainer}>
-                    <TouchableOpacity style={styles.controlBtn} onPress={() => setZoom(z => Math.min(z + 1, 18))}>
-                        <PlusIcon size={20} color="#333" />
+                    <TouchableOpacity style={[styles.controlBtn, isDark && { backgroundColor: '#374151' }]} onPress={() => setZoom(z => Math.min(z + 1, 18))}>
+                        <PlusIcon size={20} color={isDark ? '#D1D5DB' : '#333'} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.controlBtn} onPress={() => setZoom(z => Math.max(z - 1, 10))}>
-                        <Minus size={20} color="#333" />
+                    <TouchableOpacity style={[styles.controlBtn, isDark && { backgroundColor: '#374151' }]} onPress={() => setZoom(z => Math.max(z - 1, 10))}>
+                        <Minus size={20} color={isDark ? '#D1D5DB' : '#333'} />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.controlBtn, styles.primaryControlBtn]}
@@ -272,19 +279,19 @@ export const MapView = ({
 
                 {/* Top Info Badge */}
                 <View style={styles.topBadgeContainer}>
-                    <View style={styles.glassBadge}>
+                    <View style={[styles.glassBadge, isDark && { backgroundColor: 'rgba(31, 41, 55, 0.85)' }]}>
                         <MapPin size={14} color="#7C3AED" />
-                        <Text style={styles.badgeText}>{items.length} resultados</Text>
+                        <Text style={[styles.badgeText, isDark && { color: 'white' }]}>{items.length} resultados</Text>
                     </View>
                 </View>
 
                 {/* Bottom Toggle */}
                 <View style={styles.bottomContainer}>
                     <TouchableOpacity
-                        style={styles.listToggleBtn}
+                        style={[styles.listToggleBtn, isDark && { backgroundColor: '#374151' }]}
                         onPress={() => setShowProductsList(!showProductsList)}
                     >
-                        <Text style={styles.listToggleText}>
+                        <Text style={[styles.listToggleText, isDark && { color: 'white' }]}>
                             {`Ver lista (${items.length})`}
                         </Text>
                     </TouchableOpacity>
@@ -293,7 +300,7 @@ export const MapView = ({
 
             {/* Vertical List under map */}
             {showProductsList && (
-                <View style={styles.listContainer}>
+                <View style={[styles.listContainer, isDark && { backgroundColor: '#1F2937', borderTopColor: '#374151' }]}>
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listScroll}>
                         {items.map(item => {
                             const Icon = getItemIcon(item.type);
@@ -301,21 +308,21 @@ export const MapView = ({
                             return (
                                 <TouchableOpacity
                                     key={item.id}
-                                    style={styles.listRow}
+                                    style={[styles.listRow, isDark && { backgroundColor: '#374151', borderColor: '#4B5563' }]}
                                     onPress={() => {
                                         setSelectedItem(item);
                                         onItemClick(item);
                                     }}
                                 >
-                                    <ImageWithFallback src={item.image} style={styles.rowImage} />
+                                    <ImageWithFallback src={item.image} style={[styles.rowImage, isDark && { backgroundColor: '#4B5563' }]} />
                                     <View style={styles.rowContent}>
-                                        <Text style={styles.rowTitle} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={styles.rowMeta} numberOfLines={1}>{item.category} • {item.distance ?? '-'}km</Text>
+                                        <Text style={[styles.rowTitle, isDark && { color: 'white' }]} numberOfLines={1}>{item.name}</Text>
+                                        <Text style={[styles.rowMeta, isDark && { color: '#9CA3AF' }]} numberOfLines={1}>{item.category} • {item.distance ?? '-'}km</Text>
                                         <Text style={styles.rowPrice}>${item.price}</Text>
                                     </View>
                                     <View style={styles.rowActions}>
                                         <TouchableOpacity
-                                            style={[styles.iconBtn, saved ? styles.iconBtnActive : null]}
+                                            style={[styles.iconBtn, isDark && { backgroundColor: '#4B5563', borderColor: '#6B7280' }, saved ? styles.iconBtnActive : null]}
                                             onPress={(e) => {
                                                 e.stopPropagation();
                                                 toggleFavorite(item);
@@ -325,7 +332,7 @@ export const MapView = ({
                                             <Bookmark size={14} color={saved ? '#7C3AED' : '#9CA3AF'} fill={saved ? '#7C3AED' : 'transparent'} />
                                         </TouchableOpacity>
                                         <TouchableOpacity
-                                            style={[styles.iconBtn, styles.iconBtnPrimary]}
+                                            style={[styles.iconBtn, styles.iconBtnPrimary, isDark && { backgroundColor: '#4B5563', borderColor: '#6B7280' }]}
                                             onPress={(e) => {
                                                 e.stopPropagation();
                                                 addItem({

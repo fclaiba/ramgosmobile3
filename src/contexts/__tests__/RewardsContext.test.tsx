@@ -1,7 +1,6 @@
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react-native';
 import { RewardsProvider, useRewards } from '../RewardsContext';
-import { AuthProvider } from '../AuthContext';
 import { PointsProvider } from '../PointsContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -12,18 +11,19 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
     removeItem: jest.fn(() => Promise.resolve()),
 }));
 
-// Mock Auth and Points contexts to avoid complex dependencies
-jest.mock('../AuthContext', () => ({
-    useAuth: () => ({ user: { id: 'test-user-id' } }),
-    AuthProvider: ({ children }: any) => children,
-}));
-
+// Mock Points context to avoid complex dependencies
 jest.mock('../PointsContext', () => ({
     usePoints: () => ({
         addPoints: jest.fn(),
         challengeProgress: { loginStreak: 5 },
     }),
     PointsProvider: ({ children }: any) => children,
+}));
+
+// Mock Toast context (RewardsContext uses useToast internally)
+jest.mock('../ToastContext', () => ({
+    useToast: () => ({ show: jest.fn() }),
+    ToastProvider: ({ children }: any) => children,
 }));
 
 // Helper component to access hook
@@ -45,11 +45,9 @@ describe('RewardsContext', () => {
         let rewards: any;
         render(
             <PointsProvider>
-                <AuthProvider>
-                    <RewardsProvider>
-                        <TestComponent callback={(val) => (rewards = val)} />
-                    </RewardsProvider>
-                </AuthProvider>
+                <RewardsProvider>
+                    <TestComponent callback={(val) => (rewards = val)} />
+                </RewardsProvider>
             </PointsProvider>
         );
 
@@ -64,11 +62,9 @@ describe('RewardsContext', () => {
         let rewards: any;
         render(
             <PointsProvider>
-                <AuthProvider>
-                    <RewardsProvider>
-                        <TestComponent callback={(val) => (rewards = val)} />
-                    </RewardsProvider>
-                </AuthProvider>
+                <RewardsProvider>
+                    <TestComponent callback={(val) => (rewards = val)} />
+                </RewardsProvider>
             </PointsProvider>
         );
 
@@ -94,11 +90,9 @@ describe('RewardsContext', () => {
         let rewards: any;
         render(
             <PointsProvider>
-                <AuthProvider>
-                    <RewardsProvider>
-                        <TestComponent callback={(val) => (rewards = val)} />
-                    </RewardsProvider>
-                </AuthProvider>
+                <RewardsProvider>
+                    <TestComponent callback={(val) => (rewards = val)} />
+                </RewardsProvider>
             </PointsProvider>
         );
 
@@ -122,21 +116,31 @@ describe('RewardsContext', () => {
         expect(rewards.getArcadeStatus().remaining).toBe(0);
     });
 
-    it('generates a referral code for the user', async () => {
+    it('awards lucky wheel points within 5–100 and only once per day', async () => {
         let rewards: any;
         render(
             <PointsProvider>
-                <AuthProvider>
-                    <RewardsProvider>
-                        <TestComponent callback={(val) => (rewards = val)} />
-                    </RewardsProvider>
-                </AuthProvider>
+                <RewardsProvider>
+                    <TestComponent callback={(val) => (rewards = val)} />
+                </RewardsProvider>
             </PointsProvider>
         );
 
         await waitFor(() => expect(rewards).toBeDefined());
 
-        expect(rewards.referralCode).toContain('RAMGOS');
-        expect(rewards.referralLink).toContain('ramgos.app/r/');
+        let firstResult: any;
+        await act(async () => {
+            firstResult = rewards.spinLuckyWheel();
+        });
+
+        expect(firstResult.status).toBe('awarded');
+        expect(firstResult.pointsAwarded).toBeGreaterThanOrEqual(5);
+        expect(firstResult.pointsAwarded).toBeLessThanOrEqual(100);
+
+        let secondResult: any;
+        await act(async () => {
+            secondResult = rewards.spinLuckyWheel();
+        });
+        expect(secondResult.status).toBe('already_claimed');
     });
 });

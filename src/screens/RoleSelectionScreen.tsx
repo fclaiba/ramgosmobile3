@@ -1,9 +1,10 @@
-
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ShoppingBag, Store, Zap, ArrowRight, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +45,10 @@ const roles: RoleOption[] = [
 ];
 
 export default function RoleSelectionScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
     const { updateRole, user } = useAuth();
     const [selectedRole, setSelectedRole] = React.useState<string | null>(null);
 
@@ -76,13 +81,13 @@ export default function RoleSelectionScreen({ navigation }: any) {
                             key={role.id}
                             style={[
                                 styles.card,
-                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: '#fff' }
+                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: isDark ? '#1F2937' : '#fff' }
                             ]}
                             onPress={() => setSelectedRole(role.id)}
                             activeOpacity={0.9}
                         >
-                            <View style={[styles.iconContainer, { backgroundColor: isSelected ? role.color : '#F3F4F6' }]}>
-                                <role.icon size={24} color={isSelected ? '#fff' : '#6B7280'} />
+                            <View style={[styles.iconContainer, { backgroundColor: isSelected ? role.color : (isDark ? '#374151' : '#F3F4F6') }]}>
+                                <role.icon size={24} color={isSelected ? '#fff' : (isDark ? '#9CA3AF' : '#6B7280')} />
                             </View>
 
                             <View style={styles.cardContent}>
@@ -132,24 +137,24 @@ export default function RoleSelectionScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFAFA' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
     header: { padding: 24, paddingTop: 40 },
-    headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
-    headerSubtitle: { fontSize: 16, color: '#6B7280' },
+    headerTitle: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 },
+    headerSubtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280' },
 
     scrollContent: { padding: 16, paddingBottom: 100 },
 
     card: {
         flexDirection: 'row',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRadius: 20,
         padding: 20,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
-        shadowColor: '#000',
-        shadowOpacity: 0.03,
+        borderColor: isDark ? '#374151' : '#E5E7EB',
+        shadowColor: isDark ? '#000' : '#000',
+        shadowOpacity: isDark ? 0.3 : 0.03,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 4 },
         elevation: 2,
@@ -165,12 +170,12 @@ const styles = StyleSheet.create({
         marginRight: 16
     },
     cardContent: { flex: 1 },
-    cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
-    cardDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+    cardTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 4 },
+    cardDesc: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 20 },
 
     benefitsContainer: { marginTop: 12, gap: 4 },
     benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    benefitText: { fontSize: 12, color: '#4B5563' },
+    benefitText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#4B5563' },
 
     checkCircle: {
         position: 'absolute',
@@ -185,12 +190,12 @@ const styles = StyleSheet.create({
 
     footer: {
         padding: 24,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderTopWidth: 1,
-        borderTopColor: '#F3F4F6'
+        borderTopColor: isDark ? '#374151' : '#F3F4F6'
     },
     btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
-    btnDisabled: { backgroundColor: '#F3F4F6' },
+    btnDisabled: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
     btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

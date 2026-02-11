@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const PERSISTENCE_ENABLED = false;
+const PERSISTENCE_ENABLED = true;
 
 type StorageLike = {
     getItem: (key: string) => Promise<string | null>;

@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ImageBackground, Vibration, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ImageBackground, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Target, RotateCcw, Crosshair, Trophy, Coins, Clock, Zap } from 'lucide-react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useGameLevel } from './useGameLevel';
+import { GAME_LEVEL_THRESHOLDS, getArcadeParams } from './gameDifficultyConfig';
+import type { GameActionSignal } from './GameWrapper';
+import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
 
-const { width } = Dimensions.get('window');
-const GAME_HEIGHT = 400;
+const { width, height } = Dimensions.get('window');
 
 interface FlyingObject {
     id: number;
@@ -22,19 +25,42 @@ interface FlyingObject {
 interface DuckHuntProps {
     onGameEnd?: (score: number) => void;
     onClose?: () => void;
+    // Wrapper integration (optional)
+    actionSignal?: GameActionSignal;
+    uiMode?: 'standalone' | 'wrapped';
+    onEvent?: (event: GameEvent) => void;
+    onEnd?: (summary: GameEndSummary) => void;
+    gameId?: GameAdapterProps['gameId'];
+    family?: GameAdapterProps['family'];
 }
 
-export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
-    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+export const DuckHunt = (props: DuckHuntProps) => {
+    const {
+        onGameEnd,
+        onClose,
+        actionSignal,
+        uiMode = 'standalone',
+        onEvent,
+        onEnd,
+        gameId = 'duck',
+        family = 'arcade',
+    } = props;
+
+    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(0);
     const [timeLeft, setTimeLeft] = useState(30);
-    const [ammo, setAmmo] = useState(5);
+    const [ammo, setAmmo] = useState(20);
     const [items, setItems] = useState<FlyingObject[]>([]);
+    const [ducksShot, setDucksShot] = useState(0);
 
-    const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+    const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const scoreRef = useRef(0);
-    const ammoRef = useRef(5);
+    const ammoRef = useRef(20);
+    const ducksShotRef = useRef(0);
+    const pendingEndRef = useRef<GameEndSummary | null>(null);
+    const lastActionNonce = useRef(0);
+    const lastLevelReported = useRef(1);
 
     // Refs
     const gameLoopRef = useRef<number | null>(null);
@@ -43,6 +69,15 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
     // Sync Refs
     useEffect(() => { scoreRef.current = score; }, [score]);
     useEffect(() => { ammoRef.current = ammo; }, [ammo]);
+    useEffect(() => { ducksShotRef.current = ducksShot; }, [ducksShot]);
+
+    const levelState = useGameLevel({
+        mode: 'count',
+        count: ducksShot,
+        baseLevel: 1,
+        thresholds: GAME_LEVEL_THRESHOLDS.duck,
+    });
+    const params = getArcadeParams('duck', levelState.level);
 
     // Load High Score
     useEffect(() => {
@@ -60,19 +95,42 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
     }, [score]);
 
 
-    const startGame = () => {
-        setScore(0);
-        scoreRef.current = 0;
-        setTimeLeft(30);
-        setAmmo(5);
-        ammoRef.current = 5;
-        setItems([]);
-        setGameState('PLAYING');
-        gameStateRef.current = 'PLAYING';
+    const emitStatus = useCallback((status: 'start' | 'playing' | 'paused' | 'gameover' | 'levelup') => {
+        onEvent?.({ type: 'status', status });
+    }, [onEvent]);
 
-        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
-        gameLoopRef.current = requestAnimationFrame(updateLoop);
+    const emitMetrics = useCallback(() => {
+        onEvent?.({
+            type: 'metrics',
+            patch: {
+                score,
+                lives: 1,
+                level: levelState.level,
+                progressToNext: levelState.progress,
+                ammo,
+                timeLeft,
+            },
+        });
+    }, [ammo, levelState.level, levelState.progress, onEvent, score, timeLeft]);
 
+    useEffect(() => {
+        if (uiMode === 'wrapped') {
+            emitStatus('start');
+            emitMetrics();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [uiMode]);
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped') return;
+        emitMetrics();
+        if (levelState.level > lastLevelReported.current) {
+            lastLevelReported.current = levelState.level;
+            onEvent?.({ type: 'levelup', level: levelState.level });
+        }
+    }, [uiMode, emitMetrics, levelState.level, onEvent]);
+
+    const startTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
             setTimeLeft(prev => {
@@ -86,48 +144,135 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
         }, 1000);
     };
 
+    const stopTimer = () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = null;
+    };
+
+    const startGame = () => {
+        setScore(0);
+        scoreRef.current = 0;
+        setTimeLeft(30);
+        setAmmo(20);
+        ammoRef.current = 20;
+        setDucksShot(0);
+        ducksShotRef.current = 0;
+        setItems([]);
+        setGameState('PLAYING');
+        gameStateRef.current = 'PLAYING';
+
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = requestAnimationFrame(updateLoop);
+
+        startTimer();
+        if (uiMode === 'wrapped') emitStatus('playing');
+    };
+
     const endGame = () => {
         setGameState('GAMEOVER');
         gameStateRef.current = 'GAMEOVER';
-        Vibration.vibrate(500);
-        if (timerRef.current) clearInterval(timerRef.current);
+        stopTimer();
         if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        if (uiMode === 'wrapped') {
+            const final = {
+                score: scoreRef.current,
+                lives: 1,
+                level: levelState.level,
+                progressToNext: levelState.progress,
+                ammo: ammoRef.current,
+            };
+            pendingEndRef.current = {
+                gameId,
+                family,
+                score: scoreRef.current,
+                finalMetrics: final,
+                reason: 'time_or_ammo',
+            };
+        }
     };
+
+    useEffect(() => {
+        if (gameState !== 'GAMEOVER') return;
+        if (uiMode !== 'wrapped') return;
+        if (!pendingEndRef.current) return;
+        const summary = pendingEndRef.current;
+        pendingEndRef.current = null;
+        onEvent?.({ type: 'gameover', final: summary.finalMetrics, reason: summary.reason });
+        onEnd?.(summary);
+    }, [gameState, onEnd, onEvent, uiMode]);
+
+    const pauseGame = () => {
+        if (gameStateRef.current !== 'PLAYING') return;
+        setGameState('PAUSED');
+        gameStateRef.current = 'PAUSED';
+        stopTimer();
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        if (uiMode === 'wrapped') emitStatus('paused');
+    };
+
+    const resumeGame = () => {
+        if (gameStateRef.current !== 'PAUSED') return;
+        setGameState('PLAYING');
+        gameStateRef.current = 'PLAYING';
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = requestAnimationFrame(updateLoop);
+        startTimer();
+        if (uiMode === 'wrapped') emitStatus('playing');
+    };
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped' || !actionSignal) return;
+        if (actionSignal.nonce === lastActionNonce.current) return;
+        lastActionNonce.current = actionSignal.nonce;
+        if (actionSignal.type === 'start') startGame();
+        if (actionSignal.type === 'restart') startGame();
+        if (actionSignal.type === 'pause') pauseGame();
+        if (actionSignal.type === 'resume') resumeGame();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [actionSignal, uiMode]);
 
     const updateLoop = () => {
         if (gameStateRef.current !== 'PLAYING') return;
 
         const currentScore = scoreRef.current;
-        const difficulty = 1 + (currentScore / 1000);
+        const spawnMult = params?.gameId === 'duck' ? params.spawnMultiplier : 1;
+        const speedMult = params?.gameId === 'duck' ? params.duckSpeedMultiplier : 1;
+        const difficulty = 1 + (currentScore / 1500);
 
         // Spawn Logic
         // Base chance doubled
-        if (Math.random() < 0.04 * difficulty) {
+        if (Math.random() < 0.04 * difficulty * spawnMult) {
             setItems(prev => {
                 if (prev.length >= 6) return prev;
 
                 const rand = Math.random();
                 let type: FlyingObject['type'] = 'duck';
                 let emoji = '🦆';
-                let speedX = (Math.random() * 2 + 2) * difficulty;
+                let speedX = (Math.random() * 2 + 2) * difficulty * speedMult;
                 let speedY = 0;
                 let x = 0;
-                let y = Math.random() * (GAME_HEIGHT - 100);
+                // Use explicit height or fallback
+                let y = Math.random() * (height * 0.6); // Top 60%
                 const direction = Math.random() > 0.5 ? 1 : -1;
 
-                if (rand < 0.1) {
+                // Balance ammo vs time: more time => less ammo, less time => more ammo
+                const timeRatio = Math.max(0, Math.min(1, timeLeft / 30));
+                const ammoChance = 0.24 - (timeRatio * 0.14); // 10%..24%
+                const clockChance = 0.06 + (timeRatio * 0.10); // 6%..16%
+
+                if (rand < ammoChance) {
                     // Ammo (Thrown in air)
                     type = 'ammo';
                     emoji = '🧨'; // Cartridge
                     x = Math.random() * (width - 100) + 50;
-                    y = GAME_HEIGHT; // Start bottom
-                    speedY = -10 - (Math.random() * 5); // Shoot up
+                    y = height; // Start bottom
+                    speedY = -15 - (Math.random() * 5); // Shoot up higher
                     speedX = (Math.random() - 0.5) * 4; // Drift
-                } else if (rand < 0.2) {
+                } else if (rand < ammoChance + clockChance) {
                     // Clock (Fast)
                     type = 'clock';
                     emoji = '⏰';
-                    speedX = (Math.random() * 5 + 5) * difficulty; // Very fast
+                    speedX = (Math.random() * 5 + 5) * difficulty * speedMult; // Very fast
                 }
 
                 if (type !== 'ammo') {
@@ -163,7 +308,7 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
                 const isOffScreen =
                     (item.direction === 1 && newX > width + 100) ||
                     (item.direction === -1 && newX < -100) ||
-                    (item.type === 'ammo' && newY > GAME_HEIGHT + 50);
+                    (item.type === 'ammo' && newY > height + 50);
 
                 if (!isOffScreen) {
                     nextItems.push({ ...item, x: newX, y: newY, speedY: item.speedY });
@@ -178,24 +323,10 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
     const handleShoot = () => {
         if (gameStateRef.current !== 'PLAYING') return;
 
-        // This fires on background tap
-        Vibration.vibrate(20);
 
         setAmmo(prev => {
             const newAmmo = prev - 1;
-            if (newAmmo <= 0) {
-                // Check if we hit something? 
-                // Wait, item press fires FIRST.
-                // If item press handled it, this shouldn't matter?
-                // Actually, if we tap background, we lose ammo.
-                // If we tap item, we ALSO lose ammo (unless it's ammo refill).
-                // So ammo decrement is universal, except refill?
-            }
             if (newAmmo < 0) {
-                // Game Over Trigger immediately?
-                // State update is async.
-                // We need to handle this.
-                // Actually better to check in effect or sync logic.
                 endGame();
                 return 0;
             }
@@ -213,14 +344,10 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
             // Hit logic
             if (item.type === 'duck') {
                 setScore(s => s + 50);
+                setDucksShot(d => d + 1);
             } else if (item.type === 'ammo') {
-                Vibration.vibrate([0, 50, 50, 50]);
-                setAmmo(a => Math.min(10, a + 3)); // Refill
-                // No ammo cost for hitting ammo? 
-                // Or we spent 1 to hit it, but gained 3. Net +2.
-                // Since background press fires too? No, stop propagation.
+                setAmmo(a => Math.min(30, a + 5)); // Refill
             } else if (item.type === 'clock') {
-                Vibration.vibrate(100);
                 setTimeLeft(t => t + 5);
             }
 
@@ -228,8 +355,7 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
             return prev.filter(i => i.id !== id);
         });
 
-        // Decrement Ammo for shooting (UNLESS it's the ammo box itself? Logic: You shoot the box to open it)
-        // So yes, you spend 1 bullet to get 3.
+        // Decrement Ammo for shooting
         setAmmo(prev => {
             const val = prev - 1;
             if (val < 0) { endGame(); return 0; }
@@ -241,41 +367,43 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
         <View style={styles.container}>
             <LinearGradient colors={['#87CEEB', '#E0F7FA']} style={StyleSheet.absoluteFill} />
 
-            <View style={styles.hud}>
-                <View style={styles.scoreContainer}>
-                    <Trophy size={20} color="#F59E0B" />
-                    <Text style={styles.scoreText}>{score}</Text>
-                    <Text style={styles.highScoreText}>Hi: {highScore}</Text>
+            {uiMode !== 'wrapped' && (
+                <View style={styles.hud}>
+                    <View style={styles.scoreContainer}>
+                        <Trophy size={20} color="#F59E0B" />
+                        <Text style={styles.scoreText}>{score}</Text>
+                        <Text style={styles.highScoreText}>Hi: {highScore}</Text>
+                    </View>
+                    <View style={styles.ammoContainer}>
+                        {/* Ammo Shells */}
+                        {[...Array(Math.max(0, ammo))].map((_, i) => (
+                            <View key={i} style={styles.shell} />
+                        ))}
+                        {ammo === 0 && <Text style={{ color: 'red', fontWeight: 'bold' }}>EMPTY</Text>}
+                    </View>
+                    <View style={styles.timerContainer}>
+                        <Text style={[styles.timerText, timeLeft < 10 && { color: 'red' }]}>{timeLeft}s</Text>
+                    </View>
                 </View>
-                <View style={styles.ammoContainer}>
-                    {/* Ammo Shells */}
-                    {[...Array(Math.max(0, ammo))].map((_, i) => (
-                        <View key={i} style={styles.shell} />
-                    ))}
-                    {ammo === 0 && <Text style={{ color: 'red', fontWeight: 'bold' }}>EMPTY</Text>}
-                </View>
-                <View style={styles.timerContainer}>
-                    <Text style={[styles.timerText, timeLeft < 10 && { color: 'red' }]}>{timeLeft}s</Text>
-                </View>
-            </View>
+            )}
 
-            {gameState === 'IDLE' && (
+            {uiMode !== 'wrapped' && gameState === 'IDLE' && (
                 <View style={styles.centerContainer}>
                     <Text style={styles.title}>Duck Hunt</Text>
-                    <Text style={styles.subtitle}>Tap targets!</Text>
+                    <Text style={styles.subtitle}>¡Toca los objetivos!</Text>
                     <TouchableOpacity style={styles.startBtn} onPress={startGame}>
                         <Crosshair size={24} color="#fff" />
-                        <Text style={styles.btnText}>START HUNT</Text>
+                        <Text style={styles.btnText}>EMPEZAR</Text>
                     </TouchableOpacity>
                 </View>
             )}
 
-            {gameState === 'GAMEOVER' && (
+            {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && (
                 <View style={styles.centerContainer}>
                     <Text style={styles.gameOverText}>
-                        {ammo <= 0 ? 'NO AMMO!' : 'TIME UP!'}
+                        {ammo < 0 ? 'SIN MUNICIÓN' : 'TIEMPO FUERA'}
                     </Text>
-                    <Text style={styles.finalScore}>Score: {score}</Text>
+                    <Text style={styles.finalScore}>Puntos: {score}</Text>
                     <View style={{ gap: 10 }}>
                         <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
                             if (onGameEnd) onGameEnd(score); // Save Coins
@@ -286,7 +414,7 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.startBtn} onPress={startGame}>
                             <RotateCcw size={24} color="#fff" />
-                            <Text style={styles.btnText}>TRY AGAIN</Text>
+                            <Text style={styles.btnText}>REINTENTAR</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -325,17 +453,15 @@ export const DuckHunt = ({ onGameEnd, onClose }: DuckHuntProps) => {
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         width: '100%',
-        height: GAME_HEIGHT,
-        borderRadius: 16,
-        overflow: 'hidden',
         backgroundColor: '#87CEEB',
-        marginBottom: 20
     },
     hud: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         padding: 16,
+        paddingTop: Platform.OS === 'ios' ? 0 : 16,
         zIndex: 10
     },
     scoreContainer: {

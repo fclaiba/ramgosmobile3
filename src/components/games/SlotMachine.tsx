@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Vibration } from 'react-native';
-import { Coins, RotateCcw, DollarSign, X } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { Coins, RotateCcw, DollarSign } from 'lucide-react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, withRepeat, cancelAnimation } from 'react-native-reanimated';
+import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
 
 const SYMBOLS = ['🍒', '🍋', '🍇', '💎', '7️⃣', '🔔'];
 const SYMBOL_HEIGHT = 80;
@@ -27,18 +28,13 @@ const Reel = ({ spinning, stopSymbol, delay }: { spinning: boolean, stopSymbol: 
 
     const animatedStyle = useAnimatedStyle(() => {
         return {
-            transform: [{ translateY: offset.value % (SYMBOL_HEIGHT * SYMBOLS.length) }] // Simple loop visual hack or direct value
-            // To do infinite scrolling properly requires duplicating items. 
-            // For this simpler version, we just animate to the target when stopping.
-            // Let's rely on the `else` block to snap to position. 
-            // While spinning, we might see jump if not handled perfectly, but sufficient for simple demo.
+            transform: [{ translateY: offset.value % (SYMBOL_HEIGHT * SYMBOLS.length) }]
         };
     });
 
     return (
         <View style={styles.reelContainer}>
             <Animated.View style={[styles.reelContent, animatedStyle]}>
-                {/* Render multipel sets for illusion of infinity if needed, but for now just one set repeated */}
                 {[...SYMBOLS, ...SYMBOLS, ...SYMBOLS].map((s, i) => (
                     <View key={i} style={styles.symbolContainer}>
                         <Text style={styles.symbol}>{s}</Text>
@@ -55,26 +51,46 @@ interface SlotMachineProps {
     onCoinsChange?: (coins: number) => void;
     onClose: () => void;
     onGameEnd?: (score: number) => void;
+    // Wrapper integration (optional)
+    uiMode?: 'standalone' | 'wrapped';
+    onEvent?: (event: GameEvent) => void;
+    onEnd?: (summary: GameEndSummary) => void;
+    gameId?: GameAdapterProps['gameId'];
+    family?: GameAdapterProps['family'];
 }
 
-export const SlotMachine = ({ coins, onCoinsChange, onClose, onGameEnd }: SlotMachineProps) => {
+export const SlotMachine = (props: SlotMachineProps) => {
+    const {
+        coins,
+        onCoinsChange,
+        onClose,
+        onGameEnd,
+        uiMode = 'standalone',
+        onEvent,
+        onEnd,
+        gameId = 'slots',
+        family = 'casino',
+    } = props;
     const [spinning, setSpinning] = useState(false);
     const [results, setResults] = useState(['7️⃣', '7️⃣', '7️⃣']);
     const [winMessage, setWinMessage] = useState('');
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped') return;
+        onEvent?.({ type: 'status', status: 'playing' });
+        onEvent?.({ type: 'metrics', patch: { score: 0, level: 1, progressToNext: 0, lives: 0 } });
+    }, [onEvent, uiMode]);
 
     const spin = () => {
         if (spinning) return;
         setSpinning(true);
         setWinMessage('');
 
-        // Decide result upfront
         const newResults = [
             SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
             SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)],
             SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]
         ];
-
-        // Force win for demo occasionally? No, pure random.
 
         setTimeout(() => {
             setResults(newResults);
@@ -87,11 +103,9 @@ export const SlotMachine = ({ coins, onCoinsChange, onClose, onGameEnd }: SlotMa
         let winAmount = 0;
         if (res[0] === res[1] && res[1] === res[2]) {
             setWinMessage('¡JACKPOT! 🎉 (+500)');
-            Vibration.vibrate([0, 100, 50, 100, 50, 200]);
             winAmount = 500;
         } else if (res[0] === res[1] || res[1] === res[2] || res[0] === res[2]) {
             setWinMessage('¡Par! (+50)');
-            Vibration.vibrate([0, 50, 50, 50]);
             winAmount = 50;
         } else {
             setWinMessage('Sigue intentando');
@@ -100,14 +114,19 @@ export const SlotMachine = ({ coins, onCoinsChange, onClose, onGameEnd }: SlotMa
 
         onCoinsChange?.(Math.max(0, coins + winAmount));
         if (onGameEnd) onGameEnd(winAmount);
+        onEvent?.({ type: 'currencyDelta', delta: winAmount, currency: 'coins', reason: 'slots_spin' });
+        onEnd?.({
+            gameId,
+            family,
+            score: 0,
+            currencyDelta: { currency: 'coins', delta: winAmount },
+            finalMetrics: { score: 0, level: 1, progressToNext: 0, lives: 0 },
+            reason: 'slots_spin',
+        });
     };
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                <X size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-
             <View style={styles.header}>
                 <Text style={styles.title}>SLOTS</Text>
             </View>
@@ -132,9 +151,6 @@ export const SlotMachine = ({ coins, onCoinsChange, onClose, onGameEnd }: SlotMa
             {winMessage ? (
                 <View style={styles.winBox}>
                     <Text style={styles.winText}>{winMessage}</Text>
-                    <TouchableOpacity onPress={onClose} style={{ marginTop: 8 }}>
-                        <Text style={{ color: '#3B82F6' }}>Cerrar</Text>
-                    </TouchableOpacity>
                 </View>
             ) : null}
         </View>
@@ -143,21 +159,11 @@ export const SlotMachine = ({ coins, onCoinsChange, onClose, onGameEnd }: SlotMa
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 16,
         padding: 24,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        width: '100%',
-        position: 'relative',
-    },
-    closeBtn: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        zIndex: 10,
-        padding: 5,
+        justifyContent: 'center',
     },
     header: {
         backgroundColor: '#1F2937',
@@ -165,6 +171,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginBottom: 24,
         position: 'relative',
+        width: '80%',
+        alignItems: 'center',
     },
     machine: {
         backgroundColor: '#1F2937',
@@ -234,6 +242,7 @@ const styles = StyleSheet.create({
         padding: 8,
         backgroundColor: '#F3F4F6',
         borderRadius: 8,
+        minHeight: 40,
     },
     winText: {
         color: '#1F2937',

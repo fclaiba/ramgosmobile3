@@ -1,8 +1,10 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { ShieldAlert, ArrowRight, X } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface KYCRequiredModalProps {
     visible: boolean;
@@ -11,89 +13,113 @@ interface KYCRequiredModalProps {
 }
 
 export const KYCRequiredModal: React.FC<KYCRequiredModalProps> = ({ visible, onClose, onVerify }) => {
-    return (
-        <Modal
-            animationType="fade"
-            transparent={true}
-            visible={visible}
-            onRequestClose={onClose}
-        >
-            <BlurView intensity={20} style={styles.absolute} tint="dark">
-                <View style={styles.overlay}>
-                    <View style={styles.modalCard}>
-                        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                            <X size={20} color="#9CA3AF" />
-                        </TouchableOpacity>
+    const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const isNarrow = width < 420;
 
-                        <View style={styles.iconContainer}>
-                            <ShieldAlert size={48} color="#EF4444" />
+    return (
+        <Sheet open={visible} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent
+                side="bottom"
+                style={[
+                    styles.sheetContent,
+                    {
+                        backgroundColor: isDark ? '#0B1220' : '#fff',
+                        borderTopColor: isDark ? 'rgba(148, 163, 184, 0.15)' : '#E5E7EB',
+                        height: isNarrow ? 420 : 380,
+                    },
+                ]}
+            >
+                <View style={[styles.inner, { paddingBottom: Math.max(18, insets.bottom + 16) }]}>
+                    <SheetHeader style={styles.header}>
+                        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                            <X size={20} color={isDark ? '#CBD5E1' : '#9CA3AF'} />
+                        </TouchableOpacity>
+                    </SheetHeader>
+
+                    <View style={styles.content}>
+                        <View
+                            style={[
+                                styles.iconContainer,
+                                { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.14)' : '#FEE2E2' },
+                            ]}
+                        >
+                            <ShieldAlert size={44} color="#EF4444" />
                         </View>
 
-                        <Text style={styles.title}>Verificación Requerida</Text>
-                        <Text style={styles.message}>
+                        <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+                            Verificación requerida
+                        </Text>
+                        <Text style={[styles.message, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>
                             Para acceder a esta función, necesitamos verificar tu identidad. Es un proceso rápido y seguro.
                         </Text>
 
-                        <TouchableOpacity style={styles.primaryBtn} onPress={() => { onClose(); onVerify(); }}>
+                        <TouchableOpacity
+                            style={[styles.primaryBtn, { backgroundColor: '#7C3AED' }]}
+                            onPress={() => {
+                                onClose();
+                                onVerify();
+                            }}
+                        >
                             <Text style={styles.primaryBtnText}>Verificar ahora</Text>
                             <ArrowRight size={18} color="#fff" />
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.secondaryBtn} onPress={onClose}>
-                            <Text style={styles.secondaryBtnText}>Quizás luego</Text>
+                            <Text style={[styles.secondaryBtnText, { color: isDark ? '#94A3B8' : '#6B7280' }]}>
+                                Quizás luego
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
-            </BlurView>
-        </Modal>
+            </SheetContent>
+        </Sheet>
     );
 };
 
 const styles = StyleSheet.create({
-    absolute: { flex: 1 },
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    modalCard: {
+    sheetContent: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        borderTopWidth: 1,
+    },
+    inner: {
         width: '100%',
-        maxWidth: 340,
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        padding: 24,
+        maxWidth: 520,
+        alignSelf: 'center',
+    },
+    header: {
+        alignItems: 'flex-end',
+        paddingHorizontal: 20,
+        paddingTop: 16,
+    },
+    content: {
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 10,
-        position: 'relative'
+        paddingHorizontal: 24,
     },
     closeBtn: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
         padding: 4,
-        zIndex: 10
     },
     iconContainer: {
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#FEE2E2',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16
+        marginBottom: 20
     },
     title: {
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#111827',
+        fontWeight: 'bold', // 700
         marginBottom: 8,
         textAlign: 'center'
     },
     message: {
         fontSize: 14,
-        color: '#6B7280',
         textAlign: 'center',
-        marginBottom: 24,
+        marginBottom: 32,
         lineHeight: 20
     },
     primaryBtn: {
@@ -105,7 +131,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        marginBottom: 12
+        marginBottom: 16
     },
     primaryBtnText: {
         color: '#fff',
@@ -113,7 +139,9 @@ const styles = StyleSheet.create({
         fontSize: 16
     },
     secondaryBtn: {
-        paddingVertical: 8
+        paddingVertical: 8,
+        width: '100%',
+        alignItems: 'center'
     },
     secondaryBtnText: {
         color: '#6B7280',

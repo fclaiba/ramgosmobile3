@@ -4,10 +4,12 @@ import { Search, Plus as PlusIcon, Heart, Send, Users, Sparkles, Flame, Award, T
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { MobileHeader } from '../components/MobileHeader';
+import { MobileNav } from '../components/MobileNav';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 
 import { useSocial, Post as PostType, InstagramPost as IGPostType } from '../contexts/SocialContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Existing Components
 // Social Components
@@ -24,12 +26,13 @@ import {
     CreateInstagramPost
 } from '../components/social';
 
-// const { width } = Dimensions.get('window'); removed
-
 export default function SocialScreen({ navigation, onMenuPress }: any) {
     const { width } = useWindowDimensions();
     const { posts, instagramPosts, trendingTopics, suggestedUsers, communityGroups, followUser, isFollowing, joinGroup, leaveGroup } = useSocial();
     const { requireAuth } = useAuth();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     // State
     const [activeTab, setActiveTab] = useState<'feed' | 'trending' | 'community'>('feed');
@@ -68,7 +71,10 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#F9FAFB', '#F3F4F6']} style={StyleSheet.absoluteFill} />
+            <LinearGradient
+                colors={isDark ? ['#111827', '#000'] : ['#F9FAFB', '#F3F4F6']}
+                style={StyleSheet.absoluteFill}
+            />
 
             <MobileHeader
                 title="Social"
@@ -77,11 +83,11 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
                 actions={
                     <View style={styles.headerActions}>
                         <TouchableOpacity onPress={handleOpenMessages} style={styles.iconBtn}>
-                            <Send size={20} color="#111827" />
+                            <Send size={20} color={isDark ? '#fff' : "#111827"} />
                             <View style={styles.badge}><Text style={styles.badgeText}>3</Text></View>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={styles.iconBtn}>
-                            <Search size={20} color="#111827" />
+                            <Search size={20} color={isDark ? '#fff' : "#111827"} />
                         </TouchableOpacity>
                     </View>
                 }
@@ -93,7 +99,7 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
                 </View>
             )}
 
-            <View style={{ height: 100, backgroundColor: 'rgba(255,255,255,0.5)' }}>
+            <View style={{ height: 100, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)' }}>
                 <StoriesBar onStoryClick={handleStoryClick} onAddStory={handleCreateStory} />
             </View>
 
@@ -135,7 +141,7 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
                         <TouchableOpacity style={styles.createPostBar} onPress={handleCreatePost}>
                             <View style={styles.avatarPlaceholder}><Text style={styles.avatarLetter}>T</Text></View>
                             <View style={styles.cpInput}><Text style={styles.cpText}>¿Qué estás pensando?</Text></View>
-                            <PlusIcon size={20} color="#000" />
+                            <PlusIcon size={20} color={isDark ? '#fff' : "#000"} />
                         </TouchableOpacity>
 
                         {posts.map((post: PostType) => (
@@ -264,36 +270,45 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
             {showCreatePost && <CreatePost onClose={() => setShowCreatePost(false)} />}
             {showCreateStory && <CreateStory onClose={() => setShowCreateStory(false)} />}
             {viewingStory && <StoryViewer storyId={viewingStory} onClose={() => setViewingStory(null)} onNavigateProfile={handleUserClick} />}
+            {/* Navbar for Standalone Mode */}
+            <MobileNav
+                activeSection="social"
+                onSectionChange={(section) => {
+                    if (section === 'home') navigation.navigate('Home');
+                    else if (section === 'marketplace') navigation.navigate('Marketplace');
+                    else if (section === 'dashboard') navigation.navigate('Home', { initialTab: 'dashboard' });
+                }}
+            />
         </View>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     headerActions: { flexDirection: 'row', gap: 12 },
-    iconBtn: { padding: 8, backgroundColor: '#fff', borderRadius: 12 },
+    iconBtn: { padding: 8, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12 },
     badge: { position: 'absolute', top: -2, right: -2, backgroundColor: '#8B5CF6', width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
     badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-    searchArea: { padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+    searchArea: { padding: 16, backgroundColor: isDark ? '#1F2937' : '#fff', borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#f0f0f0' },
 
     // Tabs
-    tabsContainer: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.8)' },
-    tabsBg: { flexDirection: 'row', backgroundColor: '#E5E7EB', borderRadius: 16, padding: 4, height: 44, position: 'relative' },
+    tabsContainer: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)' },
+    tabsBg: { flexDirection: 'row', backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 16, padding: 4, height: 44, position: 'relative' },
     tab: { flex: 1, justifyContent: 'center', alignItems: 'center', zIndex: 1 },
-    activeIndicator: { position: 'absolute', top: 4, bottom: 4, backgroundColor: '#fff', borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-    tabText: { fontSize: 13, fontWeight: '500', color: '#6B7280' },
-    activeTabText: { color: '#111827', fontWeight: '600' },
+    activeIndicator: { position: 'absolute', top: 4, bottom: 4, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+    tabText: { fontSize: 13, fontWeight: '500', color: isDark ? '#9CA3AF' : '#6B7280' },
+    activeTabText: { color: isDark ? '#F9FAFB' : '#111827', fontWeight: '600' },
 
     // Feed
-    createPostBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 16, marginBottom: 16, gap: 12 },
-    avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E5E5E5', justifyContent: 'center', alignItems: 'center' },
-    avatarLetter: { fontSize: 16, fontWeight: 'bold', color: '#666' },
-    cpInput: { flex: 1, backgroundColor: '#F3F4F6', height: 36, borderRadius: 18, justifyContent: 'center', paddingHorizontal: 16 },
-    cpText: { color: '#9CA3AF', fontSize: 13 },
+    createPostBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 12, borderRadius: 16, marginBottom: 16, gap: 12 },
+    avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#374151' : '#E5E5E5', justifyContent: 'center', alignItems: 'center' },
+    avatarLetter: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#9CA3AF' : '#666' },
+    cpInput: { flex: 1, backgroundColor: isDark ? '#374151' : '#F3F4F6', height: 36, borderRadius: 18, justifyContent: 'center', paddingHorizontal: 16 },
+    cpText: { color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 13 },
 
     igSection: { marginTop: 24 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     seeAll: { fontSize: 13, color: '#4F46E5', fontWeight: '600' },
     grid3: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
     igItem: { borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' },
@@ -311,19 +326,19 @@ const styles = StyleSheet.create({
     statBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     statText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
-    topicCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 12, alignItems: 'center', gap: 16 },
-    rankBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center' },
+    topicCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 16, marginBottom: 12, alignItems: 'center', gap: 16 },
+    rankBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#FFF7ED', justifyContent: 'center', alignItems: 'center' },
     rankText: { fontSize: 16, fontWeight: 'bold', color: '#EA580C' },
-    topicTag: { fontSize: 14, fontWeight: '600', color: '#111827' },
-    topicCount: { fontSize: 12, color: '#6B7280' },
+    topicTag: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    topicCount: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
 
-    userCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 12, borderRadius: 16, marginBottom: 12, alignItems: 'center', gap: 12 },
-    userAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#E5E5E5' },
-    userName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+    userCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 12, borderRadius: 16, marginBottom: 12, alignItems: 'center', gap: 12 },
+    userAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? '#374151' : '#E5E5E5' },
+    userName: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     verified: { marginLeft: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: '#3B82F6', justifyContent: 'center', alignItems: 'center' },
-    userHandle: { fontSize: 12, color: '#6B7280' },
-    followBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-    followText: { fontSize: 12, fontWeight: '600', color: '#111827' },
+    userHandle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
+    followBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    followText: { fontSize: 12, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
 
     // Community
     communityStats: { flexDirection: 'row', gap: 12, marginTop: 8 },
@@ -331,7 +346,7 @@ const styles = StyleSheet.create({
     cVal: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
     cLabel: { fontSize: 10, color: 'rgba(255,255,255,0.8)' },
 
-    groupCard: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
+    groupCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
     groupHeader: { height: 140 },
     groupImg: { width: '100%', height: '100%' },
     groupInfo: { position: 'absolute', bottom: 12, left: 12, right: 12 },
@@ -339,17 +354,17 @@ const styles = StyleSheet.create({
     catTagText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
     groupName: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 2 },
     groupMembers: { color: 'rgba(255,255,255,0.8)', fontSize: 11 },
-    groupBtn: { margin: 12, backgroundColor: '#111827', paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+    groupBtn: { margin: 12, backgroundColor: isDark ? '#111827' : '#111827', paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
     groupBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-    joinedBtn: { backgroundColor: '#F3F4F6' },
-    joinedBtnText: { color: '#111827' },
+    joinedBtn: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
+    joinedBtnText: { color: isDark ? '#F9FAFB' : '#111827' },
 
     fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', shadowColor: '#8B5CF6', shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
 
     // Modal
-    modalContainer: { flex: 1, backgroundColor: '#F9FAFB' },
-    modalHeader: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff' },
-    modalTitle: { fontSize: 18, fontWeight: 'bold' },
+    modalContainer: { flex: 1, backgroundColor: isDark ? '#111827' : '#F9FAFB' },
+    modalHeader: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#fff' },
+    modalTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     closeText: { color: '#4F46E5', fontSize: 16 },
     modalContent: { flex: 1, padding: 16 }
 });

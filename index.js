@@ -1,3 +1,5 @@
+import './src/ignoreWarnings';
+import 'react-native-reanimated';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

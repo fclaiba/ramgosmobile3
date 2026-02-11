@@ -1,16 +1,41 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { ArrowLeft, Lock, Eye } from 'lucide-react-native';
+import { useTheme } from '../contexts/ThemeContext';
+import { CommonActions } from '@react-navigation/native';
 
-export default function PrivacyScreen({ navigation }: any) {
+export default function PrivacyScreen({ navigation, route }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const isSignup = route?.params?.origin === 'signup';
+    const returnKey = route?.params?.returnKey as string | undefined;
+
+    const handleAccept = () => {
+        if (isSignup) {
+            if (returnKey) {
+                navigation.dispatch({
+                    ...CommonActions.setParams({ privacyAccepted: true }),
+                    source: returnKey,
+                });
+            } else {
+                navigation.navigate('Register', { privacyAccepted: true });
+            }
+            navigation.goBack();
+            return;
+        }
+        navigation.goBack();
+    };
+
     return (
         <AuthBackground>
             <SafeAreaView style={styles.container}>
                 <View style={styles.card}>
                     <View style={styles.header}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                            <ArrowLeft size={24} color="#4B5563" />
+                            <ArrowLeft size={24} color={isDark ? "#D1D5DB" : "#4B5563"} />
                         </TouchableOpacity>
                         <Text style={styles.title}>Política de Privacidad</Text>
                         <View style={{ width: 24 }} />
@@ -93,8 +118,8 @@ export default function PrivacyScreen({ navigation }: any) {
                         <View style={{ height: 40 }} />
                     </ScrollView>
 
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.btn}>
-                        <Text style={styles.btnText}>Entendido</Text>
+                    <TouchableOpacity onPress={handleAccept} style={styles.btn}>
+                        <Text style={styles.btnText}>{isSignup ? 'Aceptar y Continuar' : 'Entendido'}</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
@@ -102,39 +127,41 @@ export default function PrivacyScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', padding: 16 },
     card: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
         borderRadius: 24,
         padding: 24,
         width: '100%',
         maxWidth: 500,
         alignSelf: 'center',
-        shadowColor: '#000',
+        shadowColor: isDark ? '#000' : '#000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
+        shadowOpacity: isDark ? 0.3 : 0.1,
         shadowRadius: 20,
         elevation: 10,
-        marginVertical: 20
+        marginVertical: 20,
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
     },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
     backBtn: { padding: 4 },
-    title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+    title: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     scroll: { flex: 1 },
     iconContainer: {
         alignSelf: 'center',
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#ede9fe',
+        backgroundColor: isDark ? '#2E1065' : '#ede9fe',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24
     },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#374151', marginBottom: 8, marginTop: 16 },
-    text: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#E5E7EB' : '#374151', marginBottom: 8, marginTop: 16 },
+    text: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 20 },
     btn: { backgroundColor: '#7C3AED', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
     btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });

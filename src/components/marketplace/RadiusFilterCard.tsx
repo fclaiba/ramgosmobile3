@@ -3,11 +3,16 @@ import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Animated, Platf
 import Slider from '@react-native-community/slider';
 import { Move, MapPin, Target } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export const RadiusFilterCard = ({ radius, setRadius, resultsCount, onMoveCenter, isCustomMode }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
     return (
         <View style={styles.container}>
-            <BlurView intensity={80} tint="light" style={styles.blurContainer}>
+            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.blurContainer}>
                 {/* Header */}
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
@@ -32,7 +37,7 @@ export const RadiusFilterCard = ({ radius, setRadius, resultsCount, onMoveCenter
                         value={radius}
                         onValueChange={setRadius}
                         minimumTrackTintColor="#7C3AED"
-                        maximumTrackTintColor="#E5E7EB"
+                        maximumTrackTintColor={isDark ? '#4B5563' : '#E5E7EB'}
                         thumbTintColor="#7C3AED"
                     />
                 </View>
@@ -43,7 +48,7 @@ export const RadiusFilterCard = ({ radius, setRadius, resultsCount, onMoveCenter
                         style={[styles.actionBtn, isCustomMode && styles.actionBtnActive]}
                         onPress={onMoveCenter}
                     >
-                        <Move size={14} color={isCustomMode ? '#fff' : '#374151'} />
+                        <Move size={14} color={isCustomMode ? '#fff' : (isDark ? '#D1D5DB' : '#374151')} />
                         <Text style={[styles.actionBtnText, isCustomMode && styles.actionBtnTextActive]}>
                             {isCustomMode ? 'Centro: Manual' : 'Centro: GPS'}
                         </Text>
@@ -54,11 +59,11 @@ export const RadiusFilterCard = ({ radius, setRadius, resultsCount, onMoveCenter
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         borderRadius: 20,
         overflow: 'hidden',
-        backgroundColor: 'rgba(255,255,255,0.9)',
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255,255,255,0.9)',
         ...Platform.select({
             web: { boxShadow: '0px 12px 24px rgba(15, 23, 42, 0.08)' },
             default: {
@@ -73,18 +78,18 @@ const styles = StyleSheet.create({
     blurContainer: { padding: 16 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    iconContainer: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-    title: { fontSize: 14, fontWeight: '600', color: '#111827' },
-    badge: { backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-    badgeText: { fontSize: 11, fontWeight: '600', color: '#4B5563' },
+    iconContainer: { width: 28, height: 28, borderRadius: 14, backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+    title: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    badge: { backgroundColor: isDark ? '#374151' : '#F3F4F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    badgeText: { fontSize: 11, fontWeight: '600', color: isDark ? '#D1D5DB' : '#4B5563' },
 
     sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
     radiusText: { fontSize: 14, fontWeight: 'bold', color: '#7C3AED', width: 45 },
     slider: { flex: 1, height: 40 },
 
     actions: { flexDirection: 'row' },
-    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', gap: 8 },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', gap: 8 },
     actionBtnActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
-    actionBtnText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+    actionBtnText: { fontSize: 12, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
     actionBtnTextActive: { color: '#fff' },
 });

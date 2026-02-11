@@ -1,9 +1,14 @@
-
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Image, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { XCircle, Mail, ExternalLink } from 'lucide-react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function BannedUserScreen() {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
     const handleContactSupport = () => {
         Linking.openURL('mailto:soporte@ramgos.com?subject=Revisión de Cuenta Suspendida');
     };
@@ -43,8 +48,8 @@ export default function BannedUserScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FEF2F2' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#FEF2F2' },
     content: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
 
     iconWrapper: {
@@ -54,10 +59,10 @@ const styles = StyleSheet.create({
         shadowRadius: 20,
         shadowOffset: { width: 0, height: 10 }
     },
-    title: { fontSize: 28, fontWeight: 'bold', color: '#991B1B', marginBottom: 16 },
+    title: { fontSize: 28, fontWeight: 'bold', color: '#EF4444', marginBottom: 16 },
 
     messageBox: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#374151' : '#fff',
         padding: 24,
         borderRadius: 16,
         width: '100%',
@@ -65,15 +70,17 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.05,
         shadowRadius: 10,
-        marginBottom: 32
+        marginBottom: 32,
+        borderWidth: 1,
+        borderColor: isDark ? '#4B5563' : 'transparent',
     },
-    subtitle: { fontSize: 16, color: '#4B5563', textAlign: 'center', marginBottom: 24, lineHeight: 24 },
-    reasonLabel: { fontSize: 13, fontWeight: '600', color: '#991B1B', marginBottom: 4, textTransform: 'uppercase' },
-    reasonText: { fontSize: 15, fontWeight: '500', color: '#1F2937' },
+    subtitle: { fontSize: 16, color: isDark ? '#D1D5DB' : '#4B5563', textAlign: 'center', marginBottom: 24, lineHeight: 24 },
+    reasonLabel: { fontSize: 13, fontWeight: '600', color: '#EF4444', marginBottom: 4, textTransform: 'uppercase' },
+    reasonText: { fontSize: 15, fontWeight: '500', color: isDark ? '#F9FAFB' : '#1F2937' },
 
     contactBtn: {
         flexDirection: 'row',
-        backgroundColor: '#111827',
+        backgroundColor: isDark ? '#111827' : '#111827',
         paddingVertical: 16,
         paddingHorizontal: 32,
         borderRadius: 12,
@@ -82,7 +89,9 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.2,
         shadowRadius: 10,
-        marginBottom: 24
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : 'transparent',
     },
     contactBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 
@@ -90,5 +99,5 @@ const styles = StyleSheet.create({
     termsText: { color: '#7C3AED', fontWeight: '500' },
 
     footer: { padding: 16, alignItems: 'center' },
-    footerText: { fontSize: 12, color: '#9CA3AF' }
+    footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF' }
 });

@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePoints } from './PointsContext';
-import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
 
 type RewardStatus = 'awarded' | 'already_claimed' | 'limit_reached' | 'not_qualified' | 'error';
 
@@ -64,27 +64,6 @@ interface StreakMilestone {
     eligible: boolean;
 }
 
-interface ReferralRecord {
-    id: string;
-    name?: string;
-    registeredAt: string;
-    firstPurchaseAt?: string;
-    status: 'registered' | 'purchased';
-}
-
-interface ReferralState {
-    ownerId?: string;
-    code: string;
-    link: string;
-    registrations: number;
-    purchases: number;
-    referrals: ReferralRecord[];
-    totalPointsAwarded: {
-        registration: number;
-        purchase: number;
-    };
-}
-
 interface RewardsContextType {
     dailyState: DailyEngagementState;
     feedVirtualPet: () => RewardResult;
@@ -99,50 +78,43 @@ interface RewardsContextType {
         available: boolean;
         lastResult?: LuckyWheelResult;
     };
-    claimStreakMilestone: (milestone: number) => RewardResult;
-    getStreakMilestones: () => StreakMilestone[];
-    streakLongest: number;
-    referralCode: string;
-    referralLink: string;
-    referrals: ReferralRecord[];
-    registerReferralSignup: (newUserId: string, name?: string) => RewardResult;
-    registerReferralFirstPurchase: (referralId: string) => RewardResult;
-    referralSummary: {
-        registrations: number;
-        purchases: number;
-        totalPoints: number;
-    };
     gameCoins: number;
     addGameCoins: (amount: number) => void;
     spendGameCoins: (amount: number) => boolean;
+    // Quarterly Mission
+    quarterlyMission: QuarterlyMissionState;
+    registerQuarterlyPurchase: () => void;
+    // Pet Customization
+    petConfig: PetConfigState;
+    unlockAccessory: (type: 'hat' | 'skin', id: string, cost: number) => boolean;
+    equipAccessory: (type: 'hat' | 'skin', id: string) => void;
 }
 
 const DAILY_STATE_KEY = '@ramgos/rewards/daily';
-const STREAK_STATE_KEY = '@ramgos/rewards/streak';
-const REFERRAL_STATE_PREFIX = '@ramgos/rewards/referral/';
+const QUARTERLY_MISSION_KEY = '@ramgos/rewards/quarterly';
 
-const FEED_PET_REWARD = 5;
-const ARCADE_MAX_REWARDS = 3;
-const ARCADE_MIN_SCORE = 50;
-const REFERRAL_REWARDS = {
-    registration: 100,
-    firstPurchase: 250,
+// Helper to get current quarter key (e.g., "2026-Q1")
+const getQuarterKey = (date: Date = new Date()): string => {
+    const year = date.getFullYear();
+    const quarter = Math.floor(date.getMonth() / 3) + 1;
+    return `${year}-Q${quarter}`;
 };
 
-const WHEEL_SEGMENTS: WheelSegment[] = [
-    { id: 'jackpot', label: 'Jackpot 500', points: 500, weight: 5, color: '#F97316', description: 'Gran premio diario' },
-    { id: 'mega', label: 'Ultra Bonus 200', points: 200, weight: 10, color: '#8B5CF6', description: 'Multiplica tu fidelidad' },
-    { id: 'bonus100', label: 'Bonus 100', points: 100, weight: 20, color: '#2563EB', description: 'Recompensa premium' },
-    { id: 'bonus50', label: 'Bonus 50', points: 50, weight: 25, color: '#22C55E', description: 'Giro afortunado' },
-    { id: 'bonus20', label: 'Bonus 20', points: 20, weight: 30, color: '#0EA5E9', description: 'Sigue sumando' },
-    { id: 'try_again', label: 'Sigue intentando', points: 0, weight: 10, color: '#9CA3AF', description: 'Vuelve mañana' },
-];
+const FEED_PET_REWARD = 5;
+export const ARCADE_MAX_REWARDS = 3;
+export const ARCADE_POINTS_RANGE = { min: 1, max: 20 } as const;
+export const WHEEL_POINTS_RANGE = { min: 5, max: 100 } as const;
+export const POINT_VALUE_USD = 0.01 as const;
 
-const STREAK_MILESTONES: Array<{ value: number; reward: number }> = [
-    { value: 3, reward: 20 },
-    { value: 7, reward: 60 },
-    { value: 14, reward: 150 },
-    { value: 30, reward: 400 },
+const WHEEL_SEGMENTS: WheelSegment[] = [
+    {
+        id: 'wheel_points',
+        label: `Puntos ${WHEEL_POINTS_RANGE.min}-${WHEEL_POINTS_RANGE.max}`,
+        points: WHEEL_POINTS_RANGE.min,
+        weight: 1,
+        color: '#8B5CF6',
+        description: `Giro diario (${WHEEL_POINTS_RANGE.min}-${WHEEL_POINTS_RANGE.max} pts)`,
+    },
 ];
 
 const createDailyState = (dayKey: string): DailyEngagementState => ({
@@ -155,35 +127,35 @@ const createDailyState = (dayKey: string): DailyEngagementState => ({
     gameCoins: 100, // Initial bonus
 });
 
-const createStreakState = (): StreakRewardState => ({
-    claimedMilestones: [],
-    longestStreak: 0,
+
+// --- QUARTERLY MISSIONS (Strategic Plan v2.0) ---
+const QUARTERLY_MISSION = {
+    TARGET_PURCHASES: 3,
+    REWARD: 150,
+    DESCRIPTION: "Compra 3 veces este trimestre"
+};
+
+export interface QuarterlyMissionState {
+    quarterKey: string;
+    purchasesCurrent: number;
+    purchasesTarget: number;
+    claimed: boolean;
+    reward: number;
+}
+
+export interface PetConfigState {
+    activeHat: string | null;
+    activeSkin: string | null;
+    unlockedHats: string[];
+    unlockedSkins: string[];
+}
+
+const createPetConfigState = (): PetConfigState => ({
+    activeHat: null,
+    activeSkin: null,
+    unlockedHats: ['none'],
+    unlockedSkins: ['default'],
 });
-
-const generateReferralCode = (ownerId?: string) => {
-    if (!ownerId) {
-        return 'RAMGOS-GUEST';
-    }
-    const sanitized = ownerId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    return `RAMGOS-${sanitized.padStart(6, '0').slice(-6)}`;
-};
-
-const createReferralState = (ownerId?: string): ReferralState => {
-    const code = generateReferralCode(ownerId);
-    const link = `https://ramgos.app/r/${code}`;
-    return {
-        ownerId,
-        code,
-        link,
-        registrations: 0,
-        purchases: 0,
-        referrals: [],
-        totalPointsAwarded: {
-            registration: 0,
-            purchase: 0,
-        },
-    };
-};
 
 const getTodayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -203,22 +175,17 @@ const pickSegment = (segments: WheelSegment[]): WheelSegment => {
 const RewardsContext = createContext<RewardsContextType | undefined>(undefined);
 
 export const RewardsProvider = ({ children }: { children: React.ReactNode }) => {
-    const { addPoints, challengeProgress } = usePoints();
-    const { user } = useAuth();
+    const { addPoints } = usePoints();
+    const { show } = useToast();  // Added missing hook
 
     const [dailyState, setDailyState] = useState<DailyEngagementState>(() => createDailyState(getTodayKey()));
-    const [streakState, setStreakState] = useState<StreakRewardState>(() => createStreakState());
-    const [referralState, setReferralState] = useState<ReferralState>(() => createReferralState());
-
-    const referralStorageKeyRef = useRef<string | null>(null);
 
     // Load persisted state on mount
     useEffect(() => {
         const loadState = async () => {
             try {
-                const [storedDaily, storedStreak] = await Promise.all([
+                const [storedDaily] = await Promise.all([
                     AsyncStorage.getItem(DAILY_STATE_KEY),
-                    AsyncStorage.getItem(STREAK_STATE_KEY),
                 ]);
 
                 if (storedDaily) {
@@ -234,13 +201,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
                     }
                 }
 
-                if (storedStreak) {
-                    const parsed: StreakRewardState = JSON.parse(storedStreak);
-                    setStreakState({
-                        ...createStreakState(),
-                        ...parsed,
-                    });
-                }
             } catch (error) {
                 console.warn('Unable to load rewards state', error);
             }
@@ -256,69 +216,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         });
     }, [dailyState]);
 
-    // Persist streak state
-    useEffect(() => {
-        AsyncStorage.setItem(STREAK_STATE_KEY, JSON.stringify(streakState)).catch((error) => {
-            console.warn('Unable to persist streak state', error);
-        });
-    }, [streakState]);
-
-    // Load or reset referral state when user changes
-    useEffect(() => {
-        const loadReferralState = async () => {
-            const ownerId = user?.id;
-            if (!ownerId) {
-                referralStorageKeyRef.current = null;
-                setReferralState(createReferralState());
-                return;
-            }
-
-            const key = `${REFERRAL_STATE_PREFIX}${ownerId}`;
-            referralStorageKeyRef.current = key;
-
-            try {
-                const stored = await AsyncStorage.getItem(key);
-                if (stored) {
-                    const parsed: ReferralState = JSON.parse(stored);
-                    setReferralState({
-                        ...createReferralState(ownerId),
-                        ...parsed,
-                        ownerId,
-                    });
-                } else {
-                    setReferralState(createReferralState(ownerId));
-                }
-            } catch (error) {
-                console.warn('Unable to load referral state', error);
-                setReferralState(createReferralState(ownerId));
-            }
-        };
-
-        loadReferralState();
-    }, [user?.id]);
-
-    // Persist referral state
-    useEffect(() => {
-        const key = referralStorageKeyRef.current;
-        if (key && referralState.ownerId) {
-            AsyncStorage.setItem(key, JSON.stringify(referralState)).catch((error) => {
-                console.warn('Unable to persist referral state', error);
-            });
-        }
-    }, [referralState]);
-
-    // Keep longest streak up-to-date with challenge progress
-    useEffect(() => {
-        setStreakState((prev) => {
-            if (challengeProgress.loginStreak <= prev.longestStreak) {
-                return prev;
-            }
-            return {
-                ...prev,
-                longestStreak: challengeProgress.loginStreak,
-            };
-        });
-    }, [challengeProgress.loginStreak]);
+    // Note: Streak rewards are handled in PointsContext (Constitución: +10/+20/+30 progresivo).
 
     const ensureDailyForToday = useCallback((state: DailyEngagementState): DailyEngagementState => {
         const today = getTodayKey();
@@ -365,11 +263,10 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
     }, [dailyState, addPoints, ensureDailyForToday]);
 
     const computeArcadeReward = (score: number) => {
-        if (score < ARCADE_MIN_SCORE) {
-            return 0;
-        }
-        const normalized = Math.min(100, Math.max(10, Math.round(score / 8)));
-        return normalized;
+        // Constitución: Arcade awards 1–20 points (max 3/day).
+        // Demo mapping: clamp(score) to avoid inventing additional business numbers.
+        const raw = Math.floor(score);
+        return Math.min(ARCADE_POINTS_RANGE.max, Math.max(ARCADE_POINTS_RANGE.min, raw || ARCADE_POINTS_RANGE.min));
     };
 
     const registerArcadeReward = useCallback((gameId: string, score: number): ArcadeRewardResult => {
@@ -387,14 +284,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         }
 
         const points = computeArcadeReward(score);
-        if (points <= 0) {
-            return {
-                status: 'not_qualified',
-                message: `Necesitas un puntaje mínimo de ${ARCADE_MIN_SCORE} para ganar puntos.`,
-                remaining,
-                attemptsUsed,
-            };
-        }
 
         setDailyState((prev) => {
             const currentState = ensureDailyForToday(prev);
@@ -439,19 +328,32 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         const state = ensureDailyForToday(dailyState);
 
         if (state.wheelSpun) {
-            const segment = state.wheelResult
-                ? WHEEL_SEGMENTS.find((item) => item.id === state.wheelResult?.segmentId) ?? WHEEL_SEGMENTS[WHEEL_SEGMENTS.length - 1]
-                : WHEEL_SEGMENTS[WHEEL_SEGMENTS.length - 1];
+            const template = state.wheelResult
+                ? WHEEL_SEGMENTS.find((item) => item.id === state.wheelResult?.segmentId) ?? WHEEL_SEGMENTS[0]
+                : WHEEL_SEGMENTS[0];
+            const resolvedPoints = state.wheelResult?.points ?? template.points;
+            const segment = {
+                ...template,
+                points: resolvedPoints,
+                label: `${resolvedPoints} pts`,
+            };
 
             return {
                 status: 'already_claimed',
                 message: 'Ya giraste la rueda hoy. Vuelve mañana.',
                 segment,
-                pointsAwarded: segment.points > 0 ? segment.points : undefined,
+                pointsAwarded: segment.points,
             };
         }
 
-        const segment = pickSegment(WHEEL_SEGMENTS);
+        const points =
+            Math.floor(Math.random() * (WHEEL_POINTS_RANGE.max - WHEEL_POINTS_RANGE.min + 1))
+            + WHEEL_POINTS_RANGE.min;
+        const segment = {
+            ...WHEEL_SEGMENTS[0],
+            label: `${points} pts`,
+            points,
+        };
 
         setDailyState((prev) => ({
             ...ensureDailyForToday(prev),
@@ -463,19 +365,15 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             },
         }));
 
-        if (segment.points > 0) {
-            addPoints(segment.points, 'Ruleta de la Suerte Ramgos', {
-                source: 'bonus',
-                metadata: { segmentId: segment.id },
-            });
-        }
+        addPoints(segment.points, 'Ruleta de la Suerte Ramgos', {
+            source: 'bonus',
+            metadata: { segmentId: segment.id },
+        });
 
         return {
             status: 'awarded',
-            message: segment.points > 0
-                ? `¡Ganaste ${segment.points} puntos!`
-                : 'Esta vez no hubo premio, vuelve mañana.',
-            pointsAwarded: segment.points > 0 ? segment.points : undefined,
+            message: `¡Ganaste ${segment.points} puntos!`,
+            pointsAwarded: segment.points,
             segment,
         };
     }, [dailyState, addPoints, ensureDailyForToday]);
@@ -486,15 +384,15 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             return { available: !state.wheelSpun };
         }
 
-        const segment = WHEEL_SEGMENTS.find((item) => item.id === state.wheelResult?.segmentId)
-            ?? WHEEL_SEGMENTS[WHEEL_SEGMENTS.length - 1];
+        const template = WHEEL_SEGMENTS.find((item) => item.id === state.wheelResult?.segmentId)
+            ?? WHEEL_SEGMENTS[0];
+        const points = state.wheelResult.points;
+        const segment = { ...template, points, label: `${points} pts` };
 
         const lastResult: LuckyWheelResult = {
-            status: segment.points > 0 ? 'awarded' : 'not_qualified',
-            message: segment.points > 0
-                ? `Ganaste ${segment.points} puntos en tu último giro.`
-                : 'Sin puntos en el último giro.',
-            pointsAwarded: segment.points > 0 ? segment.points : undefined,
+            status: 'awarded',
+            message: `Ganaste ${segment.points} puntos en tu último giro.`,
+            pointsAwarded: segment.points,
             segment,
         };
 
@@ -503,155 +401,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             lastResult,
         };
     }, [dailyState, ensureDailyForToday]);
-
-    const claimStreakMilestone = useCallback((milestone: number): RewardResult => {
-        const config = STREAK_MILESTONES.find((item) => item.value === milestone);
-        if (!config) {
-            return {
-                status: 'error',
-                message: 'Racha no disponible.',
-            };
-        }
-
-        if (challengeProgress.loginStreak < milestone) {
-            return {
-                status: 'not_qualified',
-                message: `Mantén la racha hasta el día ${milestone} para reclamar.`,
-            };
-        }
-
-        if (streakState.claimedMilestones.includes(milestone)) {
-            return {
-                status: 'already_claimed',
-                message: 'Este premio de racha ya fue reclamado.',
-            };
-        }
-
-        setStreakState((prev) => ({
-            ...prev,
-            claimedMilestones: [...prev.claimedMilestones, milestone],
-            longestStreak: Math.max(prev.longestStreak, challengeProgress.loginStreak),
-        }));
-
-        addPoints(config.reward, `Bonus racha ${milestone} días`, {
-            source: 'bonus',
-            metadata: { milestone },
-        });
-
-        return {
-            status: 'awarded',
-            message: `¡Racha de ${milestone} días! Se acreditaron ${config.reward} puntos.`,
-            pointsAwarded: config.reward,
-            metadata: { milestone },
-        };
-    }, [addPoints, challengeProgress.loginStreak, streakState.claimedMilestones]);
-
-    const getStreakMilestones = useCallback((): StreakMilestone[] => {
-        return STREAK_MILESTONES.map((item) => ({
-            ...item,
-            claimed: streakState.claimedMilestones.includes(item.value),
-            eligible: challengeProgress.loginStreak >= item.value,
-        }));
-    }, [challengeProgress.loginStreak, streakState.claimedMilestones]);
-
-    const registerReferralSignup = useCallback((newUserId: string, name?: string): RewardResult => {
-        if (!referralState.ownerId) {
-            return {
-                status: 'error',
-                message: 'Inicia sesión para activar los referidos.',
-            };
-        }
-
-        if (referralState.referrals.some((ref) => ref.id === newUserId)) {
-            return {
-                status: 'already_claimed',
-                message: 'Este referido ya fue registrado.',
-            };
-        }
-
-        setReferralState((prev) => ({
-            ...prev,
-            registrations: prev.registrations + 1,
-            referrals: [
-                {
-                    id: newUserId,
-                    name,
-                    registeredAt: new Date().toISOString(),
-                    status: 'registered',
-                },
-                ...prev.referrals,
-            ],
-            totalPointsAwarded: {
-                ...prev.totalPointsAwarded,
-                registration: prev.totalPointsAwarded.registration + REFERRAL_REWARDS.registration,
-            },
-        }));
-
-        addPoints(REFERRAL_REWARDS.registration, 'Bono por registro referido', {
-            source: 'referral',
-            metadata: { referredUserId: newUserId },
-        });
-
-        return {
-            status: 'awarded',
-            message: `¡Nuevo referido! Se acreditaron ${REFERRAL_REWARDS.registration} puntos.`,
-            pointsAwarded: REFERRAL_REWARDS.registration,
-            metadata: { referredUserId: newUserId },
-        };
-    }, [addPoints, referralState.ownerId, referralState.referrals]);
-
-    const registerReferralFirstPurchase = useCallback((referralId: string): RewardResult => {
-        if (!referralState.ownerId) {
-            return {
-                status: 'error',
-                message: 'Inicia sesión para activar los referidos.',
-            };
-        }
-
-        const referral = referralState.referrals.find((item) => item.id === referralId);
-        if (!referral) {
-            return {
-                status: 'not_qualified',
-                message: 'No encontramos el referido indicado.',
-            };
-        }
-        if (referral.firstPurchaseAt) {
-            return {
-                status: 'already_claimed',
-                message: 'Ya recibiste la recompensa por la primera compra de este referido.',
-            };
-        }
-
-        setReferralState((prev) => ({
-            ...prev,
-            purchases: prev.purchases + 1,
-            referrals: prev.referrals.map((item) =>
-                item.id === referralId
-                    ? {
-                        ...item,
-                        status: 'purchased',
-                        firstPurchaseAt: new Date().toISOString(),
-                    }
-                    : item
-            ),
-            totalPointsAwarded: {
-                ...prev.totalPointsAwarded,
-                purchase: prev.totalPointsAwarded.purchase + REFERRAL_REWARDS.firstPurchase,
-            },
-        }));
-
-        addPoints(REFERRAL_REWARDS.firstPurchase, 'Bono por primera compra de referido', {
-            source: 'referral',
-            metadata: { referredUserId: referralId, event: 'first_purchase' },
-        });
-
-        return {
-            status: 'awarded',
-            message: `Compra inicial registrada. Se acreditaron ${REFERRAL_REWARDS.firstPurchase} puntos.`,
-            pointsAwarded: REFERRAL_REWARDS.firstPurchase,
-            metadata: { referredUserId: referralId },
-        };
-    }, [addPoints, referralState.ownerId, referralState.referrals]);
 
     const addGameCoins = useCallback((amount: number) => {
         if (amount <= 0) return;
@@ -665,7 +414,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
     }, [ensureDailyForToday]);
 
     const spendGameCoins = useCallback((amount: number): boolean => {
-        if (amount <= 0) return false;
+        if (amount <= 0) return true;
         let success = false;
         setDailyState((prev) => {
             const state = ensureDailyForToday(prev);
@@ -681,11 +430,122 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         return success;
     }, [ensureDailyForToday]);
 
-    const referralSummary = useMemo(() => ({
-        registrations: referralState.registrations,
-        purchases: referralState.purchases,
-        totalPoints: referralState.totalPointsAwarded.registration + referralState.totalPointsAwarded.purchase,
-    }), [referralState]);
+    // --- QUARTERLY MISSION LOGIC ---
+    const createFreshQuarterlyMission = (quarterKey: string): QuarterlyMissionState => ({
+        quarterKey,
+        purchasesCurrent: 0,
+        purchasesTarget: QUARTERLY_MISSION.TARGET_PURCHASES,
+        claimed: false,
+        reward: QUARTERLY_MISSION.REWARD
+    });
+
+    const [quarterlyMission, setQuarterlyMission] = useState<QuarterlyMissionState>(() => 
+        createFreshQuarterlyMission(getQuarterKey())
+    );
+
+    // Load quarterly mission from storage on mount
+    useEffect(() => {
+        const loadQuarterlyMission = async () => {
+            try {
+                const stored = await AsyncStorage.getItem(QUARTERLY_MISSION_KEY);
+                if (stored) {
+                    const parsed: QuarterlyMissionState = JSON.parse(stored);
+                    const currentQuarter = getQuarterKey();
+                    
+                    // If stored data is from current quarter, restore it
+                    if (parsed.quarterKey === currentQuarter) {
+                        setQuarterlyMission(parsed);
+                    } else {
+                        // New quarter - reset mission
+                        setQuarterlyMission(createFreshQuarterlyMission(currentQuarter));
+                    }
+                }
+            } catch (error) {
+                console.warn('Unable to load quarterly mission state', error);
+            }
+        };
+        loadQuarterlyMission();
+    }, []);
+
+    // Persist quarterly mission when it changes
+    useEffect(() => {
+        AsyncStorage.setItem(QUARTERLY_MISSION_KEY, JSON.stringify(quarterlyMission)).catch((error) => {
+            console.warn('Unable to persist quarterly mission state', error);
+        });
+    }, [quarterlyMission]);
+
+    const registerQuarterlyPurchase = useCallback(() => {
+        setQuarterlyMission(prev => {
+            const currentQuarter = getQuarterKey();
+            
+            // If we crossed into a new quarter, reset
+            if (prev.quarterKey !== currentQuarter) {
+                return {
+                    ...createFreshQuarterlyMission(currentQuarter),
+                    purchasesCurrent: 1, // This purchase counts
+                };
+            }
+
+            if (prev.claimed) return prev; // Already completed this quarter
+
+            const newValue = prev.purchasesCurrent + 1;
+
+            // Check Completion
+            if (newValue >= prev.purchasesTarget) {
+                // Award Logic
+                addPoints(QUARTERLY_MISSION.REWARD, QUARTERLY_MISSION.DESCRIPTION, {
+                    type: 'earn',
+                    source: 'bonus'
+                });
+                show(`¡Misión Trimestral Completada! +${QUARTERLY_MISSION.REWARD} pts 🎯`, 'success');
+
+                return {
+                    ...prev,
+                    purchasesCurrent: newValue,
+                    claimed: true
+                };
+            }
+
+            // Show progress toast
+            const remaining = prev.purchasesTarget - newValue;
+            if (remaining > 0) {
+                show(`Misión Trimestral: ${newValue}/${prev.purchasesTarget} compras 🛒`, 'info');
+            }
+
+            return {
+                ...prev,
+                purchasesCurrent: newValue
+            };
+        });
+    }, [addPoints, show]);
+
+    // --- PET CONFIG LOGIC ---
+    const [petConfig, setPetConfig] = useState<PetConfigState>(() => createPetConfigState());
+
+    const unlockAccessory = useCallback((type: 'hat' | 'skin', id: string, cost: number): boolean => {
+        if (!spendGameCoins(cost)) {
+            show('No tienes suficientes monedas', 'error');
+            return false;
+        }
+
+        setPetConfig((prev) => {
+            if (type === 'hat') {
+                if (prev.unlockedHats.includes(id)) return prev;
+                return { ...prev, unlockedHats: [...prev.unlockedHats, id] };
+            }
+            if (prev.unlockedSkins.includes(id)) return prev;
+            return { ...prev, unlockedSkins: [...prev.unlockedSkins, id] };
+        });
+        show('¡Accesorio desbloqueado!', 'success');
+        return true;
+    }, [spendGameCoins, show]);
+
+    const equipAccessory = useCallback((type: 'hat' | 'skin', id: string) => {
+        setPetConfig(prev => ({
+            ...prev,
+            [type === 'hat' ? 'activeHat' : 'activeSkin']: id === 'none' ? null : id
+        }));
+    }, []);
 
     const value: RewardsContextType = useMemo(() => ({
         dailyState,
@@ -694,36 +554,29 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         getArcadeStatus,
         spinLuckyWheel,
         getLuckyWheelStatus,
-        claimStreakMilestone,
-        getStreakMilestones,
-        streakLongest: streakState.longestStreak,
-        referralCode: referralState.code,
-        referralLink: referralState.link,
-        referrals: referralState.referrals,
-        registerReferralSignup,
-        registerReferralFirstPurchase,
-        referralSummary,
         gameCoins: dailyState.gameCoins,
         addGameCoins,
         spendGameCoins,
+        quarterlyMission,
+        registerQuarterlyPurchase,
+        // Pet Config
+        petConfig,
+        unlockAccessory,
+        equipAccessory
     }), [
-        claimStreakMilestone,
         dailyState,
         feedVirtualPet,
         getArcadeStatus,
         getLuckyWheelStatus,
-        getStreakMilestones,
-        referralState.code,
-        referralState.link,
-        referralState.referrals,
-        referralSummary,
         registerArcadeReward,
-        registerReferralFirstPurchase,
-        registerReferralSignup,
         spinLuckyWheel,
-        streakState.longestStreak,
         addGameCoins,
         spendGameCoins,
+        quarterlyMission,
+        registerQuarterlyPurchase,
+        petConfig,
+        unlockAccessory,
+        equipAccessory
     ]);
 
     return (

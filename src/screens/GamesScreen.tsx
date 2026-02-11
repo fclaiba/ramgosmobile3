@@ -8,6 +8,8 @@ import { usePoints } from '../contexts/PointsContext';
 import { useRewards } from '../contexts/RewardsContext';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 
 // Games
 import { DinoGame } from '../components/games/DinoGame';
@@ -16,8 +18,10 @@ import { FruitCatcher } from '../components/games/FruitCatcher';
 import { MemoryGame } from '../components/games/MemoryGame';
 import { RouletteGame } from '../components/games/RouletteGame';
 import { SlotMachine } from '../components/games/SlotMachine';
+import { GameWrapper } from '../components/games/GameWrapper';
+import type { GameId } from '../components/games/gameContracts';
+import { TierProgressBar } from '../components/ui/TierProgressBar';
 
-// const { width } = Dimensions.get('window'); removed
 const ARCADE_REWARD_GAMES = new Set(['dino', 'duck', 'fruit', 'memory']);
 
 const GAMES = [
@@ -80,9 +84,13 @@ const GAMES = [
 export default function GamesScreen() {
     const { width } = useWindowDimensions();
     const { points } = usePoints();
-    const { registerArcadeReward } = useRewards();
+    const { registerArcadeReward, getArcadeStatus, spinLuckyWheel, getLuckyWheelStatus, gameCoins, addGameCoins, spendGameCoins } = useRewards();
     const navigation = useNavigation<any>();
     const [activeGame, setActiveGame] = useState<string | null>(null);
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
 
     const rewardArcadeGame = (gameId: string, score: number) => {
         if (!ARCADE_REWARD_GAMES.has(gameId)) {
@@ -90,13 +98,29 @@ export default function GamesScreen() {
         }
         const outcome = registerArcadeReward(gameId, score);
         if (outcome.status === 'awarded') {
-            Alert.alert('Recompensa Arcade', outcome.message);
+            show(outcome.message, 'success');
         } else if (outcome.status !== 'error') {
-            Alert.alert('Arcade Ramgos', outcome.message);
+            show(outcome.message, 'info');
         }
     };
 
     const handlePlay = (gameId: string) => {
+        // Constitución: límites diarios (Arcade 3/día, Wheel 1/día)
+        if (gameId === 'roulette') {
+            const status = getLuckyWheelStatus();
+            if (!status.available) {
+                show('Ya giraste la rueda hoy. Vuelve mañana.', 'warning');
+                return;
+            }
+        }
+        if (ARCADE_REWARD_GAMES.has(gameId)) {
+            const arcade = getArcadeStatus();
+            if (arcade.remaining <= 0) {
+                show('Has usado tus 3 recompensas de Arcade por hoy. Vuelve mañana.', 'warning');
+                return;
+            }
+        }
+
         setActiveGame(gameId);
     };
 
@@ -109,23 +133,34 @@ export default function GamesScreen() {
         if (!game) return null;
 
         const GameComponent = game.component as any;
-        const gameProps: Record<string, unknown> = {};
-        if (ARCADE_REWARD_GAMES.has(game.id)) {
-            gameProps.onGameEnd = (score: number) => rewardArcadeGame(game.id, score);
-        }
+        const gameId = game.id as GameId;
+        const isCasino = game.id === 'roulette' || game.id === 'slots';
 
         return (
             <Modal animationType="slide" visible={!!activeGame} onRequestClose={handleCloseGame}>
                 <SafeAreaView style={styles.modalContainer}>
-                    <View style={styles.modalHeader}>
-                        <TouchableOpacity onPress={handleCloseGame} style={styles.closeBtn}>
-                            <X size={24} color="#fff" />
-                        </TouchableOpacity>
-                        <Text style={styles.modalTitle}>{game.title}</Text>
-                        <View style={{ width: 40 }} />
-                    </View>
                     <View style={styles.gameWrapper}>
-                        {React.createElement(GameComponent, gameProps)}
+                        <GameWrapper
+                            gameId={gameId}
+                            GameComponent={GameComponent}
+                            coins={isCasino ? gameCoins : 0}
+                            onClose={handleCloseGame}
+                            onLegacyGameEnd={(value: number) => {
+                                if (isCasino) {
+                                    if (value >= 0) addGameCoins(value);
+                                    else spendGameCoins(Math.abs(value));
+                                    return;
+                                }
+                                if (ARCADE_REWARD_GAMES.has(game.id)) rewardArcadeGame(game.id, value);
+                            }}
+                            gameProps={{
+                                ...(game.id === 'roulette'
+                                    ? { onClose: handleCloseGame, uiMode: 'wrapped' }
+                                    : isCasino
+                                        ? { coins: gameCoins, onClose: handleCloseGame }
+                                        : {}),
+                            }}
+                        />
                     </View>
                 </SafeAreaView>
             </Modal>
@@ -150,6 +185,11 @@ export default function GamesScreen() {
                 <View style={styles.heroSection}>
                     <Text style={styles.heroTitle}>Juega y Gana</Text>
                     <Text style={styles.heroSubtitle}>Compite por premios exclusivos</Text>
+                </View>
+
+                {/* Tier Progress */}
+                <View style={styles.section}>
+                    <TierProgressBar />
                 </View>
 
                 {/* Daily Challenges */}
@@ -221,14 +261,15 @@ export default function GamesScreen() {
 
             {/* Game Modal */}
             {renderActiveGame()}
+
         </View>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: isDark ? '#111827' : '#F9FAFB',
     },
     content: {
         padding: 16,
@@ -236,14 +277,14 @@ const styles = StyleSheet.create({
     pointsBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
         gap: 6,
     },
     pointsText: {
-        color: '#F59E0B',
+        color: isDark ? '#F59E0B' : '#B45309',
         fontWeight: 'bold',
         fontSize: 14,
     },
@@ -253,12 +294,12 @@ const styles = StyleSheet.create({
     heroTitle: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#fff',
+        color: isDark ? '#F9FAFB' : '#111827',
         marginBottom: 4,
     },
     heroSubtitle: {
         fontSize: 16,
-        color: '#9CA3AF',
+        color: isDark ? '#9CA3AF' : '#6B7280',
     },
     section: {
         marginBottom: 32,
@@ -266,7 +307,7 @@ const styles = StyleSheet.create({
     gridTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#fff',
+        color: isDark ? '#F9FAFB' : '#111827',
         marginBottom: 16,
     },
     grid: {
@@ -276,6 +317,12 @@ const styles = StyleSheet.create({
         height: 160,
         borderRadius: 16,
         marginBottom: 16,
+        // Basic shadow for light mode
+        shadowColor: isDark ? 'transparent' : '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     gameBg: {
         flex: 1,
@@ -289,6 +336,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         height: '100%',
         justifyContent: 'flex-end', // Fallback
+        backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.7)',
     },
     gameIcon: {
         width: 48,
@@ -298,13 +346,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     gameTitle: {
-        color: '#fff',
+        color: '#fff', // Always white due to overlay
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,
     },
     gameDesc: {
-        color: '#D1D5DB',
+        color: '#D1D5DB', // Light gray on dark overlay
         fontSize: 12,
     },
     playButton: {
@@ -346,30 +394,30 @@ const styles = StyleSheet.create({
     },
     modalContainer: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: isDark ? '#000' : '#fff', // Game modal might want dark always, but flexible
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
-        backgroundColor: '#000',
+        backgroundColor: isDark ? '#000' : '#fff',
         borderBottomWidth: 1,
-        borderBottomColor: '#333',
+        borderBottomColor: isDark ? '#333' : '#E5E7EB',
     },
     closeBtn: {
         padding: 8,
         borderRadius: 20,
-        backgroundColor: '#333',
+        backgroundColor: isDark ? '#333' : '#F3F4F6',
     },
     modalTitle: {
-        color: '#fff',
+        color: isDark ? '#fff' : '#000',
         fontSize: 18,
         fontWeight: 'bold',
     },
     gameWrapper: {
         flex: 1,
-        backgroundColor: '#111',
+        backgroundColor: '#111', // Games are likely dark themed by default
         justifyContent: 'center',
         padding: 16,
     },

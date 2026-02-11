@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { BookOpen, Users, ShoppingBag, CreditCard, Award, Heart, Shield, MessageCircle, ChevronRight, Search, X, Video } from 'lucide-react-native';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -18,7 +18,14 @@ const categories = [
     { id: 'security', name: 'Seguridad', icon: Shield, colors: ['#374151', '#111827'] }, // gray-700 to gray-900
 ];
 
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+
 export default function HelpCenterScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
     const [searchQuery, setSearchQuery] = useState('');
 
     return (
@@ -33,16 +40,17 @@ export default function HelpCenterScreen({ navigation }: any) {
 
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
-                    <Search size={18} color="#666" style={{ marginRight: 8 }} />
+                    <Search size={18} color={isDark ? "#9CA3AF" : "#666"} style={{ marginRight: 8 }} />
                     <Input
                         placeholder="Busca tu pregunta..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        style={{ flex: 1, borderWidth: 0 }}
+                        style={{ flex: 1, borderWidth: 0, color: isDark ? '#fff' : '#000' }}
+                        placeholderTextColor={isDark ? "#6B7280" : "#999"}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <X size={18} color="#666" />
+                            <X size={18} color={isDark ? "#9CA3AF" : "#666"} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -66,7 +74,7 @@ export default function HelpCenterScreen({ navigation }: any) {
                         </Card>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.quickAction} onPress={() => Alert.alert('Info', 'Video tutoriales próximamente')}>
+                    <TouchableOpacity style={styles.quickAction} onPress={() => show('Tutoriales próximamente', 'info')}>
                         <Card style={styles.quickActionCard}>
                             <CardContent style={styles.quickActionContent}>
                                 <LinearGradient
@@ -88,7 +96,7 @@ export default function HelpCenterScreen({ navigation }: any) {
                         <TouchableOpacity
                             key={category.id}
                             style={styles.categoryItem}
-                            onPress={() => Alert.alert(category.name, 'Lista de artículos de esta categoría (Próximamente)')}
+                            onPress={() => show(`Artículos de ${category.name} próximamente`, 'info')}
                         >
                             <Card style={styles.categoryCard}>
                                 <CardContent style={styles.categoryContent}>
@@ -113,11 +121,11 @@ export default function HelpCenterScreen({ navigation }: any) {
                     'Sistema de puntos y recompensas',
                     'Guía del Tamagotchi'
                 ].map((article, index) => (
-                    <TouchableOpacity key={index} style={styles.articleRow} onPress={() => Alert.alert('Artículo', article)}>
+                    <TouchableOpacity key={index} style={styles.articleRow} onPress={() => show(`Artículo: ${article}`, 'info')}>
                         <Card style={styles.articleCard}>
                             <CardContent style={styles.articleContent}>
                                 <Text style={styles.articleTitle}>{article}</Text>
-                                <ChevronRight size={18} color="#ccc" />
+                                <ChevronRight size={18} color={isDark ? "#4B5563" : "#ccc"} />
                             </CardContent>
                         </Card>
                     </TouchableOpacity>
@@ -129,27 +137,27 @@ export default function HelpCenterScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFAFA' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
     searchContainer: { padding: 16, paddingBottom: 0 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F0F0', borderRadius: 12, paddingHorizontal: 12, height: 44 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F0F0F0', borderRadius: 12, paddingHorizontal: 12, height: 44 },
     content: { padding: 16 },
     quickActionsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
     quickAction: { flex: 1 },
-    quickActionCard: { borderWidth: 0, shadowColor: "#000", shadowOpacity: 0.1, elevation: 2 },
+    quickActionCard: { borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : "#000", shadowOpacity: 0.1, elevation: 2, backgroundColor: isDark ? '#1F2937' : '#fff' },
     quickActionContent: { alignItems: 'center', padding: 16 },
     iconContainer: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    quickActionText: { fontSize: 13, fontWeight: '500', color: '#333' },
-    sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#111' },
+    quickActionText: { fontSize: 13, fontWeight: '500', color: isDark ? '#F9FAFB' : '#333' },
+    sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: isDark ? '#F9FAFB' : '#111' },
     categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
     categoryItem: { width: '48%' },
-    categoryCard: { borderWidth: 1, borderColor: '#eee' },
+    categoryCard: { borderWidth: 1, borderColor: isDark ? '#374151' : '#eee', backgroundColor: isDark ? '#1F2937' : '#fff' },
     categoryContent: { alignItems: 'center', padding: 16 },
     categoryIconContainer: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    categoryName: { fontSize: 13, fontWeight: '500', color: '#333', marginBottom: 4 },
-    articleCount: { fontSize: 11, color: '#999' },
+    categoryName: { fontSize: 13, fontWeight: '500', color: isDark ? '#F9FAFB' : '#333', marginBottom: 4 },
+    articleCount: { fontSize: 11, color: isDark ? '#9CA3AF' : '#999' },
     articleRow: { marginBottom: 8 },
-    articleCard: { borderWidth: 0, shadowColor: "#000", shadowOpacity: 0.05, elevation: 1 },
+    articleCard: { borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : "#000", shadowOpacity: 0.05, elevation: 1, backgroundColor: isDark ? '#1F2937' : '#fff' },
     articleContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-    articleTitle: { fontSize: 14, color: '#333' }
+    articleTitle: { fontSize: 14, color: isDark ? '#F9FAFB' : '#333' }
 });

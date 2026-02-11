@@ -14,13 +14,20 @@ const Sheet = ({ open, onOpenChange, children }: any) => {
     )
 }
 
-const SheetContent = ({ children, side = "left", className, style }: any) => {
+const SheetContent = ({ children, side = "right", className, style }: any) => {
+    const isBottom = side === "bottom";
+    const contentStyle = [
+        styles.content,
+        side === "left" && styles.left,
+        side === "right" && styles.right,
+        side === "bottom" && styles.bottom,
+        style
+    ];
+
     return (
-        <View style={[styles.content, side === "left" ? styles.left : styles.right, style]}>
+        <View style={contentStyle}>
             {children}
-            <TouchableOpacity style={styles.close} onPress={(e) => { /* logic handled by parent usually, but need context */ }}>
-                {/* Close icon usually handled by SheetHeader or separate implementation */}
-            </TouchableOpacity>
+            {/* Close button can be added here if needed, but usually in Header */}
         </View>
     )
 }
@@ -52,52 +59,71 @@ const SheetDescription = ({ className, children, ...props }: any) => (
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        flexDirection: "row",
-        zIndex: 50,
+        backgroundColor: 'transparent',
     },
     backdrop: {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: "rgba(0,0,0,0.4)",
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.5)",
     },
     content: {
         backgroundColor: "#fff",
-        padding: 0, // p-0 in shadcn
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
+        padding: 0,
+        ...Platform.select({
+            web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)' },
+            default: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+            },
+        }),
         elevation: 5,
-        height: "100%",
-        width: "75%",
-        maxWidth: 400,
+        position: 'absolute',
     },
     left: {
         left: 0,
+        top: 0,
+        bottom: 0,
+        width: "75%",
+        maxWidth: 400,
         borderRightWidth: 1,
         borderColor: "#E5E7EB",
     },
     right: {
-        right: 0, // This logic is flawed for flex row without justification. 
-        // Better: In overlay, use justifyContent
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: "75%",
+        maxWidth: 400,
+        borderLeftWidth: 1,
+        borderColor: "#E5E7EB",
+    },
+    bottom: {
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: "85%", // Default height, can be overridden
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        borderTopWidth: 1,
+        borderColor: "#E5E7EB",
     },
     header: {
         flexDirection: "column",
-        gap: 2, // gap-2
-        padding: 16,
+        gap: 4,
+        padding: 24,
+        paddingBottom: 16,
     },
     footer: {
-        flexDirection: "column-reverse", // sm:flex-row sm:justify-end
-        gap: 8,
-        padding: 16,
+        flexDirection: "column-reverse",
+        gap: 12,
+        padding: 24,
+        paddingTop: 0,
     },
     title: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#111",
+        fontSize: 20,
+        fontWeight: "bold",
+        color: "#111827",
     },
     description: {
         fontSize: 14,
@@ -118,3 +144,5 @@ export {
     SheetTitle,
     SheetDescription,
 }
+
+

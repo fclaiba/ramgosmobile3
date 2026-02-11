@@ -1,256 +1,416 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, Animated, Dimensions, SafeAreaView, Platform, Alert } from 'react-native';
-import { User, Settings, LogOut, HelpCircle, Save, History, Moon, X, LayoutDashboard, Plus, PawPrint, Info, Phone, Shield, Store, Zap, Code, Bell, ChevronRight } from 'lucide-react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert, Switch, ActivityIndicator, AccessibilityInfo } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen } from 'lucide-react-native';
 import { useAuth, type UserRole } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Button } from './ui/button';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useWindowDimensions } from 'react-native';
+import { useToast } from '../contexts/ToastContext';
+import { Sheet, SheetContent } from './ui/sheet';
+import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 
 interface SidebarMenuProps {
     visible: boolean;
     onClose: () => void;
-    navigation: any;
+    navigation?: any;
 }
 
-export const SidebarMenu = ({ visible, onClose, navigation }: SidebarMenuProps) => {
-    const { user, logout, updateRole, loginWithEmail } = useAuth(); // Retrieve loginWithEmail
+export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
+    const navigation = useNavigation<any>();
+    const { user, status, pendingVerification, logout, updateRole, loginWithEmail, signUpWithEmail, isProcessing } = useAuth();
     const { unreadCount } = useNotifications();
-    const { width, height } = useWindowDimensions();
-    const SIDEBAR_WIDTH = Math.min(width * 0.85, 380);
+    const { theme, toggleTheme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const { show } = useToast();
 
-    const slideAnim = useRef(new Animated.Value(-width)).current;
+    // Loading states for async operations
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [isChangingRole, setIsChangingRole] = useState(false);
 
-    useEffect(() => {
-        if (visible) {
-            Animated.spring(slideAnim, {
-                toValue: 0,
-                useNativeDriver: true,
-                damping: 20,
-                mass: 0.8,
-                stiffness: 100,
-            }).start();
-        } else {
-            Animated.timing(slideAnim, {
-                toValue: -width,
-                duration: 250,
-                useNativeDriver: true,
-            }).start();
+    const effectiveUser = user ?? pendingVerification?.user ?? null;
+    const isAnonymous = status === 'anonymous' && !effectiveUser;
+    const isPending = status === 'pending_verification';
+    const isAuthenticated = status === 'authenticated' && !!user;
+
+    const statusDotColor = isPending ? '#F59E0B' : isAuthenticated ? '#10B981' : '#6B7280';
+    const statusLabel = isPending ? 'Pendiente de verificación' : isAuthenticated ? 'Conectado' : 'Invitado';
+
+    // Dynamic Styles
+    const styles = getStyles(isDark);
+
+    // Haptic feedback helper
+    const triggerHaptic = useCallback((style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
+        if (Platform.OS !== 'web') {
+            Haptics.impactAsync(style);
         }
-    }, [visible, width]);
+    }, []);
 
     const handleLogout = async () => {
-        await logout();
-        onClose();
-    };
-
-    const handleRoleChange = async (role: UserRole) => {
+        triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+        setIsLoggingOut(true);
         try {
-            if (!user) {
-                // Auto-Login for Guest Users
-                const credentials = {
-                    business: { email: 'business@ramgos.com', pass: 'password123' },
-                    influencer: { email: 'influencer@ramgos.com', pass: 'password123' },
-                    admin: { email: 'admin@ramgos.com', pass: 'password123' },
-                    consumer: { email: 'test@ramgos.com', pass: 'password123' },
-                };
-
-                const creds = credentials[role];
-                await loginWithEmail(creds.email, creds.pass);
-            } else {
-                // Just switch role if already logged in
-                await updateRole(role);
-            }
-
-            // Determine destination
-            let destination = 'Profile';
-            switch (role) {
-                case 'business': destination = 'BusinessDashboard'; break;
-                case 'influencer': destination = 'InfluencerDashboard'; break;
-                case 'admin': destination = 'AdminDashboard'; break;
-                default: destination = 'Home'; break;
-            }
-
-            Alert.alert(
-                'Modo Desarrollador',
-                `Ahora eres: ${role.toUpperCase()}. Accediendo al panel...`,
-                [
-                    {
-                        text: 'OK',
-                        onPress: () => {
-                            onClose();
-                            setTimeout(() => {
-                                navigation.navigate(destination);
-                            }, 300);
-                        }
-                    }
-                ]
-            );
-
+            await logout();
+            onClose();
+            // Reset navigation to Welcome screen to prevent going back
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+            });
         } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'No se pudo activar el modo desarrollador. Intenta nuevamente.');
+            show('Error al cerrar sesión. Intenta de nuevo.', 'error');
+        } finally {
+            setIsLoggingOut(false);
         }
     };
 
-    const MenuItem = ({ icon: Icon, label, action, badge, color = "#4B5563", danger = false }: any) => (
+
+
+    // Local state to simulate identity for Dev Mode visual feedback
+    const [simulatedProfile, setSimulatedProfile] = useState<{ name: string; email: string } | null>(null);
+
+    // Reset simulation when closing or when user logs out
+    useEffect(() => {
+        if (!user) {
+            setSimulatedProfile(null);
+        }
+    }, [user]);
+
+    const handleRoleChange = async (role: UserRole | 'guest') => {
+        if (isProcessing || isChangingRole) return;
+
+        triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
+        setIsChangingRole(true);
+        try {
+            if (role === 'guest') {
+                setSimulatedProfile(null);
+                await logout();
+                show('Modo Invitado Activado', 'success');
+                onClose();
+                setTimeout(() => {
+                    navigation.reset({ index: 0, routes: [{ name: 'Home', params: { initialTab: 'marketplace' } }] });
+                }, 100);
+                return;
+            }
+
+            // Define Test Profiles for Visual Feedback
+            const TEST_PROFILES = {
+                business: { name: 'Usuario Negocio', email: 'business@ramgos.com' },
+                influencer: { name: 'Usuario Influencer', email: 'influencer@ramgos.com' },
+                admin: { name: 'Usuario Admin', email: 'admin@ramgos.com' },
+                consumer: { name: 'Usuario Consumidor', email: 'consumer@ramgos.com' },
+                guest: { name: 'Invitado', email: '' } // Guest handled separately but good to have constraint
+            };
+
+            if (!user) {
+                // Auto-Login for Guest Users (Dev Mode)
+                const credentials = {
+                    business: { email: 'business@ramgos.com', pass: 'password123', name: 'Usuario Negocio' },
+                    influencer: { email: 'influencer@ramgos.com', pass: 'password123', name: 'Usuario Influencer' },
+                    admin: { email: 'admin@ramgos.com', pass: 'password123', name: 'Usuario Admin' },
+                    consumer: { email: 'consumer@ramgos.com', pass: 'password123', name: 'Usuario Consumidor' },
+                };
+
+                const creds = credentials[role as keyof typeof credentials];
+                if (creds) {
+                    try {
+                        await loginWithEmail(creds.email, creds.pass);
+                    } catch (e: any) {
+                        if (e.message.includes('no encontrado') || e.message.includes('not found')) {
+                            console.log(`[DevMode] Login failed, attempting auto-registration for ${role}...`);
+                            try {
+                                await signUpWithEmail({
+                                    email: creds.email,
+                                    password: creds.pass,
+                                    name: creds.name,
+                                    role: role as UserRole
+                                });
+                            } catch (regError) {
+                                console.error("Auto-registration failed", regError);
+                                show('No se pudo crear el usuario de prueba', 'error');
+                                throw e;
+                            }
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+            } else {
+                // Authenticated User: Switch Role AND Apply Visual Masquerade
+                await updateRole(role as UserRole);
+
+                // Set the visual override
+                if (role in TEST_PROFILES) {
+                    setSimulatedProfile(TEST_PROFILES[role as keyof typeof TEST_PROFILES]);
+                }
+            }
+
+            triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+            show(`Modo Dev Activado: ${role.toUpperCase()}`, 'success');
+            onClose();
+
+        } catch (error: any) {
+            console.error(error);
+            show(error.message || 'Error al cambiar rol.', 'error');
+        } finally {
+            setIsChangingRole(false);
+        }
+    };
+
+    const MenuItem = ({ icon: Icon, label, action, badge, color = isDark ? "#D1D5DB" : "#4B5563", danger = false, isSwitch = false, switchValue = false, onSwitchChange, loading = false, accessibilityHint }: any) => (
         <TouchableOpacity
-            style={[styles.menuItem, danger && styles.menuItemDanger]}
-            onPress={action}
-            activeOpacity={0.7}
+            style={[styles.menuItem, danger && styles.menuItemDanger, loading && { opacity: 0.6 }]}
+            onPress={isSwitch && onSwitchChange ? undefined : loading ? undefined : () => { triggerHaptic(); action?.(); }}
+            activeOpacity={isSwitch ? 1 : 0.7}
+            disabled={loading}
+            accessible={true}
+            accessibilityLabel={label}
+            accessibilityHint={accessibilityHint || `Navegar a ${label}`}
+            accessibilityRole={isSwitch ? 'switch' : 'button'}
+            accessibilityState={{ disabled: loading, checked: isSwitch ? switchValue : undefined }}
         >
             <View style={[styles.iconContainer, danger && { backgroundColor: '#FEE2E2' }]}>
-                <Icon size={20} color={danger ? "#EF4444" : color} />
+                {loading ? (
+                    <ActivityIndicator size="small" color={danger ? "#EF4444" : color} />
+                ) : (
+                    <Icon size={20} color={danger ? "#EF4444" : color} />
+                )}
             </View>
             <Text style={[styles.menuText, danger && { color: "#EF4444" }]}>{label}</Text>
-            {badge !== undefined && badge > 0 ? (
-                <View style={styles.badge}>
+            {isSwitch ? (
+                <Switch
+                    value={switchValue}
+                    onValueChange={(val) => { triggerHaptic(); onSwitchChange?.(val); }}
+                    trackColor={{ false: '#767577', true: '#8B5CF6' }}
+                    thumbColor={switchValue ? '#fff' : '#f4f3f4'}
+                    accessibilityLabel={`${label} ${switchValue ? 'activado' : 'desactivado'}`}
+                />
+            ) : badge !== undefined && badge > 0 ? (
+                <View style={styles.badge} accessibilityLabel={`${badge} notificaciones`}>
                     <Text style={styles.badgeText}>{badge}</Text>
                 </View>
             ) : (
-                <ChevronRight size={16} color="#D1D5DB" style={{ marginLeft: 'auto' }} />
+                <ChevronRight size={16} color={isDark ? "#4B5563" : "#D1D5DB"} style={{ marginLeft: 'auto' }} />
             )}
         </TouchableOpacity>
     );
 
-    if (!visible) return null;
+    if (!visible && !effectiveUser) return null; // keep it mounted for signed-in users, unmount for guests when hidden
+
+    const displayName = simulatedProfile?.name || (effectiveUser?.name || (isPending ? 'Cuenta pendiente' : 'Invitado'));
+    const displayEmail = simulatedProfile?.email || (pendingVerification?.email ?? effectiveUser?.email ?? 'Bienvenido a Ramgos');
 
     return (
-        <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
-            <View style={styles.overlay}>
-                <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-                <Animated.View style={[
-                    styles.container,
-                    { width: SIDEBAR_WIDTH, transform: [{ translateX: slideAnim }] }
-                ]}>
-                    <LinearGradient
-                        colors={['#fff', '#F9FAFB']}
-                        style={StyleSheet.absoluteFill}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    />
+        <Sheet open={visible} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="left" style={styles.sheetContent}>
+                <LinearGradient
+                    colors={isDark ? ['#111827', '#000'] : ['#fff', '#F9FAFB']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
 
-                    <SafeAreaView style={{ flex: 1 }}>
-                        <View style={styles.header}>
-                            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                                <X color="#6B7280" size={24} />
-                            </TouchableOpacity>
+                <SafeAreaView style={{ flex: 1 }}>
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <X color={isDark ? "#9CA3AF" : "#6B7280"} size={24} />
+                        </TouchableOpacity>
 
-                            <View style={styles.profileSection}>
-                                <View style={styles.avatarContainer}>
-                                    <Avatar style={styles.avatar}>
-                                        <AvatarImage src={user?.avatar} />
-                                        <AvatarFallback>{user?.name?.[0] || 'U'}</AvatarFallback>
-                                    </Avatar>
-                                    <View style={styles.statusDot} />
-                                </View>
-                                <View style={styles.userInfo}>
-                                    <Text style={styles.userName}>{user?.name || 'Invitado'}</Text>
-                                    <Text style={styles.userEmail} numberOfLines={1}>{user?.email || 'Inicia sesión'}</Text>
-                                    <View style={styles.roleBadge}>
-                                        <Text style={styles.roleText}>{user?.role?.toUpperCase() || 'USUARIO'}</Text>
-                                    </View>
-                                </View>
+                        <View style={styles.profileSection}>
+                            <View style={styles.avatarContainer} accessible={true} accessibilityLabel={`Avatar de ${effectiveUser?.name || 'usuario'}. Estado: ${statusLabel}`}>
+                                <Avatar style={styles.avatar}>
+                                    <AvatarImage src={effectiveUser?.avatar} />
+                                    <AvatarFallback>{effectiveUser?.name?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+                                </Avatar>
+                                <View
+                                    style={[styles.statusDot, { backgroundColor: statusDotColor }]}
+                                    accessible={true}
+                                    accessibilityLabel={statusLabel}
+                                />
+                            </View>
+                            <View style={styles.userInfo}>
+                                {isProcessing || isChangingRole ? (
+                                    <ActivityIndicator size="small" color={isDark ? "#D1D5DB" : "#4B5563"} style={{ alignSelf: 'flex-start' }} />
+                                ) : (
+                                    <>
+                                        <Text style={styles.userName}>
+                                            {displayName}
+                                        </Text>
+                                        <Text style={styles.userEmail} numberOfLines={1}>
+                                            {displayEmail}
+                                        </Text>
+                                        <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}>
+                                            <Text style={styles.roleText}>
+                                                {isPending ? 'PENDING_VERIFICATION' : effectiveUser?.role?.toUpperCase() || 'MODO INVITADO'}
+                                            </Text>
+                                        </View>
+                                    </>
+                                )}
                             </View>
                         </View>
+                    </View>
 
-                        <ScrollView
-                            style={styles.content}
-                            contentContainerStyle={styles.scrollContent}
-                            showsVerticalScrollIndicator={false}
-                        >
+                    <ScrollView
+                        style={styles.content}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* Guest CTA */}
+                        {isAnonymous && (
                             <View style={styles.section}>
-                                <Text style={styles.sectionHeader}>Principal</Text>
-                                <MenuItem icon={Bell} label="Notificaciones" action={() => { onClose(); navigation.navigate('Notifications'); }} badge={unreadCount} color="#6366F1" />
-                                <MenuItem icon={PawPrint} label="Mi Mascota" action={() => { onClose(); navigation.navigate('MiMascota'); }} color="#EC4899" />
-                                <MenuItem icon={User} label="Mi Perfil" action={() => { onClose(); navigation.navigate('Profile'); }} color="#8B5CF6" />
-                                <MenuItem icon={Save} label="Guardados" action={() => { onClose(); navigation.navigate('Saved'); }} color="#F59E0B" />
+                                <Text style={styles.sectionHeader}>Acceso</Text>
+                                <MenuItem
+                                    icon={User}
+                                    label="Iniciar sesión"
+                                    action={() => { onClose(); navigation.navigate('Login'); }}
+                                    color="#8B5CF6"
+                                />
+                                <MenuItem
+                                    icon={Plus}
+                                    label="Crear cuenta"
+                                    action={() => { onClose(); navigation.navigate('Register'); }}
+                                    color="#10B981"
+                                />
                             </View>
+                        )}
 
+                        {/* Pending verification CTA */}
+                        {isPending && (
                             <View style={styles.section}>
-                                <Text style={styles.sectionHeader}>Cuenta</Text>
-                                <MenuItem icon={History} label="Historial" action={() => { onClose(); navigation.navigate('History'); }} />
+                                <Text style={styles.sectionHeader}>Verificación</Text>
+                                <MenuItem
+                                    icon={Mail}
+                                    label="Verificar email"
+                                    action={() => {
+                                        const email = pendingVerification?.email ?? effectiveUser?.email;
+                                        onClose();
+                                        navigation.navigate('Verification', { email });
+                                    }}
+                                    color="#F59E0B"
+                                />
+                            </View>
+                        )}
+
+                        <View style={styles.section}>
+                            <Text style={styles.sectionHeader}>Principal</Text>
+                            {!isAnonymous && (
+                                <>
+                                    <MenuItem icon={Bell} label="Notificaciones" action={() => { onClose(); navigation.navigate('Notifications'); }} badge={unreadCount} color="#6366F1" />
+                                    <MenuItem icon={PawPrint} label="Mi Mascota" action={() => { onClose(); navigation.navigate('MiMascota'); }} color="#EC4899" />
+                                    <MenuItem icon={User} label="Mi Perfil" action={() => { onClose(); navigation.navigate('Profile'); }} color="#8B5CF6" />
+                                    <MenuItem icon={Users} label="Invitar Amigos" action={() => { onClose(); navigation.navigate('Referrals'); }} color="#10B981" />
+                                    <MenuItem icon={Save} label="Guardados" action={() => { onClose(); navigation.navigate('Saved'); }} color="#F59E0B" />
+                                    <MenuItem icon={PackageOpen} label="Mis Publicaciones" action={() => { onClose(); navigation.navigate('MyListings'); }} color="#3B82F6" />
+                                </>
+                            )}
+                        </View>
+
+                        <View style={styles.section}>
+                            <Text style={styles.sectionHeader}>Cuenta</Text>
+                            <MenuItem
+                                icon={isDark ? Moon : Sun}
+                                label="Tema Oscuro"
+                                isSwitch
+                                switchValue={isDark}
+                                onSwitchChange={toggleTheme}
+                                color={isDark ? "#A78BFA" : "#F59E0B"}
+                            />
+                            {!isAnonymous && (
+                                <MenuItem icon={History} label="Mis compras" action={() => { onClose(); navigation.navigate('History'); }} />
+                            )}
+                            {!isAnonymous && (
                                 <MenuItem icon={Settings} label="Configuración" action={() => { onClose(); navigation.navigate('Settings'); }} />
-                                <MenuItem icon={HelpCircle} label="Ayuda" action={() => { onClose(); navigation.navigate('HelpCenter'); }} />
+                            )}
+                            <MenuItem icon={HelpCircle} label="Ayuda" action={() => { onClose(); navigation.navigate('HelpCenter'); }} />
+                        </View>
+
+                        <View style={styles.section}>
+                            <Text style={styles.sectionHeader}>Legales</Text>
+                            <MenuItem icon={Shield} label="Términos y Condiciones" action={() => { onClose(); navigation.navigate('Terms'); }} color="#6366F1" />
+                            <MenuItem icon={Info} label="Política de Privacidad" action={() => { onClose(); navigation.navigate('Privacy'); }} color="#8B5CF6" />
+                        </View>
+
+                        {/* Dynamic Sections based on Role */}
+                        {user?.role === 'business' && (
+                            <View style={styles.section}>
+                                <Text style={[styles.sectionHeader, { color: '#10B981' }]}>Negocio</Text>
+                                <MenuItem icon={Store} label="Panel de Negocio" action={() => { onClose(); navigation.navigate('Profile'); }} color="#10B981" />
                             </View>
+                        )}
+                        {user?.role === 'influencer' && (
+                            <View style={styles.section}>
+                                <Text style={[styles.sectionHeader, { color: '#A855F7' }]}>Influencer</Text>
+                                <MenuItem icon={Zap} label="Panel Influencer" action={() => { onClose(); navigation.navigate('Profile'); }} color="#A855F7" />
+                            </View>
+                        )}
+                        {user?.role === 'admin' && (
+                            <View style={styles.section}>
+                                <Text style={[styles.sectionHeader, { color: '#EF4444' }]}>Admin</Text>
+                                <MenuItem icon={Shield} label="Panel Admin" action={() => { onClose(); navigation.navigate('AdminDashboard'); }} color="#EF4444" />
+                            </View>
+                        )}
 
-                            {/* Dynamic Sections based on Role */}
-                            {user?.role === 'business' && (
-                                <View style={styles.section}>
-                                    <Text style={[styles.sectionHeader, { color: '#10B981' }]}>Negocio</Text>
-                                    <MenuItem icon={Store} label="Panel de Negocio" action={() => { onClose(); navigation.navigate('BusinessDashboard'); }} color="#10B981" />
-                                </View>
-                            )}
-                            {user?.role === 'influencer' && (
-                                <View style={styles.section}>
-                                    <Text style={[styles.sectionHeader, { color: '#A855F7' }]}>Influencer</Text>
-                                    <MenuItem icon={Zap} label="Panel Influencer" action={() => { onClose(); navigation.navigate('InfluencerDashboard'); }} color="#A855F7" />
-                                </View>
-                            )}
-                            {user?.role === 'admin' && (
-                                <View style={styles.section}>
-                                    <Text style={[styles.sectionHeader, { color: '#EF4444' }]}>Admin</Text>
-                                    <MenuItem icon={Shield} label="Panel Admin" action={() => { onClose(); navigation.navigate('AdminDashboard'); }} color="#EF4444" />
-                                </View>
-                            )}
-
+                        {__DEV__ && (
                             <View style={styles.section}>
                                 <Text style={styles.sectionHeader}>Developer Mode</Text>
                                 <View style={styles.roleSelector}>
-                                    {(['consumer', 'business', 'influencer', 'admin'] as const).map((role) => (
+                                    {(['guest', 'consumer', 'business', 'influencer', 'admin'] as const).map((role) => (
                                         <TouchableOpacity
                                             key={role}
-                                            style={[styles.roleChip, user?.role === role && styles.roleChipActive]}
+                                            style={[styles.roleChip, user?.role === role && styles.roleChipActive, (role === 'guest' && !user) && styles.roleChipActive, isChangingRole && { opacity: 0.5 }]}
                                             onPress={() => handleRoleChange(role)}
+                                            disabled={isChangingRole}
+                                            accessible={true}
+                                            accessibilityLabel={`Cambiar a rol ${role}`}
+                                            accessibilityRole="button"
+                                            accessibilityState={{ selected: user?.role === role, disabled: isChangingRole }}
                                         >
-                                            <Text style={[styles.roleChipText, user?.role === role && styles.roleChipTextActive]}>
-                                                {role.charAt(0).toUpperCase()}
-                                            </Text>
+                                            {isChangingRole && (user?.role === role || (role === 'guest' && isLoggingOut)) ? (
+                                                <ActivityIndicator size="small" color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                            ) : (
+                                                <Text style={[styles.roleChipText, user?.role === role && styles.roleChipTextActive, (role === 'guest' && !user) && styles.roleChipTextActive]}>
+                                                    {role.charAt(0).toUpperCase()}
+                                                </Text>
+                                            )}
                                         </TouchableOpacity>
                                     ))}
                                 </View>
                             </View>
+                        )}
 
+                        {isAuthenticated && (
                             <View style={[styles.section, { borderBottomWidth: 0, marginBottom: 40 }]}>
-                                <MenuItem icon={LogOut} label="Cerrar Sesión" action={handleLogout} danger />
+                                <MenuItem
+                                    icon={isLoggingOut ? RefreshCw : LogOut}
+                                    label={isLoggingOut ? "Cerrando sesión..." : "Cerrar Sesión"}
+                                    action={handleLogout}
+                                    danger
+                                    loading={isLoggingOut}
+                                    accessibilityHint="Cerrar tu sesión actual y volver a la pantalla de bienvenida"
+                                />
                             </View>
+                        )}
 
-                        </ScrollView>
-                    </SafeAreaView>
-                </Animated.View>
-            </View>
-        </Modal>
+                    </ScrollView>
+                </SafeAreaView>
+            </SheetContent>
+        </Sheet>
     );
 };
 
-const styles = StyleSheet.create({
-    overlay: { flex: 1 },
-    backdrop: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        zIndex: 1
-    },
-    container: {
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        backgroundColor: '#fff',
-        shadowColor: "#000",
-        shadowOffset: { width: 5, height: 0 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 10,
-        zIndex: 2,
-        borderRightWidth: 1,
-        borderRightColor: 'rgba(0,0,0,0.05)'
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: {
+        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        width: '85%',
+        maxWidth: 380,
     },
     header: {
         padding: 24,
-        paddingTop: Platform.OS === 'android' ? 40 : 20,
+        paddingTop: Platform.OS === 'android' ? 20 : 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6'
+        borderBottomColor: isDark ? '#374151' : '#F3F4F6'
     },
     closeButton: {
         position: 'absolute',
@@ -273,7 +433,7 @@ const styles = StyleSheet.create({
         height: 64,
         borderRadius: 32,
         borderWidth: 3,
-        borderColor: '#fff',
+        borderColor: isDark ? '#374151' : '#fff',
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
@@ -289,7 +449,7 @@ const styles = StyleSheet.create({
         borderRadius: 7,
         backgroundColor: '#10B981',
         borderWidth: 2,
-        borderColor: '#fff'
+        borderColor: isDark ? '#1F2937' : '#fff'
     },
     userInfo: {
         flex: 1,
@@ -297,17 +457,17 @@ const styles = StyleSheet.create({
     userName: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#111827',
+        color: isDark ? '#F9FAFB' : '#111827',
         marginBottom: 2
     },
     userEmail: {
         fontSize: 13,
-        color: '#6B7280',
+        color: isDark ? '#9CA3AF' : '#6B7280',
         marginBottom: 6
     },
     roleBadge: {
         alignSelf: 'flex-start',
-        backgroundColor: '#F3F4F6',
+        backgroundColor: isDark ? '#374151' : '#F3F4F6',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 99,
@@ -315,7 +475,7 @@ const styles = StyleSheet.create({
     roleText: {
         fontSize: 10,
         fontWeight: '700',
-        color: '#4B5563',
+        color: isDark ? '#D1D5DB' : '#4B5563',
         letterSpacing: 0.5
     },
     content: { flex: 1 },
@@ -327,7 +487,7 @@ const styles = StyleSheet.create({
     sectionHeader: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#9CA3AF',
+        color: isDark ? '#6B7280' : '#9CA3AF',
         marginBottom: 12,
         paddingHorizontal: 12,
         textTransform: 'uppercase',
@@ -342,13 +502,13 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent'
     },
     menuItemDanger: {
-        backgroundColor: '#FEF2F2',
+        backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2',
     },
     iconContainer: {
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: isDark ? '#374151' : '#F9FAFB',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -356,7 +516,7 @@ const styles = StyleSheet.create({
     menuText: {
         fontSize: 15,
         fontWeight: '500',
-        color: '#374151',
+        color: isDark ? '#D1D5DB' : '#374151',
         flex: 1
     },
     badge: {
@@ -380,22 +540,22 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: isDark ? '#374151' : '#F3F4F6',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#E5E7EB'
+        borderColor: isDark ? '#4B5563' : '#E5E7EB'
     },
     roleChipActive: {
-        backgroundColor: '#111827',
-        borderColor: '#111827'
+        backgroundColor: isDark ? '#F9FAFB' : '#111827',
+        borderColor: isDark ? '#F9FAFB' : '#111827'
     },
     roleChipText: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#6B7280'
+        color: isDark ? '#9CA3AF' : '#6B7280'
     },
     roleChipTextActive: {
-        color: '#fff'
+        color: isDark ? '#111827' : '#fff'
     }
 });

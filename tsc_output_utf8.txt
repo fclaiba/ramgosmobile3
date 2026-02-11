@@ -1,0 +1,38 @@
+﻿src/contexts/__tests__/RewardsContext.test.tsx(9,1): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(10,14): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(11,14): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(12,17): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(16,1): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(21,1): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(23,20): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(38,1): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/contexts/__tests__/RewardsContext.test.tsx(39,5): error TS2304: Cannot find name 'beforeEach'.
+src/contexts/__tests__/RewardsContext.test.tsx(40,9): error TS2708: Cannot use namespace 'jest' as a value.
+src/contexts/__tests__/RewardsContext.test.tsx(41,39): error TS2694: Namespace 'global.jest' has no exported member 'Mock'.
+src/contexts/__tests__/RewardsContext.test.tsx(44,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/contexts/__tests__/RewardsContext.test.tsx(56,29): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(58,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(59,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(60,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(63,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/contexts/__tests__/RewardsContext.test.tsx(75,29): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(82,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(82,16): error TS18048: 'result' is possibly 'undefined'.
+src/contexts/__tests__/RewardsContext.test.tsx(83,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(83,16): error TS18048: 'result' is possibly 'undefined'.
+src/contexts/__tests__/RewardsContext.test.tsx(84,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(90,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(90,16): error TS18048: 'result' is possibly 'undefined'.
+src/contexts/__tests__/RewardsContext.test.tsx(93,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/contexts/__tests__/RewardsContext.test.tsx(105,29): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(111,17): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(121,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(121,16): error TS18048: 'lastResult' is possibly 'undefined'.
+src/contexts/__tests__/RewardsContext.test.tsx(122,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(125,5): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/contexts/__tests__/RewardsContext.test.tsx(137,29): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(139,9): error TS2304: Cannot find name 'expect'.
+src/contexts/__tests__/RewardsContext.test.tsx(140,9): error TS2304: Cannot find name 'expect'.
+src/contexts/MarketplaceContext.tsx(1178,25): error TS1117: An object literal cannot have multiple properties with the same name.
+src/contexts/MarketplaceContext.tsx(1179,25): error TS1117: An object literal cannot have multiple properties with the same name.
+src/screens/AdminDashboardScreen.tsx(249,63): error TS7006: Parameter 'val' implicitly has an 'any' type.

@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Animated, Vibration, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, PanResponder, Animated, useWindowDimensions, Platform, LayoutChangeEvent } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Play, RotateCcw, AlertOctagon, Heart, Trophy, Coins } from 'lucide-react-native';
+import { Play, RotateCcw, Heart, Trophy, Coins } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { GameActionSignal } from './GameWrapper';
+import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
+import { useGameLevel } from './useGameLevel';
+import { GAME_LEVEL_THRESHOLDS } from './gameDifficultyConfig';
 
-// const { width } = Dimensions.get('window'); // Removed static width
-const GAME_HEIGHT = 450;
 const BASKET_WIDTH = 80;
 const FRUIT_SIZE = 40;
 
@@ -23,30 +25,100 @@ const FRUITS = ['🍎', '🍌', '🍇', '🍊', '🍓', '🍑'];
 interface FruitCatcherProps {
     onGameEnd?: (score: number) => void;
     onClose?: () => void;
+    // Wrapper integration (optional)
+    actionSignal?: GameActionSignal;
+    uiMode?: 'standalone' | 'wrapped';
+    onEvent?: (event: GameEvent) => void;
+    onEnd?: (summary: GameEndSummary) => void;
+    gameId?: GameAdapterProps['gameId'];
+    family?: GameAdapterProps['family'];
 }
 
-export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
-    const { width } = useWindowDimensions();
-    // Width Ref to access current width inside closures (game loop, pan responder) w/o re-creating everything constantly
+export const FruitCatcher = (props: FruitCatcherProps) => {
+    const {
+        onGameEnd,
+        onClose,
+        actionSignal,
+        uiMode = 'standalone',
+        onEvent,
+        onEnd,
+        gameId = 'fruit',
+        family = 'arcade',
+    } = props;
+    const { width, height } = useWindowDimensions();
     const widthRef = useRef(width);
+    const heightRef = useRef(height);
 
     useEffect(() => {
         widthRef.current = width;
-    }, [width]);
+        heightRef.current = height;
+    }, [width, height]);
 
-    // ... (state lines 27+)
     const [highScore, setHighScore] = useState(0);
     const [lives, setLives] = useState(3);
     const [items, setItems] = useState<FallingItem[]>([]);
+    const gameAreaHeightRef = useRef<number>(height);
+    const gameAreaYRef = useRef<number>(0);
+    const debugHitCountRef = useRef<number>(0);
 
     // Game State
-    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+    const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const [score, setScore] = useState(0);
+    const scoreRef = useRef(0);
+    const livesRef = useRef(3);
+    const pendingEndRef = useRef<GameEndSummary | null>(null);
 
     // difficulty
     const difficultyRef = useRef(1);
-    // Game State Ref to avoid stale closures in loop
-    const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
+    const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
+
+    // Leveling (10 fruits caught -> score +10 each => 100 score per level)
+    const levelState = useGameLevel({
+        mode: 'score',
+        score,
+        baseLevel: 1,
+        thresholds: GAME_LEVEL_THRESHOLDS.fruit,
+    });
+
+    const lastActionNonce = useRef<number>(0);
+    const lastLevelReported = useRef<number>(levelState.level);
+
+    const emitStatus = useCallback((status: 'start' | 'playing' | 'paused' | 'gameover' | 'levelup') => {
+        onEvent?.({ type: 'status', status });
+    }, [onEvent]);
+
+    const emitMetrics = useCallback(() => {
+        onEvent?.({
+            type: 'metrics',
+            patch: {
+                score,
+                lives,
+                level: levelState.level,
+                progressToNext: levelState.progress,
+            },
+        });
+    }, [levelState.level, levelState.progress, lives, onEvent, score]);
+
+    useEffect(() => { scoreRef.current = score; }, [score]);
+    useEffect(() => { livesRef.current = lives; }, [lives]);
+
+    useEffect(() => {
+        if (uiMode === 'wrapped') {
+            // Initialize snapshot for wrapper
+            emitStatus('start');
+            emitMetrics();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [uiMode]);
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped') return;
+        emitMetrics();
+        if (levelState.level > lastLevelReported.current) {
+            lastLevelReported.current = levelState.level;
+            onEvent?.({ type: 'levelup', level: levelState.level });
+        }
+    }, [uiMode, emitMetrics, levelState.level, onEvent]);
 
     // Powerup Refs
     const magnetActive = useRef(false);
@@ -54,9 +126,8 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
     const powerupTimer = useRef<NodeJS.Timeout | null>(null);
 
     // Basket Position
-    // We initialize centrally, but if width changes, we rely on the clamp logic to keep it in screen
     const basketX = useRef(new Animated.Value(width / 2 - BASKET_WIDTH / 2)).current;
-    const basketXVal = useRef(width / 2 - BASKET_WIDTH / 2); // Mirror for logic
+    const basketXVal = useRef(width / 2 - BASKET_WIDTH / 2);
 
     // Refs
     const gameLoopRef = useRef<number | null>(null);
@@ -86,7 +157,6 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
     }, []);
 
     // Pan Responder for Dragging Basket
-    // Using useMemo to recreate if dependencies change, or check widthRef inside
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -105,7 +175,9 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
 
     const startGame = () => {
         setScore(0);
+        scoreRef.current = 0;
         setLives(3);
+        livesRef.current = 3;
         setItems([]);
         difficultyRef.current = 1;
         setGameState('PLAYING');
@@ -120,15 +192,72 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
         if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
         lastTimeRef.current = performance.now();
         gameLoopRef.current = requestAnimationFrame(update);
+        if (uiMode === 'wrapped') {
+            emitStatus('playing');
+        }
     };
 
     const endGame = () => {
         setGameState('GAMEOVER');
         gameStateRef.current = 'GAMEOVER';
-        Vibration.vibrate(500);
         if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
-        // Manual save required now
+        if (uiMode === 'wrapped') {
+            const finalScore = scoreRef.current;
+            const finalLives = livesRef.current;
+            const final = {
+                score: finalScore,
+                lives: finalLives,
+                level: levelState.level,
+                progressToNext: levelState.progress,
+            };
+            pendingEndRef.current = {
+                gameId,
+                family,
+                score: finalScore,
+                finalMetrics: final,
+                reason: 'lives',
+            };
+        }
     };
+
+    useEffect(() => {
+        if (gameState !== 'GAMEOVER') return;
+        if (uiMode !== 'wrapped') return;
+        if (!pendingEndRef.current) return;
+        const summary = pendingEndRef.current;
+        pendingEndRef.current = null;
+        onEvent?.({ type: 'gameover', final: summary.finalMetrics, reason: summary.reason });
+        onEnd?.(summary);
+    }, [gameState, onEnd, onEvent, uiMode]);
+
+    const pauseGame = () => {
+        if (gameStateRef.current !== 'PLAYING') return;
+        setGameState('PAUSED');
+        gameStateRef.current = 'PAUSED';
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        if (uiMode === 'wrapped') emitStatus('paused');
+    };
+
+    const resumeGame = () => {
+        if (gameStateRef.current !== 'PAUSED') return;
+        setGameState('PLAYING');
+        gameStateRef.current = 'PLAYING';
+        lastTimeRef.current = performance.now();
+        if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = requestAnimationFrame(update);
+        if (uiMode === 'wrapped') emitStatus('playing');
+    };
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped' || !actionSignal) return;
+        if (actionSignal.nonce === lastActionNonce.current) return;
+        lastActionNonce.current = actionSignal.nonce;
+        if (actionSignal.type === 'start') startGame();
+        if (actionSignal.type === 'restart') startGame();
+        if (actionSignal.type === 'pause') pauseGame();
+        if (actionSignal.type === 'resume') resumeGame();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [actionSignal, uiMode]);
 
     const activatePowerup = (type: 'magnet' | 'speed' | 'slow') => {
         if (powerupTimer.current) clearTimeout(powerupTimer.current);
@@ -162,28 +291,20 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
         difficultyRef.current += 0.0005;
 
         // Spawn Items
-        // Chance Logic
         if (Math.random() < 0.03 * difficultyRef.current) {
             const rand = Math.random();
             let type: FallingItem['type'] = 'fruit';
             let emoji = FRUITS[Math.floor(Math.random() * FRUITS.length)];
 
-            // Weights: 
-            // Bomb: 15%
-            // Heart: (lives < 3 ? 5% : 1%)
-            // Powerups: 10% total
-
             if (rand < 0.15) {
                 type = 'bomb';
                 emoji = '💣';
             } else if (rand < 0.25) {
-                // Powerups
                 const pRand = Math.random();
                 if (pRand < 0.33) { type = 'magnet'; emoji = '🧲'; }
                 else if (pRand < 0.66) { type = 'speed'; emoji = '⚡'; }
                 else { type = 'slow'; emoji = '❄️'; }
             } else if (rand < 0.30) {
-                // Heart logic
                 if (lives < 3 || Math.random() < 0.2) {
                     type = 'heart';
                     emoji = '❤️';
@@ -204,10 +325,15 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
             const nextItems: FallingItem[] = [];
             const basketLeft = basketXVal.current;
             const basketRight = basketLeft + BASKET_WIDTH;
-            const basketY = GAME_HEIGHT - 60;
+            // Basket Y is bottom based
+            const currentHeight = gameAreaHeightRef.current || heightRef.current;
+            // We need to know basket Y position relative to top.
+            // basket is bottom: 20, height: 60.
+            const basketTopY = currentHeight - 80;
 
             for (const item of prev) {
-                // Magnet Effect: Pull towards basket center
+                const prevY = item.y;
+                // Magnet Effect
                 let moveX = item.x;
                 if (item.type === 'fruit' && magnetActive.current) {
                     const basketCenter = basketLeft + BASKET_WIDTH / 2;
@@ -215,24 +341,23 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
                     moveX += (basketCenter - itemCenter) * 0.05;
                 }
 
-                // Speed Effect
                 const moveY = item.y + (item.speed * speedEffect.current);
+                const prevBottom = prevY + FRUIT_SIZE;
+                const nextBottom = moveY + FRUIT_SIZE;
 
                 let kept = true;
 
                 // Collision
-                if (moveY > basketY && moveY < basketY + 50 &&
-                    moveX + FRUIT_SIZE > basketLeft && moveX < basketRight) {
+                const xOverlaps = moveX + FRUIT_SIZE > basketLeft && moveX < basketRight;
+                // Top-entry-only: catch only when the item's bottom crosses basketTopY from above.
+                const crossesTop = prevBottom <= basketTopY && nextBottom >= basketTopY;
+                if (xOverlaps && crossesTop) {
 
                     if (item.type === 'bomb') {
-                        Vibration.vibrate(200);
                         setLives(l => {
                             const newLives = l - 1;
-                            if (newLives <= 0) {
-                                setGameState('GAMEOVER');
-                                gameStateRef.current = 'GAMEOVER';
-                                Vibration.vibrate(500);
-                            }
+                            livesRef.current = newLives;
+                            if (newLives <= 0) endGame();
                             return newLives;
                         });
                     } else if (item.type === 'heart') {
@@ -240,14 +365,21 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
                     } else if (['magnet', 'speed', 'slow'].includes(item.type)) {
                         activatePowerup(item.type as any);
                     } else {
-                        // Fruit
-                        Vibration.vibrate(10);
                         setScore(s => s + 10);
                     }
                     kept = false;
                 }
-                else if (moveY > GAME_HEIGHT) {
+                else if (moveY > currentHeight) {
                     kept = false;
+                }
+                // Debug: report near-miss overlap when item passes basket height.
+                if (
+                    xOverlaps &&
+                    !crossesTop &&
+                    nextBottom >= basketTopY &&
+                    debugHitCountRef.current < 5
+                ) {
+                    debugHitCountRef.current += 1;
                 }
 
                 if (kept) {
@@ -265,7 +397,8 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
     return (
         <View style={styles.container}>
             {/* HUD */}
-            <View style={styles.header}>
+            {uiMode !== 'wrapped' && (
+                <View style={styles.header}>
                 <View style={styles.lives}>
                     {[...Array(3)].map((_, i) => (
                         <Heart
@@ -286,11 +419,17 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
                     <Text style={styles.scoreTitle}>PUNTOS</Text>
                     <Text style={styles.scoreText}>{score}</Text>
                 </View>
-            </View>
+                </View>
+            )}
 
             {/* Game Area */}
             <View
                 style={styles.gameArea}
+                onLayout={(event: LayoutChangeEvent) => {
+                    const { height: layoutHeight, y } = event.nativeEvent.layout;
+                    gameAreaHeightRef.current = layoutHeight;
+                    gameAreaYRef.current = y;
+                }}
                 {...panResponder.panHandlers}
             >
                 <LinearGradient
@@ -325,7 +464,7 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
                 </Animated.View>
 
                 {/* IDLE Overlay */}
-                {gameState === 'IDLE' && (
+                {uiMode !== 'wrapped' && gameState === 'IDLE' && (
                     <View style={styles.overlay}>
                         <TouchableOpacity style={styles.playBtn} onPress={startGame}>
                             <Play size={32} color="#fff" fill="#fff" />
@@ -338,10 +477,10 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
                 )}
 
                 {/* GAME OVER Overlay */}
-                {gameState === 'GAMEOVER' && (
+                {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && (
                     <View style={styles.centerContainer}>
                         <Text style={styles.gameOverText}>GAME OVER</Text>
-                        <Text style={styles.finalScore}>Score: {score}</Text>
+                        <Text style={styles.finalScore}>Puntos: {score}</Text>
                         <View style={{ gap: 10 }}>
                             <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
                                 if (onGameEnd) onGameEnd(score);
@@ -364,20 +503,19 @@ export const FruitCatcher = ({ onGameEnd, onClose }: FruitCatcherProps) => {
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 16,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
+        paddingTop: Platform.OS === 'ios' ? 0 : 16,
         backgroundColor: '#FFF1F2',
         borderBottomWidth: 1,
         borderBottomColor: '#FECDD3',
+        zIndex: 10,
     },
     lives: {
         flexDirection: 'row',
@@ -397,7 +535,7 @@ const styles = StyleSheet.create({
         color: '#9D174D',
     },
     gameArea: {
-        height: GAME_HEIGHT,
+        flex: 1,
         width: '100%',
         backgroundColor: '#FECDD3',
         position: 'relative',
@@ -451,7 +589,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     instructions: {
-        alignItems: 'center',
+        marginTop: 20,
+        padding: 10,
+        borderRadius: 8,
         backgroundColor: '#FFF1F2',
     },
     instructionText: {

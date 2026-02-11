@@ -4,6 +4,7 @@ import { ChevronLeft, Share2, Heart, ShieldCheck, MapPin, Truck, AlertTriangle }
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useCart } from '../../contexts/CartContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useToast } from '../../contexts/ToastContext';
 
 // const { width } = Dimensions.get('window'); removed
 
@@ -12,6 +13,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
     const { productId } = route.params || {};
     const { getProductById } = useMarketplace();
     const { addItem } = useCart();
+    const { show } = useToast();
 
     const product = useMemo(() => getProductById(productId), [productId, getProductById]);
 
@@ -31,17 +33,17 @@ export default function ProductDetailScreen({ route, navigation }: any) {
             id: product.id,
             name: product.title,
             price: product.price,
-            image: product.images[0]?.url,
+            image: product.images?.[0]?.url,
             type: 'product',
-            location: product.location.name,
-            sellerId: product.seller.id,
-            sellerName: product.seller.name,
+            location: product.location?.name || '',
+            sellerId: product.seller?.id || '',
+            sellerName: product.seller?.name || '',
             condition: product.condition,
-            shippingWeightKg: product.shippingProfile.weightKg,
-            shippingDimensionsCm: product.shippingProfile.dimensionsCm,
-            distanceKm: product.location.distanceKm
+            shippingWeightKg: product.shippingProfile?.weightKg || 0,
+            shippingDimensionsCm: product.shippingProfile?.dimensionsCm,
+            distanceKm: product.location?.distanceKm
         });
-        Alert.alert('Agregado', 'Producto agregado al carrito');
+        show('Producto agregado al carrito', 'success');
     };
 
     const handleBuyNow = () => {
@@ -69,7 +71,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Image Carousel */}
                 <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carousel}>
-                    {product.images.map((img) => (
+                    {product.images?.map((img) => (
                         <Image key={img.id} source={{ uri: img.url }} style={[styles.productImage, { width }]} />
                     ))}
                 </ScrollView>
@@ -122,10 +124,10 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                     {/* Seller Info */}
                     <Text style={styles.sectionTitle}>Vendedor</Text>
                     <View style={styles.sellerRow}>
-                        <Image source={{ uri: product.seller.avatar || 'https://via.placeholder.com/50' }} style={styles.sellerAvatar} />
+                        <Image source={{ uri: product.seller?.avatar || 'https://via.placeholder.com/50' }} style={styles.sellerAvatar} />
                         <View>
-                            <Text style={styles.sellerName}>{product.seller.name}</Text>
-                            <Text style={styles.sellerRating}>★ {product.seller.rating} • Tiempo respuesta: {product.seller.responseTimeHours}h</Text>
+                            <Text style={styles.sellerName}>{product.seller?.name || 'Vendedor'}</Text>
+                            <Text style={styles.sellerRating}>★ {product.seller?.rating || '0.0'} • Tiempo respuesta: {product.seller?.responseTimeHours || 24}h</Text>
                         </View>
                     </View>
 
@@ -136,7 +138,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                         <ShieldCheck size={24} color="#7C3AED" />
                         <View style={{ flex: 1 }}>
                             <Text style={styles.safetyTitle}>Compra Protegida</Text>
-                            <Text style={styles.safetyDesc}>Recibe el producto que esperabas o te devolvemos tu dinero. Retenemos el pago por 15 días.</Text>
+                            <Text style={styles.safetyDesc}>Recibe el producto que esperabas o te devolvemos tu dinero. Retenemos el pago por 10 días.</Text>
                         </View>
                     </View>
 

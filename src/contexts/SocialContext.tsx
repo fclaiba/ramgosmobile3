@@ -195,6 +195,9 @@ interface SocialContextType {
     chats: Chat[];
     sendMessage: (chatId: string, text: string) => void;
     createChat: (participantId: string) => string;
+    // Followers System
+    getFollowers: (userId: string) => User[];
+    getFollowing: (userId: string) => User[];
 }
 
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
@@ -855,6 +858,20 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         }));
     };
 
+    const getFollowers = (userId: string) => {
+        // Mock: everyone follows everyone for demo, or random
+        // For current user, we don't track followers list in state yet, assuming mock.
+        return users.filter(u => u.id !== userId);
+    };
+
+    const getFollowing = (userId: string) => {
+        if (userId === currentUser.id) {
+            return users.filter(u => following.includes(u.id));
+        }
+        // Mock for others
+        return users.filter(u => u.id !== userId).slice(0, 2);
+    };
+
     return (
         <SocialContext.Provider
             value={{
@@ -903,6 +920,8 @@ export function SocialProvider({ children }: { children: ReactNode }) {
                 chats,
                 sendMessage,
                 createChat,
+                getFollowers,
+                getFollowing,
             }}
         >
             {children}

@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Dim
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation } from '@react-navigation/native';
 import { X, Zap, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
 export default function BusinessScannerScreen() {
     const navigation = useNavigation<any>();
+    const insets = useSafeAreaInsets();
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -87,7 +89,7 @@ export default function BusinessScannerScreen() {
             />
 
             {/* Overlay UI */}
-            <View style={styles.overlay}>
+            <View style={[styles.overlay, { paddingTop: Math.max(16, insets.top + 12), paddingBottom: Math.max(16, insets.bottom + 16) }]}>
                 <View style={styles.header}>
                     <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
                         <X size={24} color="#fff" />
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     btn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 8 },
     btnText: { color: '#fff', fontWeight: 'bold' },
 
-    overlay: { position: 'absolute', inset: 0, justifyContent: 'space-between', padding: 20, paddingTop: 50 },
+    overlay: { position: 'absolute', inset: 0, justifyContent: 'space-between', padding: 20 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
     iconBtn: { padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
@@ -172,7 +174,14 @@ const styles = StyleSheet.create({
     loadingText: { color: '#fff', marginTop: 16, fontWeight: '600' },
 
     resultModal: {
-        position: 'absolute', top: '25%', left: 20, right: 20,
+        position: 'absolute',
+        top: '22%',
+        left: 0,
+        right: 0,
+        marginHorizontal: 16,
+        width: '100%',
+        maxWidth: 520,
+        alignSelf: 'center',
         backgroundColor: '#10B981',
         borderRadius: 24, padding: 32,
         alignItems: 'center',

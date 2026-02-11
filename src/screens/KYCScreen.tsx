@@ -1,13 +1,22 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Image, Animated, Alert, TextInput, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, Alert, TextInput, ScrollView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { Camera, Upload, CheckCircle2, ShieldCheck, ArrowRight, User, Building2, MapPin, Link as LinkIcon, FileText } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { useFintech } from '../contexts/FintechContext';
 
 type Step = 'intro' | 'document' | 'face' | 'business_docs' | 'location' | 'social_link' | 'success';
 
 export default function KYCScreen({ navigation, route }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
+
     const accountType = route.params?.accountType || 'consumer';
     const [step, setStep] = useState<Step>('intro');
 
@@ -27,6 +36,7 @@ export default function KYCScreen({ navigation, route }: any) {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { user, markKycSubmitted } = useAuth();
+    const { submitKyc } = useFintech();
 
     // Animation
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -64,7 +74,7 @@ export default function KYCScreen({ navigation, route }: any) {
     // Business Flow Logic
     const handleBusinessDocsNext = () => {
         if (!ein || !incorporationDoc) {
-            Alert.alert('Datos incompletos', 'Ingresa el EIN y sube el Certificado de Incorporación.');
+            show('Ingresa el EIN y sube el Certificado de Incorporación.', 'warning');
             return;
         }
         transitionTo('location');
@@ -72,7 +82,7 @@ export default function KYCScreen({ navigation, route }: any) {
 
     const handleLocationNext = () => {
         if (!businessAddress || !premisesPhoto) {
-            Alert.alert('Datos incompletos', 'Ingresa la dirección y sube una foto del local.');
+            show('Ingresa la dirección y sube una foto del local.', 'warning');
             return;
         }
         transitionTo('document'); // Continue to Identity verification
@@ -81,7 +91,7 @@ export default function KYCScreen({ navigation, route }: any) {
     // Influencer Flow Logic
     const handleSocialLinkNext = () => {
         if (!socialLink) {
-            Alert.alert('Enlace requerido', 'Ingresa el link de tu red social principal.');
+            show('Ingresa el link de tu red social principal.', 'warning');
             return;
         }
         transitionTo('document'); // Continue to Identity verification
@@ -90,15 +100,15 @@ export default function KYCScreen({ navigation, route }: any) {
     const handleFinalizeKyc = async () => {
         if (isSubmitting) return;
         if (!user) {
-            Alert.alert('Sesión requerida', 'Debes iniciar sesión para completar la verificación.');
+            show('Debes iniciar sesión para completar la verificación.', 'error');
             return;
         }
         if (!idFront || !idBack) {
-            Alert.alert('Documento incompleto', 'Necesitamos las fotos de tu documento para continuar.');
+            show('Necesitamos las fotos de tu documento para continuar.', 'warning');
             return;
         }
         if (!faceScanned) {
-            Alert.alert('Escaneo facial pendiente', 'Completa el escaneo facial antes de finalizar.');
+            show('Completa el escaneo facial antes de finalizar.', 'warning');
             return;
         }
 
@@ -120,11 +130,29 @@ export default function KYCScreen({ navigation, route }: any) {
                 submittedFrom: 'mobile',
                 submittedAt: new Date().toISOString(),
             });
+
+            // Submit to Fintech (Admin Dashboard)
+            submitKyc({
+                ownerId: user.id,
+                ownerType: accountType as any,
+                ownerName: user.name || user.email,
+                data: {
+                    documentFront: idFront,
+                    documentBack: idBack,
+                    selfieValidated: faceScanned,
+                    ein: accountType === 'business' ? ein : undefined,
+                    incorporationDoc: accountType === 'business' ? incorporationDoc : undefined,
+                    businessAddress: accountType === 'business' ? businessAddress : undefined,
+                    premisesPhoto: accountType === 'business' ? premisesPhoto : undefined,
+                    socialLink: accountType === 'influencer' ? socialLink : undefined,
+                }
+            });
+
             transitionTo('success');
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'No pudimos registrar tu verificación. Inténtalo nuevamente.';
-            Alert.alert('Verificación', message);
+            show(message, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -204,6 +232,7 @@ export default function KYCScreen({ navigation, route }: any) {
             <TextInput
                 style={styles.input}
                 placeholder="Ej: 12-3456789"
+                placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                 value={ein}
                 onChangeText={setEin}
                 keyboardType="numeric"
@@ -247,6 +276,7 @@ export default function KYCScreen({ navigation, route }: any) {
             <TextInput
                 style={styles.input}
                 placeholder="Calle, Número, Ciudad, CP"
+                placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                 value={businessAddress}
                 onChangeText={setBusinessAddress}
             />
@@ -286,6 +316,7 @@ export default function KYCScreen({ navigation, route }: any) {
                 <TextInput
                     style={styles.inputFlex}
                     placeholder="https://instagram.com/tu_usuario"
+                    placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                     value={socialLink}
                     onChangeText={setSocialLink}
                     autoCapitalize="none"
@@ -405,18 +436,20 @@ export default function KYCScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', padding: 16 },
     card: {
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
         borderRadius: 24,
         padding: 24,
         width: '100%',
         maxWidth: 400,
         alignSelf: 'center',
-        shadowColor: '#000',
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
+        shadowColor: isDark ? '#000' : '#000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
+        shadowOpacity: isDark ? 0.3 : 0.1,
         shadowRadius: 20,
         elevation: 10,
         minHeight: 450,
@@ -424,37 +457,37 @@ const styles = StyleSheet.create({
     },
     stepContainer: { alignItems: 'center', width: '100%' },
     scrollStep: { alignItems: 'center', width: '100%', paddingBottom: 20 },
-    iconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    title: { fontSize: 22, fontWeight: 'bold', color: '#111827', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 13, color: '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 4 },
+    iconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    title: { fontSize: 22, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8, textAlign: 'center' },
+    subtitle: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 4 },
 
-    infoBox: { width: '100%', backgroundColor: '#F3F4F6', borderRadius: 16, padding: 16, marginBottom: 24 },
-    infoTitle: { fontWeight: '600', color: '#374151', marginBottom: 12 },
+    infoBox: { width: '100%', backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 16, padding: 16, marginBottom: 24 },
+    infoTitle: { fontWeight: '600', color: isDark ? '#E5E7EB' : '#374151', marginBottom: 12 },
     infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
     bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#7C3AED', marginRight: 10 },
-    infoText: { color: '#4B5563', fontSize: 13, flex: 1 },
+    infoText: { color: isDark ? '#D1D5DB' : '#4B5563', fontSize: 13, flex: 1 },
 
     btn: { backgroundColor: '#7C3AED', flexDirection: 'row', height: 50, borderRadius: 12, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center', width: '100%', marginTop: 16 },
-    btnDisabled: { backgroundColor: '#D1D5DB' },
+    btnDisabled: { backgroundColor: isDark ? '#4B5563' : '#D1D5DB' },
     btnText: { color: '#fff', fontWeight: 'bold', fontSize: 15, marginRight: 8 },
 
-    uploadCard: { width: '100%', height: 120, borderWidth: 2, borderColor: '#E5E7EB', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16, backgroundColor: '#F9FAFB' },
-    uploadCardSimple: { width: '100%', padding: 16, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 16, backgroundColor: '#F9FAFB' },
+    uploadCard: { width: '100%', height: 120, borderWidth: 2, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16, backgroundColor: isDark ? '#374151' : '#F9FAFB' },
+    uploadCardSimple: { width: '100%', padding: 16, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderRadius: 12, marginBottom: 16, backgroundColor: isDark ? '#374151' : '#F9FAFB' },
     uploadPlaceholder: { alignItems: 'center' },
     uploadPlaceholderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    uploadText: { color: '#6B7280', fontWeight: '500' },
+    uploadText: { color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
     uploadedContent: { alignItems: 'center' },
     uploadedContentRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     uploadedText: { color: '#059669', fontWeight: '600', marginTop: 8 },
     uploadedTextSimple: { color: '#059669', fontWeight: '600' },
 
-    label: { alignSelf: 'flex-start', fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 4 },
-    input: { width: '100%', height: 48, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 12, backgroundColor: '#fff', marginBottom: 12 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', width: '100%', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingHorizontal: 12, backgroundColor: '#fff', height: 48, marginBottom: 16 },
-    inputFlex: { flex: 1, height: '100%' },
-    hint: { fontSize: 11, color: '#9CA3AF', marginBottom: 16, textAlign: 'center' },
+    label: { alignSelf: 'flex-start', fontSize: 13, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 6, marginTop: 4 },
+    input: { width: '100%', height: 48, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#D1D5DB', borderRadius: 10, paddingHorizontal: 12, backgroundColor: isDark ? '#374151' : '#fff', marginBottom: 12, color: isDark ? '#F9FAFB' : '#111827' },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', width: '100%', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#D1D5DB', borderRadius: 10, paddingHorizontal: 12, backgroundColor: isDark ? '#374151' : '#fff', height: 48, marginBottom: 16 },
+    inputFlex: { flex: 1, height: '100%', color: isDark ? '#F9FAFB' : '#111827' },
+    hint: { fontSize: 11, color: isDark ? '#9CA3AF' : '#9CA3AF', marginBottom: 16, textAlign: 'center' },
 
-    cameraPreview: { width: 200, height: 200, borderRadius: 100, backgroundColor: '#111827', marginBottom: 24, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#E5E7EB' },
+    cameraPreview: { width: 200, height: 200, borderRadius: 100, backgroundColor: '#111827', marginBottom: 24, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
     faceOverlay: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
     scanBtn: { backgroundColor: '#111827', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 },
     scanBtnText: { color: '#fff', fontWeight: '600' }

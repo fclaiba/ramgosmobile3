@@ -1,17 +1,25 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import { Platform, Alert } from 'react-native';
-import * as Notifications from 'expo-notifications';
+// import * as Notifications from 'expo-notifications'; // Disabled for Expo Go optimization
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
+
+// Mock types locally to avoid import
+type PermissionStatus = 'granted' | 'denied' | 'undetermined';
+
+
+
+// ... (previous imports and setup)
 
 // Configure notification handler behavior
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-    }),
-});
+// Notifications.setNotificationHandler({
+//     handleNotification: async () => ({
+//         shouldShowAlert: true,
+//         shouldPlaySound: true,
+//         shouldSetBadge: true,
+//     } as Notifications.NotificationBehavior),
+// });
 
 export type NotificationType = 'system' | 'order' | 'money' | 'promo' | 'referral';
 
@@ -29,7 +37,7 @@ interface NotificationsContextType {
     notifications: AppNotification[];
     unreadCount: number;
     expoPushToken?: string;
-    permissionStatus: Notifications.PermissionStatus | 'undetermined';
+    permissionStatus: PermissionStatus | 'undetermined';
     requestPermissions: () => Promise<void>;
     markAsRead: (id: string) => void;
     markAllAsRead: () => void;
@@ -51,10 +59,11 @@ export const useNotifications = () => {
 export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [expoPushToken, setExpoPushToken] = useState<string | undefined>();
-    const [permissionStatus, setPermissionStatus] = useState<Notifications.PermissionStatus | 'undetermined'>('undetermined');
-    const notificationListener = useRef<Notifications.Subscription>();
-    const responseListener = useRef<Notifications.Subscription>();
+    const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | 'undetermined'>('undetermined');
+    const notificationListener = useRef<any | undefined>(undefined);
+    const responseListener = useRef<any | undefined>(undefined);
     const { user } = useAuth(); // Tie storage to user potentially, or just global for now
+    const { show } = useToast();
 
     // Load history on mount
     useEffect(() => {
@@ -69,32 +78,36 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Register for push notifications
     useEffect(() => {
-        registerForPushNotificationsAsync().then(({ token, status }) => {
-            setExpoPushToken(token);
-            setPermissionStatus(status);
-        });
+        // registerForPushNotificationsAsync()
+        //     .then(({ token, status }) => {
+        //         setExpoPushToken(token);
+        //         setPermissionStatus(status);
+        //     })
+        //     .catch(error => {
+        //         console.warn('Failed to register for push notifications:', error);
+        //     });
 
         // This listener is fired whenever a notification is received while the app is foregrounded
-        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-            const content = notification.request.content;
-            const newNotif: AppNotification = {
-                id: notification.request.identifier,
-                title: content.title || 'Nueva notificación',
-                body: content.body || '',
-                date: new Date().toISOString(),
-                read: false,
-                type: (content.data?.type as NotificationType) || 'system',
-                data: content.data,
-            };
-            addNotification(newNotif);
-        });
+        // notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+        //     const content = notification.request.content;
+        //     const newNotif: AppNotification = {
+        //         id: notification.request.identifier,
+        //         title: content.title || 'Nueva notificación',
+        //         body: content.body || '',
+        //         date: new Date().toISOString(),
+        //         read: false,
+        //         type: (content.data?.type as NotificationType) || 'system',
+        //         data: content.data,
+        //     };
+        //     addNotification(newNotif);
+        // });
 
         // This listener is fired whenever a user taps on or interacts with a notification
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-            const notif = response.notification.request.content;
-            // Here we could handle navigation based on data
-            console.log('Notification tapped:', notif.data);
-        });
+        // responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        //     const notif = response.notification.request.content;
+        //     // Here we could handle navigation based on data
+        //     console.log('Notification tapped:', notif.data);
+        // });
 
         return () => {
             if (notificationListener.current) notificationListener.current.remove();
@@ -135,78 +148,60 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const simulateNotification = async (title: string, body: string, type: NotificationType = 'system') => {
         // Schedule a local notification
-        await Notifications.scheduleNotificationAsync({
-            content: {
-                title,
-                body,
-                data: { type },
-            },
-            trigger: null, // Send immediately
-        });
+        // await Notifications.scheduleNotificationAsync({
+        //     content: {
+        //         title,
+        //         body,
+        //         data: { type },
+        //     },
+        //     trigger: null, // Send immediately
+        // });
+
+        // Mocking behavior for now since notifications are disabled
+        const newNotif: AppNotification = {
+            id: Date.now().toString(),
+            title,
+            body,
+            date: new Date().toISOString(),
+            read: false,
+            type: type || 'system',
+            data: { type },
+        };
+        addNotification(newNotif);
+        show(`${title}: ${body}`, 'info');
     };
 
     const requestPermissions = async () => {
-        const { status } = await Notifications.requestPermissionsAsync();
-        setPermissionStatus(status);
-        if (status === 'granted') {
-            const token = (await Notifications.getExpoPushTokenAsync({
-                projectId: 'your-project-id', // Optional, will infer from app.json
-            })).data;
-            setExpoPushToken(token);
-        }
+        // Mock permission grant since actual logic is commented out
+        setPermissionStatus('granted');
+        console.log("Permissions mocked as granted (Notifications disabled)");
     };
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
+    const value = useMemo(() => ({
+        notifications,
+        unreadCount,
+        expoPushToken,
+        permissionStatus,
+        requestPermissions,
+        markAsRead,
+        markAllAsRead,
+        deleteNotification,
+        clearAll,
+        simulateNotification
+    }), [notifications, unreadCount, expoPushToken, permissionStatus]); // Dependencies
+
     return (
-        <NotificationsContext.Provider value={{
-            notifications,
-            unreadCount,
-            expoPushToken,
-            permissionStatus,
-            requestPermissions,
-            markAsRead,
-            markAllAsRead,
-            deleteNotification,
-            clearAll,
-            simulateNotification
-        }}>
+        <NotificationsContext.Provider value={value}>
             {children}
         </NotificationsContext.Provider>
     );
 };
 
+/*
 async function registerForPushNotificationsAsync() {
-    let token;
-    let status: Notifications.PermissionStatus = Notifications.PermissionStatus.UNDETERMINED;
-
-    if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-        });
-    }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    status = existingStatus;
-
-    // Only ask if permissions have not already been determined, because
-    // iOS won't necessarily prompt the user a second time.
-    if (existingStatus !== 'granted') {
-        // Can't ask immediately on mount without user action in some guidelines, 
-        // but for now we check or let the user call requestPermissions
-    }
-
-    // Attempt to get token if granted
-    if (existingStatus === 'granted') {
-        try {
-            token = (await Notifications.getExpoPushTokenAsync()).data;
-        } catch (e) {
-            console.log('Error getting push token', e);
-        }
-    }
-
-    return { token, status };
+    // Disabled
+    return { token: undefined, status: 'undetermined' };
 }
+*/

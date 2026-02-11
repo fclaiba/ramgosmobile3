@@ -4,6 +4,7 @@ import { Search, X, CheckCircle } from 'lucide-react-native';
 import { useSocial, User } from '../../contexts/SocialContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Card } from '../ui/card';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface UserSearchProps {
     onUserSelect?: (userId: string) => void;
@@ -14,6 +15,10 @@ export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<User[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     useEffect(() => {
         if (query.trim().length > 0) {
@@ -94,28 +99,28 @@ export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { width: '100%', zIndex: 10 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 12, paddingHorizontal: 12, height: 44 },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 12, paddingHorizontal: 12, height: 44 },
     searchIcon: { marginRight: 8 },
-    input: { flex: 1, fontSize: 16, color: '#111' },
+    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
     clearButton: { padding: 4 },
 
-    resultsContainer: { maxHeight: 300, backgroundColor: '#fff', borderRadius: 12, marginTop: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+    resultsContainer: { maxHeight: 300, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12, marginTop: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
     resultsContent: { padding: 8 },
     emptyText: { textAlign: 'center', padding: 16, color: '#6B7280' },
 
-    userCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+    userCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
     userInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     avatar: { width: 40, height: 40, marginRight: 12 },
     textContainer: { flex: 1 },
     nameRow: { flexDirection: 'row', alignItems: 'center' },
-    name: { fontWeight: '600', fontSize: 14, color: '#111' },
-    username: { fontSize: 12, color: '#6B7280' },
+    name: { fontWeight: '600', fontSize: 14, color: isDark ? '#F9FAFB' : '#111' },
+    username: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
     followers: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
 
-    followButton: { backgroundColor: '#000', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-    followingButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB' },
+    followButton: { backgroundColor: isDark ? '#4F46E5' : '#000', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+    followingButton: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
     followText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-    followingText: { color: '#000' }
+    followingText: { color: isDark ? '#F9FAFB' : '#000' }
 });

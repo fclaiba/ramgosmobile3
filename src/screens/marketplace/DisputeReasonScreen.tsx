@@ -1,122 +1,131 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { AlertTriangle, Upload, Camera } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
+import { AlertTriangle, Camera, Package, HeartCrack, BadgeAlert, HelpCircle } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
-import { useMarketplace } from '../../contexts/MarketplaceContext';
+import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function DisputeReasonScreen({ route, navigation }: any) {
     const { orderId } = route.params;
-    const { initiateDispute } = useMarketplace();
+    const { show } = useToast();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const { width } = useWindowDimensions();
+    const isSmall = width < 375;
 
     const [reason, setReason] = useState<any | null>(null);
     const [description, setDescription] = useState('');
 
-    const reasons = [
-        { id: 'not_received', label: 'No recibí el producto', icon: '📦' },
-        { id: 'damaged', label: 'El producto llegó dañado', icon: '💔' },
-        { id: 'not_as_described', label: 'No es lo que pedí', icon: '🤔' },
-    ];
+    const reasons = useMemo(
+        () => [
+            { id: 'not_received', label: 'Producto no recibido', Icon: Package },
+            { id: 'damaged', label: 'Producto dañado', Icon: HeartCrack },
+            { id: 'not_as_described', label: 'No coincide con la descripción', Icon: HelpCircle },
+            { id: 'missing_parts', label: 'Faltan partes/accesorios', Icon: BadgeAlert },
+            { id: 'counterfeit', label: 'Falso / réplica', Icon: AlertTriangle },
+        ],
+        [],
+    );
 
     const handleSubmit = () => {
         if (!reason || !description) {
-            Alert.alert('Error', 'Por favor selecciona un motivo y describe el problema.');
+            show('Selecciona motivo y describe el problema', 'error');
             return;
         }
 
-        const result = initiateDispute(orderId, {
-            reason,
-            description,
-            evidences: [] // Mock: would include uploaded URLs
-        });
-
-        if (result.success) {
-            Alert.alert(
-                'Reclamo Iniciado',
-                'El vendedor ha sido notificado. Tienen 3 días para responder.',
-                [{
-                    text: 'Ir al Chat',
-                    onPress: () => {
-                        // Replace stack to avoid back-nav loop
-                        navigation.replace('DisputeChat', { orderId });
-                    }
-                }]
-            );
-        } else {
-            Alert.alert('Error', 'No se pudo iniciar el reclamo.');
-        }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DisputeReasonScreen.tsx:continue',message:'DisputeReason continue to Dispute screen',data:{orderId,reason,hasDescription:!!description},timestamp:Date.now(),sessionId:'debug-session',runId:'dispute-routes',hypothesisId:'H-dispute-flow'})}).catch(()=>{});
+        // #endregion
+        navigation.navigate('Dispute', { orderId, prefillReason: reason, prefillDescription: description });
     };
 
     return (
-        <View style={styles.container}>
+        <View className={isDark ? 'flex-1 bg-slate-950' : 'flex-1 bg-slate-50'}>
             <MobileHeader title="Reportar Problema" showBack onBack={() => navigation.goBack()} />
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
-                <View style={styles.header}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }} className={(isSmall ? 'px-3' : 'px-4') + ' pt-4'}>
+                <View className="items-center mt-2">
                     <AlertTriangle size={32} color="#EF4444" />
-                    <Text style={styles.title}>¿Qué salió mal?</Text>
-                    <Text style={styles.subtitle}>Iniciaremos un proceso de mediación con el vendedor.</Text>
+                    <Text className={['mt-3 font-extrabold', isSmall ? 'text-base' : 'text-lg', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
+                        ¿Qué salió mal?
+                    </Text>
+                    <Text className={['mt-1 text-center', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
+                        Elegí un motivo y describí el problema. Después vas a poder adjuntar evidencias y abrir el chat de disputa.
+                    </Text>
                 </View>
 
                 {/* Reasons */}
-                <Text style={styles.label}>Motivo del reclamo</Text>
-                <View style={styles.reasonsContainer}>
-                    {reasons.map((r) => (
+                <Text className={['mt-5 font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
+                    Motivo del reclamo
+                </Text>
+                <View className="mt-3">
+                    {reasons.map((r) => {
+                        const Icon = r.Icon;
+                        const active = reason === r.id;
+                        return (
                         <TouchableOpacity
                             key={r.id}
-                            style={[styles.reasonCard, reason === r.id && styles.reasonActive]}
+                            className={[
+                                'mb-2 rounded-2xl border p-4 flex-row items-center',
+                                isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200',
+                                active ? (isDark ? 'border-red-500 bg-red-950/20' : 'border-red-400 bg-red-50') : '',
+                            ].join(' ')}
                             onPress={() => setReason(r.id)}
                         >
-                            <Text style={{ fontSize: 24 }}>{r.icon}</Text>
-                            <Text style={[styles.reasonText, reason === r.id && styles.textActive]}>{r.label}</Text>
+                            <View className={['h-10 w-10 rounded-xl items-center justify-center border', isDark ? 'border-slate-700 bg-slate-950/40' : 'border-slate-200 bg-slate-50'].join(' ')}>
+                                <Icon size={18} color={active ? '#EF4444' : (isDark ? '#CBD5E1' : '#475569')} />
+                            </View>
+                            <Text className={['ml-3 font-bold', isSmall ? 'text-sm' : 'text-base', active ? 'text-red-500' : (isDark ? 'text-slate-50' : 'text-slate-900')].join(' ')}>
+                                {r.label}
+                            </Text>
                         </TouchableOpacity>
-                    ))}
+                    )})}
                 </View>
 
                 {/* Evidence Mock */}
-                <Text style={styles.label}>Evidencia (Fotos/Video)</Text>
-                <TouchableOpacity style={styles.uploadBtn}>
-                    <Camera size={24} color="#6B7280" />
-                    <Text style={styles.uploadText}>Cargar Fotos</Text>
+                <Text className={['mt-4 font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
+                    Evidencias (opcional)
+                </Text>
+                <TouchableOpacity
+                    className={[
+                        'mt-2 h-20 rounded-2xl border-2 border-dashed items-center justify-center',
+                        isDark ? 'border-slate-700 bg-slate-950/40' : 'border-slate-200 bg-slate-50',
+                    ].join(' ')}
+                    onPress={() => show('Carga de evidencias (mock)', 'info')}
+                >
+                    <Camera size={22} color={isDark ? '#94A3B8' : '#6B7280'} />
+                    <Text className={['mt-2 font-semibold', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
+                        Subir fotos / video
+                    </Text>
                 </TouchableOpacity>
 
                 {/* Description */}
-                <Text style={styles.label}>Describe el problema</Text>
+                <Text className={['mt-4 font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
+                    Describe el problema
+                </Text>
                 <TextInput
-                    style={styles.textArea}
+                    className={[
+                        'mt-2 rounded-2xl border px-4 py-3',
+                        isDark ? 'bg-slate-950 border-slate-800 text-slate-50' : 'bg-white border-slate-200 text-slate-900',
+                    ].join(' ')}
                     placeholder="Explica detalladamente lo sucedido..."
+                    placeholderTextColor={isDark ? '#94A3B8' : '#94A3B8'}
                     multiline
                     numberOfLines={6}
                     value={description}
                     onChangeText={setDescription}
                 />
 
-                <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                    <Text style={styles.submitBtnText}>Enviar Reclamo</Text>
+                <TouchableOpacity
+                    className={['mt-6 rounded-2xl py-4 items-center justify-center', (!reason || !description) ? 'bg-red-300' : 'bg-red-500'].join(' ')}
+                    onPress={handleSubmit}
+                    activeOpacity={0.85}
+                >
+                    <Text className={['text-white font-extrabold', isSmall ? 'text-sm' : 'text-base'].join(' ')}>
+                        Continuar
+                    </Text>
                 </TouchableOpacity>
             </ScrollView>
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
-    header: { alignItems: 'center', marginBottom: 24, marginTop: 8 },
-    title: { fontSize: 20, fontWeight: 'bold', color: '#1F2937', marginTop: 12 },
-    subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 4, paddingHorizontal: 32 },
-
-    label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 16 },
-
-    reasonsContainer: { gap: 8 },
-    reasonCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, gap: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-    reasonActive: { borderColor: '#EF4444', backgroundColor: '#FEF2F2' },
-    reasonText: { fontSize: 16, color: '#374151' },
-    textActive: { color: '#B91C1C', fontWeight: '500' },
-
-    uploadBtn: { height: 80, backgroundColor: '#E5E7EB', borderRadius: 12, borderStyle: 'dashed', borderWidth: 2, borderColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    uploadText: { marginTop: 8, color: '#6B7280' },
-
-    textArea: { backgroundColor: '#fff', borderRadius: 12, padding: 12, height: 120, textAlignVertical: 'top', borderWidth: 1, borderColor: '#E5E7EB' },
-
-    submitBtn: { backgroundColor: '#EF4444', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 32 },
-    submitBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
-});

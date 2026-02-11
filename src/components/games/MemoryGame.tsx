@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Vibration, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Play, RotateCcw, Brain, Trophy, Eye, Heart, Coins, Lock } from 'lucide-react-native';
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withTiming, interpolate, Extrapolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import type { GameActionSignal } from './GameWrapper';
+import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
 
-const { width } = Dimensions.get('window');
 const EMOJIS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵'];
+const getRandomLifeInterval = () => (Math.random() < 0.5 ? 2 : 3);
 
 interface CardItem {
     id: number;
@@ -73,10 +75,27 @@ const Card = ({ item, onPress, forcedFlip }: { item: CardItem; onPress: () => vo
 interface MemoryGameProps {
     onGameEnd?: (score: number) => void;
     onClose?: () => void;
+    // Wrapper integration (optional)
+    actionSignal?: GameActionSignal;
+    uiMode?: 'standalone' | 'wrapped';
+    onEvent?: (event: GameEvent) => void;
+    onEnd?: (summary: GameEndSummary) => void;
+    gameId?: GameAdapterProps['gameId'];
+    family?: GameAdapterProps['family'];
 }
 
-export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
-    const [gameState, setGameState] = useState<'IDLE' | 'PREVIEW' | 'PLAYING' | 'LEVEL_COMPLETE' | 'GAMEOVER'>('IDLE');
+export const MemoryGame = (props: MemoryGameProps) => {
+    const {
+        onGameEnd,
+        onClose,
+        actionSignal,
+        uiMode = 'standalone',
+        onEvent,
+        gameId = 'memory',
+        family = 'arcade',
+    } = props;
+
+    const [gameState, setGameState] = useState<'IDLE' | 'PREVIEW' | 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'GAMEOVER'>('IDLE');
     const [level, setLevel] = useState(1);
     const [lives, setLives] = useState(3);
     const [cards, setCards] = useState<CardItem[]>([]);
@@ -86,11 +105,77 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
 
     // Logic refs
     const processingRef = useRef(false);
+    const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const lastActionNonce = useRef(0);
+    const lastLevelReported = useRef(1);
+    const nextLifeLevelRef = useRef<number>(1 + getRandomLifeInterval());
+
+    const progressToNext = useMemo(() => {
+        const total = cards.length || 1;
+        const matched = cards.filter(c => c.isMatched).length;
+        return Math.max(0, Math.min(1, matched / total));
+    }, [cards]);
+
+    const emitStatus = useCallback((status: 'start' | 'playing' | 'paused' | 'gameover' | 'levelup') => {
+        onEvent?.({ type: 'status', status });
+    }, [onEvent]);
+
+    const emitMetrics = useCallback(() => {
+        onEvent?.({
+            type: 'metrics',
+            patch: {
+                score,
+                lives,
+                level,
+                progressToNext,
+            },
+        });
+    }, [level, lives, onEvent, progressToNext, score]);
+
+    useEffect(() => {
+        if (uiMode === 'wrapped') {
+            emitStatus('start');
+            emitMetrics();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [uiMode]);
+
+    useEffect(() => {
+        return () => {
+            if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped' || !actionSignal) return;
+        if (actionSignal.nonce === lastActionNonce.current) return;
+        lastActionNonce.current = actionSignal.nonce;
+        if (actionSignal.type === 'start') startGame();
+        if (actionSignal.type === 'restart') startGame();
+        if (actionSignal.type === 'pause') {
+            setGameState('PAUSED');
+            emitStatus('paused');
+        }
+        if (actionSignal.type === 'resume') {
+            // Best-effort resume: if we were paused, go back to playing.
+            setGameState((s) => (s === 'PAUSED' ? 'PLAYING' : s));
+            emitStatus('playing');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [actionSignal, uiMode]);
+
+    useEffect(() => {
+        if (uiMode !== 'wrapped') return;
+        emitMetrics();
+        if (level > lastLevelReported.current) {
+            lastLevelReported.current = level;
+            onEvent?.({ type: 'levelup', level });
+        }
+    }, [emitMetrics, level, onEvent, uiMode]);
 
     const startLevel = (lvl: number) => {
         // Config
         const pairCount = 2 + lvl; // Lvl 1: 3 pairs, Lvl 2: 4 pairs...
-        // Always add 1 special pair for Life
         const selectedEmojis = EMOJIS.slice(0, pairCount);
 
         let deck: CardItem[] = [];
@@ -101,10 +186,14 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
             deck.push({ id: i * 2 + 1, emoji, isFlipped: true, isMatched: false });
         });
 
-        // Special Pair
-        const specialIdStart = deck.length;
-        deck.push({ id: specialIdStart, emoji: '❤️', isFlipped: true, isMatched: false, isSpecial: true });
-        deck.push({ id: specialIdStart + 1, emoji: '❤️', isFlipped: true, isMatched: false, isSpecial: true });
+        // Special Pair (Life) - only every 2 or 3 levels (randomly)
+        const shouldAddLifePair = lvl === nextLifeLevelRef.current;
+        if (shouldAddLifePair) {
+            const specialIdStart = deck.length;
+            deck.push({ id: specialIdStart, emoji: '❤️', isFlipped: true, isMatched: false, isSpecial: true });
+            deck.push({ id: specialIdStart + 1, emoji: '❤️', isFlipped: true, isMatched: false, isSpecial: true });
+            nextLifeLevelRef.current = lvl + getRandomLifeInterval();
+        }
 
         // Shuffle
         deck = deck.sort(() => Math.random() - 0.5);
@@ -116,9 +205,11 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
         processingRef.current = false;
 
         // Preview Timer
-        setTimeout(() => {
+        if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+        previewTimerRef.current = setTimeout(() => {
             setCards(prev => prev.map(c => ({ ...c, isFlipped: false })));
             setGameState('PLAYING');
+            if (uiMode === 'wrapped') emitStatus('playing');
         }, 2000 + (lvl * 500)); // Longer preview for higher levels
     };
 
@@ -126,7 +217,9 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
         setLevel(1);
         setScore(0);
         setLives(3);
+        nextLifeLevelRef.current = 1 + getRandomLifeInterval();
         startLevel(1);
+        if (uiMode === 'wrapped') emitStatus('playing');
     };
 
     const nextLevel = () => {
@@ -148,7 +241,6 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
 
         const newFlipped = [...flippedIndices, index];
         setFlippedIndices(newFlipped);
-        Vibration.vibrate(5);
 
         if (newFlipped.length === 2) {
             processingRef.current = true;
@@ -165,7 +257,6 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
                         // Special Check
                         if (copy[idx1].isSpecial) {
                             setLives(l => Math.min(5, l + 1));
-                            Vibration.vibrate(200);
                         }
                         return copy;
                     });
@@ -176,7 +267,18 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
                     setCards(current => {
                         const allMatched = current.every(c => c.isMatched);
                         if (allMatched) {
-                            setTimeout(() => setGameState('LEVEL_COMPLETE'), 500);
+                            if (uiMode === 'wrapped') {
+                                // Auto-advance with a brief pause, wrapper will also show levelup toast.
+                                setTimeout(() => {
+                                    setLevel(l => {
+                                        const next = l + 1;
+                                        startLevel(next);
+                                        return next;
+                                    });
+                                }, 600);
+                            } else {
+                                setTimeout(() => setGameState('LEVEL_COMPLETE'), 500);
+                            }
                         }
                         return current;
                     });
@@ -205,7 +307,6 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
 
         setLives(l => l - 1);
         setPeeking(true);
-        Vibration.vibrate(100);
 
         setTimeout(() => {
             setPeeking(false);
@@ -256,7 +357,8 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
         <View style={styles.container}>
             <LinearGradient colors={['#A78BFA', '#DDD6FE']} style={StyleSheet.absoluteFill} />
 
-            <View style={styles.header}>
+            {uiMode !== 'wrapped' && (
+                <View style={styles.header}>
                 <View style={styles.statBox}>
                     <Text style={styles.statLabel}>LEVEL</Text>
                     <Text style={styles.statValue}>{level}</Text>
@@ -277,9 +379,10 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
                     <Text style={styles.statLabel}>SCORE</Text>
                     <Text style={styles.statValue}>{score}</Text>
                 </View>
-            </View>
+                </View>
+            )}
 
-            {gameState === 'IDLE' && (
+            {uiMode !== 'wrapped' && gameState === 'IDLE' && (
                 <View style={styles.centerContainer}>
                     <Brain size={64} color="#7C3AED" />
                     <Text style={styles.title}>Memory</Text>
@@ -290,8 +393,8 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
                 </View>
             )}
 
-            {gameState === 'GAMEOVER' && renderGameOver()}
-            {gameState === 'LEVEL_COMPLETE' && renderLevelComplete()}
+            {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && renderGameOver()}
+            {uiMode !== 'wrapped' && gameState === 'LEVEL_COMPLETE' && renderLevelComplete()}
 
             <View style={styles.gridContainer}>
                 <View style={styles.grid}>
@@ -323,12 +426,9 @@ export const MemoryGame = ({ onGameEnd, onClose }: MemoryGameProps) => {
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
         width: '100%',
-        minHeight: 500,
-        borderRadius: 16,
-        overflow: 'hidden',
         backgroundColor: '#F3F4F6',
-        marginBottom: 20
     },
     header: {
         flexDirection: 'row',
@@ -460,5 +560,3 @@ const styles = StyleSheet.create({
         backgroundColor: '#9CA3AF'
     }
 });
-
-

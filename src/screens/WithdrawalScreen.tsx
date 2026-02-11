@@ -5,12 +5,14 @@ import { useFintech } from '../contexts/FintechContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Building, DollarSign, Wallet, CheckCircle2, AlertCircle, ChevronDown, Lock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useToast } from '../contexts/ToastContext';
 
 export default function WithdrawalScreen({ navigation, route }: any) {
     const { user } = useAuth();
     const { getWalletByOwner, requestWithdrawal } = useFintech();
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
+    const { show } = useToast();
 
     // US Bank Details State
     const [bankName, setBankName] = useState('');
@@ -28,18 +30,18 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         const withdrawAmount = parseFloat(amount);
 
         if (isNaN(withdrawAmount) || withdrawAmount < 10) {
-            Alert.alert('Monto inválido', 'El monto mínimo de retiro es $10.00 USD.');
+            show('Monto inválido. Mínimo $10.00 USD', 'error');
             return;
         }
 
         if (withdrawAmount > availableBalance) {
-            Alert.alert('Saldo insuficiente', 'No tienes suficientes fondos disponibles.');
+            show('Saldo insuficiente', 'error');
             return;
         }
 
         // Validate US Bank Details
         if (!bankName || routingNumber.length !== 9 || accountNumber.length < 4) {
-            Alert.alert('Datos bancarios incompletos', 'Por favor ingresa un Routing Number válido (9 dígitos) y el número de cuenta.');
+            show('Completa los datos bancarios correctamente', 'error');
             return;
         }
 
@@ -67,13 +69,10 @@ export default function WithdrawalScreen({ navigation, route }: any) {
                 notes: `Retiro a cuenta ${accountType} en ${bankName}`
             });
 
-            Alert.alert(
-                'Solicitud Enviada',
-                `Tu retiro de $${withdrawAmount.toFixed(2)} a ${destinationLabel} está en proceso. Los fondos suelen acreditarse en 1-3 días hábiles.`,
-                [{ text: 'Entendido', onPress: () => navigation.goBack() }]
-            );
+            show(`Solicitud Enviada. $${withdrawAmount.toFixed(2)} a ${destinationLabel}`, 'success');
+            setTimeout(() => navigation.goBack(), 1500);
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'No se pudo procesar la solicitud.');
+            show(error.message || 'No se pudo procesar la solicitud', 'error');
         } finally {
             setLoading(false);
         }

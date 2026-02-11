@@ -4,6 +4,7 @@ import { Plus as PlusIcon } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useSocial, Story } from '../../contexts/SocialContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface StoriesBarProps {
     onStoryClick: (storyId: string) => void;
@@ -12,11 +13,9 @@ interface StoriesBarProps {
 
 export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
     const { stories } = useSocial();
-
-    // Group stories by user to avoid duplicates if needed, or just show list. 
-    // Reference implies one ring per user who has stories? Or just list of stories.
-    // The current mock has one story per user.
-    // Let's stick to simple iteration for now.
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     return (
         <View style={styles.wrapper}>
@@ -24,7 +23,7 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
                 <TouchableOpacity style={styles.storyItem} onPress={onAddStory}>
                     <View style={styles.addStoryContainer}>
                         <View style={styles.addStoryIcon}>
-                            <PlusIcon size={20} color="#6B7280" />
+                            <PlusIcon size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
                         </View>
                         <View style={styles.absolutePlus}>
                             <View style={styles.plusBadge}>
@@ -74,23 +73,23 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
     );
 };
 
-const styles = StyleSheet.create({
-    wrapper: { backgroundColor: 'rgba(255,255,255,0.5)' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    wrapper: { backgroundColor: 'transparent' }, // Handled by parent container opacity/color usually
     container: { paddingHorizontal: 16, gap: 16, paddingVertical: 12 },
     storyItem: { alignItems: 'center', gap: 6, width: 68 },
 
     // Add Story Style
-    addStoryContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+    addStoryContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
     addStoryIcon: { opacity: 0.5 },
     absolutePlus: { position: 'absolute', bottom: 0, right: 0 },
-    plusBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
+    plusBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#1F2937' : '#fff' },
 
     // Story Avatar Style
     avatarWrapper: { width: 68, height: 68, justifyContent: 'center', alignItems: 'center' },
     gradientRing: { width: 68, height: 68, borderRadius: 34, justifyContent: 'center', alignItems: 'center' },
-    noStoryRing: { backgroundColor: '#E5E7EB' },
-    imageBorder: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+    noStoryRing: { backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
+    imageBorder: { width: 62, height: 62, borderRadius: 31, backgroundColor: isDark ? '#1F2937' : '#fff', justifyContent: 'center', alignItems: 'center' },
     avatar: { width: 56, height: 56, borderRadius: 28 },
 
-    name: { fontSize: 11, textAlign: 'center', color: '#374151', width: '100%' }
+    name: { fontSize: 11, textAlign: 'center', color: isDark ? '#D1D5DB' : '#374151', width: '100%' }
 });

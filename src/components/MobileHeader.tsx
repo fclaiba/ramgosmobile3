@@ -3,19 +3,27 @@ import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 
 import { Menu, ChevronLeft } from 'lucide-react-native';
 import { TouchableOpacity } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const insets = useSafeAreaInsets();
+    const styles = getStyles(isDark, insets);
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     {backButton ? (
                         <TouchableOpacity onPress={onBack}>
-                            <ChevronLeft color="#000" size={24} />
+                            <ChevronLeft color={isDark ? "#fff" : "#000"} size={24} />
                         </TouchableOpacity>
                     ) : onMenuPress ? (
                         <TouchableOpacity onPress={onMenuPress}>
-                            <Menu color="#000" size={24} />
+                            <Menu color={isDark ? "#fff" : "#000"} size={24} />
                         </TouchableOpacity>
                     ) : null}
                     <View>
@@ -29,10 +37,10 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     container: {
-        backgroundColor: '#fff',
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+        backgroundColor: isDark ? '#111827' : '#fff',
+        paddingTop: insets.top,
         zIndex: 10,
     },
     header: {
@@ -41,15 +49,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0'
+        borderBottomColor: isDark ? '#374151' : '#f0f0f0'
     },
     title: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#1A1A1A'
+        color: isDark ? '#fff' : '#1A1A1A'
     },
     subtitle: {
         fontSize: 12,
-        color: '#666'
+        color: isDark ? '#9CA3AF' : '#666'
     }
 });

@@ -1,127 +1,339 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Send, Clock, AlertOctagon, Gavel } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { Send, Clock, Gavel, ShieldCheck, Paperclip, MessageSquareText } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
+import { Sheet, SheetContent } from '../../components/ui/sheet';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { EscrowSheet } from '../../components/marketplace/EscrowSheet';
+
+function Pill({
+    label,
+    tone,
+    isSmall,
+}: {
+    label: string;
+    tone: 'neutral' | 'warning' | 'danger' | 'info' | 'success';
+    isSmall: boolean;
+}) {
+    const base = 'px-2.5 py-1 rounded-full border';
+    const size = isSmall ? 'text-[10px]' : 'text-xs';
+    const toneClass =
+        tone === 'danger'
+            ? 'bg-red-50 border-red-200 text-red-700'
+            : tone === 'warning'
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : tone === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : tone === 'info'
+                        ? 'bg-blue-50 border-blue-200 text-blue-800'
+                        : 'bg-slate-50 border-slate-200 text-slate-700';
+    return (
+        <View className={[base, toneClass].join(' ')}>
+            <Text className={[size, 'font-extrabold'].join(' ')}>{label}</Text>
+        </View>
+    );
+}
 
 export default function DisputeChatScreen({ route, navigation }: any) {
     const { orderId } = route.params;
-    const { orders, addDisputeMessage } = useMarketplace();
+    const { orders, addDisputeMessage, escalateDispute } = useMarketplace();
+    const { user } = useAuth();
+    const { show } = useToast();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+    const isSmall = width < 375;
 
     const [msgText, setMsgText] = useState('');
+    const [escalateOpen, setEscalateOpen] = useState(false);
+    const [escrowOpen, setEscrowOpen] = useState(false);
 
     const order = orders.find(o => o.id === orderId);
     const dispute = order?.dispute;
 
-    if (!dispute) return null;
+    if (!dispute) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DisputeChatScreen.tsx:no-dispute',message:'DisputeChat opened but no dispute found on order',data:{orderId,hasOrder:!!order,escrowState:order?.escrow?.state ?? null,hasDispute:!!dispute},timestamp:Date.now(),sessionId:'debug-session',runId:'dispute-routes',hypothesisId:'H-dispute-flow'})}).catch(()=>{});
+        // #endregion
+        return (
+            <View className={isDark ? 'flex-1 bg-slate-950' : 'flex-1 bg-slate-50'}>
+                <MobileHeader title="Mediación" showBack onBack={() => navigation.goBack()} />
+                <View className="flex-1 items-center justify-center px-4">
+                    <Text className={['font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-100' : 'text-slate-900'].join(' ')}>
+                        No hay una disputa activa
+                    </Text>
+                    <Text className={['mt-2 text-center', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
+                        Este chat se habilita cuando el reclamo fue iniciado correctamente.
+                    </Text>
+                    <TouchableOpacity
+                        className="mt-4 rounded-2xl bg-violet-600 px-4 py-3"
+                        onPress={() => navigation.goBack()}
+                        activeOpacity={0.85}
+                    >
+                        <Text className={['text-white font-extrabold', isSmall ? 'text-sm' : 'text-base'].join(' ')}>
+                            Volver
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DisputeChatScreen.tsx:entry',message:'DisputeChatScreen rendered',data:{orderId,hasOrder:!!order,hasDispute:!!dispute,disputeStatus:dispute?.status,userId:user?.id ?? null},timestamp:Date.now(),sessionId:'debug-session',runId:'dispute-routes',hypothesisId:'H-dispute-flow'})}).catch(()=>{});
+    // #endregion
 
-    // Arbitration Timer Mock
-    const hoursLeft = 72; // Static for demo
+    const myRole = user?.id === order?.sellerId ? 'seller' : 'buyer';
+    const hoursLeft = 72; // Mock
+
+    const headerTone = useMemo(() => {
+        if (order?.escrow?.state === 'disputed') return 'danger' as const;
+        if (order?.escrow?.state === 'held') return 'warning' as const;
+        if (order?.escrow?.state === 'release_scheduled') return 'info' as const;
+        if (order?.escrow?.state === 'released') return 'success' as const;
+        if (order?.escrow?.state === 'refunded') return 'neutral' as const;
+        return 'neutral' as const;
+    }, [order?.escrow?.state]);
+
+    const headerSubtitle = useMemo(() => {
+        const escrow = order?.escrow?.state ?? '-';
+        const total = order?.totals?.grandTotal != null ? `$${Number(order.totals.grandTotal).toFixed(2)}` : '';
+        return `${myRole === 'buyer' ? 'Comprador' : 'Vendedor'} • Escrow: ${escrow}${total ? ` • ${total}` : ''}`;
+    }, [myRole, order?.escrow?.state, order?.totals?.grandTotal]);
 
     const handleSend = () => {
         if (!msgText.trim()) return;
         addDisputeMessage(orderId, {
-            sender: 'buyer', // Mock role
-            body: msgText
+            sender: myRole,
+            body: msgText,
         });
         setMsgText('');
     };
 
-    const handleEscalate = () => {
-        Alert.alert(
-            'Solicitar Arbitraje',
-            'Al solicitar arbitraje, un agente de Ramgos revisará la evidencia y tomará una decisión final. Esto no se puede deshacer.',
-            [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Confirmar',
-                    style: 'destructive',
-                    onPress: () => Alert.alert('Arbitraje Iniciado', 'El equipo de soporte ha sido notificado.')
-                }
-            ]
-        );
-    };
+    const canEscalate = dispute.status === 'awaiting_seller_response' || dispute.status === 'awaiting_buyer_response' || dispute.status === 'open';
 
     const renderMessage = ({ item }: any) => {
-        const isMe = item.sender === 'buyer'; // Mock role check
+        const isMe = item.sender === myRole;
         return (
-            <View style={[styles.bubbleContainer, isMe ? styles.right : styles.left]}>
-                <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
-                    <Text style={[styles.bubbleText, isMe ? styles.textRight : styles.textLeft]}>
+            <View className={['mb-3 max-w-[85%]', isMe ? 'self-end items-end' : 'self-start'].join(' ')}>
+                <View
+                    className={[
+                        'rounded-2xl px-4 py-3',
+                        isMe ? 'bg-violet-600' : (isDark ? 'bg-slate-800' : 'bg-white'),
+                        isMe ? 'rounded-br-md' : 'rounded-bl-md',
+                        isMe ? '' : (isDark ? 'border border-slate-700' : 'border border-slate-200'),
+                    ].join(' ')}
+                >
+                    <Text className={[isSmall ? 'text-sm' : 'text-base', isMe ? 'text-white' : (isDark ? 'text-slate-50' : 'text-slate-900')].join(' ')}>
                         {item.body}
                     </Text>
                 </View>
-                <Text style={styles.time}>{new Date(item.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                <Text className={['mt-1 text-[10px]', isDark ? 'text-slate-400' : 'text-slate-400'].join(' ')}>
+                    {new Date(item.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
             </View>
         );
     };
 
+    const listBottomPad = Math.max(insets.bottom, 12) + 88; // composer height buffer
+
     return (
-        <View style={styles.container}>
+        <View className={isDark ? 'flex-1 bg-slate-950' : 'flex-1 bg-slate-50'}>
             <MobileHeader title="Mediación" showBack onBack={() => navigation.goBack()} />
 
-            {/* Timer Header */}
-            <View style={styles.timerHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Clock size={16} color="#B45309" />
-                    <Text style={styles.timerText}>Respuesta esperada en {hoursLeft}h</Text>
+            {/* Summary Header (responsive, no overlap) */}
+            <View className={(isSmall ? 'px-3' : 'px-4') + ' pt-3'}>
+                <View
+                    className={[
+                        'rounded-2xl border p-4',
+                        isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200',
+                    ].join(' ')}
+                >
+                    <View className="flex-row items-start justify-between">
+                        <View style={{ flex: 1 }}>
+                            <Text className={['font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
+                                Caso #{orderId.slice(-6).toUpperCase()}
+                            </Text>
+                            <Text className={['mt-1', isSmall ? 'text-[11px]' : 'text-xs', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
+                                {headerSubtitle}
+                            </Text>
+                        </View>
+                        <View className="ml-3 items-end">
+                            <Pill label={dispute.status} tone={headerTone} isSmall={isSmall} />
+                            <Text className={['mt-2', isSmall ? 'text-[10px]' : 'text-[11px]', isDark ? 'text-slate-400' : 'text-slate-500'].join(' ')}>
+                                {myRole === 'buyer' ? 'Tu mediación' : 'Mediación con comprador'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View className="mt-3 flex-row items-center justify-between">
+                        <View className="flex-row items-center">
+                            <Clock size={14} color={isDark ? '#FCD34D' : '#B45309'} />
+                            <Text className={['ml-2 font-semibold', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-amber-100' : 'text-amber-800'].join(' ')}>
+                                Respuesta esperada en {hoursLeft}h
+                            </Text>
+                        </View>
+                        <View className="flex-row items-center">
+                            <TouchableOpacity
+                                className={['mr-2 rounded-xl px-3 py-2 border', isDark ? 'bg-violet-950/30 border-violet-900/60' : 'bg-violet-50 border-violet-200'].join(' ')}
+                                onPress={() => setEscrowOpen(true)}
+                                activeOpacity={0.85}
+                            >
+                                <View className="flex-row items-center">
+                                    <ShieldCheck size={14} color="#7C3AED" />
+                                    <Text className={['ml-2 font-bold text-violet-600', isSmall ? 'text-xs' : 'text-sm'].join(' ')}>
+                                        Ver escrow
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                            {canEscalate && (
+                                <TouchableOpacity
+                                    className="rounded-xl bg-red-500 px-3 py-2"
+                                    onPress={() => setEscalateOpen(true)}
+                                    activeOpacity={0.85}
+                                >
+                                    <View className="flex-row items-center">
+                                        <Gavel size={14} color="#fff" />
+                                        <Text className={['ml-2 font-extrabold text-white', isSmall ? 'text-xs' : 'text-sm'].join(' ')}>
+                                            Arbitraje
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    <View className="mt-3 flex-row items-start">
+                        <MessageSquareText size={16} color={isDark ? '#CBD5E1' : '#475569'} />
+                        <Text className={['ml-2', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+                            <Text className="font-extrabold">Motivo:</Text> {dispute.reason} {'\n'}
+                            <Text className="font-extrabold">Detalle:</Text> {dispute.description}
+                        </Text>
+                    </View>
                 </View>
-                <TouchableOpacity onPress={handleEscalate} style={styles.arbitrationBtn}>
-                    <Gavel size={14} color="#fff" style={{ marginRight: 4 }} />
-                    <Text style={styles.arbitrationBtnText}>Arbitraje</Text>
-                </TouchableOpacity>
             </View>
 
             <FlatList
                 data={dispute.messages}
                 renderItem={renderMessage}
                 keyExtractor={item => item.id}
-                contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-                inverted={false} // Normal order
+                contentContainerStyle={{
+                    paddingHorizontal: isSmall ? 12 : 16,
+                    paddingTop: 12,
+                    paddingBottom: listBottomPad,
+                }}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                    <View className="items-center mt-10">
+                        <MessageSquareText size={24} color={isDark ? '#334155' : '#CBD5E1'} />
+                        <Text className={['mt-3 font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+                            No hay mensajes todavía
+                        </Text>
+                        <Text className={['mt-1 text-center', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-400' : 'text-slate-500'].join(' ')}>
+                            Escribí un mensaje para iniciar la mediación.
+                        </Text>
+                    </View>
+                }
             />
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                keyboardVerticalOffset={100}
-                style={styles.footer}
-            >
-                <TextInput
-                    style={styles.input}
-                    placeholder="Escribe un mensaje..."
-                    value={msgText}
-                    onChangeText={setMsgText}
-                />
-                <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-                    <Send size={20} color="#fff" />
-                </TouchableOpacity>
+            {/* Composer (fixed spacing, safe-area aware) */}
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={110}>
+                <View
+                    className={[
+                        'border-t',
+                        isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white',
+                    ].join(' ')}
+                    style={{ paddingBottom: Math.max(insets.bottom, 10), paddingHorizontal: isSmall ? 12 : 16, paddingTop: 10 }}
+                >
+                    <View className="flex-row items-end">
+                        <TouchableOpacity
+                            className={['mr-2 h-12 w-12 items-center justify-center rounded-full border', isDark ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'].join(' ')}
+                            onPress={() => show('Adjuntar evidencia (mock)', 'info')}
+                            activeOpacity={0.85}
+                        >
+                            <Paperclip size={18} color={isDark ? '#CBD5E1' : '#475569'} />
+                        </TouchableOpacity>
+                        <TextInput
+                            className={[
+                                'flex-1 rounded-3xl border px-4 py-3',
+                                isDark ? 'bg-slate-950 border-slate-800 text-slate-50' : 'bg-white border-slate-200 text-slate-900',
+                            ].join(' ')}
+                            placeholder="Escribe un mensaje..."
+                            placeholderTextColor={isDark ? '#94A3B8' : '#94A3B8'}
+                            value={msgText}
+                            onChangeText={setMsgText}
+                            multiline
+                        />
+                        <TouchableOpacity
+                            className={['ml-2 h-12 w-12 items-center justify-center rounded-full', msgText.trim() ? 'bg-violet-600' : 'bg-violet-300'].join(' ')}
+                            onPress={handleSend}
+                            activeOpacity={0.85}
+                            disabled={!msgText.trim()}
+                        >
+                            <Send size={20} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </KeyboardAvoidingView>
+
+            <EscrowSheet
+                open={escrowOpen}
+                onOpenChange={setEscrowOpen}
+                order={order}
+                role={myRole}
+                onOpenDisputeChat={() => {}}
+                onOpenDispute={() => {}}
+            />
+
+            <Sheet open={escalateOpen} onOpenChange={setEscalateOpen}>
+                <SheetContent
+                    side="bottom"
+                    style={{
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        paddingBottom: Math.max(insets.bottom, 16),
+                        backgroundColor: isDark ? '#111827' : '#fff',
+                    }}
+                >
+                    <View className={(isSmall ? 'px-4' : 'px-5') + ' pt-4'}>
+                        <Text className={[isSmall ? 'text-base' : 'text-lg', 'font-extrabold', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
+                            Escalar a arbitraje
+                        </Text>
+                        <Text className={['mt-2', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
+                            Si no logran un acuerdo, soporte revisará el caso. Los fondos quedan retenidos hasta la resolución.
+                        </Text>
+
+                        <View className="mt-5 flex-row">
+                            <TouchableOpacity
+                                className={['flex-1 rounded-2xl py-4 items-center border', isDark ? 'border-slate-700' : 'border-slate-200'].join(' ')}
+                                onPress={() => setEscalateOpen(false)}
+                                activeOpacity={0.85}
+                            >
+                                <Text className={[isSmall ? 'text-sm' : 'text-base', 'font-extrabold', isDark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+                                    Cancelar
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                className="ml-3 flex-1 rounded-2xl bg-red-500 py-4 items-center"
+                                onPress={() => {
+                                    const res = escalateDispute(orderId, myRole);
+                                    show(res.success ? 'Caso escalado a soporte' : (res.error ?? 'No se pudo escalar'), res.success ? 'info' : 'error');
+                                    setEscalateOpen(false);
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Text className={[isSmall ? 'text-sm' : 'text-base', 'font-extrabold text-white'].join(' ')}>
+                                    Confirmar arbitraje
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </SheetContent>
+            </Sheet>
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F3F4F6' },
-    timerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFBEB', padding: 12, borderBottomWidth: 1, borderColor: '#FCD34D' },
-    timerText: { color: '#92400E', fontWeight: '500' },
-
-    arbitrationBtn: { backgroundColor: '#DC2626', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center' },
-    arbitrationBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-
-    bubbleContainer: { marginBottom: 12, maxWidth: '80%' },
-    left: { alignSelf: 'flex-start' },
-    right: { alignSelf: 'flex-end', alignItems: 'flex-end' },
-
-    bubble: { padding: 12, borderRadius: 16 },
-    bubbleLeft: { backgroundColor: '#fff', borderBottomLeftRadius: 4 },
-    bubbleRight: { backgroundColor: '#7C3AED', borderBottomRightRadius: 4 },
-
-    bubbleText: { fontSize: 16 },
-    textLeft: { color: '#1F2937' },
-    textRight: { color: '#fff' },
-
-    time: { fontSize: 10, color: '#9CA3AF', marginTop: 4, marginHorizontal: 4 },
-
-    footer: { flexDirection: 'row', padding: 12, backgroundColor: '#fff', alignItems: 'center', gap: 8 },
-    input: { flex: 1, backgroundColor: '#F9FAFB', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-    sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#7C3AED', justifyContent: 'center', alignItems: 'center' }
-});

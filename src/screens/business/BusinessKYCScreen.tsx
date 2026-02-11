@@ -1,18 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthBackground } from '../../components/auth/AuthBackground';
-import { Store, FileText, CheckCircle2, ArrowRight, Upload, ShieldCheck } from 'lucide-react-native';
+import { Store, FileText, CheckCircle2, ArrowRight, Upload, ShieldCheck, MapPin } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { useBusiness } from '../../contexts/BusinessContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../contexts/ToastContext';
+import { BusinessLocationSearch } from '../../components/business/BusinessLocationSearch';
 
 export default function BusinessKYCScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
+    const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
         businessName: '',
         taxId: '',
         address: '',
-        legalRep: ''
+        legalRep: '',
+        placeId: ''
     });
     const [docUploaded, setDocUploaded] = useState(false);
     const { businessInfo } = useBusiness();
@@ -20,8 +32,8 @@ export default function BusinessKYCScreen({ navigation }: any) {
 
     const handleNext = () => {
         if (step === 1) {
-            if (!formData.businessName || !formData.taxId) {
-                Alert.alert('Error', 'Completa los campos obligatorios');
+            if (!formData.businessName || !formData.address) {
+                show('Completa los campos obligatorios', 'error');
                 return;
             }
             setStep(2);
@@ -31,45 +43,50 @@ export default function BusinessKYCScreen({ navigation }: any) {
     };
 
     const handleUpload = () => {
+        // Simulate picking a document
+        show('Subiendo documento...', 'info');
         setTimeout(() => {
             setDocUploaded(true);
-            Alert.alert('Éxito', 'Documento subido correctamente');
-        }, 1000);
+            show('Documento subido correctamente', 'success');
+        }, 1500);
+    };
+
+    const handleLocationSelect = (place: { name: string; address: string; placeId: string }) => {
+        setFormData(prev => ({
+            ...prev,
+            businessName: place.name,
+            address: place.address,
+            placeId: place.placeId
+        }));
     };
 
     const handleSubmit = async () => {
         if (!docUploaded) {
-            Alert.alert('Documentación requerida', 'Necesitamos que subas la documentación legal para continuar.');
+            show('Necesitamos que subas la documentación legal para continuar.', 'error');
             return;
         }
         if (!user) {
-            Alert.alert('Sesión requerida', 'Debes iniciar sesión como negocio para completar la verificación.');
+            show('Debes iniciar sesión como negocio para completar la verificación.', 'error');
             return;
         }
         try {
             await markKycSubmitted({
-                businessId: businessInfo.id,
+                businessId: businessInfo?.id || 'new_biz',
                 businessName: formData.businessName,
                 taxId: formData.taxId,
                 legalRep: formData.legalRep,
                 address: formData.address,
+                placeId: formData.placeId,
                 documents: docUploaded,
             });
-            Alert.alert(
-                'Verificación en Proceso',
-                'Hemos recibido tu solicitud. Te notificaremos cuando tu negocio esté verificado.',
-                [
-                    {
-                        text: 'Ir al Panel',
-                        onPress: () =>
-                            navigation.navigate('BusinessDashboard', { verificationPending: true }),
-                    },
-                ],
-            );
+
+            navigation.navigate('BusinessDashboard', { verificationPending: true });
+            show('Solicitud enviada. Te notificaremos cuando tu negocio esté verificado.', 'success');
+
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'No se pudo enviar la verificación.';
-            Alert.alert('Error', message);
+            show(message, 'error');
         }
     };
 
@@ -78,8 +95,14 @@ export default function BusinessKYCScreen({ navigation }: any) {
             <SafeAreaView style={styles.container}>
                 <MobileHeader title="Verificación de Negocio" backButton onBack={() => navigation.goBack()} />
 
-                <ScrollView contentContainerStyle={styles.scroll}>
-                    <View style={styles.card}>
+                <ScrollView
+                    contentContainerStyle={[
+                        styles.scroll,
+                        { paddingBottom: Math.max(16, insets.bottom) + 24 },
+                    ]}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={[styles.card, { width: '100%', maxWidth: Math.min(720, width - 32), alignSelf: 'center' }]}>
                         {/* Progress */}
                         <View style={styles.progressRow}>
                             <View style={[styles.stepDot, step >= 1 ? styles.stepActive : null]}>
@@ -95,37 +118,43 @@ export default function BusinessKYCScreen({ navigation }: any) {
                             </View>
                         </View>
 
-                        {/* STEP 1: Info */}
+                        {/* STEP 1: Info (Updated with Location Search) */}
                         {step === 1 && (
                             <View style={styles.stepContent}>
-                                <Text style={styles.stepTitle}>Información Fiscal</Text>
-                                <Text style={styles.stepDesc}>Ingresa los datos legales de tu empresa para facturación.</Text>
+                                <Text style={styles.stepTitle}>Información del Local</Text>
+                                <Text style={styles.stepDesc}>Busca tu negocio en Google Maps o ingresalo manualmente.</Text>
+
+                                <BusinessLocationSearch onSelect={handleLocationSelect} />
 
                                 <View style={styles.inputGroup}>
-                                    <Text style={styles.label}>Razón Social</Text>
+                                    <Text style={styles.label}>Nombre Comercial</Text>
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Ej. Restaurante S.A."
+                                        placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                                         value={formData.businessName}
                                         onChangeText={t => setFormData({ ...formData, businessName: t })}
                                     />
                                 </View>
                                 <View style={styles.inputGroup}>
-                                    <Text style={styles.label}>RUT / CUIT / Tax ID</Text>
+                                    <Text style={styles.label}>Dirección Completa</Text>
                                     <TextInput
-                                        style={styles.input}
-                                        placeholder="00-00000000-0"
-                                        value={formData.taxId}
-                                        onChangeText={t => setFormData({ ...formData, taxId: t })}
+                                        style={[styles.input, { height: 'auto', minHeight: 48, paddingVertical: 12 }]}
+                                        placeholder="Calle Principal 123"
+                                        placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
+                                        value={formData.address}
+                                        onChangeText={t => setFormData({ ...formData, address: t })}
+                                        multiline
                                     />
                                 </View>
                                 <View style={styles.inputGroup}>
-                                    <Text style={styles.label}>Dirección Legal</Text>
+                                    <Text style={styles.label}>ID Fiscal (Opcional por ahora)</Text>
                                     <TextInput
                                         style={styles.input}
-                                        placeholder="Calle Principal 123"
-                                        value={formData.address}
-                                        onChangeText={t => setFormData({ ...formData, address: t })}
+                                        placeholder="00-00000000-0"
+                                        placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
+                                        value={formData.taxId}
+                                        onChangeText={t => setFormData({ ...formData, taxId: t })}
                                     />
                                 </View>
 
@@ -136,17 +165,18 @@ export default function BusinessKYCScreen({ navigation }: any) {
                             </View>
                         )}
 
-                        {/* STEP 2: Docs */}
+                        {/* STEP 2: Docs (Same as before but improved flow) */}
                         {step === 2 && (
                             <View style={styles.stepContent}>
-                                <Text style={styles.stepTitle}>Documentación</Text>
-                                <Text style={styles.stepDesc}>Sube el acta constitutiva o constancia fiscal.</Text>
+                                <Text style={styles.stepTitle}>Documentación Legal</Text>
+                                <Text style={styles.stepDesc}>Sube tu Acta Constitutiva o Constancia de Situación Fiscal.</Text>
 
                                 <TouchableOpacity style={styles.uploadBox} onPress={handleUpload}>
                                     {docUploaded ? (
                                         <>
                                             <CheckCircle2 size={48} color="#10B981" />
-                                            <Text style={[styles.uploadText, { color: '#059669', marginTop: 12 }]}>Documento cargado</Text>
+                                            <Text style={[styles.uploadText, { color: '#059669', marginTop: 12 }]}>Documento cargado exitosamente</Text>
+                                            <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>archivo_legal.pdf</Text>
                                         </>
                                     ) : (
                                         <>
@@ -173,14 +203,25 @@ export default function BusinessKYCScreen({ navigation }: any) {
                                 <View style={styles.iconContainer}>
                                     <ShieldCheck size={48} color="#7C3AED" />
                                 </View>
-                                <Text style={styles.stepTitle}>Confirma tu Solicitud</Text>
-                                <Text style={styles.stepDesc}>Al enviar, nuestros agentes revisarán tu documentación en un plazo de 24-48 horas.</Text>
+                                <Text style={styles.stepTitle}>Confirmar Verificación</Text>
+                                <Text style={styles.stepDesc}>Tus datos serán revisados manualmente.</Text>
 
                                 <View style={styles.summaryBox}>
                                     <Text style={styles.summaryLabel}>Empresa:</Text>
                                     <Text style={styles.summaryVal}>{formData.businessName}</Text>
-                                    <Text style={styles.summaryLabel}>ID Fiscal:</Text>
-                                    <Text style={styles.summaryVal}>{formData.taxId}</Text>
+
+                                    <Text style={styles.summaryLabel}>Dirección:</Text>
+                                    <Text style={styles.summaryVal}>{formData.address}</Text>
+
+                                    {formData.placeId ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                            <MapPin size={14} color="#059669" />
+                                            <Text style={{ fontSize: 12, color: '#059669', marginLeft: 4 }}>Ubicación validada por Google Maps</Text>
+                                        </View>
+                                    ) : null}
+
+                                    <Text style={styles.summaryLabel}>Documentos:</Text>
+                                    <Text style={styles.summaryVal}>Cargados (1 archivo)</Text>
                                 </View>
 
                                 <TouchableOpacity style={styles.btn} onPress={handleSubmit}>
@@ -196,34 +237,45 @@ export default function BusinessKYCScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     scroll: { flexGrow: 1, padding: 16, justifyContent: 'center' },
-    card: { backgroundColor: '#fff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
+    card: {
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : '#fff',
+        borderRadius: 24,
+        padding: 24,
+        shadowColor: isDark ? '#000' : '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: isDark ? 0.3 : 0.1,
+        shadowRadius: 12,
+        elevation: 5,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : 'transparent',
+    },
 
     progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    stepDot: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+    stepDot: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
     stepActive: { backgroundColor: '#7C3AED' },
-    stepNum: { fontSize: 14, fontWeight: 'bold', color: '#9CA3AF' },
-    stepLine: { width: 40, height: 2, backgroundColor: '#F3F4F6', marginHorizontal: 4 },
+    stepNum: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#9CA3AF' : '#9CA3AF' },
+    stepLine: { width: 40, height: 2, backgroundColor: isDark ? '#374151' : '#F3F4F6', marginHorizontal: 4 },
 
     stepContent: { alignItems: 'stretch' },
-    stepTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', textAlign: 'center', marginBottom: 8 },
-    stepDesc: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24 },
+    stepTitle: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', textAlign: 'center', marginBottom: 8 },
+    stepDesc: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 24 },
 
     inputGroup: { marginBottom: 16 },
-    label: { fontSize: 13, fontWeight: '500', color: '#374151', marginBottom: 6 },
-    input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, height: 48, paddingHorizontal: 16, fontSize: 15 },
+    label: { fontSize: 13, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 6 },
+    input: { backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 12, height: 48, paddingHorizontal: 16, fontSize: 15, color: isDark ? '#F9FAFB' : '#111827' },
 
     btn: { backgroundColor: '#7C3AED', height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
-    btnDisabled: { backgroundColor: '#D1D5DB' },
+    btnDisabled: { backgroundColor: isDark ? '#4B5563' : '#D1D5DB' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginRight: 8 },
 
-    uploadBox: { height: 160, borderWidth: 2, borderColor: '#E5E7EB', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB', marginBottom: 24 },
-    uploadText: { marginTop: 12, color: '#6B7280', fontWeight: '500' },
+    uploadBox: { height: 160, borderWidth: 2, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F9FAFB', marginBottom: 24 },
+    uploadText: { marginTop: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
 
-    iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: 40, backgroundColor: '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    summaryBox: { backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12, marginBottom: 24 },
-    summaryLabel: { color: '#6B7280', fontSize: 12, marginBottom: 2 },
-    summaryVal: { color: '#111827', fontSize: 16, fontWeight: '600', marginBottom: 12 }
+    iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    summaryBox: { backgroundColor: isDark ? '#1F2937' : '#F3F4F6', padding: 16, borderRadius: 12, marginBottom: 24 },
+    summaryLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 12, marginBottom: 2 },
+    summaryVal: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 16, fontWeight: '600', marginBottom: 12 }
 });

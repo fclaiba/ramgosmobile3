@@ -1,221 +1,497 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { CheckCircle2, Truck, Package, Clock, ShieldAlert, ChevronRight } from 'lucide-react-native';
-import { MobileHeader } from '../../components/MobileHeader';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
+import { usePoints } from '../../contexts/PointsContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { Package, MapPin, Truck, CheckCircle, Clock, ShieldCheck, Coins, Sparkles, TrendingUp } from 'lucide-react-native';
+import { Button } from '../../components/ui/button';
+import { useEscrow } from '../../contexts/EscrowContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { POINT_VALUE_USD } from '../../contexts/RewardsContext';
 
-export default function OrderDetailScreen({ route, navigation }: any) {
-    const { orderId, role } = route.params; // role: 'buyer' | 'seller'
-    const { orders, confirmDelivery, initiateDispute } = useMarketplace();
+export default function OrderDetailScreen() {
+    const route = useRoute<any>();
+    const navigation = useNavigation();
+    const { order, role = 'buyer' } = route.params || {}; // Assume order object is passed
+    const { confirmDelivery } = useMarketplace();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { openEscrow } = useEscrow();
+    const insets = useSafeAreaInsets();
+    const { currentTier } = usePoints();
+    const { user } = useAuth();
 
-    // Find Order
-    const order = useMemo(() => orders.find(o => o.id === orderId), [orders, orderId]);
+    const canConfirm = useMemo(() => {
+        if (role !== 'buyer') return false;
+        if (!order?.escrow) return false;
+        if (order?.deliveryConfirmedAt) return false;
+        return order.escrow.state === 'held';
+    }, [order?.deliveryConfirmedAt, order?.escrow, role]);
 
-    if (!order) return <View><Text>Orden no encontrada</Text></View>;
+    // Calculate points earned from this order
+    const pointsInfo = useMemo(() => {
+        if (!order) return null;
+        
+        // Get the amount paid (excluding discounts paid with points)
+        const totalPaid = order.totals?.grandTotal ?? order.totalAmount ?? 0;
+        const discountApplied = order.totals?.discount ?? order.paymentDetails?.discountApplied ?? 0;
+        
+        // Cash portion (what was actually paid, not covered by point discounts)
+        const cashPaid = Math.max(0, totalPaid);
+        
+        // Base points: 1 point per $1
+        const basePoints = Math.floor(cashPaid);
+        
+        // Bonus from tier (if order was placed when user had a tier bonus)
+        const bonusMultiplier = order.pointsBonusMultiplier ?? currentTier?.bonusMultiplier ?? 0;
+        const bonusPoints = Math.floor(basePoints * bonusMultiplier);
+        
+        // Total points
+        const totalPoints = order.pointsEarned ?? (basePoints + bonusPoints);
+        
+        // Value in USD
+        const valueUSD = (totalPoints * POINT_VALUE_USD).toFixed(2);
+        
+        return {
+            basePoints,
+            bonusPoints,
+            totalPoints,
+            valueUSD,
+            tierLabel: order.tierAtPurchase ?? currentTier?.label ?? 'Bronze',
+            hasBonusMultiplier: bonusMultiplier > 0,
+        };
+    }, [order, currentTier]);
 
-    // State Logic
-    const isBuyer = role === 'buyer';
-    const isSeller = role === 'seller';
+    if (!order) return <View style={styles.container}><Text>Orden no encontrada</Text></View>;
 
-    // 15-Day Escrow Timer Calculation
-    const getEscrowDaysLeft = () => {
-        if (!order.deliveryConfirmedAt) return 15;
-        const deliveryDate = new Date(order.deliveryConfirmedAt);
-        const releaseDate = new Date(deliveryDate);
-        releaseDate.setDate(deliveryDate.getDate() + 15);
-
-        const now = new Date();
-        const diffTime = Math.abs(releaseDate.getTime() - now.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return Math.max(0, diffDays);
-    };
-
-    // Actions
-    const handleConfirmDelivery = () => {
+    const handleConfirm = () => {
+        if (!canConfirm) {
+            Alert.alert('Confirmación no disponible', 'Esta orden ya fue confirmada o no está en estado retenido.');
+            return;
+        }
         Alert.alert(
             'Confirmar Recepción',
-            '¿Confirmas que has recibido el producto correctamente? Esto iniciará el período de liberación de fondos.',
+            '¿Confirmas que has recibido el pedido correctamente? Esto liberará el pago al vendedor.',
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
                     text: 'Confirmar',
                     onPress: () => {
-                        const res = confirmDelivery(order.id);
-                        if (res.success) Alert.alert('Éxito', 'Entrega confirmada. El dinero se liberará en 15 días si no hay reclamos.');
+                        const result = confirmDelivery(order.id);
+                        if (!result.success) {
+                            Alert.alert('No se pudo confirmar', result.error ?? 'Intenta nuevamente.');
+                            return;
+                        }
+                        Alert.alert('¡Gracias!', 'Has confirmado la recepción. El pago se liberará según el cronograma del escrow.');
+                        navigation.goBack();
                     }
                 }
             ]
         );
     };
 
-    const handleReportProblem = () => {
-        navigation.navigate('DisputeReason', { orderId: order.id });
-    };
-
-    const handleShipOrder = () => {
-        Alert.alert('Cargar Seguimiento', 'Simulación: Orden marcada como enviada.');
-        // In real app: updateOrder({ status: 'in_transit' })
-    };
-
-    // Render Status Banner
-    const renderStatusBanner = () => {
-        if (order.status === 'disputed') {
-            return (
-                <View style={[styles.banner, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                    <ShieldAlert size={24} color="#EF4444" />
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.bannerTitle, { color: '#B91C1C' }]}>Disputa en Curso</Text>
-                        <Text style={[styles.bannerText, { color: '#B91C1C' }]}>
-                            El dinero está retenido hasta que se resuelva el reclamo.
-                        </Text>
-                    </View>
-                </View>
-            );
-        }
-
-        if (order.status === 'delivered') {
-            const daysLeft = getEscrowDaysLeft();
-            return (
-                <View style={[styles.banner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-                    <Clock size={24} color="#059669" />
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.bannerTitle, { color: '#047857' }]}>
-                            {isSeller ? 'Fondos en Retención' : 'Protección Activa'}
-                        </Text>
-                        <Text style={[styles.bannerText, { color: '#047857' }]}>
-                            {isSeller
-                                ? `El dinero se liberará en ${daysLeft} días.`
-                                : `Tienes ${daysLeft} días de protección restante.`}
-                        </Text>
-                    </View>
-                </View>
-            );
-        }
-
-        return null; // Default states
-    };
-
     return (
-        <View style={styles.container}>
-            <MobileHeader title={`Orden #${order.id.slice(-6)}`} showBack onBack={() => navigation.goBack()} />
+        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}>
+            {/* Header Status */}
+            <View style={styles.statusHeader}>
+                <View>
+                    <Text style={styles.orderId}>Orden #{order.id.slice(0, 8)}</Text>
+                    <Text style={styles.date}>{new Date(order.date).toLocaleDateString()}</Text>
+                </View>
+                <View style={styles.statusBadge}>
+                    <Text style={styles.statusText}>{order.status.toUpperCase()}</Text>
+                </View>
+            </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
-                {/* State Banner */}
-                {renderStatusBanner()}
-
-                {/* Progress Stepper (Simplified) */}
-                <View style={styles.stepper}>
-                    <View style={styles.step}>
-                        <CheckCircle2 size={20} color="#059669" />
-                        <Text style={styles.stepText}>Pagado</Text>
+            {/* Steps / Tracking Info Mockup */}
+            <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Estado del Envío</Text>
+                <View style={styles.timeline}>
+                    <View style={styles.timelineItem}>
+                        <CheckCircle size={20} color="#10B981" />
+                        <Text style={styles.timelineText}>Pago Confirmado</Text>
                     </View>
-                    <View style={styles.line} />
-                    <View style={styles.step}>
-                        <Truck size={20} color={['in_transit', 'delivered', 'completed'].includes(order.status) ? "#059669" : "#D1D5DB"} />
-                        <Text style={styles.stepText}>Enviado</Text>
+                    <View style={styles.timelineLine} />
+                    <View style={styles.timelineItem}>
+                        <Truck size={20} color="#3B82F6" />
+                        <Text style={styles.timelineText}>En Camino</Text>
                     </View>
-                    <View style={styles.line} />
-                    <View style={styles.step}>
-                        <Package size={20} color={['delivered', 'completed'].includes(order.status) ? "#059669" : "#D1D5DB"} />
-                        <Text style={styles.stepText}>Entregado</Text>
+                    <View style={styles.timelineLine} />
+                    <View style={styles.timelineItem}>
+                        <Package size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                        <Text style={[styles.timelineText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Entregado</Text>
                     </View>
                 </View>
+            </View>
 
-                {/* Order Items */}
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Producto</Text>
-                    {order.items.map(item => (
-                        <View key={item.productId} style={styles.itemRow}>
-                            <View>
-                                <Text style={styles.itemTitle}>{item.title}</Text>
-                                <Text style={styles.itemSubtitle}>USD ${item.unitPrice} x {item.quantity}</Text>
-                            </View>
-                            <Text style={styles.itemTotal}>${item.subtotal}</Text>
+            {/* Items */}
+            <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Productos</Text>
+                {(order.items || []).map((item: any) => (
+                    <View key={item.id} style={styles.itemRow}>
+                        <View style={styles.itemImagePlaceholder} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.itemName}>{item.name}</Text>
+                            <Text style={styles.itemPrice}>${item.price} x {item.quantity}</Text>
                         </View>
-                    ))}
-                    <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Total</Text>
-                        <Text style={styles.totalValue}>${order.totals.grandTotal}</Text>
+                        <Text style={styles.itemTotal}>${(item.price * item.quantity).toFixed(2)}</Text>
+                    </View>
+                ))}
+            </View>
+
+            {/* Financial Summary */}
+            <View style={styles.card}>
+                <View style={styles.row}>
+                    <Text style={styles.label}>Subtotal</Text>
+                    <Text style={styles.value}>${order.totalAmount.toFixed(2)}</Text>
+                </View>
+                <View style={styles.row}>
+                    <Text style={styles.label}>Envío</Text>
+                    <Text style={styles.value}>$0.00</Text>
+                </View>
+                <View style={[styles.row, { marginTop: 8, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#E5E7EB', paddingTop: 8 }]}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>${order.totalAmount.toFixed(2)}</Text>
+                </View>
+            </View>
+
+            {/* Points Earned Card */}
+            {role === 'buyer' && pointsInfo && pointsInfo.totalPoints > 0 && (
+                <View style={styles.pointsCard}>
+                    <View style={styles.pointsHeader}>
+                        <View style={styles.pointsIconContainer}>
+                            <Coins size={24} color="#F59E0B" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.pointsTitle}>Puntos Ganados</Text>
+                            <Text style={styles.pointsSubtitle}>Por esta compra</Text>
+                        </View>
+                        <View style={styles.pointsBadge}>
+                            <Sparkles size={14} color="#F59E0B" />
+                            <Text style={styles.pointsBadgeText}>+{pointsInfo.totalPoints}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.pointsBreakdown}>
+                        <View style={styles.pointsRow}>
+                            <Text style={styles.pointsLabel}>Puntos base (1 pt por $1)</Text>
+                            <Text style={styles.pointsValue}>+{pointsInfo.basePoints} pts</Text>
+                        </View>
+                        
+                        {pointsInfo.hasBonusMultiplier && pointsInfo.bonusPoints > 0 && (
+                            <View style={styles.pointsRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <TrendingUp size={12} color="#10B981" />
+                                    <Text style={[styles.pointsLabel, { color: '#10B981' }]}>
+                                        Bonus nivel {pointsInfo.tierLabel}
+                                    </Text>
+                                </View>
+                                <Text style={[styles.pointsValue, { color: '#10B981' }]}>+{pointsInfo.bonusPoints} pts</Text>
+                            </View>
+                        )}
+
+                        <View style={[styles.pointsRow, styles.pointsTotalRow]}>
+                            <Text style={styles.pointsTotalLabel}>Total ganado</Text>
+                            <Text style={styles.pointsTotalValue}>{pointsInfo.totalPoints} pts</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.pointsFooter}>
+                        <Text style={styles.pointsFooterText}>
+                            Valor: ${pointsInfo.valueUSD} · Canjeables en tu próxima compra
+                        </Text>
                     </View>
                 </View>
+            )}
 
-                {/* Shipping Info */}
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Dirección de Envío</Text>
-                    <Text style={styles.text}>{order.shipping.destination.fullName}</Text>
-                    <Text style={styles.text}>{order.shipping.destination.addressLine1}</Text>
-                    <Text style={styles.text}>{order.shipping.destination.city}, {order.shipping.destination.country}</Text>
-                </View>
+            {/* Escrow Card */}
+            {order.escrow && (
+                <TouchableOpacity
+                    style={styles.escrowCard}
+                    onPress={() => openEscrow(order.id, role as 'buyer' | 'seller')}
+                    activeOpacity={0.8}
+                >
+                    <View style={styles.escrowIconContainer}>
+                        <ShieldCheck size={24} color="#7C3AED" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.escrowTitle}>Protección Escrow</Text>
+                        <Text style={styles.escrowStatus}>
+                            Estado: {order.escrow.state === 'held' ? 'Retenido' : order.escrow.state === 'released' ? 'Liberado' : order.escrow.state}
+                        </Text>
+                    </View>
+                    <Text style={styles.escrowLink}>Ver detalles →</Text>
+                </TouchableOpacity>
+            )}
 
-                {/* ACTIONS - Role Based */}
-                <View style={styles.actionsContainer}>
+            {/* Action - Only if not delivered yet? For demo, always show */}
+            <View style={styles.actionContainer}>
+                <Text style={styles.helpText}>
+                    Al recibir tu producto, confirma la entrega para liberar el dinero al vendedor.
+                </Text>
+                <Button onPress={handleConfirm} disabled={!canConfirm} style={{ backgroundColor: '#10B981', width: '100%' }}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirmar que recibí el pedido</Text>
+                </Button>
+            </View>
 
-                    {/* SELLER: Mark as Shipped */}
-                    {isSeller && order.status === 'payment_received' && (
-                        <TouchableOpacity style={styles.primaryBtn} onPress={handleShipOrder}>
-                            <Text style={styles.btnText}>Cargar Envío</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* BUYER: Confirm Receipt */}
-                    {isBuyer && order.status === 'in_transit' && (
-                        <TouchableOpacity style={styles.primaryBtn} onPress={handleConfirmDelivery}>
-                            <Text style={styles.btnText}>Confirmar Entrega</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* BUYER: Report Problem (Only if delivered and not disputed) */}
-                    {isBuyer && order.status === 'delivered' && getEscrowDaysLeft() > 0 && (
-                        <TouchableOpacity style={styles.dangerBtn} onPress={handleReportProblem}>
-                            <ShieldAlert size={20} color="#EF4444" />
-                            <Text style={styles.dangerBtnText}>Tengo un problema</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* DISPUTE STATUS */}
-                    {order.status === 'disputed' && (
-                        <TouchableOpacity
-                            style={styles.secondaryBtn}
-                            onPress={() => navigation.navigate('DisputeChat', { orderId: order.id })}
-                        >
-                            <Text style={styles.secondaryBtnText}>Ver Chat de Reclamo</Text>
-                            <ChevronRight size={16} color="#4B5563" />
-                        </TouchableOpacity>
-                    )}
-
-                </View>
-            </ScrollView>
-        </View>
+        </ScrollView>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
-    banner: { flexDirection: 'row', padding: 16, borderRadius: 12, borderWidth: 1, gap: 12, marginBottom: 16 },
-    bannerTitle: { fontWeight: 'bold', fontSize: 14, marginBottom: 4 },
-    bannerText: { fontSize: 13 },
-
-    stepper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 16 },
-    step: { alignItems: 'center', gap: 4 },
-    stepText: { fontSize: 12, color: '#4B5563' },
-    line: { flex: 1, height: 2, backgroundColor: '#E5E7EB', marginHorizontal: 8 },
-
-    card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16 },
-    cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 12 },
-    itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    itemTitle: { fontSize: 14, color: '#374151' },
-    itemSubtitle: { fontSize: 12, color: '#6B7280' },
-    itemTotal: { fontWeight: '600', color: '#111827' },
-    totalRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 12, marginTop: 4 },
-    totalLabel: { fontWeight: 'bold', fontSize: 16 },
-    totalValue: { fontWeight: 'bold', fontSize: 18, color: '#7C3AED' },
-    text: { fontSize: 14, color: '#4B5563', marginBottom: 2 },
-
-    actionsContainer: { gap: 12, marginBottom: 40 },
-    primaryBtn: { backgroundColor: '#7C3AED', padding: 16, borderRadius: 12, alignItems: 'center' },
-    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-    dangerBtn: { flexDirection: 'row', backgroundColor: '#FEF2F2', padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#FECACA' },
-    dangerBtnText: { color: '#EF4444', fontWeight: 'bold' },
-    secondaryBtn: { flexDirection: 'row', backgroundColor: '#F3F4F6', padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8 },
-    secondaryBtnText: { color: '#374151', fontWeight: '600' }
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        padding: 20,
+    },
+    statusHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    orderId: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    date: {
+        fontSize: 14,
+        color: isDark ? '#9CA3AF' : '#6B7280',
+    },
+    statusBadge: {
+        backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#DBEAFE',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    statusText: {
+        color: '#3B82F6',
+        fontWeight: 'bold',
+        fontSize: 12,
+    },
+    card: {
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#E5E7EB',
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: isDark ? '#F9FAFB' : '#111827',
+        marginBottom: 12,
+    },
+    timeline: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+    },
+    timelineItem: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    timelineLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        marginHorizontal: 8,
+        marginBottom: 20, // adjust alignment
+    },
+    timelineText: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: isDark ? '#D1D5DB' : '#4B5563',
+    },
+    itemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    itemImagePlaceholder: {
+        width: 40,
+        height: 40,
+        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        borderRadius: 8,
+        marginRight: 12,
+    },
+    itemName: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: isDark ? '#F9FAFB' : '#1F2937',
+    },
+    itemPrice: {
+        fontSize: 12,
+        color: isDark ? '#9CA3AF' : '#6B7280',
+    },
+    itemTotal: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    label: {
+        fontSize: 14,
+        color: isDark ? '#9CA3AF' : '#6B7280',
+    },
+    value: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    totalLabel: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    totalValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    actionContainer: {
+        marginTop: 20,
+        gap: 12,
+    },
+    helpText: {
+        fontSize: 13,
+        color: isDark ? '#9CA3AF' : '#6B7280',
+        textAlign: 'center',
+    },
+    escrowCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F5F3FF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(124, 58, 237, 0.3)' : '#DDD6FE',
+        gap: 12,
+    },
+    escrowIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    escrowTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    escrowStatus: {
+        fontSize: 12,
+        color: isDark ? '#A78BFA' : '#7C3AED',
+        marginTop: 2,
+    },
+    escrowLink: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#7C3AED',
+    },
+    // Points Card Styles
+    pointsCard: {
+        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A',
+    },
+    pointsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 12,
+    },
+    pointsIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    pointsTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: isDark ? '#FCD34D' : '#B45309',
+    },
+    pointsSubtitle: {
+        fontSize: 12,
+        color: isDark ? '#D1D5DB' : '#92400E',
+        marginTop: 2,
+    },
+    pointsBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FDE68A',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    pointsBadgeText: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: isDark ? '#FCD34D' : '#B45309',
+    },
+    pointsBreakdown: {
+        backgroundColor: isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.6)',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 12,
+    },
+    pointsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+    },
+    pointsLabel: {
+        fontSize: 13,
+        color: isDark ? '#D1D5DB' : '#6B7280',
+    },
+    pointsValue: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: isDark ? '#F9FAFB' : '#374151',
+    },
+    pointsTotalRow: {
+        borderTopWidth: 1,
+        borderTopColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+        marginTop: 6,
+        paddingTop: 10,
+    },
+    pointsTotalLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: isDark ? '#FCD34D' : '#B45309',
+    },
+    pointsTotalValue: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: isDark ? '#FCD34D' : '#B45309',
+    },
+    pointsFooter: {
+        alignItems: 'center',
+    },
+    pointsFooterText: {
+        fontSize: 11,
+        color: isDark ? '#9CA3AF' : '#78716C',
+        textAlign: 'center',
+    },
 });

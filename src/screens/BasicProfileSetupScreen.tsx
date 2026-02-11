@@ -4,19 +4,26 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, SafeAreaView, Keyb
 import { Camera, User, Phone, AtSign, ArrowRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function BasicProfileSetupScreen({ navigation, route }: any) {
     const { user, updateProfile } = useAuth();
+    const { show } = useToast();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
     const role = route.params?.role || user?.role || 'consumer';
 
-    const [nickname, setNickname] = useState(user?.profile?.nickname || '');
+    const [nickname, setNickname] = useState(user?.nickname || '');
     const [phone, setPhone] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState(user?.avatar || `https://api.dicebear.com/7.x/initials/png?seed=${nickname}`);
 
     const handleContinue = async () => {
         if (!nickname.trim()) {
-            Alert.alert('Faltan datos', 'Por favor ingresa un nombre de usuario.');
+            show('Por favor ingresa un nombre de usuario.', 'warning');
             return;
         }
 
@@ -25,26 +32,21 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
             // Update profile in context/mock store
             await updateProfile({ nickname });
 
-            // Navigate based on role
-            if (role === 'consumer') {
-                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
-            } else {
-                // Business/Influencer go to KYC Flow
-                navigation.navigate('KYC', { accountType: role });
-            }
+            // Navigate to KYC Flow for ALL users after profile setup
+            navigation.navigate('KYC', { accountType: role });
         } catch (error) {
             console.error('Profile update error:', error);
-            Alert.alert('Error', 'No pudimos guardar tu perfil');
+            show('No pudimos guardar tu perfil. Inténtalo de nuevo.', 'error');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleAvatarPress = () => {
-        Alert.alert('Cambiar Foto', 'Selección de galería simulada', [
-            { text: 'Cancelar', style: 'cancel' },
-            { text: 'Usar avatar aleatorio', onPress: () => setAvatarUrl(`https://api.dicebear.com/7.x/avataaars/png?seed=${Math.random()}`) }
-        ]);
+        // Simulating gallery selection
+        const newAvatar = `https://api.dicebear.com/7.x/avataaars/png?seed=${Math.random()}`;
+        setAvatarUrl(newAvatar);
+        show('Foto de perfil actualizada (Simulada)', 'success');
     };
 
     return (
@@ -72,10 +74,11 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Nombre de Usuario (Nickname)</Text>
                             <View style={styles.inputWrapper}>
-                                <AtSign size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <AtSign size={20} color={isDark ? '#9CA3AF' : '#9CA3AF'} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Ej. JuanPerez, TacosMexico"
+                                    placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                                     value={nickname}
                                     onChangeText={setNickname}
                                     autoCapitalize="none"
@@ -87,10 +90,11 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Teléfono (Opcional)</Text>
                             <View style={styles.inputWrapper}>
-                                <Phone size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <Phone size={20} color={isDark ? '#9CA3AF' : '#9CA3AF'} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="+52 55 1234 5678"
+                                    placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                                     value={phone}
                                     onChangeText={setPhone}
                                     keyboardType="phone-pad"
@@ -124,16 +128,16 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFAFA' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
     scrollContent: { padding: 24, paddingBottom: 100 },
 
     header: { alignItems: 'center', marginBottom: 32 },
-    title: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
+    title: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
 
     avatarContainer: { alignSelf: 'center', marginBottom: 40, position: 'relative' },
-    avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#E5E7EB' },
+    avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     cameraBtn: {
         position: 'absolute',
         bottom: 0,
@@ -145,31 +149,31 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 3,
-        borderColor: '#FAFAFA'
+        borderColor: isDark ? '#111827' : '#FAFAFA'
     },
 
     formContainer: { width: '100%' },
     inputGroup: { marginBottom: 24 },
-    label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
+    label: { fontSize: 14, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: isDark ? '#374151' : '#E5E7EB',
         borderRadius: 12,
         height: 56,
         paddingHorizontal: 16
     },
     inputIcon: { marginRight: 12 },
-    input: { flex: 1, fontSize: 16, color: '#1F2937', height: '100%' },
-    hint: { fontSize: 12, color: '#9CA3AF', marginTop: 6, marginLeft: 4 },
+    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#1F2937', height: '100%' },
+    hint: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', marginTop: 6, marginLeft: 4 },
 
     footer: {
         padding: 24,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderTopWidth: 1,
-        borderTopColor: '#F3F4F6'
+        borderTopColor: isDark ? '#374151' : '#F3F4F6'
     },
     btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
     btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },

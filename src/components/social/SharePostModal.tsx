@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, SafeAreaView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, SafeAreaView, Image } from 'react-native';
 import { X, Search, Send, Check } from 'lucide-react-native';
 import { useSocial, Chat } from '../../contexts/SocialContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 
 interface SharePostModalProps {
     postContent: string; // Or link/ID
@@ -14,6 +16,10 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
     const { chats, getUserById, currentUser, sendMessage } = useSocial();
     const [searchText, setSearchText] = useState('');
     const [sentTo, setSentTo] = useState<string[]>([]); // Track sent status per session
+
+    const { theme, colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     // Filter chats based on search
     const filteredChats = chats.filter(chat => {
@@ -64,14 +70,14 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
     };
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Compartir</Text>
+        <Sheet open={visible} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <SheetHeader style={styles.header}>
+                    <SheetTitle style={styles.title}>Compartir</SheetTitle>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <X size={24} color="#111" />
+                        <X size={24} color={isDark ? "#F9FAFB" : "#111"} />
                     </TouchableOpacity>
-                </View>
+                </SheetHeader>
 
                 <View style={styles.searchContainer}>
                     <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
@@ -95,29 +101,34 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
                         </View>
                     }
                 />
-            </SafeAreaView>
-        </Modal>
+            </SheetContent>
+        </Sheet>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    title: { fontSize: 16, fontWeight: 'bold' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: {
+        backgroundColor: isDark ? '#111827' : '#fff',
+        height: '70%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+    },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    title: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111' },
     closeBtn: { position: 'absolute', right: 16, top: 16 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', margin: 16, borderRadius: 12, paddingHorizontal: 12, height: 44 },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#F3F4F6', margin: 16, borderRadius: 12, paddingHorizontal: 12, height: 44 },
     searchIcon: { marginRight: 8 },
-    input: { flex: 1, fontSize: 16, color: '#111' },
+    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
     list: { paddingHorizontal: 16 },
-    userItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },
+    userItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F9FAFB' },
     userInfo: { flexDirection: 'row', alignItems: 'center' },
     avatar: { width: 44, height: 44, marginRight: 12 },
-    userName: { fontWeight: '600', fontSize: 14, color: '#111' },
+    userName: { fontWeight: '600', fontSize: 14, color: isDark ? '#F9FAFB' : '#111' },
     userHandle: { fontSize: 12, color: '#6B7280' },
     sendBtn: { backgroundColor: '#0095F6', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8 },
-    sentBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DBDBDB' },
+    sentBtn: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#DBDBDB' },
     sendText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-    sentText: { color: '#111', fontWeight: '600', fontSize: 13 },
+    sentText: { color: isDark ? '#F9FAFB' : '#111', fontWeight: '600', fontSize: 13 },
     empty: { alignItems: 'center', marginTop: 40 },
     emptyText: { color: '#9CA3AF' }
 });

@@ -1,474 +1,877 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Alert } from 'react-native';
-import { Star, TrendingUp, Gift, Coins, Sparkles, Flame, CircleDollarSign, Gamepad2, UserPlus } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, Platform } from 'react-native';
+import { Star, TrendingUp, Gift, Coins, Sparkles, Flame, CircleDollarSign, Gamepad2, UserPlus, Crown, Check, Lock, ChevronRight, Trophy, Zap } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { usePoints, DISCOUNT_TIERS } from '../contexts/PointsContext';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // NEW
+import { usePoints, MEMBERSHIP_TIERS, DISCOUNT_TIERS } from '../contexts/PointsContext';
 import { DailyChallenges } from './DailyChallenges';
-import { useRewards } from '../contexts/RewardsContext';
+import { POINT_VALUE_USD, useRewards } from '../contexts/RewardsContext';
+import { useReferral } from '../contexts/ReferralContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+
+const { width } = Dimensions.get('window');
+
+// --- HAPTICS HELPER ---
+const triggerImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
+    if (Platform.OS !== 'web') {
+        Haptics.impactAsync(style);
+    }
+};
 
 export function PointsManager() {
-    const { points, lifetimePoints, transactions, currentTier, nextTier, challengeProgress } = usePoints();
+    // --- STATE & CONTEXT ---
+    const insets = useSafeAreaInsets(); // NEW
+    const { points, lifetimePoints, transactions, currentTier, nextTier, challengeProgress, claimDailyReward, conversionRate } = usePoints();
+    const { show } = useToast();
     const {
         getArcadeStatus,
         spinLuckyWheel,
         getLuckyWheelStatus,
-        getStreakMilestones,
-        claimStreakMilestone,
-        streakLongest,
-        referralCode,
-        referralLink,
-        referralSummary,
+        quarterlyMission, // Injected
     } = useRewards();
+    const { referralCode, referralLink, referralSummary } = useReferral();
 
-    // Animation for progress bar
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark, insets); // Pass insets to styles
+
+    // --- ANIMATIONS ---
     const progressToNext = useRef(new Animated.Value(0)).current;
 
-    const getNextMembership = () => {
-        if (!nextTier) return undefined;
-        return nextTier;
-    };
+    // --- CALCULATIONS ---
+    const walletValueUSD = (points * POINT_VALUE_USD).toFixed(2);
 
+    const getNextMembership = () => nextTier;
     const membershipTarget = getNextMembership();
     const pointsFloor = currentTier?.minPoints ?? 0;
     const pointsCap = membershipTarget?.minPoints ?? lifetimePoints;
+
     const rawProgress = membershipTarget && pointsCap !== pointsFloor
         ? ((lifetimePoints - pointsFloor) / (pointsCap - pointsFloor)) * 100
         : 100;
     const progress = Math.min(Math.max(rawProgress, 0), 100);
     const pointsToNext = membershipTarget ? Math.max(pointsCap - lifetimePoints, 0) : 0;
 
-    const walletValueUSD = (points * 0.01).toFixed(2);
-    const arcadeStatus = getArcadeStatus();
+    // Rewards status
     const wheelStatus = getLuckyWheelStatus();
-    const milestones = getStreakMilestones();
-    const nextClaimableMilestone = milestones.find((milestone) => milestone.eligible && !milestone.claimed);
-    const upcomingMilestone = milestones.find((milestone) => !milestone.claimed) ?? milestones[milestones.length - 1];
     const wheelAvailable = wheelStatus.available;
-    const lastWheelResult = wheelStatus.lastResult;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const alreadyClaimedDaily = challengeProgress.dailyClaimDate === todayKey;
 
     useEffect(() => {
         Animated.timing(progressToNext, {
             toValue: Math.min(progress, 100),
-            duration: 1000,
-            useNativeDriver: false // width doesn't support native driver
+            duration: 1200,
+            useNativeDriver: false
         }).start();
     }, [progress]);
 
-    const formatDate = (isoDate: string) => {
-        const date = new Date(isoDate);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
 
-        if (diffMins < 1) return 'Hace un momento';
-        if (diffMins < 60) return `Hace ${diffMins} min`;
-        if (diffHours < 24) return `Hace ${diffHours}h`;
-        if (diffDays < 7) return `Hace ${diffDays}d`;
-        return date.toLocaleDateString();
-    };
-
+    // --- ACTIONS ---
     const handleClaimStreak = () => {
-        if (!nextClaimableMilestone) {
-            Alert.alert('Racha Ramgos', 'No tienes recompensas pendientes por reclamar.');
+        triggerImpact(Haptics.ImpactFeedbackStyle.Medium);
+        if (alreadyClaimedDaily) {
+            show('Ya reclamaste tu racha de hoy.', 'info');
             return;
         }
-        const result = claimStreakMilestone(nextClaimableMilestone.value);
-        Alert.alert('Racha Ramgos', result.message);
+        claimDailyReward();
+        show('¡Racha reclamada!', 'success');
     };
 
     const handleSpinWheel = () => {
+        triggerImpact(Haptics.ImpactFeedbackStyle.Heavy);
         const result = spinLuckyWheel();
-        Alert.alert('Rueda de la Suerte', result.message);
+        show(result.message, result.status === 'awarded' ? 'success' : 'info');
     };
 
     const handleShowReferralLink = () => {
-        Alert.alert('Tu enlace de referido', referralLink);
+        triggerImpact();
+        show(`Tu enlace: ${referralLink}`, 'info');
+    };
+
+    // --- COMPONENT: EXPERT HERO HUD ---
+    const HeroHud = () => (
+        <View style={styles.heroContainer}>
+            {/* Background Mesh Gradient Simulation */}
+            <LinearGradient
+                colors={isDark ? ['#4F46E5', '#7C3AED', '#2E1065'] : ['#6366F1', '#8B5CF6', '#4C1D95']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                locations={[0, 0.6, 1]}
+                style={StyleSheet.absoluteFillObject}
+            />
+            {/* Top Row: Tier & Value */}
+            <View style={styles.heroTopRow}>
+                <View style={styles.tierChip}>
+                    <Crown size={12} color="#FCD34D" fill="#FCD34D" />
+                    <Text style={styles.tierChipText}>{currentTier?.label.toUpperCase()}</Text>
+                </View>
+                <View style={styles.valueContainer}>
+                    <Text style={styles.valueLabel}>VALOR REAL</Text>
+                    <Text style={styles.valueText}>${walletValueUSD}</Text>
+                </View>
+            </View>
+
+            {/* Center Stage: Massive Points */}
+            <View style={styles.heroScoreWrapper}>
+                <Text style={styles.heroScore}>{points.toLocaleString()}</Text>
+                <Text style={styles.heroScoreLabel}>PUNTOS DISPONIBLES</Text>
+            </View>
+
+            {/* Bottom: Progress Bar 3D */}
+            {membershipTarget && (
+                <View style={styles.progressSection}>
+                    <View style={styles.progressRow}>
+                        <Text style={styles.progressMeta}>{Math.floor(progress)}% completado</Text>
+                        <Text style={styles.progressMeta}>{pointsToNext} pts para {membershipTarget.label}</Text>
+                    </View>
+                    <View style={styles.track3D}>
+                        <Animated.View style={[styles.fill3D, { width: progressToNext.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) }]}>
+                            <LinearGradient
+                                colors={['#FBBF24', '#D97706']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={StyleSheet.absoluteFill}
+                            />
+                        </Animated.View>
+                    </View>
+                </View>
+            )}
+        </View>
+    );
+
+    // --- COMPONENT: CONTINUOUS TIER ROADMAP ---
+    const ContinuousTierRoadmap = () => (
+        <View style={styles.roadmapBox}>
+            <Text style={styles.sectionHeaderLabel}>TU PROGRESO</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roadmapScroll}>
+                {/* The Continuous Line */}
+                <View style={styles.roadmapLineBackground} />
+                <Animated.View style={[styles.roadmapLineFill, {
+                    width: Math.min((lifetimePoints / 100000) * (width * 1.5), width * 1.2) // Rough approximation for demo visual
+                }]} />
+
+                {MEMBERSHIP_TIERS.map((tier, index) => {
+                    const isReached = lifetimePoints >= tier.minPoints;
+                    const isCurrent = currentTier?.id === tier.id;
+                    const isLocked = !isReached;
+
+                    return (
+                        <View key={tier.id} style={styles.nodeWrapper}>
+                            {/* The Node */}
+                            <View style={[
+                                styles.nodeCircle,
+                                isReached && styles.nodeReached,
+                                isCurrent && styles.nodeCurrent,
+                                isLocked && styles.nodeLocked
+                            ]}>
+                                {isCurrent ? <Star size={16} color="#fff" fill="#fff" /> :
+                                    isReached ? <Check size={14} color="rgba(255,255,255,0.8)" /> :
+                                        <Lock size={14} color="rgba(255,255,255,0.4)" />}
+                            </View>
+
+                            {/* The Label */}
+                            <Text style={[styles.nodeLabel, isCurrent && styles.nodeLabelCurrent]}>{tier.label}</Text>
+                            <Text style={styles.nodePoints}>{tier.minPoints > 0 ? `${tier.minPoints / 1000}k` : 'START'}</Text>
+                        </View>
+                    );
+                })}
+            </ScrollView>
+        </View>
+    );
+
+    // --- COMPONENT: GLASS ACTION CARDS ---
+    const GlassActionCard = ({ title, subtitle, icon: Icon, color, onPress, disabled, buttonText }: any) => (
+        <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onPress}
+            disabled={disabled}
+            style={[styles.glassCard, disabled && { opacity: 0.6 }]}
+        >
+            <View style={[styles.glassIconBox, { backgroundColor: `${color}20` }]}>
+                <Icon size={24} color={color} />
+            </View>
+            <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.glassTitle}>{title}</Text>
+                <Text style={styles.glassSubtitle}>{subtitle}</Text>
+            </View>
+            <View style={[styles.glassButton, disabled && { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDark ? '#334155' : '#E2E8F0' }]}>
+                <Text style={[styles.glassButtonText, disabled && { color: '#94A3B8' }]}>{buttonText}</Text>
+                {!disabled && <ChevronRight size={14} color="#fff" />}
+            </View>
+        </TouchableOpacity>
+    );
+
+    const HowItWorks = () => {
+        const [expanded, setExpanded] = React.useState(false);
+        
+        return (
+            <View style={styles.howItWorksCard}>
+                <TouchableOpacity 
+                    style={styles.howItWorksHeader} 
+                    onPress={() => { triggerImpact(); setExpanded(!expanded); }}
+                    activeOpacity={0.7}
+                    accessible={true}
+                    accessibilityLabel="Cómo funciona el sistema de puntos"
+                    accessibilityHint="Toca para expandir o colapsar la explicación"
+                >
+                    <View style={styles.howItWorksIcon}>
+                        <Zap size={18} color={isDark ? '#FCD34D' : '#B45309'} />
+                    </View>
+                    <Text style={styles.howItWorksTitle}>CÓMO FUNCIONA</Text>
+                    <ChevronRight 
+                        size={18} 
+                        color={isDark ? '#94A3B8' : '#64748B'} 
+                        style={{ marginLeft: 'auto', transform: [{ rotate: expanded ? '90deg' : '0deg' }] }} 
+                    />
+                </TouchableOpacity>
+
+                {/* Quick Summary - Always visible */}
+                <View style={styles.howItWorksSummary}>
+                    <View style={styles.summaryItem}>
+                        <Text style={styles.summaryValue}>${POINT_VALUE_USD.toFixed(2)}</Text>
+                        <Text style={styles.summaryLabel}>por punto</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryItem}>
+                        <Text style={styles.summaryValue}>1:1</Text>
+                        <Text style={styles.summaryLabel}>$1 = 1 pt</Text>
+                    </View>
+                    <View style={styles.summaryDivider} />
+                    <View style={styles.summaryItem}>
+                        <Text style={styles.summaryValue}>{currentTier?.bonusMultiplier ? `+${Math.round(currentTier.bonusMultiplier * 100)}%` : '0%'}</Text>
+                        <Text style={styles.summaryLabel}>bonus {currentTier?.label}</Text>
+                    </View>
+                </View>
+
+                {expanded && (
+                    <>
+                        <View style={styles.howItWorksDivider} />
+                        
+                        {/* Earning Section */}
+                        <Text style={styles.howItWorksSectionTitle}>💰 GANAR PUNTOS</Text>
+                        
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5' }]}>
+                                <TrendingUp size={14} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Compras</Text>
+                                <Text style={styles.howItWorksText}>
+                                    1 punto por cada $1 pagado en efectivo. Si usás puntos para pagar, solo ganás puntos sobre el saldo restante.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE' }]}>
+                                <Crown size={14} color="#8B5CF6" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Bonus por Nivel</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Tu nivel {currentTier?.label} te da {currentTier?.bonusMultiplier ? `+${Math.round(currentTier.bonusMultiplier * 100)}%` : 'puntos base'} extra en cada compra.
+                                    {nextTier ? ` Próximo: ${nextTier.label} (+${Math.round((nextTier.bonusMultiplier || 0) * 100)}%).` : ''}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(249, 115, 22, 0.2)' : '#FFEDD5' }]}>
+                                <Gamepad2 size={14} color="#F97316" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Juegos</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Jugá y ganá monedas. Convertí {conversionRate} monedas en 1 punto real.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(6, 182, 212, 0.2)' : '#CFFAFE' }]}>
+                                <UserPlus size={14} color="#06B6D4" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Referidos</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Compartí tu código "{referralCode}" y ganá cuando tus amigos se registran y compran.
+                                    {referralSummary?.registrations ? ` Ya referiste a ${referralSummary.registrations} personas.` : ''}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(236, 72, 153, 0.2)' : '#FCE7F3' }]}>
+                                <Flame size={14} color="#EC4899" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Racha Diaria</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Iniciá sesión todos los días para mantener tu racha y ganar puntos extra.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksDivider} />
+
+                        {/* Spending Section */}
+                        <Text style={styles.howItWorksSectionTitle}>🛒 USAR PUNTOS</Text>
+
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.2)' : '#FEF3C7' }]}>
+                                <Coins size={14} color="#F59E0B" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Descuentos en Checkout</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Canjeá puntos por descuentos al momento de pagar. Cada punto vale ${POINT_VALUE_USD.toFixed(2)}.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksDivider} />
+
+                        {/* Quick reference table */}
+                        <Text style={styles.howItWorksSubTitle}>Tiers de Canje</Text>
+                        <View style={styles.discountTiersContainer}>
+                            {DISCOUNT_TIERS.slice(0, 4).map((tier, idx) => (
+                                <View key={idx} style={[styles.discountTierItem, idx === 0 && points >= tier.points && styles.discountTierItemActive]}>
+                                    <Text style={[styles.discountTierPoints, idx === 0 && points >= tier.points && styles.discountTierActive]}>{tier.points} pts</Text>
+                                    <Text style={[styles.discountTierValue, idx === 0 && points >= tier.points && styles.discountTierActive]}>→ ${tier.discount.toFixed(2)}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    </>
+                )}
+
+                {!expanded && (
+                    <Text style={styles.howItWorksTapToExpand}>Toca para ver más detalles</Text>
+                )}
+            </View>
+        );
     };
 
     return (
         <View style={styles.container}>
-            {/* Balance Card */}
-            <LinearGradient
-                colors={['#8B5CF6', '#7C3AED']} // Violet gradient
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.balanceCard}
-            >
-                <View style={styles.balanceHeader}>
-                    <View>
-                        <Text style={styles.balanceLabel}>Tus Puntos · Nivel {currentTier?.label}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                            <Text style={styles.balanceValue}>{points}</Text>
-                            <Star size={24} color="#FDE047" fill="#FDE047" />
-                        </View>
-                    </View>
-                    <View style={styles.sparkleIcon}>
-                        <Sparkles size={24} color="#fff" />
-                    </View>
+            <HeroHud />
+
+            <ContinuousTierRoadmap />
+
+            <View style={styles.contentPadding}>
+                {/* QUICK ACTIONS */}
+                <Text style={styles.sectionHeaderLabel}>ACCIONES RÁPIDAS</Text>
+                <View style={{ gap: 12 }}>
+                    <GlassActionCard
+                        title="Racha Diaria"
+                        subtitle={`${challengeProgress.loginStreak} días consecutivos`}
+                        icon={Flame}
+                        color="#F97316"
+                        buttonText={alreadyClaimedDaily ? 'Hecho' : 'Reclamar'}
+                        disabled={alreadyClaimedDaily}
+                        onPress={handleClaimStreak}
+                    />
+                    <GlassActionCard
+                        title="Ruleta de la Suerte"
+                        subtitle={wheelAvailable ? "Giro disponible" : "Vuelve mañana"}
+                        icon={CircleDollarSign}
+                        color="#D97706"
+                        buttonText={wheelAvailable ? "Girar" : "Esperar"}
+                        disabled={!wheelAvailable}
+                        onPress={handleSpinWheel}
+                    />
                 </View>
 
-                {pointsToNext > 0 && membershipTarget && (
-                    <View style={{ marginTop: 16 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text style={styles.nextTierText}>Siguiente nivel: {membershipTarget.label}</Text>
-                            <Text style={styles.nextTierText}>
-                                {pointsToNext} pts para activar beneficios adicionales
-                            </Text>
+                {/* HOW IT WORKS */}
+                <View style={{ marginTop: 24 }}>
+                    <HowItWorks />
+                </View>
+
+                {/* QUARTERLY MISSION WIDGET */}
+                {quarterlyMission && (
+                    <View style={[styles.missionCard, quarterlyMission.claimed && styles.missionCardCompleted]}>
+                        <View style={styles.missionHeader}>
+                            <View style={[styles.missionIconBox, quarterlyMission.claimed && { backgroundColor: '#059669' }]}>
+                                <Trophy size={20} color="#FCD34D" fill="#FCD34D" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.missionTitle}>MISIÓN TRIMESTRAL</Text>
+                                <Text style={styles.missionSubtitle}>
+                                    {quarterlyMission.claimed ? '¡Completada! 🎉' : 'Gana +150 pts al completar'}
+                                </Text>
+                            </View>
+                            <View style={[styles.missionBadge, quarterlyMission.claimed && { backgroundColor: '#059669' }]}>
+                                <Text style={styles.missionBadgeText}>
+                                    {quarterlyMission.claimed ? '✓' : `${quarterlyMission.reward} pts`}
+                                </Text>
+                            </View>
                         </View>
-                        <View style={styles.progressBarBg}>
-                            <Animated.View
-                                style={[
-                                    styles.progressBarFill,
-                                    {
-                                        width: progressToNext.interpolate({
-                                            inputRange: [0, 100],
-                                            outputRange: ['0%', '100%']
-                                        })
-                                    }
-                                ]}
-                            />
+
+                        <View style={styles.missionProgressBox}>
+                            <View style={styles.missionMetaRow}>
+                                <Text style={styles.missionProgressText}>{Math.min(quarterlyMission.purchasesCurrent, quarterlyMission.purchasesTarget)} / {quarterlyMission.purchasesTarget} Compras</Text>
+                                <Text style={styles.missionProgressPercent}>{Math.round((quarterlyMission.purchasesCurrent / quarterlyMission.purchasesTarget) * 100)}%</Text>
+                            </View>
+                            <View style={styles.missionTrack}>
+                                <View style={[styles.missionFill, quarterlyMission.claimed && { backgroundColor: '#059669' }, { width: `${Math.min((quarterlyMission.purchasesCurrent / quarterlyMission.purchasesTarget) * 100, 100)}%` }]} />
+                            </View>
+                            <Text style={styles.missionHint}>
+                                {quarterlyMission.claimed 
+                                    ? `+${quarterlyMission.reward} pts agregados a tu cuenta` 
+                                    : 'Realiza 3 compras este trimestre para desbloquear.'}
+                            </Text>
                         </View>
                     </View>
                 )}
 
-                <View style={styles.balanceMetaRow}>
-                    <View style={styles.balanceMeta}>
-                        <Text style={styles.balanceMetaLabel}>Valor billetera</Text>
-                        <Text style={styles.balanceMetaValue}>${walletValueUSD}</Text>
-                    </View>
-                    <View style={styles.balanceMeta}>
-                        <Text style={styles.balanceMetaLabel}>Puntos históricos</Text>
-                        <Text style={styles.balanceMetaValue}>{lifetimePoints}</Text>
-                    </View>
-                </View>
-            </LinearGradient>
-
-            {/* Discount Tiers */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Gift size={20} color="#7C3AED" />
-                    <Text style={styles.sectionTitle}>Descuentos Disponibles</Text>
+                {/* DAILY CHALLENGES WIDGET */}
+                <View style={{ marginTop: 24 }}>
+                    <DailyChallenges />
                 </View>
 
-                <View style={{ gap: 10 }}>
-                        {DISCOUNT_TIERS.map((tier, index) => {
-                            const isUnlocked = points >= tier.points;
-                            const isActive = points >= tier.points && (index === DISCOUNT_TIERS.length - 1 || points < DISCOUNT_TIERS[index + 1].points);
-
-                        return (
-                            <View
-                                key={tier.points}
-                                style={[
-                                    styles.tierCard,
-                                    isActive && { borderColor: '#8B5CF6', backgroundColor: '#F5F3FF' },
-                                    isUnlocked && !isActive && { borderColor: '#22C55E', backgroundColor: '#F0FDF4' }
-                                ]}
-                            >
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                                            <Text style={styles.tierPoints}>{tier.points} puntos</Text>
-                                            {isActive && (
-                                                <View style={styles.activeBadge}>
-                                                    <Text style={styles.activeBadgeText}>Actual</Text>
-                                                </View>
-                                            )}
-                                            {isUnlocked && !isActive && (
-                                                <View style={styles.unlockedBadge}>
-                                                    <Text style={styles.unlockedBadgeText}>Desbloqueado</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <Text style={styles.tierDesc}>${tier.discount} de descuento ({tier.percentage}%)</Text>
-                                    </View>
-
-                                    <View style={[
-                                        styles.statusIcon,
-                                        isUnlocked ? { backgroundColor: '#22C55E' } : { backgroundColor: '#F3F4F6' }
-                                    ]}>
-                                        <Text style={{ fontSize: 16 }}>{isUnlocked ? '✓' : '🔒'}</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        );
-                    })}
-                </View>
-            </View>
-
-            {/* Rewards Engine */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Sparkles size={20} color="#F97316" />
-                    <Text style={styles.sectionTitle}>Ramgos Rewards</Text>
-                </View>
-
-                <View style={styles.rewardsGrid}>
-                    <View style={styles.rewardCard}>
-                        <View style={styles.rewardCardHeader}>
-                            <View style={[styles.rewardIcon, { backgroundColor: '#FFF7ED' }]}>
-                                <Flame size={18} color="#F97316" />
-                            </View>
-                            <View>
-                                <Text style={styles.rewardTitle}>Racha diaria</Text>
-                                <Text style={styles.rewardSubtitle}>
-                                    {challengeProgress.loginStreak} días · Mejor racha {streakLongest}
-                                </Text>
-                            </View>
+                {/* BENEFITS SCROLL */}
+                <Text style={[styles.sectionHeaderLabel, { marginTop: 24 }]}>BENEFICIOS ACTIVOS</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 20 }}>
+                    {currentTier?.perks.map((perk, i) => (
+                        <View key={i} style={styles.benefitPill}>
+                            <Sparkles size={14} color="#8B5CF6" />
+                            <Text style={styles.benefitText}>{perk}</Text>
                         </View>
-                        <View style={styles.rewardBody}>
-                            <Text style={styles.rewardDetail}>
-                                Próxima meta: {upcomingMilestone ? `${upcomingMilestone.value} días (+${upcomingMilestone.reward} pts)` : 'Metas completadas'}
-                            </Text>
-                            <TouchableOpacity
-                                style={[styles.rewardButton, !nextClaimableMilestone && styles.rewardButtonDisabled]}
-                                onPress={handleClaimStreak}
-                                disabled={!nextClaimableMilestone}
-                            >
-                                <Gift size={16} color={nextClaimableMilestone ? '#fff' : '#9CA3AF'} />
-                                <Text
-                                    style={[styles.rewardButtonText, !nextClaimableMilestone && styles.rewardButtonTextDisabled]}
-                                >
-                                    {nextClaimableMilestone ? `Reclamar +${nextClaimableMilestone.reward} pts` : 'Sin recompensas pendientes'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
+                    ))}
+                    <View style={[styles.benefitPill, styles.benefitPillLocked]}>
+                        <Lock size={14} color="#94A3B8" />
+                        <Text style={styles.benefitTextLocked}>Más en {nextTier?.label || 'Max'}</Text>
                     </View>
-
-                    <View style={styles.rewardCard}>
-                        <View style={styles.rewardCardHeader}>
-                            <View style={[styles.rewardIcon, { backgroundColor: '#FEF3C7' }]}>
-                                <CircleDollarSign size={18} color="#D97706" />
-                            </View>
-                            <View>
-                                <Text style={styles.rewardTitle}>Rueda de la suerte</Text>
-                                <Text style={styles.rewardSubtitle}>
-                                    {wheelAvailable ? '1 giro disponible hoy' : 'Disponible nuevamente mañana'}
-                                </Text>
-                            </View>
-                        </View>
-                        {lastWheelResult && (
-                            <Text style={styles.rewardDetail}>
-                                Último resultado: {lastWheelResult.segment.label}
-                                {lastWheelResult.pointsAwarded ? ` (+${lastWheelResult.pointsAwarded} pts)` : ''}
-                            </Text>
-                        )}
-                        <TouchableOpacity
-                            style={[styles.rewardButton, !wheelAvailable && styles.rewardButtonDisabled]}
-                            onPress={handleSpinWheel}
-                            disabled={!wheelAvailable}
-                        >
-                            <CircleDollarSign size={16} color={wheelAvailable ? '#fff' : '#9CA3AF'} />
-                            <Text
-                                style={[styles.rewardButtonText, !wheelAvailable && styles.rewardButtonTextDisabled]}
-                            >
-                                {wheelAvailable ? 'Girar ahora' : 'Mañana hay más'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.rewardCard}>
-                        <View style={styles.rewardCardHeader}>
-                            <View style={[styles.rewardIcon, { backgroundColor: '#E0F2FE' }]}>
-                                <Gamepad2 size={18} color="#0EA5E9" />
-                            </View>
-                            <View>
-                                <Text style={styles.rewardTitle}>Arcade diario</Text>
-                                <Text style={styles.rewardSubtitle}>
-                                    {arcadeStatus.remaining > 0
-                                        ? `${arcadeStatus.remaining} recompensas disponibles`
-                                        : 'Límite diario alcanzado'}
-                                </Text>
-                            </View>
-                        </View>
-                        <Text style={styles.rewardDetail}>
-                            Recompensas reclamadas hoy: {arcadeStatus.claimed} / {arcadeStatus.claimed + arcadeStatus.remaining}
-                        </Text>
-                        <Text style={styles.rewardHint}>
-                            Juega en Mi Mascota o Game Center para sumar puntos extra.
-                        </Text>
-                    </View>
-
-                    <View style={styles.rewardCard}>
-                        <View style={styles.rewardCardHeader}>
-                            <View style={[styles.rewardIcon, { backgroundColor: '#F3E8FF' }]}>
-                                <UserPlus size={18} color="#7C3AED" />
-                            </View>
-                            <View>
-                                <Text style={styles.rewardTitle}>Referidos</Text>
-                                <Text style={styles.rewardSubtitle}>
-                                    {referralSummary.registrations} registros · {referralSummary.purchases} compras
-                                </Text>
-                            </View>
-                        </View>
-                        <View style={styles.referralCodeBox}>
-                            <Text style={styles.referralCode}>{referralCode}</Text>
-                            <TouchableOpacity style={styles.linkButton} onPress={handleShowReferralLink}>
-                                <Text style={styles.linkButtonText}>Ver enlace</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={styles.rewardDetail}>
-                            Puntos acumulados: {referralSummary.totalPoints}
-                        </Text>
-                    </View>
-                </View>
-            </View>
-
-            {/* Daily Challenges Component */}
-            <DailyChallenges />
-
-            {/* How to Earn */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <TrendingUp size={20} color="#16A34A" />
-                    <Text style={styles.sectionTitle}>Cómo Ganar Puntos</Text>
-                </View>
-
-                <View style={{ gap: 10 }}>
-                    <View style={styles.earnCard}>
-                        <View style={[styles.earnIcon, { backgroundColor: '#8B5CF6' }]}>
-                            <Gift size={20} color="#fff" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.earnTitle}>Compra en la Tienda</Text>
-                            <Text style={styles.earnDesc}>Gana <Text style={{ fontWeight: 'bold' }}>1 punto</Text> por cada $1 gastado</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.earnCard}>
-                        <View style={[styles.earnIcon, { backgroundColor: '#F59E0B' }]}>
-                            <Coins size={20} color="#fff" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.earnTitle}>Juega con tu Mascota</Text>
-                            <Text style={styles.earnDesc}>Convierte <Text style={{ fontWeight: 'bold' }}>5 monedas = 1 punto</Text> desde Mi Mascota</Text>
-                        </View>
-                    </View>
-                </View>
-            </View>
-
-            {/* Transaction History */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Historial Reciente</Text>
-                </View>
-
-                {transactions.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <View style={styles.emptyIcon}>
-                            <Star size={32} color="#9CA3AF" />
-                        </View>
-                        <Text style={styles.emptyText}>Aún no tienes transacciones</Text>
-                    </View>
-                ) : (
-                    <View style={styles.historyList}>
-                        {transactions.slice(0, 10).map((transaction, index) => (
-                            <View key={transaction.id}>
-                                <View style={styles.historyItem}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                                        <View style={[
-                                            styles.historyIcon,
-                                            (transaction.type === 'earn' || transaction.type === 'convert')
-                                                ? { backgroundColor: '#DCFCE7' }
-                                                : { backgroundColor: '#FEE2E2' }
-                                        ]}>
-                                            {(transaction.type === 'earn' || transaction.type === 'convert') ? (
-                                                <TrendingUp
-                                                    size={16}
-                                                    color={transaction.type === 'convert' ? '#D97706' : '#16A34A'}
-                                                />
-                                            ) : (
-                                                <Gift size={16} color="#DC2626" />
-                                            )}
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.historyDesc} numberOfLines={1}>{transaction.description}</Text>
-                                            <Text style={styles.historyDate}>{formatDate(transaction.date)}</Text>
-                                        </View>
-                                    </View>
-                                    <Text style={[
-                                        styles.historyAmount,
-                                        transaction.amount > 0 ? { color: '#16A34A' } : { color: '#DC2626' }
-                                    ]}>
-                                        {transaction.amount > 0 ? '+' : ''}{transaction.amount}
-                                    </Text>
-                                </View>
-                                {index < transactions.slice(0, 10).length - 1 && <View style={styles.separator} />}
-                            </View>
-                        ))}
-                    </View>
-                )}
+                </ScrollView>
             </View>
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { gap: 20, paddingBottom: 20 },
+const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => {
+    // --- CONSTANTS ---
+    const roadmapPadding = 24;
+    const roadmapTopPadding = 12; // Add breathing room for scale/shadow
+    const nodeWidth = width / 4.5; // Responsive node width
+    const nodeRadius = 24; // 48px / 2
 
-    // Balance Card
-    balanceCard: { borderRadius: 24, padding: 24, elevation: 4 },
-    balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    balanceLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, marginBottom: 4 },
-    balanceValue: { color: '#fff', fontSize: 40, fontWeight: 'bold' },
-    sparkleIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-    nextTierText: { color: 'rgba(255,255,255,0.9)', fontSize: 12 },
-    progressBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, overflow: 'hidden' },
-    progressBarFill: { height: '100%', backgroundColor: '#fff', borderRadius: 4 },
-    balanceMetaRow: { flexDirection: 'row', marginTop: 24, gap: 12 },
-    balanceMeta: { flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 12 },
-    balanceMetaLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 12 },
-    balanceMetaValue: { color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 4 },
+    // Line alignment math: 
+    // Start = padding + half node width
+    const lineOffset = roadmapPadding + (nodeWidth / 2);
+    // Top = Padding Top + Node Center (Radius) - Half Stroke
+    const lineTop = roadmapTopPadding + nodeRadius - 2;
 
-    // Sections
-    section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-    rewardsGrid: { gap: 12 },
-    rewardCard: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, backgroundColor: '#fff', gap: 12 },
-    rewardCardHeader: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-    rewardIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-    rewardTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
-    rewardSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-    rewardBody: { gap: 12 },
-    rewardDetail: { fontSize: 12, color: '#4B5563' },
-    rewardHint: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
-    rewardButton: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F97316', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, justifyContent: 'center' },
-    rewardButtonText: { color: '#fff', fontWeight: '600', fontSize: 12 },
-    rewardButtonDisabled: { backgroundColor: '#F3F4F6' },
-    rewardButtonTextDisabled: { color: '#9CA3AF' },
-    referralCodeBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: '#E5E7EB', marginTop: 8 },
-    referralCode: { fontWeight: '700', fontSize: 13, color: '#4C1D95' },
-    linkButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#7C3AED' },
-    linkButtonText: { color: '#fff', fontWeight: '600', fontSize: 12 },
+    const HEADER_HEIGHT = 280;
 
-    // Discount Tiers
-    tierCard: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#fff' },
-    tierPoints: { fontSize: 14, fontWeight: '600', color: '#111827' },
-    tierDesc: { fontSize: 12, color: '#6B7280' },
-    activeBadge: { backgroundColor: '#8B5CF6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    activeBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-    unlockedBadge: { backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    unlockedBadgeText: { color: '#16A34A', fontSize: 10, fontWeight: 'bold' },
-    statusIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: isDark ? '#0F172A' : '#F8FAFC', // Slate 900 vs Slate 50
+        },
+        contentPadding: {
+            paddingHorizontal: 24,
+            paddingBottom: 40 + insets.bottom, // Add bottom safe area
+        },
 
-    // Earn Methods
-    earnCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: '#F9FAFB' },
-    earnIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-    earnTitle: { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 2 },
-    earnDesc: { fontSize: 11, color: '#6B7280' },
+        // --- HERO HUD ---
+        heroContainer: {
+            width: '100%',
+            height: HEADER_HEIGHT + insets.top, // Dynamic height
+            padding: 24,
+            justifyContent: 'flex-end',
+            paddingBottom: 40,
+            position: 'relative',
+            borderBottomLeftRadius: 32,
+            borderBottomRightRadius: 32,
+            overflow: 'hidden',
+        },
+        heroTopRow: {
+            position: 'absolute',
+            top: 20 + insets.top, // SAFE AREA FIX
+            left: 24,
+            right: 24,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+        },
+        tierChip: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 100,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.1)',
+        },
+        tierChipText: {
+            color: '#FCD34D',
+            fontWeight: '800',
+            fontSize: 12,
+            letterSpacing: 1,
+        },
+        valueContainer: { alignItems: 'flex-end' },
+        valueLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginBottom: 2 },
+        valueText: { color: '#fff', fontSize: 18, fontWeight: '700' },
 
-    // History
-    emptyState: { alignItems: 'center', padding: 24 },
-    emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-    emptyText: { color: '#6B7280', fontSize: 14 },
-    historyList: {},
-    historyItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
-    historyIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-    historyDesc: { fontSize: 13, fontWeight: '500', color: '#374151' },
-    historyDate: { fontSize: 11, color: '#9CA3AF' },
-    historyAmount: { fontSize: 13, fontWeight: 'bold' },
-    separator: { height: 1, backgroundColor: '#F3F4F6' }
-});
+        heroScoreWrapper: { alignItems: 'center', marginBottom: 24, marginTop: 40 },
+        heroScore: {
+            fontSize: 64, // SCALE TYPOGRAPHY
+            fontWeight: '900',
+            color: '#fff',
+            letterSpacing: -2,
+            textShadowColor: 'rgba(0,0,0,0.3)',
+            textShadowOffset: { width: 0, height: 4 },
+            textShadowRadius: 8,
+        },
+        heroScoreLabel: {
+            color: 'rgba(255,255,255,0.8)',
+            fontSize: 12,
+            fontWeight: '600',
+            letterSpacing: 4,
+            marginTop: -4,
+        },
 
+        progressSection: {},
+        progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+        progressMeta: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' },
+        track3D: {
+            height: 10,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            borderRadius: 5,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.1)',
+        },
+        fill3D: { height: '100%' },
+
+        // --- CONTINUOUS ROADMAP ---
+        roadmapBox: {
+            marginTop: 24,
+            marginBottom: 24,
+        },
+        sectionHeaderLabel: {
+            paddingHorizontal: 24,
+            fontSize: 11,
+            fontWeight: '700',
+            color: isDark ? '#94A3B8' : '#64748B',
+            letterSpacing: 1.5,
+            marginBottom: 16,
+        },
+        roadmapScroll: {
+            paddingHorizontal: roadmapPadding,
+            paddingTop: roadmapTopPadding, // Prevent clipping
+            paddingBottom: 20,
+        },
+        roadmapLineBackground: {
+            position: 'absolute',
+            top: lineTop,
+            left: lineOffset,
+            right: lineOffset,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+            zIndex: -1,
+        },
+        roadmapLineFill: {
+            position: 'absolute',
+            top: lineTop,
+            left: lineOffset,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: '#7C3AED',
+            zIndex: -1,
+        },
+        nodeWrapper: {
+            alignItems: 'center',
+            width: nodeWidth,
+            marginRight: 0, // No margin right, spacing handled by width
+        },
+        nodeCircle: {
+            width: nodeRadius * 2,
+            height: nodeRadius * 2,
+            borderRadius: nodeRadius,
+            backgroundColor: isDark ? '#1E293B' : '#FFF',
+            borderWidth: 4,
+            borderColor: isDark ? '#0F172A' : '#F8FAFC',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 8,
+            shadowColor: '#000',
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2,
+        },
+        nodeReached: { backgroundColor: '#7C3AED' },
+        nodeCurrent: {
+            backgroundColor: '#F59E0B',
+            transform: [{ scale: 1.1 }],
+            borderColor: '#F59E0B',
+            borderWidth: 0,
+            shadowColor: '#F59E0B',
+            shadowOpacity: 0.4,
+            shadowRadius: 8,
+        },
+        nodeLocked: { backgroundColor: isDark ? '#334155' : '#E2E8F0' },
+        nodeLabel: { fontSize: 10, fontWeight: '700', color: isDark ? '#FFF' : '#1E293B', letterSpacing: 0.5 },
+        nodeLabelCurrent: { color: '#F59E0B' },
+        nodePoints: { fontSize: 9, color: isDark ? '#64748B' : '#94A3B8', marginTop: 2 },
+
+        // --- GLASS CARDS ---
+        glassCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: isDark ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)', // More translucent
+            padding: 16,
+            borderRadius: 24,
+            gap: 16,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.4)',
+
+            // Subtle shadow
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 10,
+            elevation: 2,
+        },
+        glassIconBox: {
+            width: 52,
+            height: 52,
+            borderRadius: 18,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.1)'
+        },
+        glassTitle: { fontSize: 16, fontWeight: '700', color: isDark ? '#F8FAFC' : '#1E293B' },
+        glassSubtitle: { fontSize: 13, color: isDark ? '#94A3B8' : '#64748B', marginTop: 2 },
+        glassButton: {
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.8)' : '#F1F5F9',
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'transparent'
+        },
+        glassButtonText: { color: isDark ? '#E2E8F0' : '#334155', fontSize: 12, fontWeight: '700' },
+
+        // --- BENEFITS ---
+        benefitPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#F5F3FF',
+            borderRadius: 100,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+        },
+        benefitText: { fontSize: 13, fontWeight: '600', color: isDark ? '#E9D5FF' : '#7C3AED' },
+        benefitPillLocked: { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: 'transparent' },
+        benefitTextLocked: { color: '#94A3B8' },
+
+        // --- MISSION CARD ---
+        missionCard: {
+            marginTop: 24,
+            backgroundColor: isDark ? '#1E293B' : '#FFF',
+            borderRadius: 20,
+            padding: 2, // Gradient border effect simulation or just padding
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: isDark ? '#334155' : '#E2E8F0',
+            shadowColor: '#000',
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 3,
+        },
+        missionCardCompleted: {
+            borderColor: '#059669',
+            borderWidth: 2,
+        },
+        missionHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: 16,
+            gap: 12,
+            backgroundColor: isDark ? '#1E293B' : '#FFF',
+        },
+        missionIconBox: {
+            width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(252, 211, 77, 0.15)',
+            justifyContent: 'center', alignItems: 'center'
+        },
+        missionTitle: { fontSize: 13, fontWeight: '800', color: isDark ? '#FFF' : '#1E293B', letterSpacing: 0.5 },
+        missionSubtitle: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B' },
+        missionBadge: { backgroundColor: '#FCD34D', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
+        missionBadgeText: { fontSize: 11, fontWeight: '800', color: '#78350F' },
+
+        missionProgressBox: {
+            padding: 16,
+            paddingTop: 0,
+            backgroundColor: isDark ? '#1E293B' : '#FFF',
+        },
+        missionMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+        missionProgressText: { fontSize: 11, fontWeight: '600', color: isDark ? '#CBD5E1' : '#475569' },
+        missionProgressPercent: { fontSize: 11, fontWeight: '700', color: '#FCD34D' },
+        missionTrack: { height: 6, backgroundColor: isDark ? '#334155' : '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 },
+        missionFill: { height: '100%', backgroundColor: '#FCD34D' },
+        missionHint: { fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', fontStyle: 'italic' },
+
+        // --- HOW IT WORKS ---
+        howItWorksCard: {
+            marginTop: 0,
+            backgroundColor: isDark ? '#111827' : '#FFFFFF',
+            borderRadius: 20,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: isDark ? '#334155' : '#E2E8F0',
+        },
+        howItWorksHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 12,
+        },
+        howItWorksIcon: {
+            width: 32,
+            height: 32,
+            borderRadius: 12,
+            backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        howItWorksTitle: {
+            fontSize: 12,
+            fontWeight: '800',
+            letterSpacing: 1.2,
+            color: isDark ? '#F9FAFB' : '#111827',
+        },
+        howItWorksSummary: {
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            alignItems: 'center',
+            paddingVertical: 12,
+            backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : '#F5F3FF',
+            borderRadius: 12,
+            marginBottom: 8,
+        },
+        summaryItem: {
+            alignItems: 'center',
+        },
+        summaryValue: {
+            fontSize: 18,
+            fontWeight: '800',
+            color: isDark ? '#A5B4FC' : '#6366F1',
+        },
+        summaryLabel: {
+            fontSize: 10,
+            fontWeight: '600',
+            color: isDark ? '#94A3B8' : '#64748B',
+            marginTop: 2,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+        },
+        summaryDivider: {
+            width: 1,
+            height: 28,
+            backgroundColor: isDark ? '#334155' : '#E2E8F0',
+        },
+        howItWorksSectionTitle: {
+            fontSize: 11,
+            fontWeight: '800',
+            letterSpacing: 1,
+            color: isDark ? '#94A3B8' : '#64748B',
+            marginBottom: 12,
+            marginTop: 4,
+        },
+        howItWorksRow: {
+            flexDirection: 'row',
+            gap: 12,
+            alignItems: 'flex-start',
+            marginBottom: 14,
+        },
+        howItWorksIconBadge: {
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        howItWorksRowTitle: {
+            fontSize: 14,
+            fontWeight: '700',
+            color: isDark ? '#F9FAFB' : '#111827',
+            marginBottom: 2,
+        },
+        howItWorksText: {
+            flex: 1,
+            fontSize: 13,
+            lineHeight: 18,
+            color: isDark ? '#D1D5DB' : '#475569',
+        },
+        howItWorksDivider: {
+            height: 1,
+            backgroundColor: isDark ? '#334155' : '#E2E8F0',
+            marginVertical: 12,
+        },
+        howItWorksSubTitle: {
+            fontSize: 13,
+            fontWeight: '700',
+            color: isDark ? '#F9FAFB' : '#111827',
+            marginBottom: 10,
+        },
+        howItWorksSmallText: {
+            fontSize: 12,
+            lineHeight: 16,
+            color: isDark ? '#9CA3AF' : '#64748B',
+        },
+        howItWorksTapToExpand: {
+            fontSize: 12,
+            color: isDark ? '#6366F1' : '#6366F1',
+            textAlign: 'center',
+            marginTop: 4,
+            fontWeight: '500',
+        },
+        discountTiersContainer: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+        },
+        discountTierItem: {
+            backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+        },
+        discountTierItemActive: {
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+            borderWidth: 1,
+            borderColor: '#8B5CF6',
+        },
+        discountTierPoints: {
+            fontSize: 12,
+            fontWeight: '600',
+            color: isDark ? '#94A3B8' : '#64748B',
+        },
+        discountTierValue: {
+            fontSize: 12,
+            fontWeight: '700',
+            color: isDark ? '#D1D5DB' : '#334155',
+        },
+        discountTierActive: {
+            color: '#8B5CF6',
+        },
+    });
+};

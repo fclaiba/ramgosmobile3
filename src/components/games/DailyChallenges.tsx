@@ -10,8 +10,8 @@ export function DailyChallenges() {
     const { challenges, challengeProgress, claimDailyReward, claimChallenge } = usePoints();
 
     // Determine if daily reward is already claimed
-    // In a real app this would compare dates properly
-    const alreadyClaimed = false; // Mock implementation for now
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const alreadyClaimed = challengeProgress.dailyClaimDate === todayKey;
 
     const handleClaimDaily = () => {
         if (alreadyClaimed) return;
@@ -67,7 +67,7 @@ export function DailyChallenges() {
                     ) : (
                         <>
                             <Gift size={16} color="#fff" />
-                            <Text style={styles.claimText}>Reclamar Recompensa (+10 pts)</Text>
+                            <Text style={styles.claimText}>Reclamar Recompensa</Text>
                         </>
                     )}
                 </TouchableOpacity>

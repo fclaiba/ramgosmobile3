@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Modal, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Image } from 'react-native';
 import { X, Send, Image as ImageIcon } from 'lucide-react-native';
 import { useSocial } from '../../contexts/SocialContext';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 
 export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
     const { currentUser, createInstagramPost } = useSocial();
     const [imageUrl, setImageUrl] = useState('');
     const [caption, setCaption] = useState('');
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     const canPost = imageUrl.trim().length > 0;
 
@@ -19,80 +24,90 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
     };
 
     return (
-        <Modal animationType="slide" presentationStyle="pageSheet" visible={true} onRequestClose={onClose}>
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-                <View style={styles.container}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={onClose}>
-                            <Text style={styles.cancelText}>Cancelar</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Nueva Publicación</Text>
-                        <TouchableOpacity onPress={handlePost} disabled={!canPost}>
-                            <Text style={[styles.postButton, !canPost && styles.disabledButton]}>Compartir</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.content}>
-                        <View style={styles.userRow}>
-                            <Avatar style={styles.avatar}>
-                                <AvatarImage src={currentUser.avatar} />
-                                <AvatarFallback>{currentUser.name[0]}</AvatarFallback>
-                            </Avatar>
-                            <TextInput
-                                placeholder="Escribe un pie de foto..."
-                                style={styles.captionInput}
-                                multiline
-                                value={caption}
-                                onChangeText={setCaption}
-                            />
+        <Sheet open={true} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <SafeAreaView style={{ flex: 1 }}>
+                    <View style={styles.container}>
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={onClose}>
+                                <Text style={styles.cancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.headerTitle}>Nueva Publicación</Text>
+                            <TouchableOpacity onPress={handlePost} disabled={!canPost}>
+                                <Text style={[styles.postButton, !canPost && styles.disabledButton]}>Compartir</Text>
+                            </TouchableOpacity>
                         </View>
 
-                        <View style={styles.urlInputContainer}>
-                            <ImageIcon size={20} color="#6B7280" style={{ marginRight: 8 }} />
-                            <TextInput
-                                placeholder="URL de la imagen (https://...)"
-                                style={styles.urlInput}
-                                value={imageUrl}
-                                onChangeText={setImageUrl}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                            />
+                        <View style={styles.content}>
+                            <View style={styles.userRow}>
+                                <Avatar style={styles.avatar}>
+                                    <AvatarImage src={currentUser.avatar} />
+                                    <AvatarFallback>{currentUser.name[0]}</AvatarFallback>
+                                </Avatar>
+                                <TextInput
+                                    placeholder="Escribe un pie de foto..."
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#9CA3AF'}
+                                    style={styles.captionInput}
+                                    multiline
+                                    value={caption}
+                                    onChangeText={setCaption}
+                                />
+                            </View>
+
+                            <View style={styles.urlInputContainer}>
+                                <ImageIcon size={20} color="#6B7280" style={{ marginRight: 8 }} />
+                                <TextInput
+                                    placeholder="URL de la imagen (https://...)"
+                                    placeholderTextColor="#9CA3AF"
+                                    style={styles.urlInput}
+                                    value={imageUrl}
+                                    onChangeText={setImageUrl}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                />
+                                {imageUrl.length > 0 && (
+                                    <TouchableOpacity onPress={() => setImageUrl('')}>
+                                        <X size={16} color={isDark ? '#D1D5DB' : '#9CA3AF'} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
                             {imageUrl.length > 0 && (
-                                <TouchableOpacity onPress={() => setImageUrl('')}>
-                                    <X size={16} color="#9CA3AF" />
-                                </TouchableOpacity>
+                                <View style={styles.previewContainer}>
+                                    <ImageWithFallback src={imageUrl} style={styles.previewImage} />
+                                </View>
                             )}
                         </View>
-
-                        {imageUrl.length > 0 && (
-                            <View style={styles.previewContainer}>
-                                <ImageWithFallback src={imageUrl} style={styles.previewImage} />
-                            </View>
-                        )}
                     </View>
-                </View>
-            </SafeAreaView>
-        </Modal>
+                </SafeAreaView>
+            </SheetContent>
+        </Sheet>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    cancelText: { fontSize: 16, color: '#111' },
-    headerTitle: { fontSize: 16, fontWeight: '600' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: {
+        backgroundColor: isDark ? '#111827' : '#fff',
+        height: '92%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+    },
+    container: { flex: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    cancelText: { fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
+    headerTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#000' },
     postButton: { fontSize: 16, color: '#3B82F6', fontWeight: '600' },
-    disabledButton: { color: '#9CA3AF' },
+    disabledButton: { color: isDark ? '#4B5563' : '#9CA3AF' },
 
     content: { padding: 16 },
     userRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
     avatar: { marginRight: 12 },
-    captionInput: { flex: 1, fontSize: 16, marginTop: 8, minHeight: 60, textAlignVertical: 'top' },
+    captionInput: { flex: 1, fontSize: 16, marginTop: 8, minHeight: 60, textAlignVertical: 'top', color: isDark ? '#F9FAFB' : '#000' },
 
-    urlInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, paddingHorizontal: 12, height: 48, marginBottom: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-    urlInput: { flex: 1, fontSize: 15 },
+    urlInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderRadius: 12, paddingHorizontal: 12, height: 48, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    urlInput: { flex: 1, fontSize: 15, color: isDark ? '#F9FAFB' : '#000' },
 
-    previewContainer: { borderRadius: 12, overflow: 'hidden', aspectRatio: 1, backgroundColor: '#F3F4F6' },
+    previewContainer: { borderRadius: 12, overflow: 'hidden', aspectRatio: 1, backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
     previewImage: { width: '100%', height: '100%' }
 });

@@ -108,13 +108,43 @@ export interface CouponInput {
     image?: string;
 }
 
+export interface BusinessEvent {
+    id: string;
+    name: string;
+    description: string;
+    date: string;
+    time: string;
+    location: string;
+    price: number;
+    capacity: number;
+    ticketsSold: number;
+    status: 'active' | 'full' | 'finished' | 'draft';
+    image?: string;
+    coords?: { lat: number; lng: number; };
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface BusinessEventInput {
+    name: string;
+    description: string;
+    date: string;
+    time: string;
+    location: string;
+    price: number;
+    capacity: number;
+    image?: string;
+    coords?: { lat: number; lng: number; };
+}
+
 export interface Sale {
     id: string;
     date: string;
     branchId: string;
     total: number;
-    type: 'product' | 'coupon';
+    type: 'product' | 'coupon' | 'event';
     couponId?: string;
+    eventId?: string;
     status: 'paid' | 'pending' | 'refunded';
 }
 
@@ -145,6 +175,7 @@ export interface BusinessMetrics {
         revenueToday: number;
         totalRevenue: number;
         couponRevenue: number;
+        eventRevenue: number;
         availableBalance: number;
         pendingBalance: number;
         withheldBalance: number;
@@ -183,9 +214,15 @@ interface BusinessContextType {
     catalog: CatalogItem[];
     addCatalogItem: (input: CatalogItemInput) => CatalogItem;
     updateCatalogItem: (id: string, updates: Partial<CatalogItem>) => void;
+    deleteCatalogItem: (id: string) => void;
     coupons: Coupon[];
     createCoupon: (input: CouponInput) => Coupon;
     updateCoupon: (id: string, updates: Partial<Coupon>) => void;
+    deleteCoupon: (id: string) => void;
+    events: BusinessEvent[];
+    addEvent: (input: BusinessEventInput) => BusinessEvent;
+    updateEvent: (id: string, updates: Partial<BusinessEvent>) => void;
+    deleteEvent: (id: string) => void;
     redeemCouponByCode: (code: string, userId: string, branchId: string) => RedeemResult;
     redemptions: Redemption[];
     sales: Sale[];
@@ -550,6 +587,23 @@ const initialReviews: BusinessReview[] = [
     },
 ];
 
+const initialEvents: BusinessEvent[] = [
+    {
+        id: 'event_01',
+        name: 'Noche de Jazz',
+        description: 'Música en vivo con banda invitada y menú especial de tapas.',
+        date: addDays(now, 5).toISOString(),
+        time: '20:30',
+        location: 'Av. Libertador 123, Sala Principal',
+        price: 15.0,
+        capacity: 50,
+        ticketsSold: 12,
+        status: 'active',
+        createdAt: addDays(now, -2).toISOString(),
+        updatedAt: addDays(now, -2).toISOString(),
+    }
+];
+
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
@@ -557,6 +611,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     const [branches, setBranches] = useState<Branch[]>(initialBranches);
     const [catalog, setCatalog] = useState<CatalogItem[]>(initialCatalog);
     const [couponsState, setCouponsState] = useState<Coupon[]>(initialCoupons);
+    const [events, setEvents] = useState<BusinessEvent[]>(initialEvents);
     const [redemptions, setRedemptions] = useState<Redemption[]>(initialRedemptions);
     const [sales, setSales] = useState<Sale[]>(initialSales);
     const [reviews] = useState<BusinessReview[]>(initialReviews);
@@ -661,6 +716,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
                 revenueToday: Number(revenueToday.toFixed(2)),
                 totalRevenue: Number(totalRevenue.toFixed(2)),
                 couponRevenue: Number(couponRevenue.toFixed(2)),
+                eventRevenue: 0,
                 availableBalance: Number(businessInfo.payout.available.toFixed(2)),
                 pendingBalance: Number(businessInfo.payout.pending.toFixed(2)),
                 withheldBalance: Number(businessInfo.payout.withheld.toFixed(2)),
@@ -778,6 +834,45 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
                     : coupon
             )
         );
+    }, []);
+
+    const deleteCoupon = useCallback((id: string) => {
+        setCouponsState((prev) => prev.filter((item) => item.id !== id));
+    }, []);
+
+    const deleteCatalogItem = useCallback((id: string) => {
+        setCatalog((prev) => prev.filter((item) => item.id !== id));
+    }, []);
+
+    const addEvent = useCallback((input: BusinessEventInput): BusinessEvent => {
+        const event: BusinessEvent = {
+            id: generateId('event'),
+            ...input,
+            ticketsSold: 0,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        setEvents((prev) => [event, ...prev]);
+        return event;
+    }, []);
+
+    const updateEvent = useCallback((id: string, updates: Partial<BusinessEvent>) => {
+        setEvents((prev) =>
+            prev.map((e) =>
+                e.id === id
+                    ? {
+                        ...e,
+                        ...updates,
+                        updatedAt: new Date().toISOString(),
+                    }
+                    : e
+            )
+        );
+    }, []);
+
+    const deleteEvent = useCallback((id: string) => {
+        setEvents((prev) => prev.filter((e) => e.id !== id));
     }, []);
 
     const redeemCouponByCode = useCallback(
@@ -903,22 +998,33 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         catalog,
         addCatalogItem,
         updateCatalogItem,
+        deleteCatalogItem,
         coupons,
         createCoupon,
         updateCoupon,
+        deleteCoupon,
         redeemCouponByCode,
         redemptions,
         sales,
         reviews,
         metrics,
+        events,
+        addEvent,
+        updateEvent,
+        deleteEvent,
     }), [
         addBranch,
         addCatalogItem,
+        addEvent,
         branches,
         businessInfo,
         catalog,
         coupons,
         createCoupon,
+        deleteCatalogItem,
+        deleteCoupon,
+        deleteEvent,
+        events,
         metrics,
         redeemCouponByCode,
         redemptions,
@@ -928,6 +1034,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         updateBusinessInfo,
         updateCatalogItem,
         updateCoupon,
+        updateEvent,
     ]);
 
     return (

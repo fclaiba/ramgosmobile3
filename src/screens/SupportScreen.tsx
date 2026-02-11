@@ -8,7 +8,15 @@ import { MobileHeader } from '../components/MobileHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { submitSupportTicket, getSupportEmail } from '../utils/support';
 
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+
 export default function SupportScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const { show } = useToast();
+
     const [view, setView] = useState<'contact' | 'ticket'>('contact');
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -34,7 +42,7 @@ export default function SupportScreen({ navigation }: any) {
             description: 'Respuesta inmediata',
             available: 'Disponible ahora',
             colors: ['#3b82f6', '#06b6d4'],
-            action: () => Alert.alert('Próximamente', 'El chat en vivo estará disponible muy pronto. Mientras tanto, usa el formulario o envíanos un correo.'),
+            action: () => show('Chat en vivo próximamente', 'info'),
         },
         {
             icon: Mail,
@@ -48,7 +56,7 @@ export default function SupportScreen({ navigation }: any) {
                 if (canOpen) {
                     await Linking.openURL(mailto);
                 } else {
-                    Alert.alert('Info', `Escríbenos a ${supportEmail}`);
+                    show(`Escríbenos a ${supportEmail}`, 'info');
                 }
             },
         },
@@ -58,7 +66,7 @@ export default function SupportScreen({ navigation }: any) {
             description: '+1 (555) 123-4567',
             available: 'Lun-Vie 9AM-6PM',
             colors: ['#22c55e', '#10b981'],
-            action: () => Alert.alert('Llamada', 'Llamando...'),
+            action: () => show('Llamando a soporte...', 'info'),
         },
         {
             icon: Inbox,
@@ -73,7 +81,7 @@ export default function SupportScreen({ navigation }: any) {
                 if (canOpen) {
                     await Linking.openURL(url);
                 } else {
-                    Alert.alert('Portal Zendesk', 'No pudimos abrir el portal en este dispositivo. Intenta desde un navegador.');
+                    show('No pudimos abrir el portal', 'error');
                 }
             },
         },
@@ -89,12 +97,12 @@ export default function SupportScreen({ navigation }: any) {
         const trimmedEmail = email.trim();
 
         if (!trimmedSubject || !trimmedMessage || !trimmedEmail) {
-            Alert.alert('Formulario incompleto', 'Por favor, completa correo, asunto y mensaje para crear el ticket.');
+            show('Completa todos los campos para enviar el ticket', 'error');
             return;
         }
 
         if (!validateEmail(trimmedEmail)) {
-            Alert.alert('Correo inválido', 'Introduce un correo electrónico válido para recibir la respuesta de soporte.');
+            show('Introduce un correo electrónico válido para recibir la respuesta de soporte.', 'warning');
             return;
         }
 
@@ -108,12 +116,9 @@ export default function SupportScreen({ navigation }: any) {
                 category,
             });
 
-            Alert.alert(
-                'Ticket enviado',
-                result.channel === 'zendesk'
-                    ? 'Tu solicitud fue registrada en Zendesk. Te contactaremos pronto.'
-                    : 'Abrimos tu cliente de correo para que puedas enviarnos todos los detalles.'
-            );
+            show(result.channel === 'zendesk'
+                ? 'Solicitud registrada en Zendesk. Te contactaremos pronto.'
+                : 'Se abrió tu cliente de correo para enviar los detalles.', 'success');
 
             setName('');
             setEmail('');
@@ -122,7 +127,7 @@ export default function SupportScreen({ navigation }: any) {
             setCategory(categories[0]);
             setView('contact');
         } catch (error: any) {
-            Alert.alert('No se pudo enviar', error?.message || 'Intenta de nuevo más tarde.');
+            show(error?.message || 'Intenta de nuevo más tarde.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -146,14 +151,14 @@ export default function SupportScreen({ navigation }: any) {
                                 <Text style={styles.methodDesc}>{method.description}</Text>
                                 <Text style={styles.methodAvail}>{method.available}</Text>
                             </View>
-                            <ChevronRight size={20} color="#ccc" />
+                            <ChevronRight size={20} color={isDark ? "#4B5563" : "#ccc"} />
                         </CardContent>
                     </Card>
                 </TouchableOpacity>
             ))}
 
             <Button style={styles.ticketButton} onPress={() => setView('ticket')}>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Crear un Ticket</Text>
+                <Text style={{ color: isDark ? '#000' : '#fff', fontWeight: 'bold' }}>Crear un Ticket</Text>
             </Button>
         </View>
     );
@@ -174,6 +179,8 @@ export default function SupportScreen({ navigation }: any) {
                             value={name}
                             onChangeText={setName}
                             autoCapitalize="words"
+                            style={{ color: isDark ? '#fff' : '#000' }}
+                            placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                         />
                     </View>
                     <View style={styles.formGroup}>
@@ -184,6 +191,8 @@ export default function SupportScreen({ navigation }: any) {
                             onChangeText={setEmail}
                             keyboardType="email-address"
                             autoCapitalize="none"
+                            style={{ color: isDark ? '#fff' : '#000' }}
+                            placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                         />
                     </View>
 
@@ -213,6 +222,8 @@ export default function SupportScreen({ navigation }: any) {
                             placeholder="Breve descripción del problema"
                             value={subject}
                             onChangeText={setSubject}
+                            style={{ color: isDark ? '#fff' : '#000' }}
+                            placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                         />
                     </View>
                     <View style={[styles.formGroup, { marginBottom: 0 }]}>
@@ -225,18 +236,19 @@ export default function SupportScreen({ navigation }: any) {
                             numberOfLines={4}
                             style={styles.textArea}
                             textAlignVertical="top"
+                            placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                         />
                     </View>
                     <Button onPress={handleSubmitTicket} style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}>
                         {isSubmitting ? (
                             <>
-                                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
-                                <Text style={{ color: '#fff', fontWeight: '600' }}>Enviando...</Text>
+                                <ActivityIndicator size="small" color={isDark ? "#000" : "#fff"} style={{ marginRight: 8 }} />
+                                <Text style={{ color: isDark ? "#000" : "#fff", fontWeight: '600' }}>Enviando...</Text>
                             </>
                         ) : (
                             <>
-                                <Send size={16} color="#fff" style={{ marginRight: 8 }} />
-                                <Text style={{ color: '#fff', fontWeight: '600' }}>Enviar Ticket</Text>
+                                <Send size={16} color={isDark ? "#000" : "#fff"} style={{ marginRight: 8 }} />
+                                <Text style={{ color: isDark ? "#000" : "#fff", fontWeight: '600' }}>Enviar Ticket</Text>
                             </>
                         )}
                     </Button>
@@ -261,25 +273,25 @@ export default function SupportScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFAFA' },
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
     content: { padding: 16 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: '#111' },
-    card: { borderWidth: 0, shadowColor: "#000", shadowOpacity: 0.1, elevation: 2, marginBottom: 8 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: isDark ? '#F9FAFB' : '#111' },
+    card: { borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : "#000", shadowOpacity: 0.1, elevation: 2, marginBottom: 8, backgroundColor: isDark ? '#1F2937' : '#fff' },
     cardContentRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     iconContainer: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    methodTitle: { fontSize: 16, fontWeight: '600', color: '#333' },
-    methodDesc: { fontSize: 14, color: '#666' },
+    methodTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#333' },
+    methodDesc: { fontSize: 14, color: isDark ? '#9CA3AF' : '#666' },
     methodAvail: { fontSize: 12, color: '#3b82f6', marginTop: 2 },
-    ticketButton: { marginTop: 24, backgroundColor: '#111' },
-    label: { fontSize: 14, fontWeight: '500', marginBottom: 6, color: '#333' },
+    ticketButton: { marginTop: 24, backgroundColor: isDark ? '#F9FAFB' : '#111' },
+    label: { fontSize: 14, fontWeight: '500', marginBottom: 6, color: isDark ? '#D1D5DB' : '#333' },
     formGroup: { marginBottom: 16 },
-    textArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, minHeight: 120, fontSize: 14, color: '#1f2937' },
+    textArea: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e2e8f0', borderRadius: 12, padding: 12, minHeight: 120, fontSize: 14, color: isDark ? '#F9FAFB' : '#1f2937' },
     categoryRow: { flexDirection: 'row', flexWrap: 'wrap' },
-    categoryPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f3f4f6', marginRight: 8, marginBottom: 8 },
-    categoryPillActive: { backgroundColor: '#111', transform: [{ scale: 1.02 }] },
-    categoryText: { fontSize: 12, color: '#4b5563', fontWeight: '500' },
-    categoryTextActive: { color: '#fff' },
-    submitButton: { backgroundColor: '#111', borderRadius: 12, paddingVertical: 14 },
+    categoryPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? '#374151' : '#f3f4f6', marginRight: 8, marginBottom: 8 },
+    categoryPillActive: { backgroundColor: isDark ? '#F9FAFB' : '#111', transform: [{ scale: 1.02 }] },
+    categoryText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#4b5563', fontWeight: '500' },
+    categoryTextActive: { color: isDark ? '#000' : '#fff' },
+    submitButton: { backgroundColor: isDark ? '#F9FAFB' : '#111', borderRadius: 12, paddingVertical: 14 },
     submitButtonDisabled: { opacity: 0.7 },
 });

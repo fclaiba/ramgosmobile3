@@ -1,19 +1,79 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { ArrowLeft, ShieldCheck } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { CommonActions } from '@react-navigation/native';
 
-export default function TermsScreen({ navigation }: any) {
+export default function TermsScreen({ navigation, route }: any) {
+    const { colorScheme } = useTheme();
+    const { acceptCurrentTerms, user } = useAuth();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+
+    // Check if opened in blocking mode (forced acceptance)
+    const isBlocking = route?.params?.mode === 'blocking';
+    const isSignup = route?.params?.origin === 'signup';
+    const returnKey = route?.params?.returnKey as string | undefined;
+
+    const handleAccept = async () => {
+        try {
+            if (isBlocking) {
+                await acceptCurrentTerms();
+                // After accepting terms in blocking mode, route user to the next required step.
+                // This must work for all roles (consumer/business/influencer).
+                const next =
+                    !user
+                        ? { screen: 'Welcome', params: undefined as any }
+                        : user.requiresKyc && (user.kycStatus === 'unverified' || user.kycStatus === 'rejected')
+                            ? { screen: 'KYC', params: { accountType: user.role } }
+                            : !user.nickname
+                                ? { screen: 'BasicProfileSetup', params: undefined as any }
+                                : { screen: 'Home', params: undefined as any };
+
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: next.screen, params: next.params }],
+                });
+                return;
+            }
+
+            if (isSignup) {
+                // In signup flow, mark acceptance on the existing Register route (preserves form state),
+                // then just goBack to return to the same instance.
+                if (returnKey) {
+                    navigation.dispatch({
+                        ...CommonActions.setParams({ termsAccepted: true }),
+                        source: returnKey,
+                    });
+                } else {
+                    // Fallback if returnKey wasn't provided
+                    navigation.navigate('Register', { termsAccepted: true });
+                }
+                navigation.goBack();
+                return;
+            }
+
+            navigation.goBack();
+            // If blocking, the AuthContext state update should trigger a navigation reset or re-evaluation
+        } catch (error) {
+            console.error('Failed to accept terms', error);
+        }
+    };
+
     return (
         <AuthBackground>
             <SafeAreaView style={styles.container}>
                 <View style={styles.card}>
                     {/* Header */}
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                            <ArrowLeft size={24} color="#4B5563" />
-                        </TouchableOpacity>
+                        {!isBlocking && (
+                            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                                <ArrowLeft size={24} color={isDark ? "#D1D5DB" : "#4B5563"} />
+                            </TouchableOpacity>
+                        )}
                         <Text style={styles.title}>Términos y Condiciones</Text>
                         <View style={{ width: 24 }} />
                     </View>
@@ -22,6 +82,7 @@ export default function TermsScreen({ navigation }: any) {
                         <View style={styles.iconContainer}>
                             <ShieldCheck size={48} color="#7C3AED" />
                         </View>
+                        {/* ... text content ... */}
 
                         <Text style={styles.sectionTitle}>1. ACEPTACIÓN DE LOS TÉRMINOS</Text>
                         <Text style={styles.text}>
@@ -74,7 +135,7 @@ export default function TermsScreen({ navigation }: any) {
                             Ramgos no es propietario de los artículos listados ni interviene en la fabricación, almacenamiento o envío de los productos, siendo únicamente una plataforma de intermediación digital.{'\n\n'}
 
                             <Text style={styles.bold}>4.2. Entrega del dinero al vendedor</Text>{'\n'}
-                            <Text style={styles.bold}>Plazo de Liberación:</Text> El pago correspondiente a una venta será liberado al vendedor 15 días después de confirmada la entrega del producto al comprador, siempre que no existan reclamos o devoluciones en curso.{'\n'}
+                            <Text style={styles.bold}>Plazo de Liberación:</Text> El pago correspondiente a una venta será liberado al vendedor 10 días después de confirmada la entrega del producto al comprador, siempre que no existan reclamos o devoluciones en curso.{'\n'}
                             <Text style={styles.bold}>Retención Temporal:</Text> Si se abre una disputa o solicitud de devolución dentro de ese periodo, el pago quedará en retención temporal hasta que se resuelva el caso.{'\n'}
                             <Text style={styles.bold}>Verificación:</Text> Ramgos podrá realizar verificaciones adicionales de seguridad o autenticación KYC antes de liberar fondos.{'\n\n'}
 
@@ -124,43 +185,51 @@ export default function TermsScreen({ navigation }: any) {
                         <View style={{ height: 40 }} />
                     </ScrollView>
 
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.btn}>
-                        <Text style={styles.btnText}>Cerrar</Text>
-                    </TouchableOpacity>
+                    {isBlocking || isSignup ? (
+                        <TouchableOpacity onPress={handleAccept} style={styles.btn}>
+                            <Text style={styles.btnText}>Aceptar y Continuar</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.btn}>
+                            <Text style={styles.btnText}>Cerrar</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </SafeAreaView>
         </AuthBackground>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', padding: 16 },
     card: {
         flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
         borderRadius: 24,
         padding: 24,
         width: '100%',
         maxWidth: 500,
         alignSelf: 'center',
-        shadowColor: '#000',
+        shadowColor: isDark ? '#000' : '#000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.1,
+        shadowOpacity: isDark ? 0.3 : 0.1,
         shadowRadius: 20,
         elevation: 10,
-        marginVertical: 20
+        marginVertical: 20,
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
     },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
     backBtn: { padding: 4 },
-    title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+    title: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
 
     scroll: { flex: 1 },
-    iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: 40, backgroundColor: '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+    iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
 
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#374151', marginBottom: 8, marginTop: 16 },
-    subTitle: { fontSize: 14, fontWeight: 'bold', color: '#4B5563', marginBottom: 4, marginTop: 12, marginLeft: 8 },
-    text: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
-    bold: { fontWeight: 'bold', color: '#374151' },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#E5E7EB' : '#374151', marginBottom: 8, marginTop: 16 },
+    subTitle: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#D1D5DB' : '#4B5563', marginBottom: 4, marginTop: 12, marginLeft: 8 },
+    text: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 20 },
+    bold: { fontWeight: 'bold', color: isDark ? '#F3F4F6' : '#374151' },
 
     btn: { backgroundColor: '#7C3AED', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
     btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },

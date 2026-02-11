@@ -1,0 +1,21 @@
+
+> ramgos-mobile@1.0.0 typecheck
+> tsc -p tsconfig.check.json --noEmit
+
+src/components/LocationPickerModal.tsx(3,33): error TS2307: Cannot find module './NativeMap' or its corresponding type declarations.
+src/screens/MapExplorerScreen.tsx(4,68): error TS2307: Cannot find module '../components/NativeMap' or its corresponding type declarations.
+src/screens/marketplace/CheckoutScreen.tsx(146,24): error TS2339: Property 'success' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/marketplace/CheckoutScreen.tsx(146,42): error TS2339: Property 'orders' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/marketplace/CheckoutScreen.tsx(148,24): error TS2339: Property 'orders' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/marketplace/CheckoutScreen.tsx(148,40): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/screens/marketplace/CheckoutScreen.tsx(161,24): error TS2339: Property 'success' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/marketplace/CheckoutScreen.tsx(167,24): error TS2339: Property 'success' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/marketplace/CheckoutScreen.tsx(182,24): error TS2339: Property 'success' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/marketplace/OrderDetailScreen.tsx(18,13): error TS2339: Property 'confirmDelivery' does not exist on type 'MarketplaceContextType'.
+src/screens/PaymentScreen.tsx(341,33): error TS2339: Property 'success' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/PaymentScreen.tsx(341,56): error TS2339: Property 'orders' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/PaymentScreen.tsx(342,50): error TS2339: Property 'orders' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/PaymentScreen.tsx(342,62): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/screens/PaymentScreen.tsx(343,41): error TS2339: Property 'success' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/PaymentScreen.tsx(343,64): error TS2339: Property 'error' does not exist on type 'Promise<PlaceOrderResult>'.
+src/screens/PaymentScreen.tsx(344,52): error TS2339: Property 'error' does not exist on type 'Promise<PlaceOrderResult>'.
