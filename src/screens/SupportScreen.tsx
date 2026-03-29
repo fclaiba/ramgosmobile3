@@ -70,19 +70,12 @@ export default function SupportScreen({ navigation }: any) {
         },
         {
             icon: Inbox,
-            title: 'Zendesk',
+            title: 'Zendesk (desactivado)',
             description: 'Portal de tickets',
-            available: '24/7 Auto-servicio',
+            available: 'Temporalmente deshabilitado',
             colors: ['#6366f1', '#8b5cf6'],
-            action: async () => {
-                const subdomain = process.env.EXPO_PUBLIC_ZENDESK_SUBDOMAIN || 'ramgos';
-                const url = `https://${subdomain}.zendesk.com`;
-                const canOpen = await Linking.canOpenURL(url);
-                if (canOpen) {
-                    await Linking.openURL(url);
-                } else {
-                    show('No pudimos abrir el portal', 'error');
-                }
+            action: () => {
+                show('Zendesk está desactivado temporalmente. Usa Email para soporte.', 'info');
             },
         },
     ];

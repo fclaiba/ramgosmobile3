@@ -14,6 +14,7 @@ export type SupportTicketResult = {
 };
 
 const SUPPORT_EMAIL = 'support@ramgos.com';
+const ZENDESK_ENABLED = false;
 const ZENDESK_SUBDOMAIN = process.env.EXPO_PUBLIC_ZENDESK_SUBDOMAIN;
 const ZENDESK_EMAIL = process.env.EXPO_PUBLIC_ZENDESK_EMAIL;
 const ZENDESK_API_TOKEN = process.env.EXPO_PUBLIC_ZENDESK_API_TOKEN;
@@ -53,6 +54,10 @@ const formatBody = (payload: SupportTicketPayload) => (
 );
 
 const tryZendesk = async (payload: SupportTicketPayload): Promise<boolean> => {
+    if (!ZENDESK_ENABLED) {
+        return false;
+    }
+
     if (!ZENDESK_SUBDOMAIN || !ZENDESK_EMAIL || !ZENDESK_API_TOKEN) {
         return false;
     }

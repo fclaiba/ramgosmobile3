@@ -61,8 +61,41 @@ AAB:
 .\build-release.ps1 -Output aab
 ```
 
+Notas importantes:
+
+- El script fuerza `NODE_ENV=production`.
+- Para acelerar compilación local, usa ABIs de dispositivo real (`armeabi-v7a,arm64-v8a`) y evita `x86/x86_64`.
+- Si necesitás emulador x86 para pruebas de release, compilá manualmente desde `android/` sin ese override.
+
 Outputs:
 
 - APK: `android/app/build/outputs/apk/release/`
 - AAB: `android/app/build/outputs/bundle/release/`
+
+### 6) Conexión a backend de producción (Convex)
+
+- En `.env.local`, usar:
+  - `EXPO_PUBLIC_CONVEX_URL=https://deafening-turtle-227.convex.cloud`
+- Después de cambiar variables `EXPO_PUBLIC_*`, reiniciar Metro o rehacer build para que tome los valores embebidos.
+- Estado actual del backend Convex:
+  - Las funciones en `convex/` no leen `process.env.*`, por lo que no hay secretos obligatorios para operación base.
+  - Verificación rápida: `npx convex env list --prod` (puede devolver vacío y seguir siendo válido para este proyecto).
+
+### 7) Soporte (Zendesk) temporal
+
+- El flujo Zendesk está desactivado temporalmente.
+- Los tickets de soporte usan fallback por email (`support@ramgos.com`) hasta cargar credenciales reales.
+
+### 8) Entornos EAS/CI (importante)
+
+- `eas.json` define `EXPO_PUBLIC_CONVEX_URL` por perfil:
+  - `development` / `preview`: deployment dev
+  - `production`: deployment prod
+- En cloud builds, priorizar estas variables por perfil o secretos de EAS.
+- Usar `.env.example` como plantilla local para evitar drift de configuración.
+
+### 9) Estrategia de carrito
+
+- La fuente de verdad del carrito es el estado local persistido del cliente (`CartContext` + storage).
+- No mezclar el flujo local con `convex/cart.ts` hasta planificar una migración completa.
 

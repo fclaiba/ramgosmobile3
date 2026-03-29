@@ -3,8 +3,6 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Status
 import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
-import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
 
 import { useAuth } from '../contexts/AuthContext';
 import { usePoints } from '../contexts/PointsContext';
@@ -39,11 +37,9 @@ export default function ProfileScreen({ navigation }: any) {
     const styles = getStyles(isDark);
     const { show } = useToast();
 
-    const { user, logout, refreshActiveSession } = useAuth();
+    const { user, logout } = useAuth();
     const { points, currentTier, nextTier, lifetimePoints, transactions } = usePoints();
     const { referralSummary, referralCode } = useReferral();
-    const setAccountAge = useMutation((api.developer as any).debug_setAccountAge);
-    const triggerCron = useMutation((api.developer as any).debug_triggerCron);
     const [isEditing, setIsEditing] = useState(false);
 
     // Initial State Mock
@@ -413,38 +409,6 @@ export default function ProfileScreen({ navigation }: any) {
                         <Text style={styles.deleteText}>Eliminar Cuenta</Text>
                     </TouchableOpacity>
 
-                    {/* DEBUG SECTION */}
-                    <View style={{ marginTop: 20, padding: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: 'bold', color: isDark ? '#D1D5DB' : '#6B7280', marginBottom: 8 }}>DEBUG AREA</Text>
-                        <Text style={{ color: isDark ? '#FFF' : '#000', marginBottom: 8 }}>KYC Status: {user?.kycStatus || 'N/A'}</Text>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <Button
-                                size="sm"
-                                onPress={async () => {
-                                    if (!user) return;
-                                    const { mockConvexStore } = require('../services/auth/mockConvexStore');
-                                    await mockConvexStore.updateKycStatus(user.id, 'approved');
-                                    await refreshActiveSession();
-                                    show('Forzar verificar: OK', 'success');
-                                }}
-                            >
-                                <Text>Forzar Verificar</Text>
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onPress={async () => {
-                                    if (!user) return;
-                                    const { mockConvexStore } = require('../services/auth/mockConvexStore');
-                                    await mockConvexStore.updateKycStatus(user.id, 'unverified');
-                                    await refreshActiveSession();
-                                    show('Forzar des-verificar: OK', 'info');
-                                }}
-                            >
-                                <Text>Forzar Des-Verificar</Text>
-                            </Button>
-                        </View>
-                    </View>
                 </View>
 
             </ScrollView>

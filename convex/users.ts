@@ -36,6 +36,25 @@ const hashPassword = (password: string) => {
     return `hashed_${password.split('').reverse().join('')}`;
 };
 
+const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
+
+const sanitizeUser = (user: any) => ({
+    _id: user._id,
+    uid: user.uid,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    avatar: user.avatar,
+    kycStatus: user.kycStatus,
+    joinedAt: user.joinedAt,
+    tier: user.tier,
+    subscriptionStatus: user.subscriptionStatus,
+    subscriptionTier: user.subscriptionTier,
+    termsAcceptedVersion: user.termsAcceptedVersion,
+    isTest: user.isTest,
+    balance: user.balance,
+});
+
 export const register = mutation({
     args: {
         email: v.string(),
@@ -45,6 +64,10 @@ export const register = mutation({
         avatar: v.optional(v.string())
     },
     handler: async (ctx, args) => {
+        if (!ALLOWED_ROLES.has(args.role)) {
+            throw new Error("Rol inválido.");
+        }
+
         const existing = await ctx.db
             .query("users")
             .withIndex("by_email", (q) => q.eq("email", args.email))
@@ -92,7 +115,7 @@ export const login = mutation({
             throw new Error("Contraseña incorrecta.");
         }
 
-        return user;
+        return sanitizeUser(user);
     },
 });
 
@@ -101,7 +124,7 @@ export const getUser = query({
     handler: async (ctx, args) => {
         try {
             const user = await ctx.db.get(args.id);
-            return user;
+            return user ? sanitizeUser(user) : null;
         } catch (e) {
             return null;
         }
@@ -163,20 +186,27 @@ export const updateProfile = mutation({
 
 export const listUsers = query({
     args: {
+        adminId: v.id("users"),
         role: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const admin = await ctx.db.get(args.adminId);
+        if (!admin || admin.role !== 'admin') {
+            throw new Error("No autorizado.");
+        }
         let q = ctx.db.query("users");
         const users = await q.collect();
+        const sanitized = users.map(sanitizeUser);
         if (args.role) {
-            return users.filter(u => u.role === args.role);
+            return sanitized.filter(u => u.role === args.role);
         }
-        return users;
+        return sanitized;
     },
 });
 
 export const updateUser = mutation({
     args: {
+        actorId: v.id("users"),
         id: v.id("users"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -190,6 +220,28 @@ export const updateUser = mutation({
         })
     },
     handler: async (ctx, args) => {
+        const actor = await ctx.db.get(args.actorId);
+        if (!actor) throw new Error("No autorizado.");
+
+        const isAdmin = actor.role === 'admin';
+        const isSelf = args.actorId === args.id;
+        if (!isAdmin && !isSelf) {
+            throw new Error("No autorizado.");
+        }
+
+        if (!isAdmin) {
+            const forbidden = ['role', 'kycStatus', 'tier', 'subscriptionStatus', 'isTest'];
+            for (const field of forbidden) {
+                if (Object.prototype.hasOwnProperty.call(args.updates, field)) {
+                    throw new Error("No autorizado para actualizar ese campo.");
+                }
+            }
+        }
+
+        if (args.updates.role && !ALLOWED_ROLES.has(args.updates.role)) {
+            throw new Error("Rol inválido.");
+        }
+
         await ctx.db.patch(args.id, {
             ...args.updates,
             role: args.updates.role as any,
@@ -198,8 +250,18 @@ export const updateUser = mutation({
 });
 
 export const deleteUser = mutation({
-    args: { id: v.id("users") },
+    args: {
+        actorId: v.id("users"),
+        id: v.id("users")
+    },
     handler: async (ctx, args) => {
+        const actor = await ctx.db.get(args.actorId);
+        if (!actor) throw new Error("No autorizado.");
+        const isAdmin = actor.role === 'admin';
+        const isSelf = args.actorId === args.id;
+        if (!isAdmin && !isSelf) {
+            throw new Error("No autorizado.");
+        }
         await ctx.db.delete(args.id);
     },
 });

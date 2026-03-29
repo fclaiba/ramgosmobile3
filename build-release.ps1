@@ -7,9 +7,13 @@ param(
     [string]$Output = "apk"
 )
 
+# Release local: compilar solo ABIs de dispositivos reales para reducir tiempo.
+$releaseArchitectures = "armeabi-v7a,arm64-v8a"
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Generando Release Android (Ramgos)" -ForegroundColor Cyan
 Write-Host "  Output: $Output" -ForegroundColor Cyan
+Write-Host "  ABIs: $releaseArchitectures" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -23,6 +27,7 @@ if (-not (Test-Path $keystoreProps)) {
 
 # Paso 1: Exportar bundle de Expo
 Write-Host "[1/3] Exportando bundle de Expo..." -ForegroundColor Yellow
+$env:NODE_ENV = "production"
 npx expo export --platform android
 
 if ($LASTEXITCODE -ne 0) {
@@ -37,12 +42,13 @@ Write-Host ""
 # Paso 2: Compilar APK Release
 Write-Host '[2/3] Compilando Release - puede tardar varios minutos...' -ForegroundColor Yellow
 Set-Location android
+$archArg = "-PreactNativeArchitectures=$releaseArchitectures"
 if ($Output -eq "apk") {
-    ./gradlew assembleRelease
+    ./gradlew assembleRelease $archArg
 } elseif ($Output -eq "aab") {
-    ./gradlew bundleRelease
+    ./gradlew bundleRelease $archArg
 } else {
-    ./gradlew assembleRelease bundleRelease
+    ./gradlew assembleRelease bundleRelease $archArg
 }
 
 if ($LASTEXITCODE -ne 0) {

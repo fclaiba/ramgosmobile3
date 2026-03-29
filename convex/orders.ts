@@ -292,3 +292,37 @@ export const openDispute = mutation({
         });
     }
 });
+
+export const escalateDispute = mutation({
+    args: {
+        orderId: v.id("orders"),
+        userId: v.string(),
+        role: v.union(v.literal('buyer'), v.literal('seller')),
+    },
+    handler: async (ctx, args) => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) throw new Error("Orden no encontrada");
+
+        const isBuyer = order.userId === args.userId && args.role === 'buyer';
+        const isSeller = order.sellerId === args.userId && args.role === 'seller';
+        if (!isBuyer && !isSeller) {
+            throw new Error("No autorizado para escalar esta disputa.");
+        }
+
+        if (order.status !== 'disputed') {
+            throw new Error("Solo se pueden escalar órdenes en disputa.");
+        }
+
+        await ctx.db.patch(args.orderId, {
+            updatedAt: new Date().toISOString(),
+        });
+
+        await ctx.db.insert("audit_logs", {
+            actorUserId: args.userId,
+            targetUserId: order.sellerId,
+            action: "DISPUTE_ESCALATED",
+            timestamp: new Date().toISOString(),
+            metadata: { orderId: args.orderId, role: args.role }
+        });
+    }
+});

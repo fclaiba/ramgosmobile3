@@ -9,6 +9,8 @@ import { Sheet, SheetContent } from '../../components/ui/sheet';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EscrowSheet } from '../../components/marketplace/EscrowSheet';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
 function Pill({
     label,
@@ -55,11 +57,14 @@ export default function DisputeChatScreen({ route, navigation }: any) {
 
     const order = orders.find(o => o.id === orderId);
     const dispute = order?.dispute;
+    const liveMessages = useQuery(api.disputes.getDisputeMessages, orderId ? { orderId } : "skip") ?? [];
+    const hasActiveDispute =
+        !!dispute ||
+        order?.status === 'disputed' ||
+        String(order?.escrow?.state ?? '') === 'frozen' ||
+        order?.escrow?.state === 'disputed';
 
-    if (!dispute) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DisputeChatScreen.tsx:no-dispute',message:'DisputeChat opened but no dispute found on order',data:{orderId,hasOrder:!!order,escrowState:order?.escrow?.state ?? null,hasDispute:!!dispute},timestamp:Date.now(),sessionId:'debug-session',runId:'dispute-routes',hypothesisId:'H-dispute-flow'})}).catch(()=>{});
-        // #endregion
+    if (!hasActiveDispute) {
         return (
             <View className={isDark ? 'flex-1 bg-slate-950' : 'flex-1 bg-slate-50'}>
                 <MobileHeader title="Mediación" showBack onBack={() => navigation.goBack()} />
@@ -83,9 +88,6 @@ export default function DisputeChatScreen({ route, navigation }: any) {
             </View>
         );
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DisputeChatScreen.tsx:entry',message:'DisputeChatScreen rendered',data:{orderId,hasOrder:!!order,hasDispute:!!dispute,disputeStatus:dispute?.status,userId:user?.id ?? null},timestamp:Date.now(),sessionId:'debug-session',runId:'dispute-routes',hypothesisId:'H-dispute-flow'})}).catch(()=>{});
-    // #endregion
 
     const myRole = user?.id === order?.sellerId ? 'seller' : 'buyer';
     const hoursLeft = 72; // Mock
@@ -114,7 +116,10 @@ export default function DisputeChatScreen({ route, navigation }: any) {
         setMsgText('');
     };
 
-    const canEscalate = dispute.status === 'awaiting_seller_response' || dispute.status === 'awaiting_buyer_response' || dispute.status === 'open';
+    const disputeStatus = dispute?.status ?? 'open';
+    const disputeReason = dispute?.reason ?? 'no_provided';
+    const disputeDescription = dispute?.description ?? 'Caso abierto desde la orden.';
+    const canEscalate = disputeStatus === 'awaiting_seller_response' || disputeStatus === 'awaiting_buyer_response' || disputeStatus === 'open';
 
     const renderMessage = ({ item }: any) => {
         const isMe = item.sender === myRole;
@@ -163,7 +168,7 @@ export default function DisputeChatScreen({ route, navigation }: any) {
                             </Text>
                         </View>
                         <View className="ml-3 items-end">
-                            <Pill label={dispute.status} tone={headerTone} isSmall={isSmall} />
+                            <Pill label={disputeStatus} tone={headerTone} isSmall={isSmall} />
                             <Text className={['mt-2', isSmall ? 'text-[10px]' : 'text-[11px]', isDark ? 'text-slate-400' : 'text-slate-500'].join(' ')}>
                                 {myRole === 'buyer' ? 'Tu mediación' : 'Mediación con comprador'}
                             </Text>
@@ -209,18 +214,18 @@ export default function DisputeChatScreen({ route, navigation }: any) {
 
                     <View className="mt-3 flex-row items-start">
                         <MessageSquareText size={16} color={isDark ? '#CBD5E1' : '#475569'} />
-                        <Text className={['ml-2', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
-                            <Text className="font-extrabold">Motivo:</Text> {dispute.reason} {'\n'}
-                            <Text className="font-extrabold">Detalle:</Text> {dispute.description}
+                            <Text className={['ml-2', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+                            <Text className="font-extrabold">Motivo:</Text> {disputeReason} {'\n'}
+                            <Text className="font-extrabold">Detalle:</Text> {disputeDescription}
                         </Text>
                     </View>
                 </View>
             </View>
 
             <FlatList
-                data={dispute.messages}
+                data={liveMessages}
                 renderItem={renderMessage}
-                keyExtractor={item => item.id}
+                keyExtractor={item => item._id}
                 contentContainerStyle={{
                     paddingHorizontal: isSmall ? 12 : 16,
                     paddingTop: 12,

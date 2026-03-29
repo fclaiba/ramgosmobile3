@@ -111,8 +111,11 @@ export default function CreateListingScreen({ navigation, route }: any) {
         console.log("DEBUG: Proceeding to upload...");
 
         try {
+            if (!user?.id) {
+                throw new Error('Debes iniciar sesión para subir imágenes.');
+            }
             // 1. Get Upload URL
-            const postUrl = await generateUploadUrl();
+            const postUrl = await generateUploadUrl({ userId: user.id as any });
 
             // 2. Fetch the file blob
             const response = await fetch(uri);

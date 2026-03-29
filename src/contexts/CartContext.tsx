@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { storage } from '../services/auth/storageAdapter';
 
 export interface CartItem {
     id: number | string;
@@ -34,10 +35,37 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+const CART_STORAGE_KEY = '@ramgos/cart/v1';
 
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [hasHydrated, setHasHydrated] = useState(false);
+
+    // Cart source of truth: local persisted state.
+    useEffect(() => {
+        (async () => {
+            try {
+                const raw = await storage.getItem(CART_STORAGE_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    setItems(parsed);
+                }
+            } catch (error) {
+                console.error('Failed to hydrate cart', error);
+            } finally {
+                setHasHydrated(true);
+            }
+        })();
+    }, []);
+
+    useEffect(() => {
+        if (!hasHydrated) return;
+        storage.setItem(CART_STORAGE_KEY, JSON.stringify(items)).catch((error) => {
+            console.error('Failed to persist cart', error);
+        });
+    }, [hasHydrated, items]);
 
     const addItem = (item: CartItemInput) => {
         const quantityToAdd = item.quantity && item.quantity > 0 ? item.quantity : 1;

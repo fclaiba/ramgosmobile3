@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 
 // Helper to check dev permissions
-const checkDevAccess = async (ctx: any, userId: string) => {
+const checkDevAccess = async (ctx: any, userId: Id<"users">) => {
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("Acceso denegado");
     if (user.role !== 'admin' && user.role !== 'developer' && !user.isTest) {
@@ -11,8 +12,12 @@ const checkDevAccess = async (ctx: any, userId: string) => {
 };
 
 export const seedTestUsers = mutation({
-    args: {},
-    handler: async (ctx) => {
+    args: {
+        actorId: v.id("users")
+    },
+    handler: async (ctx, args) => {
+        await checkDevAccess(ctx, args.actorId);
+
         // Defined Test Users
         const testUsers = [
             {
@@ -74,10 +79,11 @@ export const seedTestUsers = mutation({
 });
 
 export const getTestUsers = query({
-    args: {},
-    handler: async (ctx) => {
-        // In Prod, we might want to return empty or check auth more strictly.
-        // For now, checks are done in client via logic, but ideally here too.
+    args: {
+        actorId: v.id("users")
+    },
+    handler: async (ctx, args) => {
+        await checkDevAccess(ctx, args.actorId);
         return await ctx.db
             .query("users")
             .filter((q) => q.eq(q.field("isTest"), true))

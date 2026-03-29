@@ -475,6 +475,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) return;
         try {
             await updateUserMutation({
+                actorId: state.user.id as any,
                 id: state.user.id as any,
                 updates: { role }
             });

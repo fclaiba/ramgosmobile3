@@ -54,7 +54,7 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
     const styles = useMemo(() => getStyles(isDark, insets), [isDark, insets]);
 
     // REAL DATA
-    const users = useQuery(api.users.listUsers, {}) || [];
+    const users = useQuery(api.users.listUsers, user ? { adminId: user.id as Id<"users"> } : "skip") || [];
     const approveKYC = useMutation(api.users.approveKYC);
     const rejectKYC = useMutation(api.users.rejectKYC);
 

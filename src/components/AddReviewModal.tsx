@@ -4,6 +4,8 @@ import { X, Star, Upload } from 'lucide-react-native';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import { Button } from './ui/button';
 
 interface AddReviewModalProps {
@@ -21,12 +23,18 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { user } = useAuth();
+    const { show } = useToast();
 
     const addReview = useMutation(api.reviews.addReview);
 
     const handleSubmit = async () => {
         if (rating === 0) return;
         if (!comment.trim()) return;
+        if (!user?.id) {
+            show('Debes iniciar sesión para publicar una reseña.', 'error');
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -34,16 +42,17 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
                 listingId,
                 rating,
                 comment,
-                userId: "temp-user-id", // TODO: proper auth
+                userId: user.id,
                 // orderId: "...", 
             });
             setRating(0);
             setComment('');
             onSuccess?.();
             onClose();
+            show('Reseña publicada correctamente.', 'success');
         } catch (e) {
             console.error("Failed to add review", e);
-            // TODO: Toast error
+            show('No se pudo publicar la reseña.', 'error');
         } finally {
             setIsSubmitting(false);
         }

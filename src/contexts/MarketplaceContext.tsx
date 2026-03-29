@@ -439,6 +439,8 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     const updateListingMutation = useMutation(api.listings.updateListing);
     const deleteListingMutation = useMutation(api.listings.deleteListing);
     const createOrderMutation = useMutation(api.orders.createOrder);
+    const addDisputeMessageMutation = useMutation(api.disputes.addDisputeMessage);
+    const escalateDisputeMutation = useMutation(api.orders.escalateDispute);
 
     const { user } = useAuth(); // Moved up to use userId in query
     const myOrders = useQuery(api.orders.getMyOrders, user ? { userId: user.id } : "skip") ?? [];
@@ -712,14 +714,34 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
         addToWishlist,
         removeFromWishlist,
         addDisputeMessage: (orderId, message) => {
-            // Placeholder for chat logic
-            console.log("Mock addDisputeMessage", orderId, message);
+            if (!user) {
+                show('Debes iniciar sesión para enviar mensajes de disputa.', 'error');
+                return;
+            }
+            addDisputeMessageMutation({
+                orderId,
+                senderId: user.id,
+                sender: message.sender,
+                body: message.body,
+            }).catch((error: any) => {
+                show(error?.message || 'No se pudo enviar el mensaje.', 'error');
+            });
         },
         escalateDispute: (orderId, role) => {
-            console.log("Mock escalateDispute", orderId, role);
+            const targetOrder = backendOrders.find((o) => o.id === orderId);
+            if (!user || !targetOrder) {
+                return { success: false, error: 'No se encontró la orden o la sesión actual.' };
+            }
+            escalateDisputeMutation({
+                orderId: orderId as any,
+                userId: user.id,
+                role,
+            }).catch((error: any) => {
+                show(error?.message || 'No se pudo escalar el caso.', 'error');
+            });
             return { success: true };
         },
-    }), [products, backendOrders, state.wishlist]);
+    }), [products, backendOrders, state.wishlist, user, show, addDisputeMessageMutation, escalateDisputeMutation]);
 
     return (
         <MarketplaceContext.Provider value={contextValue}>
