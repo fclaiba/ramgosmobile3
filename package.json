@@ -19,7 +19,7 @@
     "@react-navigation/native-stack": "^7.9.0",
     "@stripe/stripe-react-native": "^0.63.0",
     "convex": "^1.31.6",
-    "expo": "~54.0.30",
+    "expo": "^54.0.33",
     "expo-av": "~16.0.8",
     "expo-blur": "~15.0.8",
     "expo-brightness": "~14.0.8",

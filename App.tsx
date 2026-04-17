@@ -25,7 +25,7 @@ import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
 import CartSidebar from './src/components/CartSidebar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PointsFeedback } from './src/components/ui/PointsFeedback';
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeWrapper } from './src/components/StripeWrapper';
 
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY;
 if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
@@ -226,7 +226,7 @@ export default function App() {
                         <SafeAreaProvider>
                             <ConvexProvider client={convex}>
                                 <ToastProvider>
-                                    <StripeProvider publishableKey={stripePublishableKey}>
+                                    <StripeWrapper publishableKey={stripePublishableKey}>
                                         <AuthProvider>
                                             <PointsProvider>
                                                 <WalletProvider>
@@ -255,7 +255,7 @@ export default function App() {
                                                 </WalletProvider>
                                             </PointsProvider>
                                         </AuthProvider>
-                                    </StripeProvider>
+                                    </StripeWrapper>
                                 </ToastProvider>
                             </ConvexProvider>
                         </SafeAreaProvider>
