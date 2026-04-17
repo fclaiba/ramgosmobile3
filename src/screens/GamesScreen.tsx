@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Modal, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Modal, useWindowDimensions } from 'react-native';
 import { Gamepad2, Trophy, ArrowRight, Dna, Target, Grape, Brain, CircleDollarSign, Coins, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MobileHeader } from '../components/MobileHeader';

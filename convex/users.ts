@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 export const checkInfluencerMetrics = internalMutation({
     args: {},
@@ -167,6 +168,7 @@ export const syncUser = mutation({
 
 export const updateProfile = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         id: v.id("users"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -175,6 +177,9 @@ export const updateProfile = mutation({
         })
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        assertSelfOrAdmin(actor, String(args.id));
+
         await ctx.db.patch(args.id, {
             name: args.updates.name,
             avatar: args.updates.avatar
@@ -186,12 +191,12 @@ export const updateProfile = mutation({
 
 export const listUsers = query({
     args: {
-        adminId: v.id("users"),
+        adminId: v.optional(v.id("users")),
         role: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const admin = await ctx.db.get(args.adminId);
-        if (!admin || admin.role !== 'admin') {
+        const actor = await requireActor(ctx, args.adminId);
+        if (actor.role !== 'admin') {
             throw new Error("No autorizado.");
         }
         let q = ctx.db.query("users");
@@ -206,7 +211,7 @@ export const listUsers = query({
 
 export const updateUser = mutation({
     args: {
-        actorId: v.id("users"),
+        actorId: v.optional(v.id("users")),
         id: v.id("users"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -220,11 +225,10 @@ export const updateUser = mutation({
         })
     },
     handler: async (ctx, args) => {
-        const actor = await ctx.db.get(args.actorId);
-        if (!actor) throw new Error("No autorizado.");
+        const actor = await requireActor(ctx, args.actorId);
 
         const isAdmin = actor.role === 'admin';
-        const isSelf = args.actorId === args.id;
+        const isSelf = actor.idString === String(args.id);
         if (!isAdmin && !isSelf) {
             throw new Error("No autorizado.");
         }
@@ -251,14 +255,13 @@ export const updateUser = mutation({
 
 export const deleteUser = mutation({
     args: {
-        actorId: v.id("users"),
+        actorId: v.optional(v.id("users")),
         id: v.id("users")
     },
     handler: async (ctx, args) => {
-        const actor = await ctx.db.get(args.actorId);
-        if (!actor) throw new Error("No autorizado.");
+        const actor = await requireActor(ctx, args.actorId);
         const isAdmin = actor.role === 'admin';
-        const isSelf = args.actorId === args.id;
+        const isSelf = actor.idString === String(args.id);
         if (!isAdmin && !isSelf) {
             throw new Error("No autorizado.");
         }
@@ -268,12 +271,12 @@ export const deleteUser = mutation({
 
 export const approveKYC = mutation({
     args: {
-        adminId: v.id("users"),
+        adminId: v.optional(v.id("users")),
         targetUserId: v.id("users")
     },
     handler: async (ctx, args) => {
-        const admin = await ctx.db.get(args.adminId);
-        if (!admin || admin.role !== 'admin') {
+        const actor = await requireActor(ctx, args.adminId);
+        if (actor.role !== 'admin') {
             throw new Error("No tienes permisos de administrador.");
         }
         await ctx.db.patch(args.targetUserId, {
@@ -282,15 +285,37 @@ export const approveKYC = mutation({
     }
 });
 
+export const internalApproveKYC = internalMutation({
+    args: {
+        targetUserId: v.id("users")
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.targetUserId, {
+            kycStatus: 'approved'
+        });
+    }
+});
+
+export const internalRejectKYC = internalMutation({
+    args: {
+        targetUserId: v.id("users")
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.targetUserId, {
+            kycStatus: 'rejected'
+        });
+    }
+});
+
 export const rejectKYC = mutation({
     args: {
-        adminId: v.id("users"),
+        adminId: v.optional(v.id("users")),
         targetUserId: v.id("users"),
         reason: v.optional(v.string())
     },
     handler: async (ctx, args) => {
-        const admin = await ctx.db.get(args.adminId);
-        if (!admin || admin.role !== 'admin') {
+        const actor = await requireActor(ctx, args.adminId);
+        if (actor.role !== 'admin') {
             throw new Error("No tienes permisos de administrador.");
         }
         await ctx.db.patch(args.targetUserId, {
@@ -301,12 +326,73 @@ export const rejectKYC = mutation({
 
 export const acceptTerms = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         id: v.id("users"),
         version: v.number(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        assertSelfOrAdmin(actor, String(args.id));
+
         await ctx.db.patch(args.id, {
             termsAcceptedVersion: args.version
         });
+    }
+});
+
+export const submitKyc = mutation({
+    args: {
+        actorId: v.optional(v.id("users")),
+        id: v.id("users"),
+        payload: v.any(),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        assertSelfOrAdmin(actor, String(args.id));
+
+        const payload = (args.payload || {}) as Record<string, unknown>;
+        const docs: Array<{ type: string; url: string; status: 'pending' | 'approved' | 'rejected'; uploadedAt: string; reviewedAt?: string }> = [];
+        const documentFront = typeof payload.documentFront === 'string' ? payload.documentFront : undefined;
+        const documentBack = typeof payload.documentBack === 'string' ? payload.documentBack : undefined;
+
+        if (documentFront) {
+            docs.push({
+                type: 'id_front',
+                url: documentFront,
+                status: 'pending',
+                uploadedAt: new Date().toISOString(),
+            });
+        }
+        if (documentBack) {
+            docs.push({
+                type: 'id_back',
+                url: documentBack,
+                status: 'pending',
+                uploadedAt: new Date().toISOString(),
+            });
+        }
+
+        await ctx.db.patch(args.id, {
+            kycStatus: 'pending',
+            verificationDocuments: docs.length > 0 ? docs : undefined,
+        });
+    }
+});
+
+export const updateSubscription = mutation({
+    args: {
+        actorId: v.optional(v.id("users")),
+        id: v.id("users"),
+        tier: v.union(v.literal('free'), v.literal('pro'), v.literal('business')),
+        status: v.union(v.literal('active'), v.literal('inactive')),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        assertSelfOrAdmin(actor, String(args.id));
+
+        await ctx.db.patch(args.id, {
+            subscriptionStatus: args.status,
+            subscriptionTier: args.tier,
+        } as any);
     }
 });

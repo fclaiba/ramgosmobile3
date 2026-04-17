@@ -9,6 +9,7 @@ import { usePoints, DISCOUNT_TIERS } from '../contexts/PointsContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 
 export default function CartSidebar() {
@@ -17,6 +18,7 @@ export default function CartSidebar() {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { show } = useToast();
 
     const [selectedDiscount, setSelectedDiscount] = React.useState<number>(0);
     const [referralCode, setReferralCode] = React.useState('');
@@ -45,16 +47,16 @@ export default function CartSidebar() {
 
         if (discount) {
             setAppliedReferralDiscount(discount);
-            Alert.alert('Código Aplicado', `Descuento de $${discount.toFixed(2)} aplicado.`);
+            show(`Descuento de $${discount.toFixed(2)} aplicado.`, 'success');
         } else {
             // Check for potential user ID format or generic fallback for demo
             if (referralCode.length > 5) {
                 // Simulate a 5% discount for any "valid looking" code not in list
                 const genericDiscount = totalPrice * 0.05;
                 setAppliedReferralDiscount(genericDiscount);
-                Alert.alert('Código de Referido', 'Descuento de referido (5%) aplicado.');
+                show('Descuento de referido (5%) aplicado.', 'success');
             } else {
-                Alert.alert('Código Inválido', 'El código ingresado no existe o expiró.');
+                show('El código ingresado no existe o expiró.', 'error');
                 setAppliedReferralDiscount(0);
             }
         }

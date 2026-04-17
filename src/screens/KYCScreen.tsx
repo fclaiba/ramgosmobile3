@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, Alert, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, TextInput, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { Camera, Upload, CheckCircle2, ShieldCheck, ArrowRight, User, Building2, MapPin, Link as LinkIcon, FileText } from 'lucide-react-native';
@@ -8,8 +8,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useFintech } from '../contexts/FintechContext';
+import { useAction, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { KycWebViewMockModal } from '../components/auth/KycWebViewMockModal';
 
-type Step = 'intro' | 'document' | 'face' | 'business_docs' | 'location' | 'social_link' | 'success';
+type Step = 'intro' | 'success';
 
 export default function KYCScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
@@ -34,9 +37,14 @@ export default function KYCScreen({ navigation, route }: any) {
     // Influencer State
     const [socialLink, setSocialLink] = useState('');
 
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const { user, markKycSubmitted } = useAuth();
-    const { submitKyc } = useFintech();
+    const { submitKyc, refreshKyc } = useFintech();
+    const initiateKyc = useAction((api as any).identity?.initiateKYCSession || api.users.syncUser);
+    
+    // WebView State
+    const [webViewVisible, setWebViewVisible] = useState(false);
+    const [kycUrl, setKycUrl] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Animation
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -49,75 +57,34 @@ export default function KYCScreen({ navigation, route }: any) {
         setTimeout(() => setStep(nextStep), 200);
     };
 
-    const handleUpload = (field: 'front' | 'back' | 'incorporation' | 'premises') => {
-        // Mock Image Picker
-        setTimeout(() => {
-            if (field === 'front') setIdFront('mock_url_front');
-            else if (field === 'back') setIdBack('mock_url_back');
-            else if (field === 'incorporation') setIncorporationDoc('mock_url_incorporation');
-            else if (field === 'premises') setPremisesPhoto('mock_url_premises');
-        }, 1000);
-    };
-
-    const handleFaceScan = () => {
-        setTimeout(() => {
-            setFaceScanned(true);
-        }, 2000);
-    };
-
-    const handleNextFromIntro = () => {
-        if (accountType === 'business') transitionTo('business_docs');
-        else if (accountType === 'influencer') transitionTo('social_link');
-        else transitionTo('document');
-    };
-
-    // Business Flow Logic
-    const handleBusinessDocsNext = () => {
-        if (!ein || !incorporationDoc) {
-            show('Ingresa el EIN y sube el Certificado de Incorporación.', 'warning');
-            return;
-        }
-        transitionTo('location');
-    };
-
-    const handleLocationNext = () => {
-        if (!businessAddress || !premisesPhoto) {
-            show('Ingresa la dirección y sube una foto del local.', 'warning');
-            return;
-        }
-        transitionTo('document'); // Continue to Identity verification
-    };
-
-    // Influencer Flow Logic
-    const handleSocialLinkNext = () => {
-        if (!socialLink) {
-            show('Ingresa el link de tu red social principal.', 'warning');
-            return;
-        }
-        transitionTo('document'); // Continue to Identity verification
-    };
-
-    const handleFinalizeKyc = async () => {
-        if (isSubmitting) return;
+    const handleStartVerification = async () => {
         if (!user) {
-            show('Debes iniciar sesión para completar la verificación.', 'error');
-            return;
-        }
-        if (!idFront || !idBack) {
-            show('Necesitamos las fotos de tu documento para continuar.', 'warning');
-            return;
-        }
-        if (!faceScanned) {
-            show('Completa el escaneo facial antes de finalizar.', 'warning');
+            show('Debes iniciar sesión primero', 'error');
             return;
         }
 
         setIsSubmitting(true);
         try {
+            const result = await initiateKyc({ accountType });
+            if (result && result.url) {
+                setKycUrl(result.url);
+                setWebViewVisible(true);
+            }
+        } catch (e) {
+            show('Error contactando al proveedor de identidad', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleKycSuccess = async () => {
+        setWebViewVisible(false);
+        setIsSubmitting(true);
+        try {
             await markKycSubmitted({
                 accountType,
-                documentFront: idFront,
-                documentBack: idBack,
+                documentFront: idFront || 'mock_doc',
+                documentBack: idBack || 'mock_doc',
                 selfieValidated: faceScanned,
                 // Business Data
                 ein: accountType === 'business' ? ein : undefined,
@@ -133,12 +100,12 @@ export default function KYCScreen({ navigation, route }: any) {
 
             // Submit to Fintech (Admin Dashboard)
             submitKyc({
-                ownerId: user.id,
+                ownerId: user?.id || 'unknown',
                 ownerType: accountType as any,
-                ownerName: user.name || user.email,
+                ownerName: user?.name || user?.email || 'Unknown User',
                 data: {
-                    documentFront: idFront,
-                    documentBack: idBack,
+                    documentFront: idFront || 'mock_doc',
+                    documentBack: idBack || 'mock_doc',
                     selfieValidated: faceScanned,
                     ein: accountType === 'business' ? ein : undefined,
                     incorporationDoc: accountType === 'business' ? incorporationDoc : undefined,
@@ -148,10 +115,10 @@ export default function KYCScreen({ navigation, route }: any) {
                 }
             });
 
+            await refreshKyc();
             transitionTo('success');
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'No pudimos registrar tu verificación. Inténtalo nuevamente.';
+            const message = error instanceof Error ? error.message : 'Error interno.';
             show(message, 'error');
         } finally {
             setIsSubmitting(false);
@@ -214,194 +181,17 @@ export default function KYCScreen({ navigation, route }: any) {
             </View>
 
             <TouchableOpacity
-                style={styles.btn}
-                onPress={handleNextFromIntro}
+                style={[styles.btn, isSubmitting && styles.btnDisabled]}
+                disabled={isSubmitting}
+                onPress={handleStartVerification}
             >
-                <Text style={styles.btnText}>Comenzar verificación</Text>
+                <Text style={styles.btnText}>Continuar con Identidad Segura</Text>
                 <ArrowRight size={20} color="#fff" />
             </TouchableOpacity>
         </View>
     );
 
-    const renderBusinessDocs = () => (
-        <ScrollView contentContainerStyle={styles.scrollStep}>
-            <Text style={styles.title}>Documentación Legal</Text>
-            <Text style={styles.subtitle}>Sube los documentos de constitución de tu empresa bajo leyes de Nueva York.</Text>
 
-            <Text style={styles.label}>Número EIN (Employer Identification Number)</Text>
-            <TextInput
-                style={styles.input}
-                placeholder="Ej: 12-3456789"
-                placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
-                value={ein}
-                onChangeText={setEin}
-                keyboardType="numeric"
-            />
-
-            <Text style={styles.label}>Estatutos / Certificado de Incorporación</Text>
-            <TouchableOpacity style={styles.uploadCardSimple} onPress={() => handleUpload('incorporation')}>
-                {incorporationDoc ? (
-                    <View style={styles.uploadedContentRow}>
-                        <CheckCircle2 size={24} color="#10B981" />
-                        <Text style={styles.uploadedTextSimple}>Documento cargado</Text>
-                    </View>
-                ) : (
-                    <View style={styles.uploadPlaceholderRow}>
-                        <FileText size={24} color="#7C3AED" />
-                        <Text style={styles.uploadText}>Subir PDF o Imagen</Text>
-                    </View>
-                )}
-            </TouchableOpacity>
-
-            <Text style={styles.hint}>
-                Debes proporcionar el "Articles of Organization" o "Certificate of Incorporation" válido.
-            </Text>
-
-            <TouchableOpacity
-                style={[styles.btn, (!ein || !incorporationDoc) && styles.btnDisabled]}
-                disabled={!ein || !incorporationDoc}
-                onPress={handleBusinessDocsNext}
-            >
-                <Text style={styles.btnText}>Siguiente: Ubicación</Text>
-            </TouchableOpacity>
-        </ScrollView>
-    );
-
-    const renderLocation = () => (
-        <ScrollView contentContainerStyle={styles.scrollStep}>
-            <Text style={styles.title}>Ubicación Física</Text>
-            <Text style={styles.subtitle}>Valida la dirección comercial de tu negocio en NY.</Text>
-
-            <Text style={styles.label}>Dirección Completa</Text>
-            <TextInput
-                style={styles.input}
-                placeholder="Calle, Número, Ciudad, CP"
-                placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
-                value={businessAddress}
-                onChangeText={setBusinessAddress}
-            />
-
-            <Text style={styles.label}>Foto de la Fachada / Local</Text>
-            <TouchableOpacity style={styles.uploadCard} onPress={() => handleUpload('premises')}>
-                {premisesPhoto ? (
-                    <View style={styles.uploadedContent}>
-                        <CheckCircle2 size={32} color="#10B981" />
-                        <Text style={styles.uploadedText}>Foto subida</Text>
-                    </View>
-                ) : (
-                    <View style={styles.uploadPlaceholder}>
-                        <Building2 size={32} color="#7C3AED" style={{ marginBottom: 8 }} />
-                        <Text style={styles.uploadText}>Tomar foto del local</Text>
-                    </View>
-                )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.btn, (!businessAddress || !premisesPhoto) && styles.btnDisabled]}
-                disabled={!businessAddress || !premisesPhoto}
-                onPress={handleLocationNext}
-            >
-                <Text style={styles.btnText}>Siguiente: Identidad</Text>
-            </TouchableOpacity>
-        </ScrollView>
-    );
-
-    const renderSocialLink = () => (
-        <View style={styles.stepContainer}>
-            <Text style={styles.title}>Tus Redes</Text>
-            <Text style={styles.subtitle}>Conecta tu cuenta principal para acceder al panel de Influencer.</Text>
-
-            <View style={styles.inputContainer}>
-                <LinkIcon size={20} color="#6B7280" style={{ marginRight: 10 }} />
-                <TextInput
-                    style={styles.inputFlex}
-                    placeholder="https://instagram.com/tu_usuario"
-                    placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
-                    value={socialLink}
-                    onChangeText={setSocialLink}
-                    autoCapitalize="none"
-                />
-            </View>
-
-            <TouchableOpacity
-                style={[styles.btn, !socialLink && styles.btnDisabled]}
-                disabled={!socialLink}
-                onPress={handleSocialLinkNext}
-            >
-                <Text style={styles.btnText}>Verificar Enlace</Text>
-            </TouchableOpacity>
-        </View>
-    );
-
-    const renderDocument = () => (
-        <View style={styles.stepContainer}>
-            <Text style={styles.title}>Identidad del Representante</Text>
-            <Text style={styles.subtitle}>Sube tu documento personal (DNI/ID/Pasaporte).</Text>
-
-            <TouchableOpacity style={styles.uploadCard} onPress={() => handleUpload('front')}>
-                {idFront ? (
-                    <View style={styles.uploadedContent}>
-                        <CheckCircle2 size={32} color="#10B981" />
-                        <Text style={styles.uploadedText}>Frente subido</Text>
-                    </View>
-                ) : (
-                    <View style={styles.uploadPlaceholder}>
-                        <Upload size={32} color="#7C3AED" style={{ marginBottom: 8 }} />
-                        <Text style={styles.uploadText}>Subir Frente</Text>
-                    </View>
-                )}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.uploadCard} onPress={() => handleUpload('back')}>
-                {idBack ? (
-                    <View style={styles.uploadedContent}>
-                        <CheckCircle2 size={32} color="#10B981" />
-                        <Text style={styles.uploadedText}>Dorso subido</Text>
-                    </View>
-                ) : (
-                    <View style={styles.uploadPlaceholder}>
-                        <Upload size={32} color="#7C3AED" style={{ marginBottom: 8 }} />
-                        <Text style={styles.uploadText}>Subir Dorso</Text>
-                    </View>
-                )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.btn, (!idFront || !idBack) && styles.btnDisabled]}
-                disabled={!idFront || !idBack}
-                onPress={() => transitionTo('face')}
-            >
-                <Text style={styles.btnText}>Continuar a Selfie</Text>
-            </TouchableOpacity>
-        </View>
-    );
-
-    const renderFace = () => (
-        <View style={styles.stepContainer}>
-            <Text style={styles.title}>Prueba de Vida</Text>
-            <Text style={styles.subtitle}>Último paso. Coloca tu rostro en el centro.</Text>
-
-            <View style={styles.cameraPreview}>
-                <View style={styles.faceOverlay}>
-                    {faceScanned ? <CheckCircle2 size={64} color="#10B981" /> : <User size={80} color="#fff" opacity={0.5} />}
-                </View>
-            </View>
-
-            {!faceScanned ? (
-                <TouchableOpacity style={styles.scanBtn} onPress={handleFaceScan}>
-                    <Text style={styles.scanBtnText}>Escanear Rostro</Text>
-                </TouchableOpacity>
-            ) : (
-                <TouchableOpacity
-                    style={[styles.btn, isSubmitting && { opacity: 0.7 }]}
-                    disabled={isSubmitting}
-                    onPress={handleFinalizeKyc}
-                >
-                    <Text style={styles.btnText}>Finalizar Verificación</Text>
-                </TouchableOpacity>
-            )}
-        </View>
-    );
 
     const renderSuccess = () => (
         <View style={styles.stepContainer}>
@@ -424,13 +214,16 @@ export default function KYCScreen({ navigation, route }: any) {
             <SafeAreaView style={styles.container}>
                 <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
                     {step === 'intro' && renderIntro()}
-                    {step === 'business_docs' && renderBusinessDocs()}
-                    {step === 'location' && renderLocation()}
-                    {step === 'social_link' && renderSocialLink()}
-                    {step === 'document' && renderDocument()}
-                    {step === 'face' && renderFace()}
                     {step === 'success' && renderSuccess()}
                 </Animated.View>
+                
+                <KycWebViewMockModal
+                    userId={user?.id || ''}
+                    visible={webViewVisible}
+                    url={kycUrl}
+                    onClose={() => setWebViewVisible(false)}
+                    onSuccess={handleKycSuccess}
+                />
             </SafeAreaView>
         </AuthBackground>
     );

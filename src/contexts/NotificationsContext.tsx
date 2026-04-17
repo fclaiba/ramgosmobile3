@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
-import { Platform, Alert } from 'react-native';
-// import * as Notifications from 'expo-notifications'; // Disabled for Expo Go optimization
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { registerForPushNotificationsAsync } from '../utils/pushNotifications';
 
 // Mock types locally to avoid import
 type PermissionStatus = 'granted' | 'denied' | 'undetermined';
@@ -13,13 +16,13 @@ type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 // ... (previous imports and setup)
 
 // Configure notification handler behavior
-// Notifications.setNotificationHandler({
-//     handleNotification: async () => ({
-//         shouldShowAlert: true,
-//         shouldPlaySound: true,
-//         shouldSetBadge: true,
-//     } as Notifications.NotificationBehavior),
-// });
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+    } as Notifications.NotificationBehavior),
+});
 
 export type NotificationType = 'system' | 'order' | 'money' | 'promo' | 'referral';
 
@@ -64,6 +67,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     const responseListener = useRef<any | undefined>(undefined);
     const { user } = useAuth(); // Tie storage to user potentially, or just global for now
     const { show } = useToast();
+    const registerPushToken = useMutation((api as any).notifications?.registerPushToken || api.users.syncUser);
 
     // Load history on mount
     useEffect(() => {
@@ -78,42 +82,50 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Register for push notifications
     useEffect(() => {
-        // registerForPushNotificationsAsync()
-        //     .then(({ token, status }) => {
-        //         setExpoPushToken(token);
-        //         setPermissionStatus(status);
-        //     })
-        //     .catch(error => {
-        //         console.warn('Failed to register for push notifications:', error);
-        //     });
+        if (user && user.id) {
+            registerForPushNotificationsAsync()
+                .then((token) => {
+                    if (token) {
+                        setExpoPushToken(token);
+                        setPermissionStatus('granted');
+                        // Persist token in Convex
+                        registerPushToken({ actorId: user.id as any, token }).catch(err => {
+                            console.warn("Could not register token on server", err);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.warn('Failed to register for push notifications:', error);
+                });
+        }
 
         // This listener is fired whenever a notification is received while the app is foregrounded
-        // notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-        //     const content = notification.request.content;
-        //     const newNotif: AppNotification = {
-        //         id: notification.request.identifier,
-        //         title: content.title || 'Nueva notificación',
-        //         body: content.body || '',
-        //         date: new Date().toISOString(),
-        //         read: false,
-        //         type: (content.data?.type as NotificationType) || 'system',
-        //         data: content.data,
-        //     };
-        //     addNotification(newNotif);
-        // });
+        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+            const content = notification.request.content;
+            const newNotif: AppNotification = {
+                id: notification.request.identifier,
+                title: content.title || 'Nueva notificación',
+                body: content.body || '',
+                date: new Date().toISOString(),
+                read: false,
+                type: (content.data?.type as NotificationType) || 'system',
+                data: content.data,
+            };
+            addNotification(newNotif);
+        });
 
         // This listener is fired whenever a user taps on or interacts with a notification
-        // responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-        //     const notif = response.notification.request.content;
-        //     // Here we could handle navigation based on data
-        //     console.log('Notification tapped:', notif.data);
-        // });
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+            const notif = response.notification.request.content;
+            // Here we could handle navigation based on data
+            console.log('Notification tapped:', notif.data);
+        });
 
         return () => {
             if (notificationListener.current) notificationListener.current.remove();
             if (responseListener.current) responseListener.current.remove();
         };
-    }, []);
+    }, [user]);
 
     const loadNotifications = async () => {
         try {
@@ -148,14 +160,14 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const simulateNotification = async (title: string, body: string, type: NotificationType = 'system') => {
         // Schedule a local notification
-        // await Notifications.scheduleNotificationAsync({
-        //     content: {
-        //         title,
-        //         body,
-        //         data: { type },
-        //     },
-        //     trigger: null, // Send immediately
-        // });
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title,
+                body,
+                data: { type },
+            },
+            trigger: null, // Send immediately
+        });
 
         // Mocking behavior for now since notifications are disabled
         const newNotif: AppNotification = {
@@ -172,9 +184,8 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const requestPermissions = async () => {
-        // Mock permission grant since actual logic is commented out
-        setPermissionStatus('granted');
-        console.log("Permissions mocked as granted (Notifications disabled)");
+        const { status } = await Notifications.requestPermissionsAsync();
+        setPermissionStatus(status);
     };
 
     const unreadCount = notifications.filter(n => !n.read).length;
@@ -199,9 +210,3 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     );
 };
 
-/*
-async function registerForPushNotificationsAsync() {
-    // Disabled
-    return { token: undefined, status: 'undetermined' };
-}
-*/

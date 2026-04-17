@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Heart, Users, Globe, Award, Target, Shield, Zap, Mail, Phone, MapPin, Facebook, Instagram, Twitter, Linkedin, Github } from 'lucide-react-native';
 import { Card, CardContent } from '../components/ui/card';
 import { MobileHeader } from '../components/MobileHeader';

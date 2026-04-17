@@ -22,7 +22,6 @@ import {
     PaymentProviderKey,
 } from '../services/fintech/paymentProviders';
 import { useAuth } from './AuthContext';
-import { mockConvexStore } from '../services/auth/mockConvexStore';
 
 type WalletOwnerType = 'ramgos' | 'business' | 'influencer' | 'consumer';
 type WalletBalanceKey = 'available' | 'pending' | 'reserved';
@@ -670,7 +669,6 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const updateKycStatus = useCallback((ownerId: string, status: KycStatus, notes?: string) => {
-        console.log('[FintechContext] updateKycStatus called for:', ownerId, status);
         setKycRecords((prev) => {
             const existing = prev[ownerId] ?? {
                 ownerId,
@@ -687,42 +685,29 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
             kycRef.current = next;
             return next;
         });
-
-
-        // Sync with central Auth Store so the user sees the update immediately
-        mockConvexStore.updateKycStatus(ownerId, status, notes).catch(err => {
-            console.error('[FintechContext] Failed to sync KYC status to auth store', err);
-        });
     }, []);
 
     const refreshKyc = useCallback(async () => {
-        try {
-            await mockConvexStore.init();
-            const snapshot = await mockConvexStore.getStoreSnapshot();
-            const loadedRecords: Record<string, KycRecord> = {};
-
-            Object.values(snapshot.users).forEach((u: any) => {
-                if (u.kyc) {
-                    loadedRecords[u.id] = {
-                        ownerId: u.id,
-                        ownerType: u.role as WalletOwnerType,
-                        status: u.kyc.status as KycStatus,
-                        submittedAt: u.kyc.submittedAt || u.createdAt,
-                        updatedAt: u.kyc.updatedAt || u.updatedAt,
-                        reviewerNotes: u.kyc.reviewerNotes,
-                        dataSnapshot: {
-                            ownerName: u.name,
-                            ...u.kyc.metadata
-                        }
-                    };
-                }
-            });
-
-            setKycRecords(prev => ({ ...prev, ...loadedRecords }));
-        } catch (err) {
-            console.error('[FintechContext] Failed to refresh KYC records', err);
+        if (!user?.id) {
+            return;
         }
-    }, []);
+        setKycRecords((prev) => {
+            const existing = prev[user.id];
+            const next: KycRecord = {
+                ownerId: user.id,
+                ownerType: (user.role as WalletOwnerType) || 'consumer',
+                status: (user.kycStatus as KycStatus) || 'unverified',
+                submittedAt: existing?.submittedAt,
+                updatedAt: new Date().toISOString(),
+                reviewerNotes: existing?.reviewerNotes,
+                dataSnapshot: {
+                    ownerName: user.name,
+                    email: user.email,
+                },
+            };
+            return { ...prev, [user.id]: next };
+        });
+    }, [user?.email, user?.id, user?.kycStatus, user?.name, user?.role]);
 
     // Hydrate initially
     useEffect(() => {

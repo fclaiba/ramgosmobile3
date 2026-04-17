@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { Doc, Id } from "./_generated/dataModel";
+import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // --- QUERIES ---
 
@@ -70,11 +70,19 @@ export const getListing = query({
 });
 
 export const getMyListings = query({
-    args: { sellerId: v.string() },
+    args: {
+        actorId: v.optional(v.id("users")),
+        sellerId: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const targetSellerId = args.sellerId ?? actor.idString;
+        if (targetSellerId !== actor.idString) {
+            assertAdminOrDeveloper(actor);
+        }
         const listings = await ctx.db
             .query("listings")
-            .withIndex("by_seller", (q) => q.eq("sellerId", args.sellerId))
+            .withIndex("by_seller", (q) => q.eq("sellerId", targetSellerId))
             .collect();
         return await Promise.all(listings.map(l => resolveListingUrls(ctx, l)));
     }
@@ -85,12 +93,13 @@ export const getMyListings = query({
 // Create a new listing
 export const createListing = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         title: v.string(),
         description: v.string(),
         price: v.number(),
         type: v.union(v.literal('product'), v.literal('service'), v.literal('event'), v.literal('bono')),
         category: v.string(),
-        sellerId: v.string(),
+        sellerId: v.optional(v.string()),
         stock: v.number(),
         image: v.optional(v.string()),
         gallery: v.optional(v.array(v.string())),
@@ -116,8 +125,15 @@ export const createListing = mutation({
         condition: v.optional(v.string()), // 'new' | 'used'
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const sellerId = args.sellerId ?? actor.idString;
+        assertSelfOrAdmin(actor, sellerId);
         // Validation: Verify Seller Role
-        const seller = await ctx.db.get(args.sellerId as Id<"users">);
+        const normalizedSellerId = ctx.db.normalizeId("users", sellerId);
+        if (!normalizedSellerId) {
+            throw new Error("No autorizado.");
+        }
+        const seller = await ctx.db.get(normalizedSellerId);
         if (!seller) {
             throw new Error("Usuario no encontrado.");
         }
@@ -140,6 +156,7 @@ export const createListing = mutation({
 
         const listingId = await ctx.db.insert("listings", {
             ...args,
+            sellerId,
             slug,
             tags: args.tags || [],
             currency: "USD",
@@ -159,11 +176,15 @@ export const createListing = mutation({
 // This is critical for real-time inventory management.
 export const purchaseItem = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         listingId: v.id("listings"),
         quantity: v.number(),
-        buyerId: v.string(),
+        buyerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.buyerId);
+        const buyerId = args.buyerId ?? actor.idString;
+        assertSelfOrAdmin(actor, buyerId);
         const listing = await ctx.db.get(args.listingId);
 
         if (!listing) {
@@ -191,7 +212,9 @@ export const purchaseItem = mutation({
 
 export const updateListing = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         id: v.id("listings"),
+        sellerId: v.optional(v.string()),
         updates: v.object({
             title: v.optional(v.string()),
             description: v.optional(v.string()),
@@ -212,9 +235,15 @@ export const updateListing = mutation({
         })
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
         const listing = await ctx.db.get(args.id);
         if (!listing) {
             throw new Error("Producto no encontrado");
+        }
+        const isOwner = listing.sellerId === actor.idString;
+        const isAdmin = actor.role === "admin" || actor.role === "developer";
+        if (!isOwner && !isAdmin) {
+            throw new Error("No autorizado.");
         }
         await ctx.db.patch(args.id, args.updates);
         return { success: true };
@@ -222,11 +251,21 @@ export const updateListing = mutation({
 });
 
 export const deleteListing = mutation({
-    args: { id: v.id("listings") },
+    args: {
+        actorId: v.optional(v.id("users")),
+        id: v.id("listings"),
+        sellerId: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
         const listing = await ctx.db.get(args.id);
         if (!listing) {
             throw new Error("Producto no encontrado");
+        }
+        const isOwner = listing.sellerId === actor.idString;
+        const isAdmin = actor.role === "admin" || actor.role === "developer";
+        if (!isOwner && !isAdmin) {
+            throw new Error("No autorizado.");
         }
         await ctx.db.delete(args.id);
         return { success: true };

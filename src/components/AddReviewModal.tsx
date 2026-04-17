@@ -39,6 +39,7 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
         setIsSubmitting(true);
         try {
             await addReview({
+                actorId: user.id as any,
                 listingId,
                 rating,
                 comment,

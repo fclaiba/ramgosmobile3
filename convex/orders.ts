@@ -1,16 +1,24 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // --- QUERIES ---
 
 export const getMyOrders = query({
-    args: { userId: v.string() },
+    args: {
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string())
+    },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        const targetUserId = args.userId ?? actor.idString;
+        assertSelfOrAdmin(actor, targetUserId);
+
         // Fetch orders where userId matches
         const orders = await ctx.db
             .query("orders")
-            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .withIndex("by_user", (q) => q.eq("userId", targetUserId))
             .order("desc")
             .collect();
         return orders;
@@ -18,11 +26,21 @@ export const getMyOrders = query({
 });
 
 export const getOrdersBySeller = query({
-    args: { sellerId: v.string() },
+    args: {
+        actorId: v.optional(v.id("users")),
+        sellerId: v.optional(v.string())
+    },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        const targetSellerId = args.sellerId ?? actor.idString;
+        const isSelf = actor.idString === targetSellerId;
+        if (!isSelf) {
+            assertAdminOrDeveloper(actor);
+        }
+
         const orders = await ctx.db
             .query("orders")
-            .withIndex("by_seller", (q) => q.eq("sellerId", args.sellerId))
+            .withIndex("by_seller", (q) => q.eq("sellerId", targetSellerId))
             .order("desc")
             .collect();
         return orders;
@@ -33,8 +51,10 @@ export const getOrdersBySeller = query({
 
 export const createOrder = mutation({
     args: {
-        userId: v.string(), // Buyer
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string()), // Buyer
         sellerId: v.string(),
+        idempotencyKey: v.optional(v.string()),
         items: v.array(v.object({
             listingId: v.string(),
             title: v.string(),
@@ -56,6 +76,22 @@ export const createOrder = mutation({
         })),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        const buyerId = args.userId ?? actor.idString;
+        assertSelfOrAdmin(actor, buyerId);
+
+        if (args.idempotencyKey) {
+            const existing = await ctx.db
+                .query("orders")
+                .withIndex("by_user_idempotency", (q) =>
+                    q.eq("userId", buyerId).eq("idempotencyKey", args.idempotencyKey),
+                )
+                .first();
+            if (existing) {
+                return existing._id;
+            }
+        }
+
         // 1. Verify Stock for all items
         for (const item of args.items) {
             try {
@@ -78,7 +114,13 @@ export const createOrder = mutation({
         // 2. Create Order
         // Initially funds are "held" in escrow
         const orderId = await ctx.db.insert("orders", {
-            ...args,
+            userId: buyerId,
+            sellerId: args.sellerId,
+            items: args.items,
+            total: args.total,
+            currency: args.currency,
+            shipping: args.shipping,
+            idempotencyKey: args.idempotencyKey,
             status: "payment_received",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -98,6 +140,20 @@ export const createOrder = mutation({
     },
 });
 
+export const internalUpdateOrderStatus = internalMutation({
+    args: {
+        orderId: v.id("orders"),
+        status: v.string(),
+    },
+    handler: async (ctx, args) => {
+        // Since it's internal, we don't require an actor (it's called by HTTP webhook).
+        await ctx.db.patch(args.orderId, {
+            status: args.status as any,
+            updatedAt: new Date().toISOString()
+        });
+    }
+});
+
 
 // 1. Mark as Shipped
 export const markAsShipped = mutation({
@@ -105,14 +161,18 @@ export const markAsShipped = mutation({
         orderId: v.id("orders"),
         trackingNumber: v.string(),
         carrier: v.string(),
-        sellerId: v.string(), // Passed to verify authority
+        actorId: v.optional(v.id("users")),
+        sellerId: v.optional(v.string()), // legacy fallback
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
         // Validate Authority
-        if (order.sellerId !== args.sellerId) {
+        const isSeller = order.sellerId === actor.idString;
+        const isAdmin = actor.role === "admin" || actor.role === "developer";
+        if (!isSeller && !isAdmin) {
             throw new Error("No autorizado. Solo el vendedor puede marcar enviado.");
         }
 
@@ -138,11 +198,19 @@ export const markAsShipped = mutation({
 export const markAsDelivered = mutation({
     args: {
         orderId: v.id("orders"),
-        sellerId: v.optional(v.string()), // Optional if system calls it
+        actorId: v.optional(v.id("users")),
+        sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
+
+        const isSeller = order.sellerId === actor.idString;
+        const isAdmin = actor.role === "admin" || actor.role === "developer";
+        if (!isSeller && !isAdmin) {
+            throw new Error("No autorizado. Solo el vendedor puede marcar entregado.");
+        }
 
         // Validate State
         if (order.status !== 'in_transit') {
@@ -162,14 +230,16 @@ export const markAsDelivered = mutation({
 export const confirmReceipt = mutation({
     args: {
         orderId: v.id("orders"),
-        userId: v.string(), // Buyer
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string()), // Legacy buyer
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
         // Validate Authority
-        if (order.userId !== args.userId) {
+        if (order.userId !== actor.idString) {
             throw new Error("No autorizado. Solo el comprador puede confirmar recepción.");
         }
 
@@ -210,14 +280,16 @@ export const confirmReceipt = mutation({
 export const cancelOrder = mutation({
     args: {
         orderId: v.id("orders"),
-        userId: v.string(), // Buyer
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string()), // Buyer (legacy)
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
         // Validate Authority
-        if (order.userId !== args.userId) {
+        if (order.userId !== actor.idString) {
             throw new Error("No autorizado.");
         }
 
@@ -267,15 +339,17 @@ export const cancelOrder = mutation({
 export const openDispute = mutation({
     args: {
         orderId: v.id("orders"),
-        userId: v.string(), // Buyer or Seller
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string()), // Buyer or Seller (legacy)
         reason: v.string()
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
         // Validate Authority
-        if (order.userId !== args.userId && order.sellerId !== args.userId) {
+        if (order.userId !== actor.idString && order.sellerId !== actor.idString) {
             throw new Error("No autorizado.");
         }
 
@@ -296,15 +370,17 @@ export const openDispute = mutation({
 export const escalateDispute = mutation({
     args: {
         orderId: v.id("orders"),
-        userId: v.string(),
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string()),
         role: v.union(v.literal('buyer'), v.literal('seller')),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
-        const isBuyer = order.userId === args.userId && args.role === 'buyer';
-        const isSeller = order.sellerId === args.userId && args.role === 'seller';
+        const isBuyer = order.userId === actor.idString && args.role === 'buyer';
+        const isSeller = order.sellerId === actor.idString && args.role === 'seller';
         if (!isBuyer && !isSeller) {
             throw new Error("No autorizado para escalar esta disputa.");
         }
@@ -318,7 +394,7 @@ export const escalateDispute = mutation({
         });
 
         await ctx.db.insert("audit_logs", {
-            actorUserId: args.userId,
+            actorUserId: actor.idString,
             targetUserId: order.sellerId,
             action: "DISPUTE_ESCALATED",
             timestamp: new Date().toISOString(),

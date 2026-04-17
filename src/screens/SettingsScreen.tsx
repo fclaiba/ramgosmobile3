@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import { Settings, Bell, Globe, Lock, CreditCard, Download, Trash2, ChevronRight, Moon, Sun, Smartphone, Volume2, Mail, MessageSquare, Shield, Eye, Database, FileText, Plus, Check, Keyboard, Key, Fingerprint, UserX, MapPin, History as HistoryIcon, Target, Camera, Mic, Wifi, Share2 } from 'lucide-react-native';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';

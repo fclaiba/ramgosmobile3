@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, useWindowDimensions, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, ZoomIn, useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming } from 'react-native-reanimated';
 import { CreditCard, Lock, CheckCircle, ShieldCheck, User, Calendar, Cctv, ChevronRight, X, Wallet, Building, ArrowRightLeft, Home, Trophy, Coins } from 'lucide-react-native';
@@ -357,7 +357,7 @@ export default function PaymentScreen({ route, navigation }: any) {
             console.error('Payment error', error);
             const message = typeof error?.message === 'string' ? error.message : 'No pudimos procesar tu pago. Intenta nuevamente.';
             setProcessingError(message);
-            Alert.alert('Error al procesar el pago', message);
+            show(message, 'error');
         } finally {
             setLoading(false);
         }

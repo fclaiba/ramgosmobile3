@@ -25,6 +25,13 @@ import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
 import CartSidebar from './src/components/CartSidebar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PointsFeedback } from './src/components/ui/PointsFeedback';
+import { StripeProvider } from '@stripe/stripe-react-native';
+
+const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY;
+if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
+    throw new Error('Missing EXPO_PUBLIC_STRIPE_KEY. Configure Stripe publishable key for production builds.');
+}
+const stripePublishableKey = STRIPE_PUBLISHABLE_KEY ?? 'pk_test_mock_fallback';
 
 // #endregion
 
@@ -219,34 +226,36 @@ export default function App() {
                         <SafeAreaProvider>
                             <ConvexProvider client={convex}>
                                 <ToastProvider>
-                                    <AuthProvider>
-                                        <PointsProvider>
-                                            <WalletProvider>
-                                                <FintechProvider>
-                                                    <RewardsProvider>
-                                                        <BusinessProvider>
-                                                            <MarketplaceProvider>
-                                                                <EscrowProvider>
-                                                                    <CartProvider>
-                                                                        <FavoritesProvider>
-                                                                            <NotificationsProvider>
-                                                                                <SocialProvider>
-                                                                                    <ReferralProvider>
-                                                                                        <PointsFeedback />
-                                                                                        <AppNavigator />
-                                                                                    </ReferralProvider>
-                                                                                </SocialProvider>
-                                                                            </NotificationsProvider>
-                                                                        </FavoritesProvider>
-                                                                    </CartProvider>
-                                                                </EscrowProvider>
-                                                            </MarketplaceProvider>
-                                                        </BusinessProvider>
-                                                    </RewardsProvider>
-                                                </FintechProvider>
-                                            </WalletProvider>
-                                        </PointsProvider>
-                                    </AuthProvider>
+                                    <StripeProvider publishableKey={stripePublishableKey}>
+                                        <AuthProvider>
+                                            <PointsProvider>
+                                                <WalletProvider>
+                                                    <FintechProvider>
+                                                        <RewardsProvider>
+                                                            <BusinessProvider>
+                                                                <MarketplaceProvider>
+                                                                    <EscrowProvider>
+                                                                        <CartProvider>
+                                                                            <FavoritesProvider>
+                                                                                <NotificationsProvider>
+                                                                                    <SocialProvider>
+                                                                                        <ReferralProvider>
+                                                                                            <PointsFeedback />
+                                                                                            <AppNavigator />
+                                                                                        </ReferralProvider>
+                                                                                    </SocialProvider>
+                                                                                </NotificationsProvider>
+                                                                            </FavoritesProvider>
+                                                                        </CartProvider>
+                                                                    </EscrowProvider>
+                                                                </MarketplaceProvider>
+                                                            </BusinessProvider>
+                                                        </RewardsProvider>
+                                                    </FintechProvider>
+                                                </WalletProvider>
+                                            </PointsProvider>
+                                        </AuthProvider>
+                                    </StripeProvider>
                                 </ToastProvider>
                             </ConvexProvider>
                         </SafeAreaProvider>

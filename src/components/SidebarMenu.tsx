@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert, Switch, ActivityIndicator, AccessibilityInfo } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Switch, ActivityIndicator, AccessibilityInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen } from 'lucide-react-native';
 import { useAuth, type UserRole } from '../contexts/AuthContext';

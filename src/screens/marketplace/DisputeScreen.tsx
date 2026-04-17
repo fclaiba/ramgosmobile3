@@ -8,7 +8,6 @@ import {
     useWindowDimensions,
     KeyboardAvoidingView,
     Platform,
-    Alert,
 } from 'react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import {
@@ -19,13 +18,13 @@ import {
     Package,
     HeartCrack,
     HelpCircle,
-    BadgeAlert,
     CheckCircle2,
     MessageSquare,
     Upload,
     FileImage,
     XCircle,
     ChevronRight,
+    Badge,
 } from 'lucide-react-native';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -52,7 +51,7 @@ const REASONS = [
     { label: 'Producto no recibido', code: 'not_received', Icon: Package, description: 'No llegó el pedido en el plazo acordado' },
     { label: 'Producto dañado', code: 'damaged', Icon: HeartCrack, description: 'Llegó roto, defectuoso o en mal estado' },
     { label: 'No es lo que pedí', code: 'not_as_described', Icon: HelpCircle, description: 'Diferente a las fotos o descripción' },
-    { label: 'Faltan piezas', code: 'missing_parts', Icon: BadgeAlert, description: 'Incompleto o sin accesorios prometidos' },
+    { label: 'Faltan piezas', code: 'missing_parts', Icon: Badge, description: 'Incompleto o sin accesorios prometidos' },
     { label: 'Producto falso', code: 'counterfeit', Icon: AlertTriangle, description: 'Réplica o imitación no autorizada' },
 ] as const;
 
@@ -69,7 +68,7 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
     const theme = useTheme();
 
     const orders = marketplace?.orders || [];
-    const showToast = toast?.show || Alert.alert;
+    const showToast = toast?.show || (() => {});
     const colorScheme = theme?.colorScheme || 'light';
     const isDark = colorScheme === 'dark';
 

@@ -342,6 +342,7 @@ interface UpdateProductResult {
 
 interface PlaceOrderPayload {
     cartItems: CartItem[];
+    requestId?: string;
     shippingMethod: ShippingMethod;
     shippingDestination: ShippingDestination;
     appliedDiscount?: number;
@@ -388,6 +389,7 @@ interface MarketplaceContextType {
     removeFromWishlist: (productId: string) => void;
     addDisputeMessage: (orderId: string, message: { sender: 'buyer' | 'seller'; body: string }) => void;
     escalateDispute: (orderId: string, role: 'buyer' | 'seller') => { success: boolean; error?: string };
+    confirmDelivery: (orderId: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 import { useQuery, useMutation } from 'convex/react';
@@ -439,11 +441,15 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     const updateListingMutation = useMutation(api.listings.updateListing);
     const deleteListingMutation = useMutation(api.listings.deleteListing);
     const createOrderMutation = useMutation(api.orders.createOrder);
+    const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
     const addDisputeMessageMutation = useMutation(api.disputes.addDisputeMessage);
     const escalateDisputeMutation = useMutation(api.orders.escalateDispute);
 
     const { user } = useAuth(); // Moved up to use userId in query
-    const myOrders = useQuery(api.orders.getMyOrders, user ? { userId: user.id } : "skip") ?? [];
+    const myOrders = useQuery(
+        api.orders.getMyOrders,
+        user ? { actorId: user.id as any, userId: user.id } : "skip"
+    ) ?? [];
 
     const { show } = useToast();
 
@@ -529,6 +535,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const newId = await createListingMutation({
+                actorId: user.id as any,
                 title: input.title,
                 description: input.description,
                 price: input.price,
@@ -585,7 +592,9 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
 
             // Simple mapping for now
             await updateListingMutation({
+                actorId: user?.id as any,
                 id: productId as any,
+                sellerId: user?.id,
                 updates: {
                     title: updates.title,
                     description: updates.description,
@@ -602,7 +611,11 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
 
     const deleteProduct = async (productId: string) => {
         try {
-            await deleteListingMutation({ id: productId as any });
+            await deleteListingMutation({
+                actorId: user?.id as any,
+                id: productId as any,
+                sellerId: user?.id,
+            });
         } catch (e) {
             console.error("Failed to delete", e);
         }
@@ -645,10 +658,13 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             // Note: If one fails, others might succeed. Ideal is all-or-nothing but for MVP partial is acceptable
             // or we do sequential and stop on error.
 
-            const results = [];
+            const createdOrders: Order[] = [];
 
             for (const [sellerId, items] of itemsBySeller.entries()) {
                 const subtotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                const orderRequestKey = payload.requestId
+                    ? `${payload.requestId}_${sellerId}`
+                    : `ord_${user.id}_${sellerId}_${Date.now()}`;
 
                 // Distribute shipping cost proportionally or per order?
                 // Simplification for MVP: full shipping cost on first order or split? 
@@ -657,9 +673,11 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                 // Let's assume shipping is PER SELLER in this logic if we grouped by seller.
 
                 // Construct Backend Order Payload
-                await createOrderMutation({
+                const createdOrderId = await createOrderMutation({
+                    actorId: user.id as any,
                     userId: user.id,
                     sellerId: sellerId,
+                    idempotencyKey: orderRequestKey,
                     items: items.map(i => ({
                         listingId: i.id as any,
                         title: i.name,
@@ -674,10 +692,51 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                         address: payload.shippingDestination
                     }
                 });
-                results.push(true);
+
+                createdOrders.push({
+                    id: createdOrderId,
+                    buyerId: user.id,
+                    sellerId,
+                    sellerName: items[0]?.sellerName || 'Vendedor',
+                    items: items.map(i => ({
+                        productId: String(i.id),
+                        listingType: i.type === 'product' ? 'product' : 'product',
+                        title: i.name,
+                        category: undefined,
+                        quantity: i.quantity,
+                        unitPrice: i.price,
+                        subtotal: i.price * i.quantity,
+                        condition: i.condition || 'new',
+                        sellerId,
+                        sellerName: i.sellerName || 'Vendedor',
+                        shippingWeightKg: i.shippingWeightKg || 1,
+                    })),
+                    totals: {
+                        items: subtotal,
+                        shipping: shippingQuote.cost,
+                        fees: 0,
+                        discount: payload.paymentDetails?.discountApplied || 0,
+                        grandTotal: Math.max(0, subtotal + shippingQuote.cost - (payload.paymentDetails?.discountApplied || 0)),
+                        currency: 'USD',
+                    },
+                    shipping: {
+                        ...shippingQuote,
+                        selectedAt: new Date().toISOString(),
+                        destination: payload.shippingDestination,
+                    },
+                    escrow: {
+                        state: 'held',
+                        holdStartedAt: new Date().toISOString(),
+                    },
+                    status: 'payment_received',
+                    paymentStatus: 'paid',
+                    timeline: [{ label: 'Orden creada', at: new Date().toISOString(), actor: 'system' }],
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                });
             }
 
-            return { success: true, orders: [] }; // Orders will sync via useQuery
+            return { success: true, orders: createdOrders };
 
         } catch (err: any) {
             console.error("Order Failed:", err);
@@ -700,6 +759,23 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
         dispatch({ type: 'REMOVE_FROM_WISHLIST', payload: productId });
     };
 
+    const confirmDelivery = async (orderId: string): Promise<{ success: boolean; error?: string }> => {
+        if (!user) {
+            return { success: false, error: 'Debes iniciar sesión para confirmar la entrega.' };
+        }
+
+        try {
+            await confirmReceiptMutation({
+                orderId: orderId as any,
+                actorId: user.id as any,
+                userId: user.id,
+            });
+            return { success: true };
+        } catch (error: any) {
+            return { success: false, error: error?.message || 'No se pudo confirmar la entrega.' };
+        }
+    };
+
     const contextValue = useMemo<MarketplaceContextType>(() => ({
         products: products, // Use derived query result directly
         orders: backendOrders, // Use derived query result directly
@@ -713,6 +789,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
         wishlist: state.wishlist,
         addToWishlist,
         removeFromWishlist,
+        confirmDelivery,
         addDisputeMessage: (orderId, message) => {
             if (!user) {
                 show('Debes iniciar sesión para enviar mensajes de disputa.', 'error');
@@ -720,6 +797,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             }
             addDisputeMessageMutation({
                 orderId,
+                actorId: user.id as any,
                 senderId: user.id,
                 sender: message.sender,
                 body: message.body,
@@ -734,6 +812,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             }
             escalateDisputeMutation({
                 orderId: orderId as any,
+                actorId: user.id as any,
                 userId: user.id,
                 role,
             }).catch((error: any) => {
@@ -741,7 +820,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             });
             return { success: true };
         },
-    }), [products, backendOrders, state.wishlist, user, show, addDisputeMessageMutation, escalateDisputeMutation]);
+    }), [products, backendOrders, state.wishlist, user, show, addDisputeMessageMutation, escalateDisputeMutation, confirmDelivery]);
 
     return (
         <MarketplaceContext.Provider value={contextValue}>

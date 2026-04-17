@@ -7,9 +7,11 @@ import React, {
     useRef,
     useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { usePoints } from './PointsContext';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
 
 type RewardStatus = 'awarded' | 'already_claimed' | 'limit_reached' | 'not_qualified' | 'error';
 
@@ -89,9 +91,6 @@ interface RewardsContextType {
     unlockAccessory: (type: 'hat' | 'skin', id: string, cost: number) => boolean;
     equipAccessory: (type: 'hat' | 'skin', id: string) => void;
 }
-
-const DAILY_STATE_KEY = '@ramgos/rewards/daily';
-const QUARTERLY_MISSION_KEY = '@ramgos/rewards/quarterly';
 
 // Helper to get current quarter key (e.g., "2026-Q1")
 const getQuarterKey = (date: Date = new Date()): string => {
@@ -175,46 +174,18 @@ const pickSegment = (segments: WheelSegment[]): WheelSegment => {
 const RewardsContext = createContext<RewardsContextType | undefined>(undefined);
 
 export const RewardsProvider = ({ children }: { children: React.ReactNode }) => {
+    const { user } = useAuth();
     const { addPoints } = usePoints();
     const { show } = useToast();  // Added missing hook
+    const economyState = useQuery(
+        api.economy.getState,
+        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+    );
+    const saveRewardsState = useMutation(api.economy.saveRewardsState);
+    const claimRewardMutation = useMutation(api.economy.claimReward);
+    const hydratedRef = useRef(false);
 
     const [dailyState, setDailyState] = useState<DailyEngagementState>(() => createDailyState(getTodayKey()));
-
-    // Load persisted state on mount
-    useEffect(() => {
-        const loadState = async () => {
-            try {
-                const [storedDaily] = await Promise.all([
-                    AsyncStorage.getItem(DAILY_STATE_KEY),
-                ]);
-
-                if (storedDaily) {
-                    const parsed: DailyEngagementState = JSON.parse(storedDaily);
-                    const today = getTodayKey();
-                    if (parsed.dayKey === today) {
-                        setDailyState({
-                            ...createDailyState(today),
-                            ...parsed,
-                        });
-                    } else {
-                        setDailyState(createDailyState(today));
-                    }
-                }
-
-            } catch (error) {
-                console.warn('Unable to load rewards state', error);
-            }
-        };
-
-        loadState();
-    }, []);
-
-    // Persist daily state
-    useEffect(() => {
-        AsyncStorage.setItem(DAILY_STATE_KEY, JSON.stringify(dailyState)).catch((error) => {
-            console.warn('Unable to persist daily rewards state', error);
-        });
-    }, [dailyState]);
 
     // Note: Streak rewards are handled in PointsContext (Constitución: +10/+20/+30 progresivo).
 
@@ -249,6 +220,18 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         }));
 
         const points = FEED_PET_REWARD;
+        if (user?.id) {
+            claimRewardMutation({
+                actorId: user.id as any,
+                userId: user.id,
+                claimKey: `pet_feed_${getTodayKey()}`,
+                type: 'virtual_pet',
+                pointsAwarded: points,
+                metadata: { action: 'feed_pet' },
+            }).catch((error: any) => {
+                console.warn('Failed to persist reward claim', error);
+            });
+        }
         addPoints(points, 'Cuidado diario de mascota virtual', {
             source: 'bonus',
             metadata: { module: 'virtual_pet' },
@@ -260,7 +243,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             pointsAwarded: points,
             metadata: { action: 'feed_pet' },
         };
-    }, [dailyState, addPoints, ensureDailyForToday]);
+    }, [dailyState, addPoints, ensureDailyForToday, user?.id, claimRewardMutation]);
 
     const computeArcadeReward = (score: number) => {
         // Constitución: Arcade awards 1–20 points (max 3/day).
@@ -284,6 +267,18 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         }
 
         const points = computeArcadeReward(score);
+        if (user?.id) {
+            claimRewardMutation({
+                actorId: user.id as any,
+                userId: user.id,
+                claimKey: `arcade_${getTodayKey()}_${gameId}_${attemptsUsed + 1}`,
+                type: 'arcade',
+                pointsAwarded: points,
+                metadata: { gameId, score },
+            }).catch((error: any) => {
+                console.warn('Failed to persist arcade claim', error);
+            });
+        }
 
         setDailyState((prev) => {
             const currentState = ensureDailyForToday(prev);
@@ -313,7 +308,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             attemptsUsed: attemptsUsed + 1,
             metadata: { gameId, score },
         };
-    }, [dailyState, addPoints, ensureDailyForToday]);
+    }, [dailyState, addPoints, ensureDailyForToday, user?.id, claimRewardMutation]);
 
     const getArcadeStatus = useCallback(() => {
         const state = ensureDailyForToday(dailyState);
@@ -365,6 +360,19 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             },
         }));
 
+        if (user?.id) {
+            claimRewardMutation({
+                actorId: user.id as any,
+                userId: user.id,
+                claimKey: `wheel_${getTodayKey()}`,
+                type: 'lucky_wheel',
+                pointsAwarded: segment.points,
+                metadata: { segmentId: segment.id },
+            }).catch((error: any) => {
+                console.warn('Failed to persist wheel claim', error);
+            });
+        }
+
         addPoints(segment.points, 'Ruleta de la Suerte Ramgos', {
             source: 'bonus',
             metadata: { segmentId: segment.id },
@@ -376,7 +384,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             pointsAwarded: segment.points,
             segment,
         };
-    }, [dailyState, addPoints, ensureDailyForToday]);
+    }, [dailyState, addPoints, ensureDailyForToday, user?.id, claimRewardMutation]);
 
     const getLuckyWheelStatus = useCallback(() => {
         const state = ensureDailyForToday(dailyState);
@@ -443,37 +451,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         createFreshQuarterlyMission(getQuarterKey())
     );
 
-    // Load quarterly mission from storage on mount
-    useEffect(() => {
-        const loadQuarterlyMission = async () => {
-            try {
-                const stored = await AsyncStorage.getItem(QUARTERLY_MISSION_KEY);
-                if (stored) {
-                    const parsed: QuarterlyMissionState = JSON.parse(stored);
-                    const currentQuarter = getQuarterKey();
-                    
-                    // If stored data is from current quarter, restore it
-                    if (parsed.quarterKey === currentQuarter) {
-                        setQuarterlyMission(parsed);
-                    } else {
-                        // New quarter - reset mission
-                        setQuarterlyMission(createFreshQuarterlyMission(currentQuarter));
-                    }
-                }
-            } catch (error) {
-                console.warn('Unable to load quarterly mission state', error);
-            }
-        };
-        loadQuarterlyMission();
-    }, []);
-
-    // Persist quarterly mission when it changes
-    useEffect(() => {
-        AsyncStorage.setItem(QUARTERLY_MISSION_KEY, JSON.stringify(quarterlyMission)).catch((error) => {
-            console.warn('Unable to persist quarterly mission state', error);
-        });
-    }, [quarterlyMission]);
-
     const registerQuarterlyPurchase = useCallback(() => {
         setQuarterlyMission(prev => {
             const currentQuarter = getQuarterKey();
@@ -492,6 +469,18 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
 
             // Check Completion
             if (newValue >= prev.purchasesTarget) {
+                if (user?.id) {
+                    claimRewardMutation({
+                        actorId: user.id as any,
+                        userId: user.id,
+                        claimKey: `quarterly_${currentQuarter}`,
+                        type: 'quarterly_mission',
+                        pointsAwarded: QUARTERLY_MISSION.REWARD,
+                        metadata: { purchases: newValue },
+                    }).catch((error: any) => {
+                        console.warn('Failed to persist quarterly mission claim', error);
+                    });
+                }
                 // Award Logic
                 addPoints(QUARTERLY_MISSION.REWARD, QUARTERLY_MISSION.DESCRIPTION, {
                     type: 'earn',
@@ -517,10 +506,51 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
                 purchasesCurrent: newValue
             };
         });
-    }, [addPoints, show]);
+    }, [addPoints, show, user?.id, claimRewardMutation]);
 
     // --- PET CONFIG LOGIC ---
     const [petConfig, setPetConfig] = useState<PetConfigState>(() => createPetConfigState());
+
+    useEffect(() => {
+        if (!user || hydratedRef.current) return;
+        const persisted = economyState?.rewardsState;
+        if (!persisted) {
+            hydratedRef.current = true;
+            return;
+        }
+
+        if (persisted.dailyState) {
+            setDailyState(persisted.dailyState);
+        }
+        if (persisted.quarterlyMission) {
+            const currentQuarter = getQuarterKey();
+            const restored = persisted.quarterlyMission as QuarterlyMissionState;
+            setQuarterlyMission(
+                restored.quarterKey === currentQuarter
+                    ? restored
+                    : createFreshQuarterlyMission(currentQuarter),
+            );
+        }
+        if (persisted.petConfig) {
+            setPetConfig(persisted.petConfig as PetConfigState);
+        }
+        hydratedRef.current = true;
+    }, [user, economyState]);
+
+    useEffect(() => {
+        if (!user || !hydratedRef.current) return;
+        saveRewardsState({
+            actorId: user.id as any,
+            userId: user.id,
+            rewardsState: {
+                dailyState,
+                quarterlyMission,
+                petConfig,
+            },
+        }).catch((error: any) => {
+            console.warn('Unable to persist rewards state', error);
+        });
+    }, [user, dailyState, quarterlyMission, petConfig, saveRewardsState]);
 
     const unlockAccessory = useCallback((type: 'hat' | 'skin', id: string, cost: number): boolean => {
         if (!spendGameCoins(cost)) {

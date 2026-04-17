@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/button';
 import { useEscrow } from '../../contexts/EscrowContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { POINT_VALUE_USD } from '../../contexts/RewardsContext';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function OrderDetailScreen() {
     const route = useRoute<any>();
@@ -23,6 +24,7 @@ export default function OrderDetailScreen() {
     const insets = useSafeAreaInsets();
     const { currentTier } = usePoints();
     const { user } = useAuth();
+    const { show } = useToast();
 
     const canConfirm = useMemo(() => {
         if (role !== 'buyer') return false;
@@ -69,7 +71,7 @@ export default function OrderDetailScreen() {
 
     const handleConfirm = () => {
         if (!canConfirm) {
-            Alert.alert('Confirmación no disponible', 'Esta orden ya fue confirmada o no está en estado retenido.');
+            show('Esta orden ya fue confirmada o no está en estado retenido.', 'warning');
             return;
         }
         Alert.alert(
@@ -79,13 +81,13 @@ export default function OrderDetailScreen() {
                 { text: 'Cancelar', style: 'cancel' },
                 {
                     text: 'Confirmar',
-                    onPress: () => {
-                        const result = confirmDelivery(order.id);
+                    onPress: async () => {
+                        const result = await confirmDelivery(order.id);
                         if (!result.success) {
-                            Alert.alert('No se pudo confirmar', result.error ?? 'Intenta nuevamente.');
+                            show(result.error ?? 'Intenta nuevamente.', 'error');
                             return;
                         }
-                        Alert.alert('¡Gracias!', 'Has confirmado la recepción. El pago se liberará según el cronograma del escrow.');
+                        show('Has confirmado la recepción. El pago se liberará.', 'success');
                         navigation.goBack();
                     }
                 }

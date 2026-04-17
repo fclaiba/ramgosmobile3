@@ -1,13 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // PHASE 2: Reviews and Ratings
 
 export const addReview = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         listingId: v.string(),
-        userId: v.string(),
+        userId: v.optional(v.string()),
         orderId: v.optional(v.string()),
         rating: v.number(), // 1-5
         title: v.optional(v.string()),
@@ -15,6 +17,9 @@ export const addReview = mutation({
         images: v.optional(v.array(v.string())),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const targetUserId = args.userId ?? actor.idString;
+        assertSelfOrAdmin(actor, targetUserId);
         // Validate rating
         if (args.rating < 1 || args.rating > 5) {
             throw new Error("Rating debe estar entre 1 y 5");
@@ -27,7 +32,7 @@ export const addReview = mutation({
                 const orderId = ctx.db.normalizeId("orders", args.orderId);
                 if (orderId) {
                     const order = await ctx.db.get(orderId);
-                    verified = order?.userId === args.userId;
+                    verified = order?.userId === targetUserId;
                 }
             } catch (e) {
                 // Order doesn't exist, not verified
@@ -35,7 +40,7 @@ export const addReview = mutation({
         }
 
         // Get user info
-        const userId = ctx.db.normalizeId("users", args.userId);
+        const userId = ctx.db.normalizeId("users", targetUserId);
         let userName = "Usuario";
         let userAvatar: string | undefined;
 
@@ -51,7 +56,7 @@ export const addReview = mutation({
         const reviewId = await ctx.db.insert("reviews", {
             listingId: args.listingId,
             orderId: args.orderId,
-            userId: args.userId,
+            userId: targetUserId,
             userName,
             userAvatar,
             rating: args.rating,
@@ -115,11 +120,17 @@ export const getListingReviews = query({
 });
 
 export const getUserReviews = query({
-    args: { userId: v.string() },
+    args: {
+        actorId: v.optional(v.id("users")),
+        userId: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const targetUserId = args.userId ?? actor.idString;
+        assertSelfOrAdmin(actor, targetUserId);
         return await ctx.db
             .query("reviews")
-            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .withIndex("by_user", (q) => q.eq("userId", targetUserId))
             .order("desc")
             .collect();
     },
@@ -139,11 +150,13 @@ export const markReviewHelpful = mutation({
 
 export const addSellerResponse = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         reviewId: v.id("reviews"),
-        sellerId: v.string(), // For authorization
+        sellerId: v.optional(v.string()), // legacy fallback
         message: v.string(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
         const review = await ctx.db.get(args.reviewId);
         if (!review) throw new Error("Review no encontrado");
 
@@ -152,7 +165,9 @@ export const addSellerResponse = mutation({
             const listingId = ctx.db.normalizeId("listings", review.listingId);
             if (listingId) {
                 const listing = await ctx.db.get(listingId);
-                if (listing?.sellerId !== args.sellerId) {
+                const isOwner = listing?.sellerId === actor.idString;
+                const isAdmin = actor.role === "admin" || actor.role === "developer";
+                if (!isOwner && !isAdmin) {
                     throw new Error("No autorizado");
                 }
             }
@@ -172,14 +187,18 @@ export const addSellerResponse = mutation({
 
 export const deleteReview = mutation({
     args: {
+        actorId: v.optional(v.id("users")),
         reviewId: v.id("reviews"),
-        userId: v.string(), // For authorization
+        userId: v.optional(v.string()), // legacy fallback
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId ?? args.userId);
         const review = await ctx.db.get(args.reviewId);
         if (!review) throw new Error("Review no encontrado");
 
-        if (review.userId !== args.userId) {
+        const isOwner = review.userId === actor.idString;
+        const isAdmin = actor.role === "admin" || actor.role === "developer";
+        if (!isOwner && !isAdmin) {
             throw new Error("No autorizado");
         }
 

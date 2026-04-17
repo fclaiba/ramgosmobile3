@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Trophy, Gift, ShoppingBag, Zap, Clock, CheckCircle2, Flame } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePoints, DailyChallenge } from '../contexts/PointsContext';

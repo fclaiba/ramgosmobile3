@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'; // Context
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 import { calculateCommission, calculateInfluencerCommission } from '../utils/CommissionUtils';
 import { useAuth } from './AuthContext';
@@ -90,14 +91,45 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-const WALLET_CAMPAIGNS_STORAGE_KEY = 'ramgos_wallet_campaigns_v1';
-const INFLUENCER_CONTRACTS_STORAGE_KEY = 'ramgos_influencer_contracts_v1';
+const serializeWalletState = (state: {
+    wallets: Record<string, Wallet>;
+    transactions: Transaction[];
+    campaigns: Campaign[];
+    contracts: InfluencerContract[];
+}) => ({
+    ...state,
+    transactions: state.transactions.map((tx) => ({
+        ...tx,
+        date: tx.date.toISOString(),
+        releaseDate: tx.releaseDate ? tx.releaseDate.toISOString() : undefined,
+    })),
+});
+
+const deserializeWalletState = (raw: any) => ({
+    wallets: raw?.wallets ?? { ramgos_holding: { userId: 'ramgos_holding', balanceAvailable: 0, balancePending: 0, currency: 'ARS' } },
+    transactions: Array.isArray(raw?.transactions)
+        ? raw.transactions.map((tx: any) => ({
+            ...tx,
+            date: new Date(tx.date),
+            releaseDate: tx.releaseDate ? new Date(tx.releaseDate) : undefined,
+        }))
+        : [],
+    campaigns: Array.isArray(raw?.campaigns) ? raw.campaigns : [],
+    contracts: Array.isArray(raw?.contracts) ? raw.contracts : [],
+});
 
 // --- Provider ---
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const { user } = useAuth();
     const { addPoints } = usePoints();
+    const economyState = useQuery(
+        api.economy.getState,
+        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+    );
+    const saveWalletState = useMutation(api.economy.saveWalletState);
+    const applyWalletEvent = useMutation(api.economy.applyWalletEvent);
+    const [hasHydratedFromBackend, setHasHydratedFromBackend] = useState(false);
 
     // Mock Database
     const [wallets, setWallets] = useState<Record<string, Wallet>>({
@@ -133,44 +165,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     ]);
 
     useEffect(() => {
-        const hydrate = async () => {
-            try {
-                const [storedCampaigns, storedContracts] = await Promise.all([
-                    AsyncStorage.getItem(WALLET_CAMPAIGNS_STORAGE_KEY),
-                    AsyncStorage.getItem(INFLUENCER_CONTRACTS_STORAGE_KEY),
-                ]);
+        if (!user || hasHydratedFromBackend) return;
+        if (!economyState?.walletState) {
+            setHasHydratedFromBackend(true);
+            return;
+        }
 
-                if (storedCampaigns) {
-                    const parsed = JSON.parse(storedCampaigns);
-                    if (Array.isArray(parsed)) {
-                        setCampaigns(parsed);
-                    }
-                }
-
-                if (storedContracts) {
-                    const parsed = JSON.parse(storedContracts);
-                    if (Array.isArray(parsed)) {
-                        setContracts(parsed);
-                    }
-                }
-            } catch (error) {
-                console.warn('[WalletContext] Failed to hydrate campaigns/contracts', error);
-            }
-        };
-        hydrate();
-    }, []);
+        const hydrated = deserializeWalletState(economyState.walletState);
+        setWallets(hydrated.wallets);
+        setTransactions(hydrated.transactions);
+        setCampaigns(hydrated.campaigns.length > 0 ? hydrated.campaigns : campaigns);
+        setContracts(hydrated.contracts.length > 0 ? hydrated.contracts : contracts);
+        setHasHydratedFromBackend(true);
+    }, [user, economyState, hasHydratedFromBackend]);
 
     useEffect(() => {
-        AsyncStorage.setItem(WALLET_CAMPAIGNS_STORAGE_KEY, JSON.stringify(campaigns)).catch((error) => {
-            console.warn('[WalletContext] Failed to persist campaigns', error);
+        if (!user || !hasHydratedFromBackend) return;
+        saveWalletState({
+            actorId: user.id as any,
+            userId: user.id,
+            walletState: serializeWalletState({
+                wallets,
+                transactions,
+                campaigns,
+                contracts,
+            }),
+        }).catch((error: any) => {
+            console.warn('[WalletContext] Failed to persist wallet state', error);
         });
-    }, [campaigns]);
-
-    useEffect(() => {
-        AsyncStorage.setItem(INFLUENCER_CONTRACTS_STORAGE_KEY, JSON.stringify(contracts)).catch((error) => {
-            console.warn('[WalletContext] Failed to persist contracts', error);
-        });
-    }, [contracts]);
+    }, [user, hasHydratedFromBackend, wallets, transactions, campaigns, contracts, saveWalletState]);
 
     // Helpers
     const getWallet = (userId: string): Wallet => {
@@ -186,6 +209,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     const addTransaction = (tx: Transaction) => {
         setTransactions(prev => [tx, ...prev]);
+        if (user?.id && tx.relatedUserId === user.id) {
+            applyWalletEvent({
+                actorId: user.id as any,
+                userId: tx.relatedUserId,
+                eventKey: tx.id,
+                type: tx.status === 'PENDING' ? 'hold' : tx.type === 'PAYOUT_SELLER' ? 'credit' : 'debit',
+                amount: tx.amount,
+                description: tx.description,
+                orderId: tx.orderId,
+                metadata: {
+                    source: tx.source,
+                    destination: tx.destination,
+                    txType: tx.type,
+                    txStatus: tx.status,
+                },
+            }).catch((error: any) => {
+                console.warn('[WalletContext] Failed to persist wallet ledger event', error);
+            });
+        }
 
         // Update Wallet Balances Logic
         // PENDING transactions go to balancePending

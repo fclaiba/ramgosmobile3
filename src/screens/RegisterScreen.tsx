@@ -678,7 +678,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                     <TouchableOpacity
                                         onPress={() => {
                                             if (!formData.acceptTerms || !formData.acceptPrivacy) {
-                                                Alert.alert('Acción requerida', 'Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.');
+                                                show('Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.', 'warning');
                                                 return;
                                             }
                                             handleRegister();

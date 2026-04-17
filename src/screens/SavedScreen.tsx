@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Share, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, TextInput } from 'react-native';
 import { Heart, ShoppingBag, Ticket, Calendar, MapPin, Star, Trash2, Search, X, Share2, ExternalLink, Tag } from 'lucide-react-native';
 
 import { Card, CardContent } from '../components/ui/card';

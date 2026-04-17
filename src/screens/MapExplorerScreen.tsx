@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform, TextInput, ScrollView, Alert, Keyboard, Animated } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform, TextInput, ScrollView, Keyboard, Animated } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from '../components/NativeMap';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';

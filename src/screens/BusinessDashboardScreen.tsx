@@ -6,8 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
     Plus as PlusIcon,
     QrCode,
-    ShieldAlert,
-    AlertTriangle,
     Tag,
     DollarSign,
     Users,
@@ -16,7 +14,9 @@ import {
     Trophy,
     BarChart3,
     ChevronRight,
-    MoreHorizontal
+    MoreHorizontal,
+    ShieldAlert,
+    AlertTriangle
 } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Badge } from '../components/ui/badge';

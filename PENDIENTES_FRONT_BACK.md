@@ -1,179 +1,150 @@
-# Pendientes Front-Back para Desarrollo
+# Pendientes Front-Back para llegar al 100%
 
-## Contexto
+## Objetivo
 
-Este documento consolida los pendientes detectados para terminar de alinear frontend y backend (Convex producción), con foco en:
+Cerrar el 30% restante para que la app quede 100% alineada front-back en producción Convex:
 
-- Operar solo con datos/permisos válidos de producción.
-- Eliminar rutas mock/developer riesgosas.
-- Dejar despliegue reproducible sin ambigüedad de backend.
-
----
-
-## Plan incluido (diagnóstico y preparación front-back)
-
-### Alcance acordado
-- Solo diagnóstico y preparación; sin implementar cambios de código en esta etapa.
-- Preparar qué corregir y qué revertir, con prioridad productiva (Convex prod).
-
-### Hallazgos clave a consolidar
-- **Bloqueantes funcionales front-back**
-  - Checkout usa resultado async de forma incorrecta y rompe el flujo de confirmación en `src/screens/marketplace/CheckoutScreen.tsx`.
-  - Contrato de órdenes/disputas parcial entre `src/contexts/MarketplaceContext.tsx`, `convex/orders.ts` y `convex/disputes.ts`.
-- **Riesgos de seguridad/back-end**
-  - Falta de identidad fuerte (IDs enviados por cliente) en rutas de `convex/users.ts`, `convex/orders.ts`, `convex/cart.ts`, `convex/files.ts`.
-  - Exposición de payloads sensibles en `convex/developer.ts`.
-- **Deriva operativa de entorno**
-  - Diferencias de configuración local/EAS entre `eas.json`, `App.tsx`, `build-release.ps1` y `.env.example`.
-
-### Entregables de preparación
-- Matriz de brechas front-back por severidad, archivo e impacto.
-- Mapa de contratos (frontend esperado vs backend real).
-- Propuesta de reversión selectiva (sin ejecutar).
-- Backlog ejecutable por fases con criterios de aceptación.
-
-### Criterios de cierre de esta etapa
-- Lista única y priorizada de todo lo que falta para conectar correctamente front-back.
-- Propuesta explícita de qué revertir y por qué, lista para aprobación.
-- Plan posterior listo para pasar a implementación.
+- Seguridad/identidad server-centric real.
+- Wallet/points/rewards con backend como fuente de verdad.
+- Carrito y contratos de dominio unificados end-to-end.
 
 ---
 
-## Inventario de pendientes (priorizado)
+## Estado actual (estimado)
 
-### Crítico
+- Avance global: **70%**
+- Restante para 100%: **30%**
 
-1. **Checkout async roto**
-   - Archivo: `src/screens/marketplace/CheckoutScreen.tsx`
-   - Problema: `placeOrder(...)` se usa sin `await`; `result` es Promise.
-   - Impacto: falla cierre de compra, `result.success/orders`, post-procesos y UX.
+### Desglose por módulo
 
-2. **Auth/KYC/subscription incompletos (stubs/no-op)**
-   - Archivo: `src/contexts/AuthContext.tsx`
-   - Problema: `loginWithSocial`, `resendVerificationCode`, `markKycSubmitted`, `updateSubscription` sin implementación real.
-   - Impacto: integración incompleta con backend en flujos clave.
-
-3. **Seguridad backend basada en IDs del cliente**
-   - Archivos: `convex/users.ts`, `convex/orders.ts`, `convex/disputes.ts`, `convex/cart.ts`, `convex/files.ts`
-   - Problema: varias mutaciones/queries dependen de IDs enviados por frontend.
-   - Impacto: riesgo de acceso/operación sobre recursos ajenos.
-
-4. **Exposición de datos sensibles en funciones developer**
-   - Archivo: `convex/developer.ts`
-   - Problema: `impersonate` y `getTestUsers` devuelven documentos de usuario completos.
-   - Impacto: filtración de datos sensibles en clientes no estrictamente controlados.
-
-5. **KYC aún mockeado**
-   - Archivos: `src/contexts/FintechContext.tsx`, `src/screens/KYCScreen.tsx`
-   - Problema: dependencia de `mockConvexStore` y `mock_url_*`.
-   - Impacto: KYC no persistente ni trazable en backend real.
-
-### Alto
-
-1. **Contrato roto en detalle de orden**
-   - Archivo: `src/screens/marketplace/OrderDetailScreen.tsx`
-   - Problema: usa `confirmDelivery` inexistente en `MarketplaceContext`.
-   - Impacto: error de tipo y funcionalidad incompleta.
-
-2. **Modelo de disputas/escrow parcialmente alineado**
-   - Archivos: `src/contexts/MarketplaceContext.tsx`, `convex/orders.ts`, `convex/disputes.ts`
-   - Problema: backend y frontend no comparten contrato completo de estado/lifecycle.
-   - Impacto: inconsistencias de flujo en disputa/chat/escalado.
-
-3. **Lógica financiera/rewards local**
-   - Archivos: `src/contexts/WalletContext.tsx`, `src/contexts/PointsContext.tsx`, `src/contexts/RewardsContext.tsx`
-   - Problema: fuente de verdad no unificada en backend.
-   - Impacto: divergencia de saldos, recompensas y trazabilidad.
-
-### Medio
-
-1. **Riesgo operativo de entorno local/build**
-   - Archivos: `eas.json`, `.env.example`, `build-release.ps1`, `App.tsx`
-   - Problema: mejora parcial, pero se puede fallar localmente si falta `EXPO_PUBLIC_CONVEX_URL`.
-   - Impacto: builds no reproducibles entre local/CI.
-
-2. **Carrito con doble conceptualización**
-   - Archivos: `src/contexts/CartContext.tsx`, `convex/cart.ts`
-   - Problema: backend de carrito existe, pero estrategia actual es local.
-   - Impacto: deuda técnica de sincronización futura.
+- **Auth/KYC:** 80%
+- **Marketplace/Orders:** 75%
+- **Disputas/Chat:** 75%
+- **Wallet/Points/Rewards:** 45%
+- **Carrito:** 60%
+- **Build/Env:** 90%
 
 ---
 
-## Propuesta de reversión selectiva (sin ejecutar)
+## Lo ya resuelto (cerrado)
 
-### Revertir (si se quiere volver a baseline previo)
-- `src/components/AddReviewModal.tsx`
-- `src/screens/ProfileScreen.tsx`
-- `src/contexts/MarketplaceContext.tsx`
-- `src/screens/marketplace/DisputeChatScreen.tsx`
-- `src/contexts/CartContext.tsx`
-- `src/contexts/AuthContext.tsx`
-- `src/screens/AdminDashboardScreen.tsx`
-- `src/screens/CreateListingScreen.tsx`
-- `convex/users.ts`
-- `convex/developer.ts`
-- `convex/files.ts`
-- `convex/orders.ts`
-
-### Mantener (cambios operativos útiles)
-- `App.tsx` (validación de `EXPO_PUBLIC_CONVEX_URL`)
-- `eas.json` (env por perfil)
-- `RELEASE_ANDROID.md` (guía operativa)
-- `.env.example` y `.gitignore` (higiene de entorno)
-- `build-release.ps1` (optimización build)
+- Checkout async corregido en `src/screens/marketplace/CheckoutScreen.tsx`.
+- Contrato `confirmDelivery` agregado en `src/contexts/MarketplaceContext.tsx` y usado por `src/screens/marketplace/OrderDetailScreen.tsx`.
+- Stubs críticos de auth reemplazados en `src/contexts/AuthContext.tsx`.
+- KYC dejó de usar `mock_url_*` en `src/screens/KYCScreen.tsx`.
+- Dependencia directa a `mockConvexStore` eliminada del ciclo principal de KYC en `src/contexts/FintechContext.tsx`.
+- `NativeMap` agregado para cubrir imports en mapas.
+- `typecheck` y build release verificados en iteración previa.
 
 ---
 
-## Backlog ejecutable por fases
+## Pendientes reales para 100% (el 30% que pesa)
 
-### Fase 1 - Bloqueantes de contrato front-back
-- Corregir async checkout en `CheckoutScreen`.
-- Definir/implementar `confirmDelivery` o alinear `OrderDetailScreen` al contrato real.
-- Criterio de aceptación:
-  - Compra completa sin errores TS/runtime.
-  - Flujo de orden consistente de checkout a historial/detalle.
+## 1) Seguridad e identidad backend (prioridad máxima)
 
-### Fase 2 - Auth/KYC real
-- Reemplazar stubs/no-op en `AuthContext` con mutaciones reales.
-- Remover dependencia de `mockConvexStore` para KYC.
-- Criterio de aceptación:
-  - KYC y suscripción persistidos en backend.
-  - Login/social/verificación con contratos reales.
+**Problema actual**
+- Aún hay endpoints que validan por IDs enviados por cliente en vez de identidad de servidor.
+- Esto no es auth server-centric completa.
 
-### Fase 3 - Hardening de seguridad backend
-- Endurecer autorización en `users/orders/disputes/cart/files/developer`.
-- Evitar depender de IDs suministrados por cliente para permisos.
-- Criterio de aceptación:
-  - No es posible operar sobre recursos de terceros manipulando payloads.
+**Cambios a hacer**
+- Migrar autorización a identidad de servidor (`ctx.auth` / identidad verificable) en:
+  - `convex/users.ts`
+  - `convex/orders.ts`
+  - `convex/disputes.ts`
+  - `convex/cart.ts`
+  - `convex/files.ts`
+  - `convex/developer.ts`
+- Sustituir validaciones de `actorId/userId` cliente por identidad derivada del token/sesión.
+- Mantener solo controles de rol/ownership derivados del usuario autenticado.
 
-### Fase 4 - Operativa y verificación final
-- Validar entorno dev/preview/prod en local + EAS.
-- Ejecutar smoke E2E: login, listado, compra, disputa/chat, reseña, perfil.
-- Criterio de aceptación:
-  - Build reproducible apuntando al backend correcto.
+**Criterio de aceptación**
+- Ninguna operación sensible depende de IDs arbitrarios enviados por frontend.
+- Test de acceso denegado pasa para intentos cruzados (otro usuario, otro seller, otro cart).
 
 ---
 
-## Evidencia técnica actual
+## 2) Wallet / Points / Rewards como backend source-of-truth
 
-`npm run typecheck` falla actualmente por:
+**Problema actual**
+- `WalletContext`, `PointsContext` y `RewardsContext` conservan mucha lógica local/memoria.
 
-- Módulo faltante `NativeMap` en:
-  - `src/components/LocationPickerModal.tsx`
-  - `src/screens/MapExplorerScreen.tsx`
-- Uso async incorrecto en:
-  - `src/screens/marketplace/CheckoutScreen.tsx`
-- Contrato faltante:
-  - `src/screens/marketplace/OrderDetailScreen.tsx` (`confirmDelivery` no existe en contexto)
+**Cambios a hacer**
+- Definir tablas/mutaciones Convex para:
+  - balances
+  - ledger de puntos
+  - historial de recompensas/challenges
+- Hacer que contexts lean/escriban en backend (no solo estado local).
+- Asegurar idempotencia en operaciones de compra/canjeo.
+
+**Criterio de aceptación**
+- Reiniciar app no pierde estado financiero/recompensas.
+- Saldo y puntos son consistentes entre sesiones/dispositivos.
 
 ---
 
-## Checklist rápida para empezar desarrollo
+## 3) Carrito y contratos de dominio unificados
 
-- [ ] Definir si se revierte a baseline o se continúa sobre estado actual.
-- [ ] Cerrar Fase 1 (checkout + contrato order detail).
-- [ ] Cerrar Fase 2 (auth/kyc/subscription reales).
-- [ ] Cerrar Fase 3 (seguridad backend y permisos).
-- [ ] Cerrar Fase 4 (env/build/qa end-to-end).
-- [ ] Re-ejecutar typecheck y smoke final.
+**Problema actual**
+- Existe backend de carrito (`convex/cart.ts`) pero estrategia aún híbrida.
+- Contratos de dominio (order/dispute/escrow) todavía requieren consolidación total.
+
+**Cambios a hacer**
+- Elegir una estrategia definitiva de carrito:
+  - Opción A: carrito backend (recomendada para multi-dispositivo)
+  - Opción B: carrito local (aceptando limitaciones)
+- Si backend: conectar `src/contexts/CartContext.tsx` a `api.cart.*`.
+- Alinear estados y transiciones en:
+  - `src/contexts/MarketplaceContext.tsx`
+  - `convex/orders.ts`
+  - `convex/disputes.ts`
+
+**Criterio de aceptación**
+- Un solo source-of-truth de carrito.
+- Flujos order-dispute-escrow sin divergencias de estado entre front y back.
+
+---
+
+## 4) Cierre operativo y QA final de producción
+
+**Problema actual**
+- Build/env está casi cerrado, pero falta cierre formal con smoke completo sobre backend real.
+
+**Cambios a hacer**
+- Ejecutar smoke E2E obligatorio sobre producción:
+  - login
+  - listado
+  - compra
+  - disputa/chat
+  - reseña
+  - perfil
+- Verificar rutas de soporte y comportamiento en escenarios sin secretos opcionales.
+- Validar checklist de despliegue en:
+  - `eas.json`
+  - `.env.example`
+  - `build-release.ps1`
+  - `App.tsx`
+
+**Criterio de aceptación**
+- Smoke E2E aprobado.
+- Build reproducible sin ambiguedad de backend.
+
+---
+
+## Plan de ejecución recomendado (solo restante)
+
+1. **Fase A (Seguridad/Identidad):** cerrar auth server-centric en Convex.
+2. **Fase B (Datos financieros):** backend source-of-truth para wallet/points/rewards.
+3. **Fase C (Dominio):** unificar carrito + contratos order/dispute/escrow.
+4. **Fase D (QA/Release):** smoke final y cierre operativo.
+
+---
+
+## Checklist final para declarar 100%
+
+- [ ] Seguridad basada en identidad de servidor en endpoints críticos.
+- [ ] Wallet/points/rewards persisten y sincronizan desde backend.
+- [ ] Carrito definido y unificado en una sola estrategia.
+- [ ] Contratos de order/dispute/escrow totalmente consistentes.
+- [ ] Smoke E2E sobre backend de producción aprobado.
+- [ ] Build/release reproducible validado.
 

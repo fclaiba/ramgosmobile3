@@ -13,6 +13,9 @@ import { useReferral } from '../../contexts/ReferralContext';
 
 import { useWallet } from '../../contexts/WalletContext';
 import { useActionGate } from '../../utils/useActionGate';
+import { useAction } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { StripePaymentModal } from '../../components/stripe/StripePaymentModal';
 
 export default function CheckoutScreen({ navigation }: any) {
     const { items, totalPrice, clearCart } = useCart();
@@ -32,6 +35,12 @@ export default function CheckoutScreen({ navigation }: any) {
     const [selectedDiscount, setSelectedDiscount] = useState<{ points: number; discount: number } | null>(null);
     const [couponCode, setCouponCode] = useState('');
     const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; campaignId: string } | null>(null);
+
+    // Stripe
+    const [stripeModalVisible, setStripeModalVisible] = useState(false);
+    const [clientSecret, setClientSecret] = useState('');
+    const stripeCreatePaymentIntentRef = (api as any).stripe?.createPaymentIntent;
+    const createPaymentIntent = useAction(stripeCreatePaymentIntentRef || api.users.syncUser);
 
     // Mock Form State
     const [address, setAddress] = useState('Av. Libertador 1234');
@@ -110,6 +119,39 @@ export default function CheckoutScreen({ navigation }: any) {
         setLoading(true);
 
         try {
+            if (requiresPayment) {
+                if (!stripeCreatePaymentIntentRef) {
+                    show('Stripe no está inicializado en el backend. Configura y redeploya credenciales antes de cobrar.', 'error');
+                    setLoading(false);
+                    return;
+                }
+                // Request Payment Intent
+                const amountInCents = Math.round(finalTotal * 100);
+                const intentResult = await createPaymentIntent({ amountInCents });
+                if (intentResult && intentResult.clientSecret) {
+                    setClientSecret(intentResult.clientSecret);
+                    setStripeModalVisible(true);
+                    setLoading(false); // Modal will handle its own presentation
+                    return; // Wait for onPaymentSuccess
+                } else {
+                    show('Error al iniciar el pago seguro', 'error');
+                    setLoading(false);
+                    return;
+                }
+            } else {
+                // Free via points, proceed directly
+                finalizeOrderProcess();
+            }
+        } catch (error) {
+            console.error(error);
+            show('Error de conexión', 'error');
+            setLoading(false);
+        }
+    };
+
+    const finalizeOrderProcess = async () => {
+        setLoading(true);
+        try {
             // Simulate API delay (demo-only)
             await new Promise((resolve) => setTimeout(resolve, 2000));
 
@@ -125,8 +167,10 @@ export default function CheckoutScreen({ navigation }: any) {
             }
 
             // Create Order
-            const result = placeOrder({
+            const checkoutRequestId = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            const result = await placeOrder({
                 cartItems: items,
+                requestId: checkoutRequestId,
                 shippingMethod: 'standard',
                 shippingDestination: {
                     fullName: 'Usuario Demo',
@@ -145,7 +189,7 @@ export default function CheckoutScreen({ navigation }: any) {
             // Process Financials (Escrow & Commissions)
             if (result.success && result.orders) {
                 // Process transaction for each created order (multi-vendor support)
-                result.orders.forEach((order) => {
+                result.orders.forEach((order: any) => {
                     processCheckoutTransaction({
                         id: order.id,
                         sellerId: order.sellerId,
@@ -432,6 +476,25 @@ export default function CheckoutScreen({ navigation }: any) {
                     )}
                 </TouchableOpacity>
             </View>
+
+            {stripeModalVisible && (
+                <StripePaymentModal
+                    visible={stripeModalVisible}
+                    clientSecret={clientSecret}
+                    onPaymentSuccess={() => {
+                        setStripeModalVisible(false);
+                        finalizeOrderProcess();
+                    }}
+                    onPaymentError={(err) => {
+                        setStripeModalVisible(false);
+                        show(err, 'error');
+                    }}
+                    onCancel={() => {
+                        setStripeModalVisible(false);
+                        show('Pago cancelado', 'info');
+                    }}
+                />
+            )}
         </View>
     );
 }

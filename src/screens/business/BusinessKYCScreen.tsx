@@ -9,6 +9,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { BusinessLocationSearch } from '../../components/business/BusinessLocationSearch';
+import { useAction, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { KycWebViewMockModal } from '../../components/auth/KycWebViewMockModal';
 
 export default function BusinessKYCScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -29,6 +32,12 @@ export default function BusinessKYCScreen({ navigation }: any) {
     const [docUploaded, setDocUploaded] = useState(false);
     const { businessInfo } = useBusiness();
     const { user, markKycSubmitted } = useAuth();
+    
+    // Identity Provider Integration
+    const initiateKyc = useAction((api as any).identity?.initiateKYCSession || api.users.syncUser);
+    const [webViewVisible, setWebViewVisible] = useState(false);
+    const [kycUrl, setKycUrl] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleNext = () => {
         if (step === 1) {
@@ -61,14 +70,28 @@ export default function BusinessKYCScreen({ navigation }: any) {
     };
 
     const handleSubmit = async () => {
-        if (!docUploaded) {
-            show('Necesitamos que subas la documentación legal para continuar.', 'error');
-            return;
-        }
         if (!user) {
             show('Debes iniciar sesión como negocio para completar la verificación.', 'error');
             return;
         }
+
+        setIsSubmitting(true);
+        try {
+            const result = await initiateKyc({ accountType: 'business' });
+            if (result && result.url) {
+                setKycUrl(result.url);
+                setWebViewVisible(true);
+            }
+        } catch (e) {
+            show('Error al conectar con el proveedor de identidad comercial.', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleKycSuccess = async () => {
+        setWebViewVisible(false);
+        setIsSubmitting(true);
         try {
             await markKycSubmitted({
                 businessId: businessInfo?.id || 'new_biz',
@@ -81,12 +104,12 @@ export default function BusinessKYCScreen({ navigation }: any) {
             });
 
             navigation.navigate('BusinessDashboard', { verificationPending: true });
-            show('Solicitud enviada. Te notificaremos cuando tu negocio esté verificado.', 'success');
-
+            show('Solicitud enviada. Te notificaremos al verificar los datos legales.', 'success');
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'No se pudo enviar la verificación.';
+            const message = error instanceof Error ? error.message : 'No se pudo enviar la verificación.';
             show(message, 'error');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -220,18 +243,30 @@ export default function BusinessKYCScreen({ navigation }: any) {
                                         </View>
                                     ) : null}
 
-                                    <Text style={styles.summaryLabel}>Documentos:</Text>
-                                    <Text style={styles.summaryVal}>Cargados (1 archivo)</Text>
+                                    <Text style={styles.summaryLabel}>Verificación KYB:</Text>
+                                    <Text style={styles.summaryVal}>Serás redirigido al proveedor de identidad segura.</Text>
                                 </View>
 
-                                <TouchableOpacity style={styles.btn} onPress={handleSubmit}>
-                                    <Text style={styles.btnText}>Enviar Solicitud</Text>
+                                <TouchableOpacity 
+                                    style={[styles.btn, isSubmitting && styles.btnDisabled]} 
+                                    onPress={handleSubmit}
+                                    disabled={isSubmitting}
+                                >
+                                    <Text style={styles.btnText}>Iniciar Verificación Segura</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
 
                     </View>
                 </ScrollView>
+                
+                <KycWebViewMockModal
+                    userId={user?.id || ''}
+                    visible={webViewVisible}
+                    url={kycUrl}
+                    onClose={() => setWebViewVisible(false)}
+                    onSuccess={handleKycSuccess}
+                />
             </SafeAreaView>
         </AuthBackground>
     );

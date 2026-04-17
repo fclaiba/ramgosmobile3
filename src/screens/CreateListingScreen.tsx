@@ -115,7 +115,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 throw new Error('Debes iniciar sesión para subir imágenes.');
             }
             // 1. Get Upload URL
-            const postUrl = await generateUploadUrl({ userId: user.id as any });
+            const postUrl = await generateUploadUrl({ actorId: user.id as any, userId: user.id as any });
 
             // 2. Fetch the file blob
             const response = await fetch(uri);
@@ -262,7 +262,9 @@ export default function CreateListingScreen({ navigation, route }: any) {
             if (editMode && initialData?._id) {
                 // UPDATE LOGIC
                 await updateListingMutation({
+                    actorId: user?.id as any,
                     id: initialData._id,
+                    sellerId: user?.id,
                     updates: {
                         title: form.title,
                         description: fullDescription || 'Sin descripción',

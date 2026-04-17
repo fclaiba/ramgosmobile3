@@ -16,8 +16,14 @@ export default function OrderHistoryScreen({ navigation }: any) {
     const [itemsFilter, setItemsFilter] = useState<'active' | 'past'>('active');
 
     // Data Fetching
-    const purchases = useQuery(api.orders.getMyOrders, user ? { userId: user.id } : "skip") || [];
-    const sales = useQuery(api.orders.getOrdersBySeller, user ? { sellerId: user.id } : "skip") || [];
+    const purchases = useQuery(
+        api.orders.getMyOrders,
+        user ? { actorId: user.id as any, userId: user.id } : "skip"
+    ) || [];
+    const sales = useQuery(
+        api.orders.getOrdersBySeller,
+        user ? { actorId: user.id as any, sellerId: user.id } : "skip"
+    ) || [];
 
     const rawList = activeTab === 'purchases' ? purchases : sales;
 

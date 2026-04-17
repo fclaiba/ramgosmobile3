@@ -2,11 +2,15 @@ import React, {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useRef,
     useState,
     ReactNode
 } from 'react';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from './AuthContext';
 
 type PointSource = 'purchase' | 'game' | 'referral' | 'bonus' | 'manual';
 export type DailyActivityType = 'FEED_PET' | 'ARCADE_GAME' | 'WHEEL';
@@ -263,6 +267,7 @@ const buildTransaction = (payload: TransactionPayload): PointsTransaction => {
 const initialQuarter = createQuarterSummary(new Date());
 
 export function PointsProvider({ children }: { children: ReactNode }) {
+    const { user } = useAuth();
     const [points, setPoints] = useState<number>(0);
     const pointsRef = useRef(points);
 
@@ -279,6 +284,13 @@ export function PointsProvider({ children }: { children: ReactNode }) {
 
     const [quarterSummary, setQuarterSummaryState] = useState<QuarterSummary>(initialQuarter);
     const quarterSummaryRef = useRef<QuarterSummary>(initialQuarter);
+    const economyState = useQuery(
+        api.economy.getState,
+        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+    );
+    const savePointsState = useMutation(api.economy.savePointsState);
+    const applyPointsEvent = useMutation(api.economy.applyPointsEvent);
+    const hasHydratedFromBackend = useRef(false);
 
     const updatePoints = useCallback((delta: number) => {
         setPoints((prev) => {
@@ -439,6 +451,21 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         updateTransactions((prev) => [transaction, ...prev]);
         updatePoints(amount);
 
+        if (user?.id) {
+            applyPointsEvent({
+                actorId: user.id as any,
+                userId: user.id,
+                eventKey: transaction.id,
+                type: transaction.type,
+                source,
+                amount,
+                description,
+                metadata: transaction.metadata,
+            }).catch((error: any) => {
+                console.error('Failed to persist points ledger event', error);
+            });
+        }
+
         if (amount > 0) {
             updateLifetimePoints(amount);
             updateQuarterContribution(source, amount, transaction.metadata ?? {}, eventDate);
@@ -448,7 +475,7 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         }
 
         return transaction;
-    }, [ensureQuarterForDate, updateLifetimePoints, updatePoints, updateTransactions, updateQuarterContribution]);
+    }, [ensureQuarterForDate, updateLifetimePoints, updatePoints, updateTransactions, updateQuarterContribution, user?.id, applyPointsEvent]);
 
     const getTierForPoints = useCallback((balance: number): MembershipTier => {
         const sorted = [...MEMBERSHIP_TIERS].sort((a, b) => a.minPoints - b.minPoints);
@@ -743,6 +770,63 @@ export function PointsProvider({ children }: { children: ReactNode }) {
             };
         });
     }, []);
+
+    useEffect(() => {
+        if (!user || hasHydratedFromBackend.current) return;
+        const persisted = economyState?.pointsState;
+        if (!persisted) {
+            hasHydratedFromBackend.current = true;
+            return;
+        }
+
+        setPoints(typeof persisted.points === 'number' ? persisted.points : 0);
+        pointsRef.current = typeof persisted.points === 'number' ? persisted.points : 0;
+        setLifetimePoints(typeof persisted.lifetimePoints === 'number' ? persisted.lifetimePoints : 0);
+        lifetimePointsRef.current = typeof persisted.lifetimePoints === 'number' ? persisted.lifetimePoints : 0;
+
+        const persistedTransactions = Array.isArray(persisted.transactions) ? persisted.transactions : [];
+        setTransactions(persistedTransactions);
+        transactionsRef.current = persistedTransactions;
+
+        setLastEarnTransactionId(typeof persisted.lastEarnTransactionId === 'string' ? persisted.lastEarnTransactionId : null);
+        setChallenges(Array.isArray(persisted.challenges) ? persisted.challenges : defaultChallenges);
+        setChallengeProgress(persisted.challengeProgress ?? defaultChallengeProgress);
+
+        const nextQuarter = persisted.quarterSummary ?? initialQuarter;
+        setQuarterSummaryState(nextQuarter);
+        quarterSummaryRef.current = nextQuarter;
+
+        hasHydratedFromBackend.current = true;
+    }, [user, economyState]);
+
+    useEffect(() => {
+        if (!user || !hasHydratedFromBackend.current) return;
+        savePointsState({
+            actorId: user.id as any,
+            userId: user.id,
+            pointsState: {
+                points,
+                lifetimePoints,
+                transactions,
+                lastEarnTransactionId,
+                challenges,
+                challengeProgress,
+                quarterSummary,
+            },
+        }).catch((error: any) => {
+            console.error('Failed to persist points state', error);
+        });
+    }, [
+        user,
+        points,
+        lifetimePoints,
+        transactions,
+        lastEarnTransactionId,
+        challenges,
+        challengeProgress,
+        quarterSummary,
+        savePointsState,
+    ]);
 
     const value: PointsContextType = {
         points,

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 import { useWallet, Campaign } from '../../contexts/WalletContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { Megaphone, Plus, Copy, TrendingUp, DollarSign, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -12,6 +13,7 @@ export default function CampaignManagerScreen() {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { show } = useToast();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newCode, setNewCode] = useState('');
@@ -29,14 +31,14 @@ export default function CampaignManagerScreen() {
 
     const handleCreate = () => {
         if (!newCode || !storeName) {
-            Alert.alert('Error', 'Completa todos los campos');
+            show('Completa todos los campos', 'error');
             return;
         }
         createCampaign(myId, 'store_temp', storeName, newCode);
         setIsModalOpen(false);
         setNewCode('');
         setStoreName('');
-        Alert.alert('¡Éxito!', 'Campaña creada correctamente.');
+        show('Campaña creada correctamente.', 'success');
     };
 
     return (

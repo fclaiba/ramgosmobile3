@@ -57,7 +57,10 @@ export default function DisputeChatScreen({ route, navigation }: any) {
 
     const order = orders.find(o => o.id === orderId);
     const dispute = order?.dispute;
-    const liveMessages = useQuery(api.disputes.getDisputeMessages, orderId ? { orderId } : "skip") ?? [];
+    const liveMessages = useQuery(
+        api.disputes.getDisputeMessages,
+        orderId && user?.id ? { orderId, actorId: user.id as any, requesterId: user.id } : "skip"
+    ) ?? [];
     const hasActiveDispute =
         !!dispute ||
         order?.status === 'disputed' ||

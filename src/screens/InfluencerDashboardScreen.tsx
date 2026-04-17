@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Share, Modal, TextInput, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Modal, TextInput, useWindowDimensions } from 'react-native';
 import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck, X, Wrench } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Card } from '../components/ui/card';

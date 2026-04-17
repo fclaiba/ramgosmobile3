@@ -8,10 +8,12 @@
  * @module
  */
 
+import type * as authHelpers from "../authHelpers.js";
 import type * as cart from "../cart.js";
 import type * as crons from "../crons.js";
 import type * as developer from "../developer.js";
 import type * as disputes from "../disputes.js";
+import type * as economy from "../economy.js";
 import type * as favorites from "../favorites.js";
 import type * as files from "../files.js";
 import type * as listings from "../listings.js";
@@ -27,10 +29,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  authHelpers: typeof authHelpers;
   cart: typeof cart;
   crons: typeof crons;
   developer: typeof developer;
   disputes: typeof disputes;
+  economy: typeof economy;
   favorites: typeof favorites;
   files: typeof files;
   listings: typeof listings;

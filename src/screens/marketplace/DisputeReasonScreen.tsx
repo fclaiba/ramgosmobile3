@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
-import { AlertTriangle, Camera, Package, HeartCrack, BadgeAlert, HelpCircle } from 'lucide-react-native';
+import { AlertTriangle, Camera, Package, HeartCrack, HelpCircle } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -21,7 +21,7 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
             { id: 'not_received', label: 'Producto no recibido', Icon: Package },
             { id: 'damaged', label: 'Producto dañado', Icon: HeartCrack },
             { id: 'not_as_described', label: 'No coincide con la descripción', Icon: HelpCircle },
-            { id: 'missing_parts', label: 'Faltan partes/accesorios', Icon: BadgeAlert },
+            { id: 'missing_parts', label: 'Faltan partes/accesorios', Icon: AlertTriangle },
             { id: 'counterfeit', label: 'Falso / réplica', Icon: AlertTriangle },
         ],
         [],

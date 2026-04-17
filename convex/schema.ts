@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export default defineSchema({
     users: defineTable({
         uid: v.string(), // Ext auth ID? or just internal ID
+        tokenIdentifier: v.optional(v.string()),
         name: v.string(),
         email: v.string(),
         password: v.optional(v.string()), // For simple auth
@@ -22,6 +23,13 @@ export default defineSchema({
         phoneNumber: v.optional(v.string()),
         phoneVerified: v.optional(v.boolean()),
         emailVerified: v.optional(v.boolean()),
+        
+        // Fase 2 - Push Notifications
+        pushTokens: v.optional(v.array(v.string())),
+
+        // Fase 3 - Stripe Payments
+        stripeCustomerId: v.optional(v.string()),
+        stripeConnectAccountId: v.optional(v.string()),
 
         // Seller Metrics
         sellerRating: v.optional(v.number()), // 0-5
@@ -42,7 +50,7 @@ export default defineSchema({
         totalOrders: v.optional(v.number()),
         lastActiveAt: v.optional(v.string()), // Kept only one instance
         followerCount: v.optional(v.number()), // For Influencer metrics
-    }).index("by_email", ["email"]).index("by_uid", ["uid"]),
+    }).index("by_email", ["email"]).index("by_uid", ["uid"]).index("by_tokenIdentifier", ["tokenIdentifier"]),
 
     audit_logs: defineTable({
         actorUserId: v.string(),
@@ -145,6 +153,8 @@ export default defineSchema({
     orders: defineTable({
         userId: v.string(), // Buyer
         sellerId: v.string(),
+        idempotencyKey: v.optional(v.string()),
+        stripePaymentIntentId: v.optional(v.string()), // Fase 3
         items: v.array(v.object({
             listingId: v.string(), // We store the ID
             title: v.string(),
@@ -182,7 +192,8 @@ export default defineSchema({
     })
         .index("by_user", ["userId"])
         .index("by_seller", ["sellerId"])
-        .index("by_status", ["status"]),
+        .index("by_status", ["status"])
+        .index("by_user_idempotency", ["userId", "idempotencyKey"]),
 
     // PHASE 1: User Profile Tables
     savedAddresses: defineTable({
@@ -301,13 +312,70 @@ export default defineSchema({
         userId: v.string(),
         listingId: v.string(),
         quantity: v.number(),
+        lastMutationKey: v.optional(v.string()),
         addedAt: v.string(),
         snapshot: v.object({
             title: v.string(),
             price: v.number(),
             image: v.optional(v.string()),
-            sellerId: v.string(),
+            sellerId: v.optional(v.string()),
+            type: v.optional(v.union(v.literal('product'), v.literal('bono'), v.literal('event'), v.literal('subscription'))),
+            subscriptionTier: v.optional(v.union(v.literal('pro'), v.literal('business'))),
+            location: v.optional(v.string()),
+            sellerName: v.optional(v.string()),
+            condition: v.optional(v.union(v.literal('new'), v.literal('used'))),
+            shippingWeightKg: v.optional(v.number()),
+            shippingDimensionsCm: v.optional(v.object({
+                length: v.number(),
+                width: v.number(),
+                height: v.number(),
+            })),
+            distanceKm: v.optional(v.number()),
+            referralCode: v.optional(v.string()),
         }),
     }).index("by_user", ["userId"])
         .index("by_user_listing", ["userId", "listingId"]),
+
+    economyState: defineTable({
+        userId: v.string(),
+        pointsState: v.optional(v.any()),
+        walletState: v.optional(v.any()),
+        rewardsState: v.optional(v.any()),
+        updatedAt: v.string(),
+    }).index("by_user", ["userId"]),
+
+    pointsLedger: defineTable({
+        userId: v.string(),
+        eventKey: v.string(),
+        type: v.union(v.literal('earn'), v.literal('redeem'), v.literal('convert'), v.literal('challenge')),
+        source: v.union(v.literal('purchase'), v.literal('game'), v.literal('referral'), v.literal('bonus'), v.literal('manual')),
+        amount: v.number(),
+        description: v.string(),
+        metadata: v.optional(v.any()),
+        createdAt: v.string(),
+    }).index("by_user", ["userId"])
+        .index("by_user_event", ["userId", "eventKey"]),
+
+    walletLedger: defineTable({
+        userId: v.string(),
+        eventKey: v.string(),
+        type: v.union(v.literal('credit'), v.literal('debit'), v.literal('hold'), v.literal('release')),
+        amount: v.number(),
+        currency: v.literal('USD'),
+        orderId: v.optional(v.string()),
+        description: v.string(),
+        metadata: v.optional(v.any()),
+        createdAt: v.string(),
+    }).index("by_user", ["userId"])
+        .index("by_user_event", ["userId", "eventKey"]),
+
+    rewardsClaims: defineTable({
+        userId: v.string(),
+        claimKey: v.string(),
+        type: v.string(),
+        pointsAwarded: v.number(),
+        metadata: v.optional(v.any()),
+        claimedAt: v.string(),
+    }).index("by_user", ["userId"])
+        .index("by_user_claim", ["userId", "claimKey"]),
 });

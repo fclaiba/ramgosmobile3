@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { assertAdminOrDeveloper, requireActor } from "./authHelpers";
 
 // Helper to check dev permissions
 const checkDevAccess = async (ctx: any, userId: Id<"users">) => {
@@ -11,12 +12,29 @@ const checkDevAccess = async (ctx: any, userId: Id<"users">) => {
     }
 };
 
+const sanitizeDevUser = (user: any) => ({
+    _id: user._id,
+    uid: user.uid,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    avatar: user.avatar,
+    kycStatus: user.kycStatus,
+    joinedAt: user.joinedAt,
+    tier: user.tier,
+    subscriptionStatus: user.subscriptionStatus,
+    isTest: user.isTest,
+});
+
 export const seedTestUsers = mutation({
     args: {
-        actorId: v.id("users")
+        actorId: v.optional(v.id("users"))
     },
     handler: async (ctx, args) => {
-        await checkDevAccess(ctx, args.actorId);
+        const actor = await requireActor(ctx, args.actorId);
+        if (actor.role !== "admin" && actor.role !== "developer" && !actor.isTest) {
+            throw new Error("Se requiere rol de desarrollador o admin.");
+        }
 
         // Defined Test Users
         const testUsers = [
@@ -54,7 +72,7 @@ export const seedTestUsers = mutation({
                     password: 'hashed_321drowssap', // Force reset password to ensure access
                     kycStatus: u.kycStatus // Also ensure KYC status matches expectations
                 });
-                results.push({ ...existing, status: 'updated' });
+                results.push({ ...sanitizeDevUser(existing), status: 'updated' });
             } else {
                 // Create
                 const newId = await ctx.db.insert("users", {
@@ -80,25 +98,30 @@ export const seedTestUsers = mutation({
 
 export const getTestUsers = query({
     args: {
-        actorId: v.id("users")
+        actorId: v.optional(v.id("users"))
     },
     handler: async (ctx, args) => {
-        await checkDevAccess(ctx, args.actorId);
+        const actor = await requireActor(ctx, args.actorId);
+        if (actor.role !== "admin" && actor.role !== "developer" && !actor.isTest) {
+            throw new Error("Se requiere rol de desarrollador o admin.");
+        }
         return await ctx.db
             .query("users")
             .filter((q) => q.eq(q.field("isTest"), true))
-            .collect();
+            .collect()
+            .then((users: any[]) => users.map(sanitizeDevUser));
     },
 });
 
 export const impersonate = mutation({
     args: {
-        adminId: v.id("users"), // The real user requesting access
+        adminId: v.optional(v.id("users")), // legacy fallback
         targetUserId: v.id("users"), // The test user to enter
     },
     handler: async (ctx, args) => {
         // 1. Security Check
-        await checkDevAccess(ctx, args.adminId);
+        const actor = await requireActor(ctx, args.adminId);
+        assertAdminOrDeveloper(actor);
 
         // 2. Target Check
         const targetUser = await ctx.db.get(args.targetUserId);
@@ -107,7 +130,7 @@ export const impersonate = mutation({
 
         // 3. Log Audit
         await ctx.db.insert("audit_logs", {
-            actorUserId: args.adminId,
+            actorUserId: actor.idString,
             targetUserId: args.targetUserId,
             action: "IMPERSONATE_START",
             timestamp: new Date().toISOString(),
@@ -117,6 +140,6 @@ export const impersonate = mutation({
         // 4. Return Session Data
         // In a real OAuth system we'd issue a token.
         // Here we return the full user object so the frontend can swap context.
-        return targetUser;
+        return sanitizeDevUser(targetUser);
     },
 });

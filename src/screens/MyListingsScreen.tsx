@@ -5,6 +5,7 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import { useToast } from '../contexts/ToastContext';
 import { Edit2, Trash2, Plus, PackageOpen, LayoutGrid, Search, ArrowLeft, MoreVertical } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,10 +17,14 @@ export default function MyListingsScreen() {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const navigation = useNavigation<any>();
+    const { show } = useToast();
 
     // Using (user as any)._id because Convex users have _id
     const userId = (user as any)?._id || (user as any)?.id;
-    const listings = useQuery(api.listings.getMyListings, userId ? { sellerId: userId } : "skip");
+    const listings = useQuery(
+        api.listings.getMyListings,
+        userId ? { actorId: userId as any, sellerId: userId } : "skip"
+    );
     const deleteListing = useMutation(api.listings.deleteListing);
 
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -35,9 +40,9 @@ export default function MyListingsScreen() {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            await deleteListing({ id });
+                            await deleteListing({ actorId: userId as any, sellerId: userId, id });
                         } catch (e) {
-                            Alert.alert("Error", "No se pudo eliminar la publicación.");
+                            show("No se pudo eliminar la publicación.", "error");
                         }
                     }
                 }

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import { useWallet } from '../../contexts/WalletContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { ArrowUpRight, ArrowDownLeft, Clock, Wallet as WalletIcon, DollarSign } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -12,6 +13,7 @@ export default function WalletScreen() {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { show } = useToast();
 
     // In a real app, userId would come from auth context. 
     // For demo purposes, we might be looking at 'seller_1' or 'inf_1' or the logged in user.
@@ -25,19 +27,15 @@ export default function WalletScreen() {
 
     const handleWithdraw = () => {
         if (wallet.balanceAvailable <= 0) {
-            Alert.alert('Saldo insuficiente', 'No tienes fondos disponibles para retirar.');
+            show('No tienes fondos disponibles para retirar.', 'error');
             return;
         }
-        Alert.alert(
-            'Retiro Solicitado',
-            `Se ha iniciado la transferencia de $${wallet.balanceAvailable.toFixed(2)} a tu CBU vinculado.`,
-            [{ text: 'Entendido' }]
-        );
+        show(`Se ha iniciado la transferencia de $${wallet.balanceAvailable.toFixed(2)} a tu CBU vinculado.`, 'success');
     };
 
     const handleSimulateTime = () => {
         simulateTimePass(10);
-        Alert.alert('Modo Desarrollador', 'Se ha simulado el paso de 10 días. Fondos en Escrow liberados.');
+        show('Modo Desarrollador. Se ha simulado el paso de 10 días. Fondos en Escrow liberados.', 'info');
     };
 
     return (
