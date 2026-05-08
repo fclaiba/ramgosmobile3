@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, useWindowDimensions, Alert } from 'react-native';
 import { AlertTriangle, Camera, Package, HeartCrack, HelpCircle } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useMutation, useAction } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useAuth } from '../../contexts/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function DisputeReasonScreen({ route, navigation }: any) {
     const { orderId } = route.params;
@@ -12,9 +16,15 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
     const isDark = colorScheme === 'dark';
     const { width } = useWindowDimensions();
     const isSmall = width < 375;
+    const { user } = useAuth();
 
     const [reason, setReason] = useState<any | null>(null);
     const [description, setDescription] = useState('');
+    const [evidenceUrls, setEvidenceUrls] = useState<string[]>([]);
+    const [uploading, setUploading] = useState(false);
+
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+    const addEvidence = useMutation(api.disputes.addEvidence);
 
     const reasons = useMemo(
         () => [
@@ -27,15 +37,53 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
         [],
     );
 
+    const handleUploadEvidence = async () => {
+        if (!user) { show('Debes iniciar sesión', 'error'); return; }
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.7,
+        });
+        if (result.canceled || !result.assets[0]) return;
+
+        setUploading(true);
+        try {
+            const uploadUrl = await generateUploadUrl({ actorId: user.id as any, userId: user.id as any });
+            const asset = result.assets[0];
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
+                body: { uri: asset.uri } as any,
+            });
+            const { storageId } = await response.json();
+            const fileUrl = `convex-storage:${storageId}`;
+
+            await addEvidence({
+                orderId,
+                actorId: user.id as any,
+                uploadedBy: 'buyer',
+                uploadedByUserId: user.id,
+                type: 'photo',
+                url: fileUrl,
+                description: description || reason || 'Evidencia fotográfica',
+            });
+
+            setEvidenceUrls((prev) => [...prev, fileUrl]);
+            show('Evidencia subida correctamente', 'success');
+        } catch (e: any) {
+            show(e.message || 'Error al subir evidencia', 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     const handleSubmit = () => {
         if (!reason || !description) {
             show('Selecciona motivo y describe el problema', 'error');
             return;
         }
-
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DisputeReasonScreen.tsx:continue',message:'DisputeReason continue to Dispute screen',data:{orderId,reason,hasDescription:!!description},timestamp:Date.now(),sessionId:'debug-session',runId:'dispute-routes',hypothesisId:'H-dispute-flow'})}).catch(()=>{});
-        // #endregion
         navigation.navigate('Dispute', { orderId, prefillReason: reason, prefillDescription: description });
     };
 
@@ -82,7 +130,7 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
                     )})}
                 </View>
 
-                {/* Evidence Mock */}
+                {/* Evidence upload */}
                 <Text className={['mt-4 font-extrabold', isSmall ? 'text-sm' : 'text-base', isDark ? 'text-slate-50' : 'text-slate-900'].join(' ')}>
                     Evidencias (opcional)
                 </Text>
@@ -91,11 +139,12 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
                         'mt-2 h-20 rounded-2xl border-2 border-dashed items-center justify-center',
                         isDark ? 'border-slate-700 bg-slate-950/40' : 'border-slate-200 bg-slate-50',
                     ].join(' ')}
-                    onPress={() => show('Carga de evidencias (mock)', 'info')}
+                    onPress={handleUploadEvidence}
+                    disabled={uploading}
                 >
                     <Camera size={22} color={isDark ? '#94A3B8' : '#6B7280'} />
                     <Text className={['mt-2 font-semibold', isSmall ? 'text-xs' : 'text-sm', isDark ? 'text-slate-300' : 'text-slate-500'].join(' ')}>
-                        Subir fotos / video
+                        {uploading ? 'Subiendo...' : evidenceUrls.length > 0 ? `${evidenceUrls.length} foto(s) adjunta(s)` : 'Subir fotos / video'}
                     </Text>
                 </TouchableOpacity>
 

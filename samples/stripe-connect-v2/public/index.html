@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Stripe Connect V2 sample</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <div class="page">
+            <div class="header">
+                <div class="brand">Stripe Connect V2 sample</div>
+                <nav class="nav">
+                    <a href="/">Home</a>
+                    <a href="/storefront.html">Storefront</a>
+                </nav>
+            </div>
+
+            <h1>Run Connect end-to-end in 3 minutes</h1>
+            <p class="subtitle">
+                Onboard a seller, create a product on the platform, and let a
+                buyer purchase it &mdash; with a destination charge that splits
+                the funds between the platform and the connected account.
+            </p>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h2>1. Become a seller</h2>
+                    <p class="muted">
+                        Creates a V2 connected account and takes you to the
+                        seller dashboard.
+                    </p>
+                    <form id="create-account-form">
+                        <div class="field">
+                            <label for="displayName">Display name</label>
+                            <input
+                                id="displayName"
+                                name="displayName"
+                                placeholder="Acme Studio"
+                                required
+                            />
+                        </div>
+                        <div class="field">
+                            <label for="contactEmail">Contact email</label>
+                            <input
+                                id="contactEmail"
+                                name="contactEmail"
+                                type="email"
+                                placeholder="hello@acme.test"
+                                required
+                            />
+                        </div>
+                        <button type="submit" id="create-account-btn">
+                            Create connected account
+                        </button>
+                        <div id="create-account-error" class="error" hidden></div>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>2. Browse the storefront</h2>
+                    <p class="muted">
+                        See every product across every connected account and
+                        try a Checkout (use any
+                        <span class="code">4242 4242 4242 4242</span> test
+                        card).
+                    </p>
+                    <a href="/storefront.html" class="btn">Open storefront</a>
+                </div>
+            </div>
+
+            <footer>
+                Standalone sample &middot; uses the Stripe Node SDK V2
+                namespace.
+            </footer>
+        </div>
+
+        <script>
+            const form = document.getElementById("create-account-form");
+            const btn = document.getElementById("create-account-btn");
+            const errBox = document.getElementById("create-account-error");
+
+            form.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                errBox.hidden = true;
+                btn.disabled = true;
+                btn.textContent = "Creating...";
+
+                try {
+                    const data = new FormData(form);
+                    const res = await fetch("/api/accounts", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            displayName: data.get("displayName"),
+                            contactEmail: data.get("contactEmail"),
+                        }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok)
+                        throw new Error(json.error || "Could not create account");
+                    window.location.href = `/dashboard.html?accountId=${encodeURIComponent(json.account.id)}`;
+                } catch (err) {
+                    errBox.textContent = err.message;
+                    errBox.hidden = false;
+                    btn.disabled = false;
+                    btn.textContent = "Create connected account";
+                }
+            });
+        </script>
+    </body>
+</html>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, FlatList }
 import { ChevronLeft, Star, MapPin, Share2, Heart, ShoppingBag, Plus as PlusIcon, Minus, Check, Truck, ShieldCheck, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ReviewsList } from '../components/ReviewsList';
@@ -18,12 +19,12 @@ export default function ItemDetailScreen({ navigation, route }: any) {
     const item = passedItem || listingFromSlug;
 
     const { addItem, openCart } = useCart();
+    const { user } = useAuth();
     const [quantity, setQuantity] = useState(1);
     const [activeSection, setActiveSection] = useState<'details' | 'reviews'>('details');
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const recordView = useMutation(api.listings.recordView);
 
-    // 2. Record View on Mount
     useEffect(() => {
         if (item) {
             const id = item._id || item.id;
@@ -32,11 +33,11 @@ export default function ItemDetailScreen({ navigation, route }: any) {
                 recordView({
                     listingId: String(id),
                     sessionId,
-                    userId: undefined // TODO: user ID
+                    userId: user?.id ? (user.id as any) : undefined,
                 }).catch(e => console.log("View record failed", e));
             }
         }
-    }, [item?._id, item?.id]);
+    }, [item?._id, item?.id, user]);
 
     const handleAddToCart = () => {
         if (!item) return;

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Payment successful - Stripe Connect V2 sample</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <div class="page">
+            <div class="header">
+                <div class="brand">Stripe Connect V2 sample</div>
+                <nav class="nav">
+                    <a href="/">Home</a>
+                    <a href="/storefront.html">Storefront</a>
+                </nav>
+            </div>
+
+            <div class="card">
+                <h1>Payment successful</h1>
+                <p class="subtitle">
+                    The destination charge sent the application fee to the
+                    platform and the rest to the seller's connected account.
+                </p>
+                <p>
+                    Checkout session id:
+                    <span class="code" id="session-id">(missing)</span>
+                </p>
+                <p class="muted">
+                    Watch your <code>npm start</code> terminal for any V2 thin
+                    webhook events that fire (e.g. capability status changes).
+                </p>
+                <a class="btn" href="/storefront.html">Back to storefront</a>
+            </div>
+        </div>
+
+        <script>
+            const id = new URLSearchParams(window.location.search).get(
+                "session_id",
+            );
+            if (id) document.getElementById("session-id").textContent = id;
+        </script>
+    </body>
+</html>

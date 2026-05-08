@@ -16,6 +16,10 @@ import { useReferral } from '../contexts/ReferralContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { StripePaymentModal } from '../components/stripe/StripePaymentModal';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function PaymentScreen({ route, navigation }: any) {
     const { width } = useWindowDimensions();
@@ -49,7 +53,14 @@ export default function PaymentScreen({ route, navigation }: any) {
     const { redeemPoints, trackPurchase, points, previewPurchasePoints } = usePoints();
     const { notifyMyFirstPurchase } = useReferral();
     const { placeOrder } = useMarketplace();
-    const { processPayment, previewSplit, providers } = useFintech();
+    const { previewSplit, providers } = useFintech();
+    const { user } = useAuth();
+
+    // Stripe
+    const stripeCreatePaymentIntentRef = (api as any).stripe?.createPaymentIntent;
+    const createPaymentIntentAction = useAction(stripeCreatePaymentIntentRef || api.users.syncUser);
+    const [stripeModalVisible, setStripeModalVisible] = useState(false);
+    const [clientSecret, setClientSecret] = useState('');
 
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -218,101 +229,98 @@ export default function PaymentScreen({ route, navigation }: any) {
         setProcessingError(null);
 
         try {
-            let receipt: PaymentRecord;
             if (finalAmount > 0) {
-                // Normal payment flow
-                const paymentMethod = {
-                    brand: cardBrand,
-                    last4: cleanedCardNumber.slice(-4).padStart(4, '•'),
-                    expMonth: expMonthRaw || '00',
-                    expYear: expYearRaw || '00',
-                    ownerName: name.trim(),
-                };
-
-                receipt = await processPayment({
-                    amount: finalAmount,
-                    currency,
-                    providerKey: selectedProvider,
+                if (!stripeCreatePaymentIntentRef) {
+                    show('Stripe no está inicializado. Configura y redeploya credenciales antes de cobrar.', 'error');
+                    setLoading(false);
+                    return;
+                }
+                const amountInCents = Math.round(finalAmount * 100);
+                const intentResult = await createPaymentIntentAction({
+                    amountInCents,
+                    userId: user?.id,
                     sellerId,
-                    sellerName,
-                    influencerId,
-                    influencerName,
                     commissionRate,
                     influencerRate,
-                    paymentMethod,
+                    influencerId,
+                    description: params.description ?? `Compra en ${sellerName}`,
                     metadata: {
-                        discountUsedPoints: localAppliedPoints,
-                        discountAmount: localDiscountAmount,
                         cartItems: cartSnapshot,
                         shippingMethod,
                         shippingCost,
-                        saveCard,
+                        discountUsedPoints: localAppliedPoints,
+                        discountAmount: localDiscountAmount,
                     },
-                    description: params.description ?? `Compra en ${sellerName}`,
                 });
-
-                if (receipt.status !== 'succeeded') {
-                    throw new Error('La pasarela requiere una acción adicional para completar el pago.');
+                if (intentResult && intentResult.clientSecret) {
+                    setClientSecret(intentResult.clientSecret);
+                    setStripeModalVisible(true);
+                    setLoading(false);
+                    return;
+                } else {
+                    show('Error al iniciar el pago seguro', 'error');
+                    setLoading(false);
+                    return;
                 }
             } else {
-                // Fully paid with points - create a mock receipt
-                receipt = {
-                    id: `pts-${Date.now()}`,
-                    status: 'succeeded',
-                    amount: 0,
-                    currency,
-                    provider: selectedProvider,
-                    providerFee: 0,
-                    method: {
-                        brand: 'points',
-                        last4: '0000',
-                        expMonth: '00',
-                        expYear: '00',
-                        ownerName: name?.trim() || 'Puntos Ramgos',
-                    },
-                    split: {
-                        total: 0,
-                        currency,
-                        sellerId,
-                        sellerName,
-                        sellerGross: 0,
-                        sellerNet: 0,
-                        ramgosCommission: 0,
-                        influencerAmount: 0,
-                        influencerId,
-                        influencerName,
-                        commissionRate: commissionRate ?? 0,
-                        influencerRate: influencerRate ?? 0,
-                        appliedMinimumCommission: 0,
-                    },
-                    gateway: {
-                        id: `pts_gateway_${Date.now()}`,
-                        status: 'succeeded',
-                        authorizationCode: 'POINTS',
-                        providerFee: 0,
-                        netAmount: 0,
-                        currency,
-                        processedAt: new Date().toISOString(),
-                        provider: selectedProvider,
-                        riskLevel: 'low',
-                        rawResponse: {
-                            paidWithPoints: true,
-                        },
-                    },
-                    metadata: {
-                        paidWithPoints: true,
-                        discountUsedPoints: localAppliedPoints,
-                        discountAmount: localDiscountAmount,
-                        cartItems: cartSnapshot,
-                        shippingMethod,
-                        shippingCost,
-                    },
-                    description: params.description ?? `Compra en ${sellerName}`,
-                    createdAt: new Date().toISOString(),
-                } as PaymentRecord;
+                // Fully paid with points — no Stripe charge needed
+                await finalizeOrderProcess();
             }
+        } catch (error: any) {
+            console.error('Payment error', error);
+            const message = typeof error?.message === 'string' ? error.message : 'No pudimos procesar tu pago. Intenta nuevamente.';
+            setProcessingError(message);
+            show(message, 'error');
+            setLoading(false);
+        }
+    };
 
-            setProcessingError(null);
+    const finalizeOrderProcess = async () => {
+        setLoading(true);
+        try {
+            // Build a minimal PaymentRecord for the success UI (points-only or post-Stripe confirmation)
+            const splitData = previewSplit({
+                total: finalAmount,
+                currency,
+                sellerId,
+                sellerName,
+                influencerId,
+                influencerName,
+                commissionRate,
+                influencerRate,
+            });
+            const receipt: PaymentRecord = {
+                id: finalAmount > 0 ? `stripe-${Date.now()}` : `pts-${Date.now()}`,
+                status: 'succeeded',
+                amount: finalAmount,
+                currency,
+                provider: selectedProvider,
+                providerFee: finalAmount > 0 ? Math.round(finalAmount * 0.029 * 100) / 100 + 0.3 : 0,
+                method: {
+                    brand: finalAmount > 0 ? cardBrand : 'points',
+                    last4: finalAmount > 0 ? cardNumber.replace(/\D/g, '').slice(-4).padStart(4, '•') : '0000',
+                    expMonth: expiry.split('/')[0] || '00',
+                    expYear: expiry.split('/')[1] || '00',
+                    ownerName: name.trim() || 'Puntos Ramgos',
+                },
+                split: splitData,
+                gateway: {
+                    id: `gw_${Date.now()}`,
+                    status: 'succeeded',
+                    authorizationCode: finalAmount > 0 ? 'STRIPE' : 'POINTS',
+                    providerFee: 0,
+                    netAmount: finalAmount,
+                    currency,
+                    processedAt: new Date().toISOString(),
+                    provider: selectedProvider,
+                    riskLevel: 'low',
+                    rawResponse: { paidWithPoints: finalAmount === 0 },
+                },
+                metadata: { cartItems: cartSnapshot, shippingMethod, shippingCost },
+                description: params.description ?? `Compra en ${sellerName}`,
+                createdAt: new Date().toISOString(),
+            };
+
             setPaymentReceipt(receipt);
             setSuccess(true);
 
@@ -354,8 +362,8 @@ export default function PaymentScreen({ route, navigation }: any) {
             clearCart();
 
         } catch (error: any) {
-            console.error('Payment error', error);
-            const message = typeof error?.message === 'string' ? error.message : 'No pudimos procesar tu pago. Intenta nuevamente.';
+            console.error('Finalize order error', error);
+            const message = typeof error?.message === 'string' ? error.message : 'No pudimos completar la orden.';
             setProcessingError(message);
             show(message, 'error');
         } finally {
@@ -808,6 +816,25 @@ export default function PaymentScreen({ route, navigation }: any) {
                     </LinearGradient>
                 </TouchableOpacity>
             </View>
+
+            {stripeModalVisible && (
+                <StripePaymentModal
+                    visible={stripeModalVisible}
+                    clientSecret={clientSecret}
+                    onPaymentSuccess={() => {
+                        setStripeModalVisible(false);
+                        finalizeOrderProcess();
+                    }}
+                    onPaymentError={(err) => {
+                        setStripeModalVisible(false);
+                        show(err, 'error');
+                    }}
+                    onCancel={() => {
+                        setStripeModalVisible(false);
+                        show('Pago cancelado', 'info');
+                    }}
+                />
+            )}
         </View>
     );
 }

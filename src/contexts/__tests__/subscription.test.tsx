@@ -56,7 +56,6 @@ jest.mock('../../contexts/PointsContext', () => ({
 
 jest.mock('../../contexts/WalletContext', () => ({
     useWallet: () => ({
-        validateCoupon: () => ({ valid: false, message: 'invalid' }),
         processCheckoutTransaction: jest.fn(),
     }),
 }));

@@ -253,6 +253,23 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
                             <Text style={styles.metricLabel}>KYC Pend.</Text>
                         </View>
                     </View>
+
+                    {/* Quick link to AdminFinanceScreen — Sprint 7. */}
+                    <TouchableOpacity
+                        style={[styles.metricCard, { marginTop: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, justifyContent: 'space-between' }]}
+                        onPress={() => navigation.navigate('AdminFinance')}
+                    >
+                        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                            <View style={[styles.metricIcon, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.2)' : '#FEF2F2' }]}>
+                                <CreditCard size={20} color={isDark ? '#F87171' : '#DC2626'} />
+                            </View>
+                            <View>
+                                <Text style={[styles.metricLabel, { color: isDark ? '#F9FAFB' : '#111827', fontWeight: '700' }]}>Finanzas (admin)</Text>
+                                <Text style={styles.metricLabel}>Transfers, escrows, disputas, refunds, reconciliación</Text>
+                            </View>
+                        </View>
+                        <ChevronRight size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Recent sign ups */}

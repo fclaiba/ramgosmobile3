@@ -1,57 +1,68 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, SafeAreaView, Image } from 'react-native';
-import { X, Search, Send, Check } from 'lucide-react-native';
-import { useSocial, Chat } from '../../contexts/SocialContext';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList } from 'react-native';
+import { X, Search } from 'lucide-react-native';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 
 interface SharePostModalProps {
-    postContent: string; // Or link/ID
+    postContent: string;
     visible: boolean;
     onClose: () => void;
 }
 
 export const SharePostModal = ({ postContent, visible, onClose }: SharePostModalProps) => {
-    const { chats, getUserById, currentUser, sendMessage } = useSocial();
+    const { sendMessage } = useSocial();
+    const { user: authUser } = useAuth();
     const [searchText, setSearchText] = useState('');
-    const [sentTo, setSentTo] = useState<string[]>([]); // Track sent status per session
+    const [sentTo, setSentTo] = useState<string[]>([]);
 
-    const { theme, colorScheme } = useTheme();
+    const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    // Filter chats based on search
-    const filteredChats = chats.filter(chat => {
-        const otherId = chat.participants.find(p => p !== currentUser.id);
-        const user = otherId ? getUserById(otherId) : null;
-        if (!user) return false;
-        return user.name.toLowerCase().includes(searchText.toLowerCase()) ||
-            user.username.toLowerCase().includes(searchText.toLowerCase());
+    const chatsRows = useQuery(
+        api.social.getMyChats,
+        authUser ? { actorId: authUser.id as any } : 'skip',
+    );
+
+    const flat = (chatsRows ?? []).map((c: any) => {
+        const other = c.otherParticipants?.[0];
+        return {
+            id: c._id,
+            name: other?.displayName ?? 'Usuario',
+            username: other?.username ?? 'usuario',
+            avatar: other?.avatar ?? '',
+        };
     });
+
+    const filteredChats = flat.filter(
+        (c) =>
+            c.name.toLowerCase().includes(searchText.toLowerCase()) ||
+            c.username.toLowerCase().includes(searchText.toLowerCase()),
+    );
 
     const handleSend = (chatId: string) => {
         sendMessage(chatId, `Shared Post: ${postContent}`);
-        setSentTo(prev => [...prev, chatId]);
+        setSentTo((prev) => [...prev, chatId]);
     };
 
-    const renderItem = ({ item }: { item: Chat }) => {
-        const otherId = item.participants.find(p => p !== currentUser.id);
-        const user = otherId ? getUserById(otherId) : null;
-        if (!user) return null;
-
+    const renderItem = ({ item }: { item: typeof flat[number] }) => {
         const isSent = sentTo.includes(item.id);
-
         return (
             <View style={styles.userItem}>
                 <View style={styles.userInfo}>
                     <Avatar style={styles.avatar}>
-                        <AvatarImage src={user.avatar} />
-                        <AvatarFallback>{user.name[0]}</AvatarFallback>
+                        {item.avatar ? <AvatarImage src={item.avatar} /> : null}
+                        <AvatarFallback>{item.name[0] ?? 'U'}</AvatarFallback>
                     </Avatar>
                     <View>
-                        <Text style={styles.userName}>{user.name}</Text>
-                        <Text style={styles.userHandle}>@{user.username}</Text>
+                        <Text style={styles.userName}>{item.name}</Text>
+                        <Text style={styles.userHandle}>@{item.username}</Text>
                     </View>
                 </View>
                 <TouchableOpacity

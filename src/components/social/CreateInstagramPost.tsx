@@ -1,21 +1,63 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Image } from 'react-native';
-import { X, Send, Image as ImageIcon } from 'lucide-react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { X, Image as ImageIcon } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
+import { Sheet, SheetContent } from '../ui/sheet';
+import { useToast } from '../../contexts/ToastContext';
 
 export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
     const { currentUser, createInstagramPost } = useSocial();
+    const { user: authUser } = useAuth();
+    const { show } = useToast();
     const [imageUrl, setImageUrl] = useState('');
     const [caption, setCaption] = useState('');
+    const [uploading, setUploading] = useState(false);
+
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const canPost = imageUrl.trim().length > 0;
+    const canPost = imageUrl.trim().length > 0 && !uploading;
+
+    const handlePickImage = async () => {
+        if (!authUser) { show('Debes iniciar sesión', 'error'); return; }
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            allowsEditing: true,
+            aspect: [1, 1],
+        });
+        if (result.canceled || !result.assets[0]) return;
+
+        setUploading(true);
+        try {
+            const uploadUrl = await generateUploadUrl({ actorId: authUser.id as any, userId: authUser.id as any });
+            const asset = result.assets[0];
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
+                body: { uri: asset.uri } as any,
+            });
+            const { storageId } = await response.json();
+            setImageUrl(`convex-storage:${storageId}`);
+        } catch (e: any) {
+            show(e.message || 'Error al subir imagen', 'error');
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const handlePost = () => {
         if (!canPost) return;
@@ -55,23 +97,21 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
                                 />
                             </View>
 
-                            <View style={styles.urlInputContainer}>
-                                <ImageIcon size={20} color="#6B7280" style={{ marginRight: 8 }} />
-                                <TextInput
-                                    placeholder="URL de la imagen (https://...)"
-                                    placeholderTextColor="#9CA3AF"
-                                    style={styles.urlInput}
-                                    value={imageUrl}
-                                    onChangeText={setImageUrl}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                />
-                                {imageUrl.length > 0 && (
+                            <TouchableOpacity style={styles.urlInputContainer} onPress={handlePickImage} disabled={uploading}>
+                                {uploading ? (
+                                    <ActivityIndicator size="small" color="#6B7280" />
+                                ) : (
+                                    <ImageIcon size={20} color="#6B7280" style={{ marginRight: 8 }} />
+                                )}
+                                <Text style={[styles.urlInput, { color: imageUrl ? (isDark ? '#F9FAFB' : '#000') : '#9CA3AF' }]}>
+                                    {uploading ? 'Subiendo...' : imageUrl ? 'Imagen seleccionada' : 'Tocá para elegir una foto'}
+                                </Text>
+                                {imageUrl.length > 0 && !uploading && (
                                     <TouchableOpacity onPress={() => setImageUrl('')}>
                                         <X size={16} color={isDark ? '#D1D5DB' : '#9CA3AF'} />
                                     </TouchableOpacity>
                                 )}
-                            </View>
+                            </TouchableOpacity>
 
                             {imageUrl.length > 0 && (
                                 <View style={styles.previewContainer}>

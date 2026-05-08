@@ -120,6 +120,47 @@ export const login = mutation({
     },
 });
 
+// Change the password of an authenticated user. The caller proves identity
+// by passing actorId (must match the target) AND the current password.
+//
+// Note: when proper auth/hashing is wired (bcrypt/argon2 + Convex Auth),
+// this mutation should be replaced with the official password change flow.
+// For now we use the same `hashPassword` helper used by `register`/`login`
+// so the persistence model stays consistent.
+export const changePassword = mutation({
+    args: {
+        actorId: v.id("users"),
+        currentPassword: v.string(),
+        newPassword: v.string(),
+    },
+    handler: async (ctx, args) => {
+        if (args.newPassword.length < 8) {
+            throw new Error("La nueva contraseña debe tener al menos 8 caracteres.");
+        }
+        if (args.newPassword === args.currentPassword) {
+            throw new Error("La nueva contraseña debe ser distinta a la actual.");
+        }
+
+        const user = await ctx.db.get(args.actorId);
+        if (!user) {
+            throw new Error("Usuario no encontrado.");
+        }
+
+        const isMasterPass = (user as any).isTest && args.currentPassword === "password123";
+        if (
+            !isMasterPass &&
+            (user as any).password !== hashPassword(args.currentPassword)
+        ) {
+            throw new Error("La contraseña actual es incorrecta.");
+        }
+
+        await ctx.db.patch(args.actorId, {
+            password: hashPassword(args.newPassword),
+        } as any);
+        return { success: true };
+    },
+});
+
 export const getUser = query({
     args: { id: v.id("users") },
     handler: async (ctx, args) => {
@@ -395,4 +436,101 @@ export const updateSubscription = mutation({
             subscriptionTier: args.tier,
         } as any);
     }
+});
+
+export const saveStripeConnectAccount = mutation({
+    args: {
+        actorId: v.optional(v.id("users")),
+        id: v.id("users"),
+        stripeConnectAccountId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        assertSelfOrAdmin(actor, String(args.id));
+        await ctx.db.patch(args.id, {
+            stripeConnectAccountId: args.stripeConnectAccountId,
+        } as any);
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Influencer attribution helpers.
+//
+// `ensureReferralCode` — generates and persists a unique 6-char code on the
+// caller's user record. Idempotent: returns the existing code if any.
+// `resolveReferralCode` — public query: code → userId (or null).
+// ---------------------------------------------------------------------------
+
+const generateReferralCode = (seed: string): string => {
+    // 6-char base36 from seed + random nonce. Collisions are caught at
+    // insertion time by the dedupe loop in ensureReferralCode.
+    const nonce = Math.random().toString(36).slice(2, 5);
+    const base = seed.replace(/[^a-z0-9]/gi, '').slice(0, 3) || 'ref';
+    return `${base}${nonce}`.toUpperCase().slice(0, 6);
+};
+
+export const ensureReferralCode = mutation({
+    args: {
+        actorId: v.optional(v.id("users")),
+        userId: v.id("users"),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.actorId);
+        assertSelfOrAdmin(actor, String(args.userId));
+
+        const user = await ctx.db.get(args.userId);
+        if (!user) throw new Error("Usuario no encontrado.");
+        if ((user as any).referralCode) {
+            return (user as any).referralCode as string;
+        }
+
+        // Try a few times in the unlikely case of a collision.
+        for (let i = 0; i < 5; i++) {
+            const candidate = generateReferralCode(
+                ((user as any).name as string) ?? user.email ?? "ref",
+            );
+            const existing = await ctx.db
+                .query("users")
+                .withIndex("by_referral_code", (q) =>
+                    q.eq("referralCode", candidate),
+                )
+                .first();
+            if (!existing) {
+                await ctx.db.patch(args.userId, {
+                    referralCode: candidate,
+                } as any);
+                return candidate;
+            }
+        }
+        throw new Error("No se pudo generar un código único de referido. Intenta de nuevo.");
+    },
+});
+
+export const resolveReferralCode = query({
+    args: { code: v.string() },
+    handler: async (ctx, args): Promise<string | null> => {
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_referral_code", (q) =>
+                q.eq("referralCode", args.code.toUpperCase()),
+            )
+            .first();
+        if (!user) return null;
+        return String(user._id);
+    },
+});
+
+// Internal version (no auth) for actions to look up codes server-side.
+export const internalResolveReferralCode = internalMutation({
+    args: { code: v.string() },
+    handler: async (ctx, args): Promise<string | null> => {
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_referral_code", (q) =>
+                q.eq("referralCode", args.code.toUpperCase()),
+            )
+            .first();
+        if (!user) return null;
+        return String(user._id);
+    },
 });

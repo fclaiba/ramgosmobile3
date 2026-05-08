@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Modal, TextInput, useWindowDimensions } from 'react-native';
-import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck, X, Wrench } from 'lucide-react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Modal, TextInput, useWindowDimensions, Linking, ActivityIndicator } from 'react-native';
+import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck, X, Wrench, CreditCard, CheckCircle2, ExternalLink } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -11,7 +11,8 @@ import { useFintech, PaymentRecord } from '../contexts/FintechContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
-import { useWallet } from '../contexts/WalletContext';
+import { useAction, useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,7 +36,22 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const influencerId = user?.id ?? 'influencer_demo';
     const influencerName = user?.name ?? 'Influencer Demo';
     const { ensureWalletAccount, getWalletByOwner, requestWithdrawal, payments, getKycStatus } = useFintech();
-    const { campaigns, contracts, createCampaign, createContract, endContract } = useWallet();
+
+    // ─── Influencer campaigns (server-backed) ──────────────────────────
+    // Replaces the legacy WalletContext.campaigns / .contracts mock.
+    // We pull the influencer's full list (active + pending + paused) and
+    // split it client-side into two buckets: pending invitations from
+    // businesses (the influencer has to accept/reject) and everything
+    // else. The single backend table replaces both the "código por
+    // tienda" and "contratos" sections of the legacy UI.
+    const campaignRows = useQuery(
+        api.campaigns.getMyCampaigns,
+        user?.id ? { actorId: user.id as any, influencerId: user.id as any } : 'skip',
+    ) ?? [];
+    const proposeCampaignMutation = useMutation(api.campaigns.proposeCampaign);
+    const respondToCampaignMutation = useMutation(api.campaigns.respondToCampaign);
+    const endCampaignMutation = useMutation(api.campaigns.endCampaign);
+    const pauseCampaignMutation = useMutation(api.campaigns.pauseCampaign);
 
     useEffect(() => {
         ensureWalletAccount(influencerId, 'influencer', influencerName);
@@ -43,6 +59,86 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
 
     const wallet = getWalletByOwner(influencerId) ?? getWalletByOwner('influencer_demo');
     const kycStatus = getKycStatus(influencerId);
+
+    // ─── Stripe Connect V2 onboarding (influencer) ─────────────────────
+    // Mirrors the BusinessDashboardScreen flow: same 3-step pattern
+    // (ensureConnectAccount → createOnboardingLink → poll status). Gated
+    // behind kycStatus === 'approved' per the plan. Without a Connect
+    // account the influencer's commissions accumulate in walletAccounts
+    // .balancePending indefinitely (we cannot transfer with no destination).
+    const _api = api as any;
+    const ensureConnectAccountAction = useAction(
+        _api.connect?.ensureConnectAccount || api.users.syncUser,
+    );
+    const createOnboardingLinkAction = useAction(
+        _api.connect?.createOnboardingLink || api.users.syncUser,
+    );
+    const getAccountStatusAction = useAction(
+        _api.connect?.getAccountStatus || api.users.syncUser,
+    );
+    const [connectLoading, setConnectLoading] = useState(false);
+    const [connectStatus, setConnectStatus] = useState<{
+        readyToReceivePayments: boolean;
+        onboardingComplete: boolean;
+    } | null>(null);
+    const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
+    const isKycApproved = kycStatus === 'approved';
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!stripeConnectAccountId) {
+            setConnectStatus(null);
+            return;
+        }
+        (async () => {
+            try {
+                const status = await getAccountStatusAction({
+                    actorId: user?.id as any,
+                    accountId: stripeConnectAccountId,
+                });
+                if (!cancelled && status) {
+                    setConnectStatus({
+                        readyToReceivePayments: !!(status as any).readyToReceivePayments,
+                        onboardingComplete: !!(status as any).onboardingComplete,
+                    });
+                }
+            } catch (err) {
+                console.warn('[Connect V2 / influencer] status fetch failed', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [stripeConnectAccountId, getAccountStatusAction, user?.id]);
+
+    const handleStripeConnectOnboarding = async () => {
+        if (!user) { show('Inicia sesión primero', 'error'); return; }
+        if (!isKycApproved) {
+            show('Completa tu verificación KYC primero.', 'warning');
+            navigation.navigate('KYC', { accountType: 'influencer' });
+            return;
+        }
+        setConnectLoading(true);
+        try {
+            const ensured = await ensureConnectAccountAction({
+                actorId: user.id as any,
+                userId: user.id as any,
+                displayName: influencerName || user.name || 'Ramgos influencer',
+                contactEmail: user.email,
+            });
+            const accountId = (ensured as any)?.accountId;
+            if (!accountId) throw new Error('No se obtuvo accountId de Stripe.');
+
+            const link = await createOnboardingLinkAction({
+                actorId: user.id as any,
+                accountId,
+            });
+            const url = (link as any)?.url;
+            if (url) await Linking.openURL(url);
+        } catch (e: any) {
+            show(e.message || 'Error al iniciar onboarding de Stripe', 'error');
+        } finally {
+            setConnectLoading(false);
+        }
+    };
 
     // Level System Logic
     const referrals = referralSummary.registrations;
@@ -106,56 +202,97 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         { id: '3', name: 'Clientes VIP', email: 'luis.maestre@email.com' },
     ];
 
-    const myCampaigns = useMemo(() => campaigns.filter((c) => c.influencerId === influencerId), [campaigns, influencerId]);
-    const myContracts = useMemo(() => contracts.filter((c) => c.influencerId === influencerId), [contracts, influencerId]);
+    // Pending invitations: business-initiated proposals waiting for me
+    // to accept/reject. (Influencer-initiated proposals also have
+    // status=pending but are visible under "Mis campañas" — they're
+    // grouped under "Esperando respuesta" since the OTHER party owns the
+    // accept/reject decision.)
+    const pendingInvitations = useMemo(
+        () =>
+            campaignRows.filter(
+                (c: any) => c.status === 'pending' && c.initiatedBy === 'business',
+            ),
+        [campaignRows],
+    );
+    const myProposals = useMemo(
+        () =>
+            campaignRows.filter(
+                (c: any) => c.status === 'pending' && c.initiatedBy === 'influencer',
+            ),
+        [campaignRows],
+    );
+    const activeCampaigns = useMemo(
+        () =>
+            campaignRows.filter(
+                (c: any) => c.status === 'active' || c.status === 'paused',
+            ),
+        [campaignRows],
+    );
 
-    const [codeModalVisible, setCodeModalVisible] = useState(false);
-    const [contractModalVisible, setContractModalVisible] = useState(false);
-    const [newStoreName, setNewStoreName] = useState('');
-    const [newCode, setNewCode] = useState('');
-    const [newSplit, setNewSplit] = useState('5');
-    const [newCommissionRate, setNewCommissionRate] = useState('0.05');
+    const [proposeModalVisible, setProposeModalVisible] = useState(false);
+    const [proposeBusinessId, setProposeBusinessId] = useState('');
+    const [proposeRatePct, setProposeRatePct] = useState('5');
+    const [submittingProposal, setSubmittingProposal] = useState(false);
 
-    const handleCreateCode = () => {
-        const storeName = newStoreName.trim();
-        const code = newCode.trim().toUpperCase();
-        const split = Number(newSplit);
-
-        if (!storeName || !code) {
-            show('Completa tienda y código.', 'warning');
+    const handleProposeCampaign = async () => {
+        if (!user?.id) {
+            show('Iniciá sesión.', 'error');
             return;
         }
-        if (!Number.isFinite(split) || split <= 0 || split > 50) {
-            show('Split inválido (1–50%).', 'warning');
+        const businessId = proposeBusinessId.trim();
+        const ratePct = Number(proposeRatePct);
+        if (!businessId) {
+            show('Pegá el ID del negocio.', 'warning');
             return;
         }
-
-        const storeId = `store_${storeName.toLowerCase().replace(/\s+/g, '_')}`;
-        createCampaign(influencerId, storeId, storeName, code, split);
-        setCodeModalVisible(false);
-        setNewStoreName('');
-        setNewCode('');
-        setNewSplit('5');
-        show('Código creado y listo para usar en checkout.', 'success');
+        if (!Number.isFinite(ratePct) || ratePct <= 0 || ratePct > 50) {
+            show('Comisión inválida (1–50%).', 'warning');
+            return;
+        }
+        setSubmittingProposal(true);
+        try {
+            await proposeCampaignMutation({
+                actorId: user.id as any,
+                influencerId: user.id as any,
+                businessId: businessId as any,
+                commissionRate: ratePct / 100,
+            });
+            setProposeModalVisible(false);
+            setProposeBusinessId('');
+            setProposeRatePct('5');
+            show('Propuesta enviada al negocio.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo enviar la propuesta.', 'error');
+        } finally {
+            setSubmittingProposal(false);
+        }
     };
 
-    const handleCreateContract = () => {
-        const storeName = newStoreName.trim();
-        const rate = Number(newCommissionRate);
-        if (!storeName) {
-            show('Ingresa el nombre de la tienda.', 'warning');
-            return;
+    const handleRespond = async (campaignId: string, decision: 'accept' | 'reject') => {
+        if (!user?.id) return;
+        try {
+            await respondToCampaignMutation({
+                actorId: user.id as any,
+                campaignId: campaignId as any,
+                decision,
+            });
+            show(decision === 'accept' ? 'Invitación aceptada.' : 'Invitación rechazada.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo responder.', 'error');
         }
-        if (!Number.isFinite(rate) || rate <= 0 || rate > 0.5) {
-            show('Comisión inválida (0.01–0.50).', 'warning');
-            return;
+    };
+
+    const handleEndCampaign = async (campaignId: string) => {
+        if (!user?.id) return;
+        try {
+            await endCampaignMutation({
+                actorId: user.id as any,
+                campaignId: campaignId as any,
+            });
+            show('Campaña finalizada.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo finalizar.', 'error');
         }
-        const storeId = `store_${storeName.toLowerCase().replace(/\s+/g, '_')}`;
-        createContract(influencerId, storeId, storeName, rate);
-        setContractModalVisible(false);
-        setNewStoreName('');
-        setNewCommissionRate('0.05');
-        show('Contrato creado (demo).', 'success');
     };
 
     const monthlyGoals = useMemo(() => [
@@ -404,6 +541,76 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     </View>
                 </Card>
 
+                {/* Stripe Connect V2 — influencer payout onboarding banner */}
+                <View style={{ width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center', marginBottom: 16 }}>
+                    {(() => {
+                        // Same 3 modes as the business banner. Influencers are
+                        // gated behind kycStatus === 'approved' so the CTA
+                        // routes them to KYC first if they haven't passed.
+                        const hasAccount = !!stripeConnectAccountId;
+                        const ready = !!connectStatus?.readyToReceivePayments;
+                        const onboardingDone = !!connectStatus?.onboardingComplete;
+                        const isReadyState = hasAccount && ready;
+                        const isPendingState = hasAccount && !ready;
+
+                        const palette = isReadyState
+                            ? { border: isDark ? '#064E3B' : '#A7F3D0', bg: isDark ? 'rgba(5,150,105,0.15)' : '#ECFDF5', icoBg: isDark ? '#065F46' : '#D1FAE5', text: isDark ? '#6EE7B7' : '#065F46', desc: isDark ? '#A7F3D0' : '#047857' }
+                            : isPendingState
+                                ? { border: isDark ? '#78350F' : '#FEF3C7', bg: isDark ? 'rgba(120,53,15,0.15)' : '#FFFBEB', icoBg: isDark ? '#92400E' : '#FDE68A', text: isDark ? '#FCD34D' : '#92400E', desc: isDark ? '#FDE68A' : '#B45309' }
+                                : !isKycApproved
+                                    ? { border: isDark ? '#7F1D1D' : '#FECACA', bg: isDark ? 'rgba(127,29,29,0.18)' : '#FEF2F2', icoBg: isDark ? '#991B1B' : '#FEE2E2', text: isDark ? '#FCA5A5' : '#991B1B', desc: isDark ? '#FECACA' : '#B91C1C' }
+                                    : { border: isDark ? '#1E3A5F' : '#BFDBFE', bg: isDark ? 'rgba(37,99,235,0.15)' : '#EFF6FF', icoBg: isDark ? '#1E40AF' : '#DBEAFE', text: isDark ? '#93C5FD' : '#1D4ED8', desc: isDark ? '#BFDBFE' : '#1E40AF' };
+
+                        const title = isReadyState
+                            ? 'Cuenta de pagos lista'
+                            : isPendingState
+                                ? 'Completa tu onboarding de Stripe'
+                                : !isKycApproved
+                                    ? 'KYC requerido para cobrar'
+                                    : 'Conectar cuenta de pagos';
+
+                        const desc = isReadyState
+                            ? `Stripe Connect activo · ${stripeConnectAccountId!.slice(0, 16)}...`
+                            : isPendingState
+                                ? (onboardingDone
+                                    ? 'Stripe está revisando tu cuenta. Te avisamos cuando esté lista.'
+                                    : 'Faltan datos para activar tus comisiones. Continúa el onboarding.')
+                                : !isKycApproved
+                                    ? 'Verifica tu identidad para habilitar el cobro de comisiones por Stripe.'
+                                    : 'Vincula tu cuenta bancaria para recibir tus comisiones vía Stripe Connect.';
+
+                        const Icon = isReadyState ? CheckCircle2 : CreditCard;
+
+                        return (
+                            <TouchableOpacity
+                                activeOpacity={isReadyState ? 1 : 0.85}
+                                onPress={isReadyState ? undefined : handleStripeConnectOnboarding}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 12,
+                                    padding: 14,
+                                    borderRadius: 14,
+                                    borderWidth: 1,
+                                    borderColor: palette.border,
+                                    backgroundColor: palette.bg,
+                                }}
+                            >
+                                <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.icoBg }}>
+                                    <Icon size={18} color={palette.text} />
+                                </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={{ fontWeight: '800', color: palette.text }} numberOfLines={1}>{title}</Text>
+                                    <Text style={{ fontSize: 12, color: palette.desc, marginTop: 4 }} numberOfLines={2}>{desc}</Text>
+                                </View>
+                                {connectLoading
+                                    ? <ActivityIndicator size="small" color={palette.text} />
+                                    : !isReadyState && <ExternalLink size={18} color={palette.text} />}
+                            </TouchableOpacity>
+                        );
+                    })()}
+                </View>
+
                 {/* STATS OVERVIEW */}
                 <View
                     style={[
@@ -590,18 +797,93 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                         </View>
                         <Button
                             size="sm"
-                            onPress={() => setCodeModalVisible(true)}
+                            onPress={() => setProposeModalVisible(true)}
                             style={[
                                 { backgroundColor: '#4f46e5' },
                                 metricsLayout.headerStack && { alignSelf: 'stretch' },
                             ]}
                         >
                             <Link size={16} color="#fff" style={{ marginRight: 8 }} />
-                            <Text style={{ color: '#fff', fontWeight: '700' }}>Nuevo código</Text>
+                            <Text style={{ color: '#fff', fontWeight: '700' }}>Proponer campaña</Text>
                         </Button>
                     </View>
 
-                    {myCampaigns.length === 0 ? (
+                    {/* Pending invitations from businesses */}
+                    {pendingInvitations.length > 0 && (
+                        <View style={{ marginTop: 12 }}>
+                            <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
+                                Invitaciones pendientes
+                            </Text>
+                            {pendingInvitations.map((c: any) => (
+                                <Card
+                                    key={c._id}
+                                    style={{
+                                        marginBottom: 12,
+                                        padding: 12,
+                                        backgroundColor: isDark ? '#1F2937' : '#fff',
+                                        borderWidth: 1,
+                                        borderColor: isDark ? '#F59E0B' : '#FCD34D',
+                                    }}
+                                >
+                                    <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
+                                        {c.businessName}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                        <Badge variant="secondary">{(c.commissionRate * 100).toFixed(1)}% por venta</Badge>
+                                        <Badge variant="outline">Te invitaron</Badge>
+                                    </View>
+                                    {c.notes && (
+                                        <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                                            "{c.notes}"
+                                        </Text>
+                                    )}
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                                        <Button
+                                            size="sm"
+                                            onPress={() => handleRespond(c._id, 'accept')}
+                                            style={{ flex: 1, backgroundColor: '#16a34a' }}
+                                        >
+                                            <Text style={{ color: '#fff', fontWeight: '700' }}>Aceptar</Text>
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onPress={() => handleRespond(c._id, 'reject')}
+                                            style={{ flex: 1 }}
+                                        >
+                                            <Text style={{ color: '#ef4444', fontWeight: '700' }}>Rechazar</Text>
+                                        </Button>
+                                    </View>
+                                </Card>
+                            ))}
+                        </View>
+                    )}
+
+                    {/* My proposals waiting on the business to respond */}
+                    {myProposals.length > 0 && (
+                        <View style={{ marginTop: 12 }}>
+                            <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
+                                Esperando respuesta
+                            </Text>
+                            {myProposals.map((c: any) => (
+                                <Card key={c._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
+                                    <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
+                                        {c.businessName}
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                                        <Badge variant="secondary">{(c.commissionRate * 100).toFixed(1)}% propuesto</Badge>
+                                        <Badge variant="outline">Pendiente</Badge>
+                                    </View>
+                                    <TouchableOpacity onPress={() => handleEndCampaign(c._id)} style={{ marginTop: 8 }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Cancelar propuesta</Text>
+                                    </TouchableOpacity>
+                                </Card>
+                            ))}
+                        </View>
+                    )}
+
+                    {/* Active / paused campaigns */}
+                    {activeCampaigns.length === 0 ? (
                         <Card
                             style={{
                                 marginTop: 12,
@@ -629,118 +911,28 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                                 </View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>
-                                        Aún no tienes códigos
+                                        Aún no tenés campañas activas
                                     </Text>
                                     <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
-                                        Crea tu primer código para empezar a medir usos, ventas y ganancias por tienda.
+                                        Proponé una a un negocio o esperá a que te inviten. Con tu código personal {referralCode} acreditarás cada venta atribuida.
                                     </Text>
                                 </View>
                             </View>
                         </Card>
                     ) : (
-                        myCampaigns.map((camp) => (
-                            <Card key={camp.id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
+                        activeCampaigns.map((camp: any) => (
+                            <Card key={camp._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
                                 <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
-                                    {camp.targetStoreName}
+                                    {camp.businessName}
                                 </Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                                    <Badge variant="secondary">{camp.code}</Badge>
-                                    <Badge variant="secondary">{camp.splitPercentage}% split</Badge>
-                                    <Badge variant="outline">{camp.isActive ? 'Activo' : 'Pausado'}</Badge>
+                                    <Badge variant="secondary">{referralCode || 'Tu código'}</Badge>
+                                    <Badge variant="secondary">{(camp.commissionRate * 100).toFixed(1)}% por venta</Badge>
+                                    <Badge variant="outline">{camp.status === 'active' ? 'Activa' : 'Pausada'}</Badge>
                                 </View>
-                                <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
-                                    Usos: {camp.stats.uses} • Ventas: {formatCurrency(camp.stats.totalSales)} • Ganancias: {formatCurrency(camp.stats.totalEarnings)}
-                                </Text>
-                            </Card>
-                        ))
-                    )}
-                </View>
-
-                <View style={{ marginTop: 16, width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }}>
-                    <View
-                        style={[
-                            {
-                                flexDirection: metricsLayout.headerStack ? 'column' : 'row',
-                                alignItems: metricsLayout.headerStack ? 'flex-start' : 'center',
-                                justifyContent: 'space-between',
-                                gap: 10,
-                            },
-                        ]}
-                    >
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Contratos (demo)</Text>
-                            <Text style={[styles.sectionSubtitle, { marginTop: 6 }]}>
-                                Simula acuerdos de comisión con tiendas (útil para demos y pruebas internas).
-                            </Text>
-                        </View>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onPress={() => setContractModalVisible(true)}
-                            style={[
-                                {
-                                    borderColor: isDark ? 'rgba(209, 213, 219, 0.25)' : 'rgba(17, 24, 39, 0.18)',
-                                    backgroundColor: isDark ? 'rgba(17, 24, 39, 0.4)' : '#fff',
-                                },
-                                metricsLayout.headerStack && { alignSelf: 'stretch' },
-                            ]}
-                        >
-                            <ShieldCheck size={16} color={isDark ? '#E5E7EB' : '#111827'} style={{ marginRight: 8 }} />
-                            <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>Crear contrato</Text>
-                        </Button>
-                    </View>
-
-                    {myContracts.length === 0 ? (
-                        <Card
-                            style={{
-                                marginTop: 12,
-                                padding: 14,
-                                borderRadius: 14,
-                                borderWidth: 1,
-                                borderColor: isDark ? '#374151' : '#E5E7EB',
-                                backgroundColor: isDark ? '#111827' : '#fff',
-                            }}
-                        >
-                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                                <View
-                                    style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 10,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        backgroundColor: isDark ? 'rgba(5, 150, 105, 0.20)' : '#ecfdf5',
-                                        borderWidth: 1,
-                                        borderColor: isDark ? 'rgba(52, 211, 153, 0.20)' : '#bbf7d0',
-                                    }}
-                                >
-                                    <ShieldCheck size={18} color={isDark ? '#34D399' : '#059669'} />
-                                </View>
-                                <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>
-                                        No hay contratos todavía
-                                    </Text>
-                                    <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
-                                        Crea uno para simular acuerdos por comisión y validar el flujo.
-                                    </Text>
-                                </View>
-                            </View>
-                        </Card>
-                    ) : (
-                        myContracts.map((c) => (
-                            <Card key={c.id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }}>{c.storeName}</Text>
-                                    <Badge variant="secondary">{Math.round(c.commissionRate * 100)}%</Badge>
-                                </View>
-                                <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
-                                    Estado: {c.status} • Inicio: {new Date(c.startsAt).toLocaleDateString('es-ES')}
-                                </Text>
-                                {c.status === 'active' && (
-                                    <TouchableOpacity onPress={() => endContract(c.id)} style={{ marginTop: 8 }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Finalizar contrato</Text>
-                                    </TouchableOpacity>
-                                )}
+                                <TouchableOpacity onPress={() => handleEndCampaign(camp._id)} style={{ marginTop: 8 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Finalizar campaña</Text>
+                                </TouchableOpacity>
                             </Card>
                         ))
                     )}
@@ -845,22 +1037,25 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                 </View>
             </Modal>
 
-            {/* Create Code Modal */}
+            {/* Propose Campaign Modal — replaces the legacy "código" and
+                "contrato" modals. The influencer pastes the business
+                user-id and proposes a commission rate; the business
+                accepts/rejects it server-side. */}
             <Modal
                 animationType="slide"
                 transparent={true}
-                visible={codeModalVisible}
-                onRequestClose={() => setCodeModalVisible(false)}
+                visible={proposeModalVisible}
+                onRequestClose={() => setProposeModalVisible(false)}
             >
                 <View style={[styles.centeredView, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
                     <View style={[styles.modalView, { maxHeight: windowHeight * 0.86 }]}>
                         <View style={styles.modalHeaderRow}>
                             <View style={{ flex: 1, minWidth: 0 }}>
-                                <Text style={styles.modalTitle}>Nuevo código</Text>
-                                <Text style={styles.modalText}>Asócialo a una tienda y define el split.</Text>
+                                <Text style={styles.modalTitle}>Proponer campaña</Text>
+                                <Text style={styles.modalText}>Pegá el ID del negocio y la comisión que querés cobrar por venta.</Text>
                             </View>
                             <TouchableOpacity
-                                onPress={() => setCodeModalVisible(false)}
+                                onPress={() => setProposeModalVisible(false)}
                                 style={styles.modalCloseBtn}
                                 accessibilityRole="button"
                             >
@@ -870,110 +1065,45 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
 
                         <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
                             <View style={styles.formGroup}>
-                                <Text style={styles.modalLabel}>Tienda</Text>
+                                <Text style={styles.modalLabel}>ID del negocio</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Ej: Nike Official"
-                                    value={newStoreName}
-                                    onChangeText={setNewStoreName}
+                                    placeholder="users/abc123..."
+                                    value={proposeBusinessId}
+                                    onChangeText={setProposeBusinessId}
+                                    autoCapitalize="none"
                                     placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
                                 />
                             </View>
 
                             <View style={styles.formGroup}>
-                                <Text style={styles.modalLabel}>Código</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Ej: JORGE10"
-                                    value={newCode}
-                                    onChangeText={setNewCode}
-                                    autoCapitalize="characters"
-                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.modalLabel}>Split (%)</Text>
+                                <Text style={styles.modalLabel}>Comisión (%)</Text>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="5"
-                                    value={newSplit}
-                                    onChangeText={setNewSplit}
+                                    value={proposeRatePct}
+                                    onChangeText={setProposeRatePct}
                                     keyboardType="numeric"
                                     placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
                                 />
                             </View>
+
+                            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' }}>
+                                El negocio tiene que aceptar la propuesta antes de que se acrediten comisiones. Tu código personal es {referralCode || '(generándose)'}.
+                            </Text>
                         </ScrollView>
 
                         <View style={styles.modalFooter}>
                             <View style={[styles.modalActionsRow, windowWidth < 420 && { flexDirection: 'column' }]}>
-                                <Button variant="outline" onPress={() => setCodeModalVisible(false)} style={windowWidth < 420 ? { width: '100%' } : { flex: 1 }}>
+                                <Button variant="outline" onPress={() => setProposeModalVisible(false)} style={windowWidth < 420 ? { width: '100%' } : { flex: 1 }} disabled={submittingProposal}>
                                     <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>Cancelar</Text>
                                 </Button>
-                                <Button onPress={handleCreateCode} style={[windowWidth < 420 ? { width: '100%' } : { flex: 1 }, { backgroundColor: '#4f46e5' }]}>
-                                    <Text style={{ color: '#fff', fontWeight: '800' }}>Crear</Text>
-                                </Button>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* Create Contract Modal */}
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={contractModalVisible}
-                onRequestClose={() => setContractModalVisible(false)}
-            >
-                <View style={[styles.centeredView, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
-                    <View style={[styles.modalView, { maxHeight: windowHeight * 0.86 }]}>
-                        <View style={styles.modalHeaderRow}>
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                                <Text style={styles.modalTitle}>Nuevo contrato</Text>
-                                <Text style={styles.modalText}>Simula acuerdos por comisión con tiendas.</Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => setContractModalVisible(false)}
-                                style={styles.modalCloseBtn}
-                                accessibilityRole="button"
-                            >
-                                <X size={18} color={isDark ? '#CBD5E1' : '#64748b'} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-                            <View style={styles.formGroup}>
-                                <Text style={styles.modalLabel}>Tienda</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Ej: Nike Official"
-                                    value={newStoreName}
-                                    onChangeText={setNewStoreName}
-                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
-                                />
-                            </View>
-
-                            <View style={styles.formGroup}>
-                                <Text style={styles.modalLabel}>Comisión (rate)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="0.05"
-                                    value={newCommissionRate}
-                                    onChangeText={setNewCommissionRate}
-                                    keyboardType="numeric"
-                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
-                                />
-                            </View>
-                        </ScrollView>
-
-                        <View style={styles.modalFooter}>
-                            <View style={[styles.modalActionsRow, windowWidth < 420 && { flexDirection: 'column' }]}>
-                                <Button variant="outline" onPress={() => setContractModalVisible(false)} style={windowWidth < 420 ? { width: '100%' } : { flex: 1 }}>
-                                    <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>Cancelar</Text>
-                                </Button>
-                                <Button onPress={handleCreateContract} style={[windowWidth < 420 ? { width: '100%' } : { flex: 1 }, { backgroundColor: '#4f46e5' }]}>
-                                    <Text style={{ color: '#fff', fontWeight: '800' }}>Crear</Text>
+                                <Button onPress={handleProposeCampaign} style={[windowWidth < 420 ? { width: '100%' } : { flex: 1 }, { backgroundColor: '#4f46e5' }]} disabled={submittingProposal}>
+                                    {submittingProposal ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={{ color: '#fff', fontWeight: '800' }}>Enviar propuesta</Text>
+                                    )}
                                 </Button>
                             </View>
                         </View>

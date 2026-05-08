@@ -10,13 +10,17 @@ import {
     KeyboardAvoidingView,
     Platform,
     useWindowDimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { Camera, ChevronLeft, Upload, X } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { useMutation } from 'convex/react';
 import { MobileHeader } from '../../components/MobileHeader';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { api } from '../../../convex/_generated/api';
 
 export default function AddEditProductScreen({ navigation }: any) {
     const { createProduct } = useMarketplace();
@@ -46,13 +50,52 @@ export default function AddEditProductScreen({ navigation }: any) {
     const [stock, setStock] = useState('1');
     const [category, setCategory] = useState('Electrónica');
 
-    // Mock Image State
     const [images, setImages] = useState<string[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
-    const handleAddImage = () => {
-        // Mock image picker
-        if (images.length < 5) {
-            setImages([...images, 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500']);
+    const handleAddImage = async () => {
+        if (images.length >= 5) {
+            show('Máximo 5 fotos por producto.', 'info');
+            return;
+        }
+        try {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+                show('Necesitamos permiso para acceder a la galería.', 'error');
+                return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+            if (result.canceled || !result.assets?.[0]?.uri) return;
+
+            setUploading(true);
+            const uri = result.assets[0].uri;
+            const mime = result.assets[0].mimeType ?? 'image/jpeg';
+            const uploadUrl = await generateUploadUrl({
+                actorId: user?.id as any,
+                userId: user?.id as any,
+            });
+            const blob = await (await fetch(uri)).blob();
+            const uploadRes = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': mime },
+                body: blob,
+            });
+            if (!uploadRes.ok) {
+                show('No se pudo subir la imagen. Intentá de nuevo.', 'error');
+                return;
+            }
+            const { storageId } = await uploadRes.json();
+            setImages((prev) => [...prev, `convex-storage:${storageId}`]);
+        } catch (err: any) {
+            show(err?.message ?? 'Error subiendo la imagen.', 'error');
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -148,9 +191,19 @@ export default function AddEditProductScreen({ navigation }: any) {
                                             </View>
                                         ))}
                                         {images.length < 5 && (
-                                            <TouchableOpacity style={styles.addBtn} onPress={handleAddImage}>
-                                                <Camera size={24} color={isDark ? '#D1D5DB' : '#6B7280'} />
-                                                <Text style={styles.addBtnText}>Agregar</Text>
+                                            <TouchableOpacity
+                                                style={styles.addBtn}
+                                                onPress={handleAddImage}
+                                                disabled={uploading}
+                                            >
+                                                {uploading ? (
+                                                    <ActivityIndicator color={isDark ? '#D1D5DB' : '#6B7280'} />
+                                                ) : (
+                                                    <Camera size={24} color={isDark ? '#D1D5DB' : '#6B7280'} />
+                                                )}
+                                                <Text style={styles.addBtnText}>
+                                                    {uploading ? 'Subiendo...' : 'Agregar'}
+                                                </Text>
                                             </TouchableOpacity>
                                         )}
                                     </ScrollView>

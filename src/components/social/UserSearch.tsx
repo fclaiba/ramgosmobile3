@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Search, X, CheckCircle } from 'lucide-react-native';
-import { useSocial, User } from '../../contexts/SocialContext';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { Card } from '../ui/card';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface UserSearchProps {
@@ -11,25 +13,39 @@ interface UserSearchProps {
 }
 
 export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
-    const { searchUsers, followUser, unfollowUser, isFollowing, currentUser } = useSocial();
+    const { followUser, unfollowUser, isFollowing, currentUser } = useSocial();
+    const { user: authUser } = useAuth();
     const [query, setQuery] = useState('');
-    const [results, setResults] = useState<User[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
+    const [debouncedQuery, setDebouncedQuery] = useState('');
 
-    const { theme, colorScheme } = useTheme();
+    const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
+    // Debounce search input by 250ms to avoid hammering the backend.
     useEffect(() => {
-        if (query.trim().length > 0) {
-            setIsSearching(true);
-            const users = searchUsers(query).filter((u) => u.id !== currentUser.id);
-            setResults(users);
-        } else {
-            setResults([]);
-            setIsSearching(false);
-        }
+        const t = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+        return () => clearTimeout(t);
     }, [query]);
+
+    const searchRows = useQuery(
+        api.social.searchUsers,
+        authUser && debouncedQuery
+            ? { actorId: authUser.id as any, term: debouncedQuery, limit: 25 }
+            : 'skip',
+    );
+
+    const isSearching = debouncedQuery.length > 0;
+    const results = (searchRows ?? [])
+        .filter((u: any) => u.userId !== currentUser.id)
+        .map((u: any) => ({
+            id: u.userId,
+            name: u.displayName,
+            username: u.username,
+            avatar: u.avatar ?? '',
+            verified: Boolean(u.verified),
+            followers: u.followerCount ?? 0,
+        }));
 
     const handleFollow = (userId: string) => {
         if (isFollowing(userId)) {

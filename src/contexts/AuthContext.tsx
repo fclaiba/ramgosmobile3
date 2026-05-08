@@ -10,17 +10,73 @@ import { useToast } from './ToastContext';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
-import {
-    type AuthUserRole,
-    type PublicUser,
-    type SessionRecord,
-    type SignUpInput,
-    type SignUpResult,
-    type SocialProfile,
-    type SocialProvider,
-    CURRENT_SESSION_KEY,
-} from '../services/auth/mockConvexStore';
 import { storage } from '../services/auth/storageAdapter';
+
+export const CURRENT_SESSION_KEY = '@ramgos/auth/current-session';
+
+// ---------------------------------------------------------------------------
+// Auth types (inlined, no longer depending on mockConvexStore internals)
+// ---------------------------------------------------------------------------
+
+export type AuthUserRole = 'consumer' | 'business' | 'influencer' | 'admin';
+export type AuthKycStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
+export type SubscriptionStatus = 'active' | 'inactive';
+export type SubscriptionTier = 'free' | 'pro' | 'business';
+export type SocialProvider = 'google' | 'facebook' | 'apple';
+
+export interface SocialProfile {
+    providerUserId: string;
+    email?: string;
+    name?: string;
+    avatar?: string;
+}
+
+export interface PublicUser {
+    id: string;
+    email: string;
+    status: 'active' | 'banned' | 'suspended';
+    name: string;
+    role: AuthUserRole;
+    avatar?: string;
+    emailVerified: boolean;
+    requiresKyc: boolean;
+    kycStatus: AuthKycStatus;
+    kycMetadata?: Record<string, unknown>;
+    nickname?: string;
+    tier: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
+    termsAcceptedVersion: number;
+    subscriptionStatus: SubscriptionStatus;
+    subscriptionTier: SubscriptionTier;
+    createdAt: string;
+    lastLoginAt?: string;
+    providers: string[];
+    isTest?: boolean;
+}
+
+export interface SessionRecord {
+    id: string;
+    userId: string;
+    deviceId: string;
+    accessToken: string;
+    refreshToken: string;
+    createdAt: number;
+    lastActiveAt: number;
+    expiresAt: number;
+    refreshExpiresAt: number;
+}
+
+export interface SignUpInput {
+    email: string;
+    password: string;
+    name: string;
+    role?: AuthUserRole;
+    avatar?: string;
+}
+
+export interface SignUpResult {
+    user: PublicUser;
+    requiresVerification: boolean;
+}
 
 export const CURRENT_TERMS_VERSION = 1;
 
@@ -272,7 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 email: payload.email,
                 password: payload.password,
                 name: payload.name,
-                role: payload.role,
+                role: payload.role ?? 'consumer',
                 avatar: payload.avatar
             });
 
@@ -302,9 +358,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Return structure for UI
             return {
-                user: { id: newId, email: payload.email } as any,
-                userId: newId,
-                verification: pendingParams
+                user: { id: newId as string, email: payload.email } as PublicUser,
+                requiresVerification: true,
             };
         } catch (error: any) {
             show(error.message || 'Error de registro', 'error');

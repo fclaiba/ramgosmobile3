@@ -44,6 +44,9 @@ En Google Cloud Console:
   - **Application restrictions**: Android apps
   - **Package name**: `com.fclaiba.ramgosmobile`
   - **SHA-1**: el del paso anterior (keystore de release)
+- Reemplazar en `app.json`:
+  - `android.config.googleMaps.apiKey = "__SET_GOOGLE_MAPS_ANDROID_API_KEY__"`
+  - por la key Android restringida final antes de generar release candidate.
 
 > Si el mapa funciona en debug pero queda gris en APK release, casi siempre es porque el SHA-1 configurado no coincide con la firma del release.
 

@@ -1,24 +1,29 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, StatusBar } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Platform, StatusBar, Linking, ActivityIndicator } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useCart } from '../contexts/CartContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, Crown, ShieldCheck, ArrowRight, Star, Award, Zap } from 'lucide-react-native';
+import { Check, Crown, ShieldCheck, ArrowRight, Star, RefreshCw } from 'lucide-react-native';
 import { useToast } from '../contexts/ToastContext';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withSpring,
-    withDelay,
     FadeInDown,
-    withRepeat,
-    withSequence,
-    withTiming
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import {
+    initIapConnection,
+    isIapSupported,
+    requestSubscription,
+    restorePurchases,
+    finishPurchase,
+    endIapConnection,
+    type IapPurchaseResult,
+} from '../services/iap/iapService';
 
 const { width } = Dimensions.get('window');
 
@@ -27,25 +32,149 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
     const isDark = colorScheme === 'dark';
     const { user } = useAuth();
     const { show } = useToast();
-    const { addItem, openCart } = useCart();
+    const [busyTier, setBusyTier] = useState<null | 'pro' | 'business'>(null);
+    const [restoring, setRestoring] = useState(false);
+
+    // Subscription routing (per Sprint 4):
+    //   - business → Stripe Subscriptions (B2B exempt from IAP).
+    //   - pro (consumer)
+    //       on iOS/Android with native IAP available → Apple IAP / Google Play Billing.
+    //       on web/Expo Go                          → Stripe Checkout fallback.
+    const _api = api as any;
+    const createSubscriptionCheckoutAction = useAction(
+        _api.subscriptions?.createSubscriptionCheckout || api.users.syncUser,
+    );
+    const validateAppleReceiptAction = useAction(
+        _api.iapActions?.validateAppleReceipt || api.users.syncUser,
+    );
+    const validateGoogleReceiptAction = useAction(
+        _api.iapActions?.validateGoogleReceipt || api.users.syncUser,
+    );
+
+    useEffect(() => {
+        if (isIapSupported()) {
+            void initIapConnection();
+        }
+        return () => {
+            void endIapConnection();
+        };
+    }, []);
+
+    const validatePurchase = async (purchase: IapPurchaseResult) => {
+        if (!user) throw new Error('Usuario no autenticado.');
+        if (Platform.OS === 'ios') {
+            return await validateAppleReceiptAction({
+                actorId: user.id as any,
+                userId: user.id as any,
+                receiptData: purchase.transactionReceipt,
+                jwsRepresentation: purchase.jwsRepresentationIos,
+                productId: purchase.sku,
+            });
+        }
+        if (Platform.OS === 'android') {
+            return await validateGoogleReceiptAction({
+                actorId: user.id as any,
+                userId: user.id as any,
+                productId: purchase.sku,
+                purchaseToken: purchase.purchaseToken ?? purchase.transactionId,
+            });
+        }
+        throw new Error('Plataforma no soportada para IAP.');
+    };
 
     const handleSubscribe = async (tier: 'pro' | 'business') => {
-        const plan = SUBSCRIPTION_PLANS[tier];
-        addItem({
-            id: `sub-${tier}-${Date.now()}`,
-            name: plan.displayName,
-            price: plan.priceMonthlyUsd,
-            image: tier === 'business'
-                ? 'https://cdn-icons-png.flaticon.com/512/2921/2921222.png'
-                : 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
-            type: 'subscription',
-            subscriptionTier: tier,
-            quantity: 1
-        });
+        if (!user) {
+            show('Inicia sesión para suscribirte', 'error');
+            return;
+        }
+        setBusyTier(tier);
+        try {
+            // Consumer pro on mobile MUST go through IAP per store rules.
+            const useNativeIap =
+                tier === 'pro' &&
+                (Platform.OS === 'ios' || Platform.OS === 'android') &&
+                isIapSupported();
 
-        show('¡Excelente elección! Membresía agregada al carrito', 'success');
-        openCart();
-        navigation.navigate('Cart');
+            if (useNativeIap) {
+                show('Abriendo tienda...', 'info');
+                const purchase = await requestSubscription('pro');
+                show('Validando recibo...', 'info');
+                const result = await validatePurchase(purchase);
+                if ((result as any)?.success) {
+                    await finishPurchase(purchase);
+                    show('¡Suscripción activada!', 'success');
+                } else {
+                    show('No pudimos validar tu compra. Contactá soporte.', 'error');
+                }
+                return;
+            }
+
+            // Pro on web (or Expo Go fallback) → Stripe Checkout
+            // OR Business tier → Stripe Subscriptions.
+            if (tier === 'pro' && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+                show(
+                    'IAP nativo no disponible (requiere development build). Abrimos Stripe.',
+                    'info',
+                );
+            }
+            const result = await createSubscriptionCheckoutAction({
+                actorId: user.id as any,
+                userId: user.id as any,
+                tier,
+            });
+            const url = (result as any)?.url;
+            if (url && typeof url === 'string') {
+                await Linking.openURL(url);
+                show('Te llevamos a Stripe para completar el pago.', 'success');
+            } else {
+                show('No se pudo iniciar el checkout. Intenta de nuevo.', 'error');
+            }
+        } catch (e: any) {
+            show(e?.message || 'No se pudo iniciar la suscripción.', 'error');
+        } finally {
+            setBusyTier(null);
+        }
+    };
+
+    const handleRestore = async () => {
+        if (!user) {
+            show('Inicia sesión para restaurar compras', 'error');
+            return;
+        }
+        if (!isIapSupported()) {
+            show('Restaurar solo está disponible en iOS / Android nativo.', 'info');
+            return;
+        }
+        setRestoring(true);
+        try {
+            const purchases = await restorePurchases();
+            if (purchases.length === 0) {
+                show('No encontramos compras previas para restaurar.', 'info');
+                return;
+            }
+            let restoredCount = 0;
+            for (const p of purchases) {
+                try {
+                    const result = await validatePurchase(p);
+                    if ((result as any)?.success) {
+                        await finishPurchase(p);
+                        restoredCount++;
+                    }
+                } catch (err) {
+                    console.warn('[IAP restore] one item failed:', err);
+                }
+            }
+            show(
+                restoredCount > 0
+                    ? `Restauramos ${restoredCount} suscripción(es).`
+                    : 'No pudimos validar las compras encontradas.',
+                restoredCount > 0 ? 'success' : 'error',
+            );
+        } catch (e: any) {
+            show(e?.message || 'Error restaurando compras.', 'error');
+        } finally {
+            setRestoring(false);
+        }
     };
 
     const AnimatedBtn = Animated.createAnimatedComponent(TouchableOpacity);
@@ -149,12 +278,16 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                             onPress={() => handleSubscribe(tier)}
                             onPressIn={onPressIn}
                             onPressOut={onPressOut}
-                            disabled={tier === user?.subscriptionTier}
+                            disabled={tier === user?.subscriptionTier || busyTier === tier}
                         >
                             <Text style={styles.subscribeButtonText}>
-                                {tier === user?.subscriptionTier ? 'Tu Plan Actual' : 'Obtener Ahora'}
+                                {tier === user?.subscriptionTier
+                                    ? 'Tu Plan Actual'
+                                    : busyTier === tier
+                                        ? 'Procesando...'
+                                        : 'Obtener Ahora'}
                             </Text>
-                            {tier !== user?.subscriptionTier && <ArrowRight color="white" size={20} />}
+                            {tier !== user?.subscriptionTier && busyTier !== tier && <ArrowRight color="white" size={20} />}
                         </AnimatedBtn>
 
                         <Text style={styles.cancelText}>Cancela cuando quieras.</Text>
@@ -227,6 +360,26 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                             />
                         )}
                     </View>
+
+                    {/* Restore button — required by App Store guidelines. */}
+                    {(Platform.OS === 'ios' || Platform.OS === 'android') && (
+                        <TouchableOpacity
+                            onPress={handleRestore}
+                            disabled={restoring}
+                            style={styles.restoreButton}
+                            accessibilityRole="button"
+                            accessibilityLabel="Restaurar compras anteriores"
+                        >
+                            {restoring ? (
+                                <ActivityIndicator color={isDark ? '#D1D5DB' : '#4B5563'} />
+                            ) : (
+                                <RefreshCw size={16} color={isDark ? '#D1D5DB' : '#4B5563'} />
+                            )}
+                            <Text style={[styles.restoreText, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>
+                                {restoring ? 'Restaurando...' : 'Restaurar compras'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
 
                     <TouchableOpacity onPress={() => navigation.goBack()} style={{ alignSelf: 'center', marginTop: 20, padding: 10 }}>
                         <Text style={{ color: '#9CA3AF', fontSize: 14 }}>No, gracias. Volver al inicio.</Text>
@@ -434,5 +587,23 @@ const styles = StyleSheet.create({
         color: '#9CA3AF',
         fontSize: 12,
         marginTop: 16
-    }
+    },
+    restoreButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 24,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        alignSelf: 'center',
+    },
+    restoreText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
 });

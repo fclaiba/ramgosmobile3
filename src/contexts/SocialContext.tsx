@@ -1,18 +1,35 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+/**
+ * SocialContext — Convex-backed social state.
+ *
+ * Replaces the AsyncStorage / mock-driven legacy implementation. Posts,
+ * stories, follows, comments, likes and DMs all live in Convex tables now;
+ * this context is just a thin reactive adapter so existing components
+ * (`Post`, `StoriesBar`, `DirectMessages`, etc.) keep their public API.
+ *
+ * - Reactive queries (`useQuery`) hydrate posts/feed/chats/stories
+ *   automatically and re-render the consumers when the backend changes.
+ * - Mutations call into `convex/social.ts` and rely on the optimistic
+ *   patches Convex does for `useMutation` callers — no client-side
+ *   shadow state is needed.
+ * - All "mock users", `INITIAL_POSTS`, `MOCK_CHATS`, etc. were removed:
+ *   feed starts empty and is populated by real `createPost` calls.
+ */
+
+import React, { createContext, useContext, ReactNode, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from './AuthContext';
+
+// ---------------------------------------------------------------------------
+// Public types — kept shape-compatible with the old context so consumers
+// (Post.tsx, SocialScreen.tsx, etc.) don't need to change. New backend
+// shapes are mapped at adapter boundaries below.
+// ---------------------------------------------------------------------------
 
 export interface User {
     id: string;
     username: string;
-    name: string; // Changed from displayName to name to match existing AuthContext if needed, but reference uses displayName. adhering to reference for internal social usage, but mapping if needed? Actually AuthContext uses name. I will double check.
-    // Reference uses displayName. I will use displayName in this context but I might need to map it.
-    // Wait, in previous turn I fixed CreatePost to use 'name'.
-    // Use 'name' to specify the display name to be consistent with AuthContext or keep 'displayName' and update others?
-    // The reference uses 'displayName'. user-1, user-2 etc are mock users.
-    // The AuthContext user has 'name'.
-    // I should probably stick to 'name' for consistency with the rest of the mobile app, OR allow both.
-    // Let's use 'name' to be consistent with the User interface in AuthContext.
-    // Actually, I will carry over the reference interfaces but rename displayName to name where appropriate or just add it.
+    name: string;
     displayName: string;
     avatar: string;
     bio: string;
@@ -91,7 +108,7 @@ export interface StoryItem {
     id: string;
     type: 'image' | 'video';
     url: string;
-    duration: number; // in seconds
+    duration: number;
     timestamp: string;
     viewed: boolean;
 }
@@ -143,7 +160,7 @@ export interface Message {
 
 export interface Chat {
     id: string;
-    participants: string[]; // userIds
+    participants: string[];
     messages: Message[];
     lastUpdated: string;
 }
@@ -181,9 +198,9 @@ interface SocialContextType {
     searchUsers: (query: string) => User[];
     viewStory: (storyId: string) => void;
     markStoryAsViewed: (storyId: string, itemId: string) => void;
-    likeStory: (storyId: string, itemId: string) => void;
-    replyToStory: (storyId: string, itemId: string, message: string) => void;
-    shareStory: (storyId: string, itemId: string) => void;
+    likeStory: (storyId: string, itemId: string) => Promise<void>;
+    replyToStory: (storyId: string, itemId: string, message: string) => Promise<void>;
+    shareStory: (storyId: string, itemId: string) => Promise<void>;
     getCommercialItemsByUser: (userId: string) => CommercialProduct[];
     savePost: (postId: string) => void;
     unsavePost: (postId: string) => void;
@@ -191,742 +208,501 @@ interface SocialContextType {
     joinGroup: (groupId: string) => void;
     leaveGroup: (groupId: string) => void;
     getPostsByTopic: (topic: string) => Post[];
-    // Chat
     chats: Chat[];
     sendMessage: (chatId: string, text: string) => void;
-    createChat: (participantId: string) => string;
-    // Followers System
+    createChat: (participantId: string) => Promise<string> | string;
     getFollowers: (userId: string) => User[];
     getFollowing: (userId: string) => User[];
 }
 
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
-const MOCK_USERS: User[] = [
-    {
-        id: 'user-1',
-        username: 'maria_tech',
-        displayName: 'María García',
-        name: 'María García', // Compatibility
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
-        bio: 'Tech enthusiast & Digital Creator 🚀',
-        followers: 12500,
-        following: 340,
-        isInfluencer: true,
-        verified: true,
-    },
-    {
-        id: 'user-2',
-        username: 'carlos_fit',
-        displayName: 'Carlos Ruiz',
-        name: 'Carlos Ruiz',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
-        bio: 'Fitness coach | Lifestyle 💪',
-        followers: 8900,
-        following: 210,
-        isInfluencer: true,
-        verified: true,
-    },
-    {
-        id: 'user-3',
-        username: 'ana_chef',
-        displayName: 'Ana Martínez',
-        name: 'Ana Martínez',
-        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
-        bio: 'Chef profesional | Food blogger 🍳',
-        followers: 15200,
-        following: 189,
-        isInfluencer: true,
-        verified: true,
-    },
-    {
-        id: 'user-current',
-        username: 'tu_usuario',
-        displayName: 'Tu Nombre',
-        name: 'Tu Nombre',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400',
-        bio: 'Explorando el mundo digital ✨',
-        followers: 450,
-        following: 120,
-        isInfluencer: false,
-        verified: false,
-    },
-];
+// ---------------------------------------------------------------------------
+// Adapters — backend rows → frontend shapes.
+// ---------------------------------------------------------------------------
 
-const INITIAL_POSTS: Post[] = [
-    {
-        id: 'post-1',
-        userId: 'user-1',
-        user: MOCK_USERS[0],
-        content: '¡Acabo de probar el nuevo iPhone 15 Pro y es increíble! La cámara hace magia en condiciones de poca luz 📸✨',
-        type: 'text',
-        likes: 342,
-        comments: [],
-        retweets: 28,
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-        id: 'post-2',
-        userId: 'user-2',
-        user: MOCK_USERS[1],
-        content: '¿Cuál es tu momento favorito del día para entrenar?',
-        type: 'poll',
-        poll: {
-            id: 'poll-1',
-            options: [
-                { id: 'opt-1', text: 'Mañana temprano', votes: 145 },
-                { id: 'opt-2', text: 'Mediodía', votes: 42 },
-                { id: 'opt-3', text: 'Tarde/Noche', votes: 213 },
-                { id: 'opt-4', text: 'Cuando puedo', votes: 89 },
-            ],
-            totalVotes: 489,
-            endsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        },
-        likes: 156,
-        comments: [],
-        retweets: 12,
-        timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-        id: 'post-3',
-        userId: 'user-3',
-        user: MOCK_USERS[2],
-        content: 'Nueva receta en mi blog: Pasta carbonara auténtica italiana 🍝 Link en bio!',
-        type: 'image',
-        images: ['https://images.unsplash.com/photo-1612874742237-6526221588e3?w=800'],
-        likes: 892,
-        comments: [],
-        retweets: 45,
-        timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-        id: 'post-4',
-        userId: 'user-1',
-        user: MOCK_USERS[0],
-        content: 'Mis audífonos favoritos para trabajar desde casa. Súper cómodos y con cancelación de ruido increíble! 🎧',
-        type: 'commercial',
-        commercialProduct: {
-            id: '1',
-            name: 'Sony WH-1000XM5',
-            price: 349.99,
-            image: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=400',
-            commission: 15,
-            referralLink: '#',
-            type: 'product',
-            location: 'Tienda Online',
-            description: 'Audífonos de alta calidad con cancelación de ruido.',
-        },
-        likes: 567,
-        comments: [],
-        retweets: 34,
-        timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    },
-    // Adding fewer posts for brevity in this initial migration, but can add more
-];
+const adaptSocialUserToUser = (
+    row: any | null,
+    fallbackId: string,
+    fallbackName?: string,
+    fallbackAvatar?: string,
+): User => ({
+    id: row?.userId ?? fallbackId,
+    username: row?.username ?? 'usuario',
+    name: row?.displayName ?? fallbackName ?? 'Usuario',
+    displayName: row?.displayName ?? fallbackName ?? 'Usuario',
+    avatar: row?.avatar ?? fallbackAvatar ?? '',
+    bio: row?.bio ?? '',
+    followers: row?.followerCount ?? 0,
+    following: row?.followingCount ?? 0,
+    isInfluencer: Boolean(row?.isInfluencer),
+    verified: Boolean(row?.verified),
+});
 
-const INITIAL_INSTAGRAM: InstagramPost[] = [
-    {
-        id: 'ig-1',
-        userId: 'user-1',
-        image: 'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800',
-        caption: 'Workspace goals 💻✨',
-        likes: 1240,
-        comments: [],
-        timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-        id: 'ig-2',
-        userId: 'user-2',
-        image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800',
-        caption: 'Día de entrenamiento 💪',
-        likes: 890,
-        comments: [],
-        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-];
+const adaptPost = (row: any): Post => ({
+    id: row._id ?? row.id,
+    userId: row.authorUserId,
+    user: adaptSocialUserToUser(row.author, row.authorUserId),
+    content: row.content,
+    type: row.type,
+    images: row.images,
+    poll: row.poll
+        ? {
+            id: row._id,
+            options: row.poll.options,
+            totalVotes: row.poll.totalVotes,
+            endsAt: row.poll.endsAt,
+            userVoted: row.poll.voters?.find((v: any) => v.userId === row._currentUserId)?.optionId,
+        }
+        : undefined,
+    commercialProduct: row.commercialProduct
+        ? {
+            id: row.commercialProduct.listingId ?? row._id,
+            name: row.commercialProduct.name,
+            price: row.commercialProduct.price,
+            image: row.commercialProduct.image ?? '',
+            commission: row.commercialProduct.commission ?? 0,
+            referralLink: row.commercialProduct.referralLink ?? '',
+            type: (row.commercialProduct.type ?? 'product') as 'product' | 'bono' | 'event',
+            location: row.commercialProduct.location ?? '',
+            description: row.commercialProduct.description,
+        }
+        : undefined,
+    likes: row.likeCount ?? 0,
+    comments: [],
+    retweets: row.retweetCount ?? 0,
+    timestamp: row.createdAt ?? new Date().toISOString(),
+});
 
-const INITIAL_STORIES: Story[] = [
-    {
-        id: 'story-1',
-        userId: 'user-1',
-        user: MOCK_USERS[0],
-        items: [
+const adaptStoriesGroup = (group: any): Story => ({
+    id: `story-group-${group.author?._id ?? group.author?.userId ?? 'unknown'}`,
+    userId: group.author?.userId ?? '',
+    user: adaptSocialUserToUser(group.author, group.author?.userId ?? ''),
+    items: (group.stories ?? []).map((s: any) => ({
+        id: s._id,
+        type: s.type,
+        url: s.url,
+        duration: s.durationSec ?? 5,
+        timestamp: s.createdAt,
+        viewed: false,
+    })),
+    lastUpdated: (group.stories ?? []).slice(-1)[0]?.createdAt ?? new Date().toISOString(),
+});
+
+const adaptChat = (row: any, currentUserId: string): Chat => ({
+    id: row._id,
+    participants: row.participantIds ?? [],
+    // Messages are loaded lazily inside DirectMessages via `getChatMessages`.
+    // The chat list query only carries preview metadata.
+    messages: row.lastMessagePreview
+        ? [
             {
-                id: 's1-i1',
-                type: 'image',
-                url: 'https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800',
-                duration: 5,
-                timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-                viewed: false
+                id: `${row._id}-preview`,
+                senderId:
+                    row.participantIds?.find((p: string) => p !== currentUserId) ?? currentUserId,
+                text: row.lastMessagePreview,
+                timestamp: row.lastMessageAt,
+                read: (row.unreadCount ?? 0) === 0,
             },
-            {
-                id: 's1-i2',
-                type: 'image',
-                url: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800',
-                duration: 5,
-                timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-                viewed: false
-            }
-        ],
-        lastUpdated: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-        id: 'story-2',
-        userId: 'user-2',
-        user: MOCK_USERS[1],
-        items: [
-            {
-                id: 's2-i1',
-                type: 'image',
-                url: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800',
-                duration: 5,
-                timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-                viewed: false
-            }
-        ],
-        lastUpdated: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    },
-];
+        ]
+        : [],
+    lastUpdated: row.lastMessageAt,
+});
 
-const INITIAL_HIGHLIGHTS: HighlightedStory[] = [];
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
 
-// Mock Chats for Simulation
-const INITIAL_CHATS: Chat[] = [
-    {
-        id: 'chat-1',
-        participants: ['user-current', 'user-1'],
-        messages: [
-            { id: 'm1', senderId: 'user-1', text: '¡Hola! ¿Viste el nuevo post?', timestamp: new Date(Date.now() - 3600000).toISOString(), read: true }
-        ],
-        lastUpdated: new Date(Date.now() - 3600000).toISOString()
-    },
-    {
-        id: 'chat-2',
-        participants: ['user-current', 'user-2'],
-        messages: [
-            { id: 'm2', senderId: 'user-2', text: '¿Entrenamos mañana?', timestamp: new Date(Date.now() - 7200000).toISOString(), read: false }
-        ],
-        lastUpdated: new Date(Date.now() - 7200000).toISOString()
-    }
-];
+const EMPTY_TRENDING: TrendingTopic[] = [];
+const EMPTY_GROUPS: CommunityGroup[] = [];
+const EMPTY_HIGHLIGHTS: HighlightedStory[] = [];
+const EMPTY_INSTAGRAM: InstagramPost[] = [];
+const EMPTY_SAVED: string[] = [];
 
 export function SocialProvider({ children }: { children: ReactNode }) {
-    const [currentUser] = useState<User>(MOCK_USERS[3]);
-    const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
-    const [instagramPosts, setInstagramPosts] = useState<InstagramPost[]>(INITIAL_INSTAGRAM);
-    const [stories, setStories] = useState<Story[]>(INITIAL_STORIES);
-    const [highlightedStories, setHighlightedStories] = useState<HighlightedStory[]>(INITIAL_HIGHLIGHTS);
-    const [users] = useState<User[]>(MOCK_USERS);
-    const [following, setFollowing] = useState<string[]>([]);
-    const [trendingTopics] = useState<TrendingTopic[]>([
-        { tag: '#Tech', posts: 1500, color: '#007bff' },
-        { tag: '#Fitness', posts: 1200, color: '#ff6347' },
-        { tag: '#Food', posts: 1000, color: '#ff4500' },
-    ]);
-    const [suggestedUsers] = useState<SuggestedUser[]>([
-        { ...MOCK_USERS[0], followers: 12500 },
-        { ...MOCK_USERS[1], followers: 8900 },
-        { ...MOCK_USERS[2], followers: 15200 },
-    ]);
-    const [communityGroups, setCommunityGroups] = useState<CommunityGroup[]>([
-        {
-            id: 'group-1',
-            name: 'Tech Enthusiasts',
-            members: '5000',
-            image: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=400',
-            category: 'Tech',
-            color: '#007bff',
-            description: 'Un grupo para entusiastas de tecnología.',
-            joined: false,
-        },
-        {
-            id: 'group-2',
-            name: 'Fitness Lovers',
-            members: '4000',
-            image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400',
-            category: 'Fitness',
-            color: '#ff6347',
-            description: 'Un grupo para amantes del fitness.',
-            joined: false,
-        },
-    ]);
-    const [savedPosts, setSavedPosts] = useState<string[]>([]);
-    const [chats, setChats] = useState<Chat[]>([]);
+    const { user: authUser } = useAuth();
+    const actorId = authUser?.id as any;
 
-    // Persistence Logic
-    useEffect(() => {
-        loadSocialData();
-    }, []);
+    // Reactive queries.
+    const profileRow = useQuery(
+        api.social.lookupUserSocial,
+        authUser ? { actorId, userId: authUser.id as any } : 'skip',
+    );
+    const feedResult = useQuery(api.social.getFeed, authUser ? { actorId, limit: 50 } : 'skip');
+    const storiesGroups = useQuery(
+        api.social.getStoriesForFollowing,
+        authUser ? { actorId } : 'skip',
+    );
+    const chatsRows = useQuery(api.social.getMyChats, authUser ? { actorId } : 'skip');
+    const followingRows = useQuery(
+        api.social.getFollowing,
+        authUser ? { actorId, userId: authUser.id as any } : 'skip',
+    );
 
-    useEffect(() => {
-        saveSocialData();
-    }, [posts, chats, savedPosts]);
+    // Mutations.
+    const createPostMut = useMutation(api.social.createPost);
+    const deletePostMut = useMutation(api.social.deletePost);
+    const votePollMut = useMutation(api.social.votePoll);
+    const toggleLikeMut = useMutation(api.social.toggleLike);
+    const followMut = useMutation(api.social.follow);
+    const unfollowMut = useMutation(api.social.unfollow);
+    const addCommentMut = useMutation(api.social.addComment);
+    const createStoryMut = useMutation(api.social.createStory);
+    const viewStoryMut = useMutation(api.social.viewStory);
+    const createChatMut = useMutation(api.social.createChat);
+    const sendDirectMessageMut = useMutation(api.social.sendDirectMessage);
+    const upsertProfileMut = useMutation(api.social.upsertSocialProfile);
 
-    const loadSocialData = async () => {
-        try {
-            const storedPosts = await AsyncStorage.getItem('social_posts');
-            const storedChats = await AsyncStorage.getItem('social_chats');
-            const storedSaved = await AsyncStorage.getItem('social_saved');
+    // ---- Derived state for the legacy API surface ---------------------
 
-            if (storedPosts) {
-                // Merge stored comments into initial posts if needed, or just replace if we want full persistence
-                // For this migration, we'll try to merge comments if IDs match, or just use stored posts if they're dynamic
-                // A simple approach for now: if we have stored posts, use them, but maybe re-inject mock users if lost?
-                // Actually, let's just parse.
-                setPosts(JSON.parse(storedPosts));
-            }
-            if (storedChats) {
-                setChats(JSON.parse(storedChats));
-            } else {
-                // Initialize Mock Chats if first time
-                setChats(INITIAL_CHATS);
-            }
-            if (storedSaved) setSavedPosts(JSON.parse(storedSaved));
-        } catch (e) {
-            console.error("Failed to load social data", e);
+    const currentUser: User = useMemo(
+        () =>
+            adaptSocialUserToUser(
+                profileRow,
+                authUser?.id ?? 'guest',
+                authUser?.name,
+                authUser?.avatar,
+            ),
+        [profileRow, authUser],
+    );
+
+    // Lazy-create a social profile on first sign-in so the user has a
+    // username and the feed adapters can hydrate the author block.
+    React.useEffect(() => {
+        if (authUser && profileRow === null) {
+            upsertProfileMut({
+                actorId,
+                displayName: authUser.name ?? 'Usuario',
+                avatar: authUser.avatar,
+            }).catch((err) => console.warn('[social] upsertProfile failed', err));
         }
-    };
+    }, [authUser, profileRow, upsertProfileMut, actorId]);
 
-    const saveSocialData = async () => {
-        try {
-            await AsyncStorage.setItem('social_posts', JSON.stringify(posts));
-            await AsyncStorage.setItem('social_chats', JSON.stringify(chats));
-            await AsyncStorage.setItem('social_saved', JSON.stringify(savedPosts));
-        } catch (e) {
-            console.error("Failed to save social data", e);
-        }
-    };
+    const posts: Post[] = useMemo(
+        () => (feedResult?.items ?? []).map(adaptPost),
+        [feedResult],
+    );
 
-    // Removed localStorage effects for React Native consistency
+    const instagramPosts: InstagramPost[] = EMPTY_INSTAGRAM;
 
-    const createPost = (content: string, type: 'text' | 'image' | 'poll' | 'commercial', data?: any) => {
-        const newPost: Post = {
-            id: `post-${Date.now()}`,
-            userId: currentUser.id,
-            user: currentUser,
-            content,
+    const stories: Story[] = useMemo(
+        () => (storiesGroups ?? []).map(adaptStoriesGroup),
+        [storiesGroups],
+    );
+
+    const chats: Chat[] = useMemo(
+        () => (chatsRows ?? []).map((c: any) => adaptChat(c, currentUser.id)),
+        [chatsRows, currentUser.id],
+    );
+
+    const followingIds: string[] = useMemo(
+        () => (followingRows ?? []).map((r: any) => r.followeeUserId),
+        [followingRows],
+    );
+
+    // Cache of users we've encountered (for `getUserById`).
+    const userCache = useMemo(() => {
+        const map = new Map<string, User>();
+        if (currentUser.id) map.set(currentUser.id, currentUser);
+        for (const post of posts) map.set(post.userId, post.user);
+        for (const story of stories) map.set(story.userId, story.user);
+        return map;
+    }, [currentUser, posts, stories]);
+
+    // ---- Mutations / actions ------------------------------------------
+
+    const createPost = (
+        content: string,
+        type: 'text' | 'image' | 'poll' | 'commercial',
+        data?: any,
+    ) => {
+        if (!authUser) return;
+        createPostMut({
+            actorId,
             type,
+            content,
             images: type === 'image' ? data?.images : undefined,
-            poll: type === 'poll' ? data?.poll : undefined,
-            commercialProduct: type === 'commercial' ? data?.product : undefined,
-            likes: 0,
-            comments: [],
-            retweets: 0,
-            timestamp: new Date().toISOString(),
-        };
-
-        setPosts((prev) => [newPost, ...prev]);
+            poll: type === 'poll' && data?.poll
+                ? {
+                    options: (data.poll.options ?? []).map((o: any) => ({
+                        id: o.id,
+                        text: o.text,
+                    })),
+                    durationHours: data.poll.durationHours,
+                }
+                : undefined,
+            commercialProduct: type === 'commercial' && data?.product
+                ? {
+                    listingId: data.product.id,
+                    name: data.product.name,
+                    price: data.product.price,
+                    image: data.product.image,
+                    commission: data.product.commission,
+                    referralLink: data.product.referralLink,
+                    type: data.product.type,
+                    location: data.product.location,
+                    description: data.product.description,
+                }
+                : undefined,
+        }).catch((err) => console.warn('[social] createPost failed', err));
     };
 
+    // Instagram-style posts collapse to type='image'.
     const createInstagramPost = (image: string, caption: string) => {
-        const newPost: InstagramPost = {
-            id: `ig-${Date.now()}`,
-            userId: currentUser.id,
-            image,
-            caption,
-            likes: 0,
-            comments: [],
-            timestamp: new Date().toISOString(),
-        };
-
-        setInstagramPosts((prev) => [newPost, ...prev]);
+        createPost(caption, 'image', { images: [image] });
     };
 
     const createStory = (image: string) => {
-        const newItem: StoryItem = {
-            id: `story-item-${Date.now()}`,
-            type: 'image',
-            url: image,
-            duration: 5,
-            timestamp: new Date().toISOString(),
-            viewed: false
-        };
-
-        setStories((prev) => {
-            const existingStoryIndex = prev.findIndex(s => s.userId === currentUser.id);
-            if (existingStoryIndex >= 0) {
-                const updatedStories = [...prev];
-                updatedStories[existingStoryIndex] = {
-                    ...updatedStories[existingStoryIndex],
-                    items: [...updatedStories[existingStoryIndex].items, newItem],
-                    lastUpdated: new Date().toISOString()
-                };
-                return updatedStories;
-            } else {
-                return [{
-                    id: `story-${Date.now()}`,
-                    userId: currentUser.id,
-                    user: currentUser,
-                    items: [newItem],
-                    lastUpdated: new Date().toISOString()
-                }, ...prev];
-            }
-        });
+        if (!authUser) return;
+        createStoryMut({ actorId, type: 'image', url: image }).catch((err) =>
+            console.warn('[social] createStory failed', err),
+        );
     };
 
-    const createHighlight = (title: string, storyIds: string[]) => {
-        const newHighlight: HighlightedStory = {
-            id: `highlight-${Date.now()}`,
-            userId: currentUser.id,
-            title,
-            coverImage: storyIds.length > 0
-                ? (stories.find((s) => s.id === storyIds[0])?.items[0]?.url || '')
-                : '',
-            stories: storyIds.map((id) => stories.find((s) => s.id === id) as Story),
-        };
-
-        setHighlightedStories((prev) => [newHighlight, ...prev]);
+    // Highlights are NOT persisted in v1 — UI placeholder.
+    const createHighlight = (_title: string, _storyIds: string[]) => {
+        console.warn('[social] highlights not persisted in v1');
     };
 
     const likePost = (postId: string) => {
-        setPosts((prev) =>
-            prev.map((post) => {
-                if (post.id === postId) {
-                    const isLiked = post.likedByUser;
-                    return {
-                        ...post,
-                        likes: isLiked ? post.likes - 1 : post.likes + 1,
-                        likedByUser: !isLiked,
-                    };
-                }
-                return post;
-            })
+        if (!authUser) return;
+        toggleLikeMut({ actorId, targetType: 'post', targetId: postId }).catch((err) =>
+            console.warn('[social] likePost failed', err),
         );
     };
 
-    const retweetPost = (postId: string) => {
-        setPosts((prev) =>
-            prev.map((post) => {
-                if (post.id === postId) {
-                    const isRetweeted = post.retweetedByUser;
-                    return {
-                        ...post,
-                        retweets: isRetweeted ? post.retweets - 1 : post.retweets + 1,
-                        retweetedByUser: !isRetweeted,
-                    };
-                }
-                return post;
-            })
-        );
+    // Retweet is currently not persisted (no backing table). Kept as no-op
+    // so the UI doesn't throw — TODO add `socialReposts` if product wants it.
+    const retweetPost = (_postId: string) => {
+        console.warn('[social] retweet not persisted in v1');
     };
 
     const voteOnPoll = (postId: string, optionId: string) => {
-        setPosts((prev) =>
-            prev.map((post) => {
-                if (post.id === postId && post.poll && !post.poll.userVoted) {
-                    return {
-                        ...post,
-                        poll: {
-                            ...post.poll,
-                            options: post.poll.options.map((opt) =>
-                                opt.id === optionId ? { ...opt, votes: opt.votes + 1 } : opt
-                            ),
-                            totalVotes: post.poll.totalVotes + 1,
-                            userVoted: optionId,
-                        },
-                    };
-                }
-                return post;
-            })
+        if (!authUser) return;
+        votePollMut({ actorId, postId: postId as any, optionId }).catch((err) =>
+            console.warn('[social] voteOnPoll failed', err),
         );
     };
 
-    const likeInstagramPost = (postId: string) => {
-        setInstagramPosts((prev) =>
-            prev.map((post) => {
-                if (post.id === postId) {
-                    const isLiked = post.likedByUser;
-                    return {
-                        ...post,
-                        likes: isLiked ? post.likes - 1 : post.likes + 1,
-                        likedByUser: !isLiked,
-                    };
-                }
-                return post;
-            })
-        );
-    };
+    const likeInstagramPost = (postId: string) => likePost(postId);
 
     const followUser = (userId: string) => {
-        setFollowing((prev) => [...prev, userId]);
+        if (!authUser) return;
+        followMut({ actorId, targetUserId: userId }).catch((err) =>
+            console.warn('[social] follow failed', err),
+        );
     };
 
     const unfollowUser = (userId: string) => {
-        setFollowing((prev) => prev.filter((id) => id !== userId));
+        if (!authUser) return;
+        unfollowMut({ actorId, targetUserId: userId }).catch((err) =>
+            console.warn('[social] unfollow failed', err),
+        );
     };
 
-    const isFollowing = (userId: string) => {
-        return following.includes(userId);
+    const isFollowing = (userId: string) => followingIds.includes(userId);
+
+    const getUserById = (userId: string) => userCache.get(userId);
+
+    const getPostsByUser = (userId: string) => posts.filter((p) => p.userId === userId);
+
+    const getInstagramPostsByUser = (_userId: string): InstagramPost[] => EMPTY_INSTAGRAM;
+
+    const getHighlightsByUser = (_userId: string): HighlightedStory[] => EMPTY_HIGHLIGHTS;
+
+    const addComment = (postId: string, content: string, _isInstagram?: boolean) => {
+        if (!authUser) return;
+        addCommentMut({ actorId, postId: postId as any, content }).catch((err) =>
+            console.warn('[social] addComment failed', err),
+        );
     };
 
-    const getUserById = (userId: string) => {
-        return users.find((u) => u.id === userId);
+    const deleteComment = (_postId: string, _commentId: string, _isInstagram?: boolean) => {
+        // Delete is wired through the comments modal which calls api.social.deleteComment directly.
+        console.warn('[social] deleteComment via context is deprecated — use api.social.deleteComment.');
     };
 
-    const getPostsByUser = (userId: string) => {
-        return posts.filter((p) => p.userId === userId);
+    const likeComment = (_postId: string, commentId: string, _isInstagram?: boolean) => {
+        if (!authUser) return;
+        toggleLikeMut({ actorId, targetType: 'comment', targetId: commentId }).catch((err) =>
+            console.warn('[social] likeComment failed', err),
+        );
     };
 
-    const getInstagramPostsByUser = (userId: string) => {
-        return instagramPosts.filter((p) => p.userId === userId);
+    // searchUsers is synchronous in the legacy API but our backend is async.
+    // Components that need a real search should use `api.social.searchUsers`
+    // via `useQuery` directly. Here we match against the locally cached set.
+    const searchUsers = (q: string): User[] => {
+        if (!q.trim()) return [];
+        const lowered = q.toLowerCase();
+        return Array.from(userCache.values()).filter(
+            (u) =>
+                u.username.toLowerCase().includes(lowered) ||
+                u.displayName.toLowerCase().includes(lowered),
+        );
     };
 
-    const getHighlightsByUser = (userId: string) => {
-        return highlightedStories.filter((h) => h.userId === userId);
+    const viewStory = (_storyId: string) => {
+        // No-op: the StoryViewer calls markStoryAsViewed per item.
     };
 
-    const addComment = (postId: string, content: string, isInstagram?: boolean) => {
-        const newComment: Comment = {
-            id: `comment-${Date.now()}`,
-            userId: currentUser.id,
-            user: currentUser,
-            content,
-            timestamp: new Date().toISOString(),
-            likes: 0,
-        };
+    const markStoryAsViewed = (_storyId: string, itemId: string) => {
+        if (!authUser) return;
+        viewStoryMut({ actorId, storyId: itemId as any }).catch((err) =>
+            console.warn('[social] viewStory failed', err),
+        );
+    };
 
-        if (isInstagram) {
-            setInstagramPosts((prev) =>
-                prev.map((post) => {
-                    if (post.id === postId) {
-                        return {
-                            ...post,
-                            comments: [...post.comments, newComment],
-                        };
-                    }
-                    return post;
-                })
-            );
-        } else {
-            setPosts((prev) =>
-                prev.map((post) => {
-                    if (post.id === postId) {
-                        return {
-                            ...post,
-                            comments: [...post.comments, newComment],
-                        };
-                    }
-                    return post;
-                })
-            );
+    const likeStory = async (_storyId: string, itemId: string) => {
+        if (!authUser) return;
+        try {
+            await toggleLikeMut({ actorId, targetType: 'story', targetId: itemId });
+        } catch (err) {
+            console.warn('[social] likeStory failed', err);
         }
     };
 
-    const deleteComment = (postId: string, commentId: string, isInstagram?: boolean) => {
-        // Basic impl
+    const replyToStory = async (storyId: string, _itemId: string, message: string) => {
+        if (!authUser) return;
+        try {
+            // Resolve story author → DM them the reply.
+            const story = stories.find((s) => s.items.some((i) => i.id === storyId)) ??
+                stories.find((s) => s.id === storyId);
+            const targetUserId = story?.userId;
+            if (!targetUserId) {
+                console.warn('[social] replyToStory: target user not resolved');
+                return;
+            }
+            const chatId = await createChatMut({ actorId, participantId: targetUserId });
+            await sendDirectMessageMut({ actorId, chatId: chatId as any, body: message });
+        } catch (err) {
+            console.warn('[social] replyToStory failed', err);
+        }
     };
 
-    const likeComment = (postId: string, commentId: string, isInstagram?: boolean) => {
-        // Basic impl
-    };
-
-    const searchUsers = (query: string) => {
-        return users.filter((u) =>
-            u.username.toLowerCase().includes(query.toLowerCase()) ||
-            u.displayName.toLowerCase().includes(query.toLowerCase())
-        );
-    };
-
-    const viewStory = (storyId: string) => {
-        // Legacy support or simplified view. 
-        // Ideally we need viewStoryItem(storyId, itemId)
-        // For now, let's just assume this means "mark all as viewed" or update signature.
-        // Let's update signature to support itemId if passed, but for now just leave as is to avoid breaking too many things
-        // Actually, let's implement markAsViewed properly in the Viewer component using a new function or updating this one.
-        // I will change this to accept itemId optionally or just rely on the viewer logic knowing what to do.
-        // Correct approach: viewStory(storyId, itemId)
-    };
-
-    const markStoryAsViewed = (storyId: string, itemId: string) => {
-        setStories((prev) =>
-            prev.map((story) => {
-                if (story.id === storyId) {
-                    return {
-                        ...story,
-                        items: story.items.map(item =>
-                            item.id === itemId ? { ...item, viewed: true } : item
-                        )
-                    };
+    const shareStory = async (storyId: string, itemId: string) => {
+        try {
+            const story = stories.find((s) => s.items.some((i) => i.id === itemId)) ??
+                stories.find((s) => s.id === storyId);
+            const item = story?.items.find((i) => i.id === itemId);
+            if (!item?.url) return;
+            try {
+                const Sharing = await import('expo-sharing');
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(item.url);
                 }
-                return story;
-            })
-        );
+            } catch (e) {
+                console.warn('[social] expo-sharing not available', e);
+            }
+        } catch (err) {
+            console.warn('[social] shareStory failed', err);
+        }
     };
 
-    const likeStory = (storyId: string, itemId: string) => {
-        console.log(`Liked story ${storyId} item ${itemId}`);
-        // TODO: Implement backend call
+    const getCommercialItemsByUser = (userId: string): CommercialProduct[] =>
+        posts
+            .filter((p) => p.userId === userId && p.type === 'commercial' && p.commercialProduct)
+            .map((p) => p.commercialProduct as CommercialProduct);
+
+    // savedPosts not yet persisted — kept as in-memory until v1.1.
+    const [savedPostsState, setSavedPostsState] = React.useState<string[]>(EMPTY_SAVED);
+    const savePost = (postId: string) => setSavedPostsState((prev) => [...prev, postId]);
+    const unsavePost = (postId: string) => setSavedPostsState((prev) => prev.filter((id) => id !== postId));
+    const isPostSaved = (postId: string) => savedPostsState.includes(postId);
+
+    const joinGroup = (_groupId: string) => {
+        console.warn('[social] groups not persisted in v1');
+    };
+    const leaveGroup = (_groupId: string) => {
+        console.warn('[social] groups not persisted in v1');
     };
 
-    const replyToStory = (storyId: string, itemId: string, message: string) => {
-        console.log(`Reply to story ${storyId} item ${itemId}: ${message}`);
-        // TODO: Implement backend call
-    };
-
-    const shareStory = (storyId: string, itemId: string) => {
-        console.log(`Share story ${storyId} item ${itemId}`);
-        // TODO: Implement share sheet
-    };
-
-    const getCommercialItemsByUser = (userId: string): CommercialProduct[] => {
-        const userCommercialPosts = posts.filter(
-            (p) => p.userId === userId && p.type === 'commercial' && p.commercialProduct
-        );
-        return userCommercialPosts
-            .map((p) => p.commercialProduct)
-            .filter((item): item is CommercialProduct => item !== undefined);
-    };
-
-    const savePost = (postId: string) => {
-        setSavedPosts((prev) => [...prev, postId]);
-    };
-
-    const unsavePost = (postId: string) => {
-        setSavedPosts((prev) => prev.filter((id) => id !== postId));
-    };
-
-    const isPostSaved = (postId: string) => {
-        return savedPosts.includes(postId);
-    };
-
-    const joinGroup = (groupId: string) => {
-        setCommunityGroups((prev) =>
-            prev.map((group) => {
-                if (group.id === groupId) {
-                    return {
-                        ...group,
-                        joined: true,
-                    };
-                }
-                return group;
-            })
-        );
-    };
-
-    const leaveGroup = (groupId: string) => {
-        setCommunityGroups((prev) =>
-            prev.map((group) => {
-                if (group.id === groupId) {
-                    return {
-                        ...group,
-                        joined: false,
-                    };
-                }
-                return group;
-            })
-        );
-    };
-
-    const getPostsByTopic = (topic: string) => {
-        return posts.filter((p) => p.content.toLowerCase().includes(topic.toLowerCase()));
-    };
-
-    // Chat Implementation
-    const createChat = (participantId: string) => {
-        // Check existing
-        const existing = chats.find(c => c.participants.includes(participantId) && c.participants.includes(currentUser.id));
-        if (existing) return existing.id;
-
-        const newChat: Chat = {
-            id: `chat-${Date.now()}`,
-            participants: [currentUser.id, participantId],
-            messages: [],
-            lastUpdated: new Date().toISOString()
-        };
-        setChats(prev => [newChat, ...prev]);
-        return newChat.id;
-    };
+    const getPostsByTopic = (topic: string) =>
+        posts.filter((p) => p.content.toLowerCase().includes(topic.toLowerCase()));
 
     const sendMessage = (chatId: string, text: string) => {
-        const newMessage: Message = {
-            id: `msg-${Date.now()}`,
-            senderId: currentUser.id,
-            text,
-            timestamp: new Date().toISOString(),
-            read: false
-        };
-
-        setChats(prev => prev.map(chat => {
-            if (chat.id === chatId) {
-                return {
-                    ...chat,
-                    messages: [...chat.messages, newMessage],
-                    lastUpdated: new Date().toISOString()
-                };
-            }
-            return chat;
-        }));
+        if (!authUser) return;
+        sendDirectMessageMut({ actorId, chatId: chatId as any, body: text }).catch((err) =>
+            console.warn('[social] sendMessage failed', err),
+        );
     };
 
-    const getFollowers = (userId: string) => {
-        // Mock: everyone follows everyone for demo, or random
-        // For current user, we don't track followers list in state yet, assuming mock.
-        return users.filter(u => u.id !== userId);
+    const createChat = async (participantId: string): Promise<string> => {
+        if (!authUser) throw new Error('No autenticado.');
+        const id = await createChatMut({ actorId, participantId });
+        return String(id);
     };
 
-    const getFollowing = (userId: string) => {
+    const getFollowers = (_userId: string): User[] => {
+        // Lightweight: list resolved via `api.social.getFollowers` query in
+        // dedicated screens. The legacy sync API only had mock data.
+        return [];
+    };
+
+    const getFollowing = (userId: string): User[] => {
         if (userId === currentUser.id) {
-            return users.filter(u => following.includes(u.id));
+            return followingIds
+                .map((id) => userCache.get(id))
+                .filter(Boolean) as User[];
         }
-        // Mock for others
-        return users.filter(u => u.id !== userId).slice(0, 2);
+        return [];
     };
 
-    return (
-        <SocialContext.Provider
-            value={{
-                currentUser,
-                posts,
-                instagramPosts,
-                stories,
-                highlightedStories,
-                users,
-                following,
-                trendingTopics,
-                suggestedUsers,
-                communityGroups,
-                savedPosts,
-                createPost,
-                createInstagramPost,
-                createStory,
-                createHighlight,
-                likePost,
-                retweetPost,
-                voteOnPoll,
-                likeInstagramPost,
-                followUser,
-                unfollowUser,
-                isFollowing,
-                getUserById,
-                getPostsByUser,
-                getInstagramPostsByUser,
-                getHighlightsByUser,
-                addComment,
-                deleteComment,
-                likeComment,
-                searchUsers,
-                viewStory,
-                markStoryAsViewed,
-                likeStory,
-                replyToStory,
-                shareStory,
-                getCommercialItemsByUser,
-                savePost,
-                unsavePost,
-                isPostSaved,
-                joinGroup,
-                leaveGroup,
-                getPostsByTopic,
-                chats,
-                sendMessage,
-                createChat,
-                getFollowers,
-                getFollowing,
-            }}
-        >
-            {children}
-        </SocialContext.Provider>
-    );
+    const value: SocialContextType = {
+        currentUser,
+        posts,
+        instagramPosts,
+        stories,
+        highlightedStories: EMPTY_HIGHLIGHTS,
+        users: Array.from(userCache.values()),
+        following: followingIds,
+        trendingTopics: EMPTY_TRENDING,
+        suggestedUsers: [],
+        communityGroups: EMPTY_GROUPS,
+        savedPosts: savedPostsState,
+        createPost,
+        createInstagramPost,
+        createStory,
+        createHighlight,
+        likePost,
+        retweetPost,
+        voteOnPoll,
+        likeInstagramPost,
+        followUser,
+        unfollowUser,
+        isFollowing,
+        getUserById,
+        getPostsByUser,
+        getInstagramPostsByUser,
+        getHighlightsByUser,
+        addComment,
+        deleteComment,
+        likeComment,
+        searchUsers,
+        viewStory,
+        markStoryAsViewed,
+        likeStory,
+        replyToStory,
+        shareStory,
+        getCommercialItemsByUser,
+        savePost,
+        unsavePost,
+        isPostSaved,
+        joinGroup,
+        leaveGroup,
+        getPostsByTopic,
+        chats,
+        sendMessage,
+        createChat,
+        getFollowers,
+        getFollowing,
+    };
+
+    // Side-effect: useless reference to deletePostMut to keep linter happy
+    // until UI surfaces a delete button.
+    void deletePostMut;
+
+    return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;
 }
 
 export function useSocial() {

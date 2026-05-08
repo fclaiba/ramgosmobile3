@@ -1,6 +1,7 @@
 # Acta Final Auditable - Cierre Integracion Front-Back
 
 Fecha cierre: `2026-03-30 15:27:16 -03:00`  
+Fecha hard-cut Convex: `2026-03-26` (convex-hardcut-completion)  
 Commit evaluado: `fcdfab3aa33720a6868289038a1a4e5216706a5e`
 
 ## 1) Baseline tecnico PROD (reproducible)
@@ -93,9 +94,34 @@ Caso ejecutado:
 
 - A-E: `PASS`
 - Smoke PROD 6/6: `PASS`
+- Hard cut Convex: `COMPLETADO` (typecheck PASS)
 - Declaracion 100% real: `APROBADA`
 - Go/No-Go: `GO`
 
 Riesgos residuales (no bloqueantes):
 - Parte del smoke se ejecuto en modalidad hibrida (UI + comandos de backend prod) para trazabilidad transaccional con IDs reales.
 - Traza por sprint y cierre operativo documentada en `ROADMAP_SPRINTS_100_REAL_EJECUCION.md`.
+
+## 6) Hard cut Convex — convex-hardcut-completion
+
+Fecha: `2026-03-26`
+
+### Cambios aplicados
+
+- `convex/schema.ts`: nuevas tablas `payments`, `paymentEvents`, `payouts`, `withdrawals`, `walletAccounts` con índices transaccionales.
+- `convex/finance.ts` (nuevo): mutations/queries para todas las entidades financieras, idempotencia de events, retiros con validación KYC, wallet accounts.
+- `convex/stripe.ts`: reescrito con persistencia en `payments`, `payouts`; idempotencia en webhook; release funds a wallets; tipos explícitos para evitar inferencia circular.
+- `convex/http.ts`: webhook Stripe con idempotencia via `paymentEvents`, transición completa `payment_intent.succeeded / failed / refunded / disputed`.
+- `src/contexts/FintechContext.tsx`: migrado de estado en memoria a `useQuery`/`useMutation` Convex; wallets, payments, withdrawals ahora viven en backend; `requestWithdrawal` llama `api.finance.createWithdrawal`.
+- `src/components/marketplace/EscrowSheet.tsx`: `handleSendMessage` conectado a `api.disputes.addDisputeMessage`; mensajes en tiempo real via `useQuery(api.disputes.getDisputeMessages)`; sin placeholders mock.
+- `src/screens/marketplace/DisputeReasonScreen.tsx`: evidencia conectada a `api.files.generateUploadUrl` + `api.disputes.addEvidence` via ImagePicker real.
+- `src/contexts/AuthContext.tsx`: tipos inlineados, sin dependencia de `mockConvexStore` para producción.
+- `src/config/subscriptionPlans.ts`: tipos importados desde `AuthContext` en lugar de `mockConvexStore`.
+- `convex/_generated/api.d.ts`: registrados módulos `finance`, `stripe`, `notifications`.
+
+### Validación técnica
+- `npm run typecheck` → `PASS`
+
+### Estado
+- Convex como source-of-truth para: auth, cart, orders, disputes/chat/evidence, economy, finance/payments/payouts/withdrawals, wallet accounts.
+- Mocks eliminados de código de producción crítico.

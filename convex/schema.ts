@@ -14,6 +14,7 @@ export default defineSchema({
         joinedAt: v.string(),
         tier: v.optional(v.string()), // 'Bronze', 'Silver', 'Gold', etc.
         subscriptionStatus: v.optional(v.string()), // 'active', 'inactive'
+        subscriptionTier: v.optional(v.union(v.literal('free'), v.literal('pro'), v.literal('business'))),
         balance: v.optional(v.number()), // Wallet balance in USD
         isTest: v.optional(v.boolean()), // Flag for test users able to be impersonated
         termsAcceptedVersion: v.optional(v.number()), // Version of T&C accepted
@@ -50,7 +51,15 @@ export default defineSchema({
         totalOrders: v.optional(v.number()),
         lastActiveAt: v.optional(v.string()), // Kept only one instance
         followerCount: v.optional(v.number()), // For Influencer metrics
-    }).index("by_email", ["email"]).index("by_uid", ["uid"]).index("by_tokenIdentifier", ["tokenIdentifier"]),
+
+        // Influencer attribution: short, unique, shareable code that maps
+        // back to this user. Resolved server-side at PaymentIntent time.
+        referralCode: v.optional(v.string()),
+    })
+        .index("by_email", ["email"])
+        .index("by_uid", ["uid"])
+        .index("by_tokenIdentifier", ["tokenIdentifier"])
+        .index("by_referral_code", ["referralCode"]),
 
     audit_logs: defineTable({
         actorUserId: v.string(),
@@ -127,6 +136,10 @@ export default defineSchema({
         eventDate: v.optional(v.string()), // ISO
         eventTime: v.optional(v.string()),
         validUntil: v.optional(v.string()), // ISO for bonos
+        // Event-only: total capacity and atomically-decremented soldCount.
+        // We update soldCount transactionally inside `events.holdEventCapacity`.
+        eventCapacity: v.optional(v.number()),
+        eventSoldCount: v.optional(v.number()),
         discountValue: v.optional(v.number()),
         condition: v.optional(v.string()), // 'new' | 'used'
         discountType: v.optional(v.string()), // 'percentage' | 'fixed'
@@ -139,6 +152,14 @@ export default defineSchema({
         // PHASE 2: Aggregated Rating
         averageRating: v.optional(v.number()),
         reviewCount: v.optional(v.number()),
+
+        // Open promotion — when true, ANY influencer can promote this
+        // listing without an explicit campaign with the seller. The
+        // commission rate is taken from `openCommissionRate` (0–0.5).
+        // Only valid for listings whose seller has role='business'; the
+        // PaymentIntent validator enforces that server-side.
+        openPromotion: v.optional(v.boolean()),
+        openCommissionRate: v.optional(v.number()),
 
         createdAt: v.string(),
         updatedAt: v.optional(v.string()), // PHASE 2
@@ -319,7 +340,7 @@ export default defineSchema({
             price: v.number(),
             image: v.optional(v.string()),
             sellerId: v.optional(v.string()),
-            type: v.optional(v.union(v.literal('product'), v.literal('bono'), v.literal('event'), v.literal('subscription'))),
+            type: v.optional(v.union(v.literal('product'), v.literal('service'), v.literal('bono'), v.literal('event'), v.literal('subscription'))),
             subscriptionTier: v.optional(v.union(v.literal('pro'), v.literal('business'))),
             location: v.optional(v.string()),
             sellerName: v.optional(v.string()),
@@ -378,4 +399,493 @@ export default defineSchema({
         claimedAt: v.string(),
     }).index("by_user", ["userId"])
         .index("by_user_claim", ["userId", "claimKey"]),
+
+    // FINANCIAL TABLES — persistent source-of-truth for payments, payouts, withdrawals, wallets
+
+    payments: defineTable({
+        orderId: v.optional(v.string()),
+        userId: v.string(), // buyer
+        sellerId: v.optional(v.string()),
+        stripePaymentIntentId: v.optional(v.string()),
+        provider: v.string(), // 'stripe' | 'mercadopago' | 'points'
+        providerFee: v.number(),
+        amount: v.number(),
+        currency: v.literal('USD'),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('succeeded'),
+            v.literal('failed'),
+            v.literal('refunded'),
+            v.literal('disputed'),
+        ),
+        sellerNet: v.number(),
+        ramgosCommission: v.number(),
+        influencerId: v.optional(v.string()),
+        influencerAmount: v.number(),
+        commissionRate: v.number(),
+        influencerRate: v.number(),
+        paymentMethodBrand: v.optional(v.string()),
+        paymentMethodLast4: v.optional(v.string()),
+        description: v.optional(v.string()),
+        metadata: v.optional(v.any()),
+        createdAt: v.string(),
+        settledAt: v.optional(v.string()),
+    }).index("by_user", ["userId"])
+        .index("by_order", ["orderId"])
+        .index("by_seller", ["sellerId"])
+        .index("by_stripe_intent", ["stripePaymentIntentId"])
+        .index("by_status", ["status"]),
+
+    paymentEvents: defineTable({
+        stripeEventId: v.string(),
+        eventType: v.string(),
+        processed: v.boolean(),
+        payload: v.optional(v.any()),
+        error: v.optional(v.string()),
+        processedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    }).index("by_stripe_event", ["stripeEventId"]),
+
+    payouts: defineTable({
+        paymentId: v.optional(v.string()),
+        sellerId: v.string(),
+        stripeTransferId: v.optional(v.string()),
+        destinationAccountId: v.optional(v.string()),
+        amountInCents: v.number(),
+        currency: v.literal('USD'),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('processing'),
+            v.literal('completed'),
+            v.literal('failed'),
+        ),
+        scheduledAt: v.optional(v.string()),
+        executedAt: v.optional(v.string()),
+        error: v.optional(v.string()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    }).index("by_seller", ["sellerId"])
+        .index("by_status", ["status"])
+        .index("by_payment", ["paymentId"])
+        .index("by_stripe_transfer", ["stripeTransferId"]),
+
+    withdrawals: defineTable({
+        userId: v.string(),
+        amount: v.number(),
+        currency: v.literal('USD'),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('processing'),
+            v.literal('approved'),
+            v.literal('rejected'),
+        ),
+        destinationType: v.union(v.literal('bank'), v.literal('wallet')),
+        destinationLabel: v.string(),
+        notes: v.optional(v.string()),
+        metadata: v.optional(v.any()),
+        processedAt: v.optional(v.string()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    }).index("by_user", ["userId"])
+        .index("by_status", ["status"]),
+
+    walletAccounts: defineTable({
+        userId: v.string(),
+        ownerType: v.union(
+            v.literal('ramgos'),
+            v.literal('business'),
+            v.literal('influencer'),
+            v.literal('consumer'),
+        ),
+        ownerName: v.string(),
+        currency: v.literal('USD'),
+        balanceAvailable: v.number(),
+        balancePending: v.number(),
+        balanceReserved: v.number(),
+        lastUpdatedAt: v.string(),
+    }).index("by_user", ["userId"]),
+
+    // Influencer campaigns — first-class table replacing the legacy
+    // client-side WalletContext mock. Models the bidirectional
+    // influencer ↔ business relationship that the Stripe attribution
+    // validator consults to decide whether a referralCode counts.
+    //
+    // Lifecycle:
+    //   - status='pending'  → waiting for the OTHER party to respond
+    //                         (initiatedBy=influencer → business approves;
+    //                          initiatedBy=business   → influencer accepts).
+    //   - status='active'   → live; PaymentIntent attribution succeeds.
+    //   - status='paused'   → temporarily disabled (no attribution).
+    //   - status='ended'    → terminated by either side; final state.
+    //   - status='rejected' → never accepted; final state.
+    influencerCampaigns: defineTable({
+        influencerId: v.string(),
+        businessId: v.string(),
+        commissionRate: v.number(), // 0–0.5 (e.g. 0.05 → 5%)
+        initiatedBy: v.union(
+            v.literal('influencer'),
+            v.literal('business'),
+        ),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('active'),
+            v.literal('paused'),
+            v.literal('ended'),
+            v.literal('rejected'),
+        ),
+        notes: v.optional(v.string()),
+        startsAt: v.optional(v.string()),
+        endsAt: v.optional(v.string()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_influencer', ['influencerId'])
+        .index('by_business', ['businessId'])
+        // Composite index used by the PI validator to find an active
+        // campaign for a given (influencer, business) pair in O(log n).
+        .index('by_influencer_business', ['influencerId', 'businessId'])
+        .index('by_status', ['status']),
+
+    // Bono redemptions — emitted at payment success, redeemed at the business POS.
+    bonoRedemptions: defineTable({
+        bonoCode: v.string(), // unique human-friendly code (UUID + check digit)
+        listingId: v.string(),
+        ownerUserId: v.string(), // buyer who owns/can redeem the bono
+        sellerId: v.string(), // business that issued the bono
+        paymentId: v.optional(v.string()),
+        orderId: v.optional(v.string()),
+        validUntil: v.optional(v.string()), // ISO copy from listing
+        status: v.union(
+            v.literal('issued'),
+            v.literal('redeemed'),
+            v.literal('expired'),
+            v.literal('cancelled'),
+        ),
+        redeemedByBusinessUserId: v.optional(v.string()),
+        redeemedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index("by_code", ["bonoCode"])
+        .index("by_owner", ["ownerUserId"])
+        .index("by_seller", ["sellerId"])
+        .index("by_listing", ["listingId"])
+        .index("by_status", ["status"]),
+
+    // Event reservations — emitted at payment success, redeemed at the event entrance.
+    eventReservations: defineTable({
+        listingId: v.string(),
+        userId: v.string(),
+        sellerId: v.string(),
+        paymentId: v.optional(v.string()),
+        orderId: v.optional(v.string()),
+        quantity: v.number(),
+        qrCode: v.string(),
+        status: v.union(
+            v.literal('confirmed'),
+            v.literal('cancelled'),
+            v.literal('checked_in'),
+            v.literal('refunded'),
+        ),
+        checkedInAt: v.optional(v.string()),
+        eventDate: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index("by_listing", ["listingId"])
+        .index("by_user", ["userId"])
+        .index("by_seller", ["sellerId"])
+        .index("by_qr", ["qrCode"]),
+
+    // Stripe Subscriptions — mirror of business merchant subscriptions on Stripe.
+    stripeSubscriptions: defineTable({
+        userId: v.string(),
+        stripeCustomerId: v.string(),
+        stripeSubscriptionId: v.string(),
+        stripePriceId: v.string(),
+        tier: v.union(v.literal('pro'), v.literal('business')),
+        status: v.union(
+            v.literal('active'),
+            v.literal('past_due'),
+            v.literal('canceled'),
+            v.literal('incomplete'),
+            v.literal('trialing'),
+            v.literal('unpaid'),
+        ),
+        currentPeriodEnd: v.optional(v.string()),
+        cancelAtPeriodEnd: v.optional(v.boolean()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index("by_user", ["userId"])
+        .index("by_stripe_subscription", ["stripeSubscriptionId"])
+        .index("by_stripe_customer", ["stripeCustomerId"]),
+
+    // Reconciliation flags — discrepancies detected by the daily
+    // reconciliation cron between Stripe Balance Transactions and our
+    // internal `payments` / `payouts` ledger. Each flag is an actionable
+    // item for an admin to inspect on AdminFinanceScreen.
+    reconciliationFlags: defineTable({
+        // Stripe Balance Transaction id (canonical).
+        stripeBalanceTransactionId: v.string(),
+        // What the BT references on Stripe's side (charge, payout, refund, transfer, ...).
+        sourceType: v.string(),
+        sourceId: v.optional(v.string()),
+        // Linked rows in our DB (best-effort match on PI / transfer id).
+        relatedPaymentId: v.optional(v.string()),
+        relatedPayoutId: v.optional(v.string()),
+        // Why the row was flagged (eg. 'no_local_payment', 'amount_mismatch').
+        reason: v.string(),
+        amountInCents: v.number(),
+        currency: v.string(),
+        // Cursor we read from Stripe (so re-runs are idempotent).
+        cursor: v.optional(v.string()),
+        status: v.union(
+            v.literal('open'),
+            v.literal('investigating'),
+            v.literal('resolved'),
+            v.literal('ignored'),
+        ),
+        notes: v.optional(v.string()),
+        createdAt: v.string(),
+        resolvedAt: v.optional(v.string()),
+    })
+        .index("by_stripe_bt", ["stripeBalanceTransactionId"])
+        .index("by_status", ["status"])
+        .index("by_source_type", ["sourceType"]),
+
+    // Reconciliation cursor — single-row table holding the last Stripe
+    // Balance Transaction id we processed, so the cron can resume.
+    reconciliationCursor: defineTable({
+        scope: v.string(), // 'stripe-bt' fixed value, used as a unique key
+        lastBalanceTransactionId: v.optional(v.string()),
+        lastRunAt: v.optional(v.string()),
+        runsCompleted: v.number(),
+    }).index("by_scope", ["scope"]),
+
+    // ===== SOCIAL MODULE =====
+    // socialUsers — extends `users` with the social-specific profile fields
+    // (handle, bio override, counters). We keep this OUT of `users` to
+    // avoid bloating the auth row and to allow social-only users to be
+    // created lazily on first interaction.
+    socialUsers: defineTable({
+        userId: v.string(), // FK -> users._id (string for portability)
+        username: v.string(), // unique handle, lowercased
+        displayName: v.string(),
+        bio: v.optional(v.string()),
+        avatar: v.optional(v.string()),
+        verified: v.optional(v.boolean()),
+        isInfluencer: v.optional(v.boolean()),
+        followerCount: v.number(),
+        followingCount: v.number(),
+        postCount: v.number(),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_user', ['userId'])
+        .index('by_username', ['username'])
+        .searchIndex('search_username', {
+            searchField: 'username',
+            filterFields: ['isInfluencer'],
+        }),
+
+    // socialPosts — feed entries: text, image, poll, or commercial.
+    socialPosts: defineTable({
+        authorUserId: v.string(),
+        type: v.union(
+            v.literal('text'),
+            v.literal('image'),
+            v.literal('poll'),
+            v.literal('commercial'),
+        ),
+        content: v.string(),
+        images: v.optional(v.array(v.string())),
+        poll: v.optional(v.object({
+            options: v.array(v.object({
+                id: v.string(),
+                text: v.string(),
+                votes: v.number(),
+            })),
+            totalVotes: v.number(),
+            endsAt: v.string(),
+            voters: v.optional(v.array(v.object({
+                userId: v.string(),
+                optionId: v.string(),
+            }))),
+        })),
+        commercialProduct: v.optional(v.object({
+            listingId: v.optional(v.string()),
+            name: v.string(),
+            price: v.number(),
+            image: v.optional(v.string()),
+            commission: v.optional(v.number()),
+            referralLink: v.optional(v.string()),
+            type: v.optional(v.string()),
+            location: v.optional(v.string()),
+            description: v.optional(v.string()),
+        })),
+        likeCount: v.number(),
+        commentCount: v.number(),
+        retweetCount: v.number(),
+        deletedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_author', ['authorUserId'])
+        .index('by_created', ['createdAt']),
+
+    // socialComments — flat comments on posts (no threading in v1).
+    socialComments: defineTable({
+        postId: v.string(),
+        authorUserId: v.string(),
+        content: v.string(),
+        likeCount: v.number(),
+        deletedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_post', ['postId'])
+        .index('by_post_created', ['postId', 'createdAt']),
+
+    // socialLikes — polymorphic likes (post / comment / story).
+    socialLikes: defineTable({
+        userId: v.string(),
+        targetType: v.union(
+            v.literal('post'),
+            v.literal('comment'),
+            v.literal('story'),
+        ),
+        targetId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_user_target', ['userId', 'targetType', 'targetId'])
+        .index('by_target', ['targetType', 'targetId']),
+
+    // socialFollows — directed follower → followee.
+    socialFollows: defineTable({
+        followerUserId: v.string(),
+        followeeUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_follower', ['followerUserId'])
+        .index('by_followee', ['followeeUserId'])
+        .index('by_pair', ['followerUserId', 'followeeUserId']),
+
+    // socialStories — 24-hour ephemeral content. Soft-deleted by the
+    // `expireStories` cron in convex/crons.ts.
+    socialStories: defineTable({
+        authorUserId: v.string(),
+        type: v.union(v.literal('image'), v.literal('video')),
+        url: v.string(),
+        durationSec: v.number(),
+        viewCount: v.number(),
+        expiresAt: v.string(),
+        deletedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_author', ['authorUserId'])
+        .index('by_expires', ['expiresAt']),
+
+    // socialStoryViews — viewer log. Idempotent per (storyId, userId).
+    socialStoryViews: defineTable({
+        storyId: v.string(),
+        viewerUserId: v.string(),
+        viewedAt: v.string(),
+    })
+        .index('by_story', ['storyId'])
+        .index('by_story_viewer', ['storyId', 'viewerUserId']),
+
+    // socialChats — 1:1 (or future group) DM threads.
+    socialChats: defineTable({
+        participantIds: v.array(v.string()),
+        lastMessagePreview: v.optional(v.string()),
+        lastMessageAt: v.string(),
+        // Per-participant unread counters keyed by userId. Stored as a
+        // JSON-ish object (Convex `v.any()`) because the participant set
+        // is dynamic and small.
+        unreadCounts: v.optional(v.any()),
+        createdAt: v.string(),
+    })
+        // No native "array contains" index — we store a flat
+        // `participantsKey` (sorted ids joined by ":") so we can find
+        // existing 1:1 chats in O(log n).
+        .index('by_lastMessage', ['lastMessageAt'])
+        .index('by_participant', ['participantIds']),
+
+    // socialMessages — DM messages within a socialChats thread.
+    socialMessages: defineTable({
+        chatId: v.string(),
+        senderUserId: v.string(),
+        body: v.string(),
+        attachments: v.optional(v.array(v.object({
+            type: v.union(v.literal('image'), v.literal('video'), v.literal('document'), v.literal('post')),
+            url: v.string(),
+            metadata: v.optional(v.any()),
+        }))),
+        readBy: v.optional(v.array(v.string())),
+        createdAt: v.string(),
+    })
+        .index('by_chat', ['chatId'])
+        .index('by_chat_created', ['chatId', 'createdAt']),
+
+    // Push deliveries — audit log of every push notification dispatched by
+    // `notifications.notifyUser`. Persisted before/after the Expo Push API
+    // call so we can correlate failures and rate-limit per category if
+    // needed in the future.
+    pushDeliveries: defineTable({
+        userId: v.string(),
+        title: v.string(),
+        body: v.string(),
+        category: v.optional(v.string()), // 'order' | 'payment' | 'dispute' | 'social' | 'system'
+        sentAt: v.string(),
+        status: v.union(
+            v.literal('queued'),
+            v.literal('sent'),
+            v.literal('failed'),
+            v.literal('skipped'),
+        ),
+        expoReceiptId: v.optional(v.string()),
+        errorMessage: v.optional(v.string()),
+        data: v.optional(v.any()),
+    })
+        .index('by_user', ['userId'])
+        .index('by_status', ['status'])
+        .index('by_user_category', ['userId', 'category']),
+
+    // IAP notifications — idempotency log for Apple Server Notifications V2
+    // (notificationUUID) and Google Play Real-Time Developer Notifications
+    // (purchaseToken + notificationType + eventTimeMillis). Prevents
+    // duplicate side-effects when the same webhook fires multiple times.
+    iapNotifications: defineTable({
+        platform: v.union(v.literal('ios'), v.literal('android')),
+        notificationUUID: v.string(), // Apple notificationUUID OR composite "${purchaseToken}:${notificationType}:${eventTimeMillis}" for Google
+        notificationType: v.string(),
+        subtype: v.optional(v.string()),
+        userId: v.optional(v.string()),
+        receiptId: v.optional(v.id('iapReceipts')),
+        rawPayload: v.optional(v.any()),
+        processedAt: v.string(),
+    })
+        .index('by_uuid', ['notificationUUID'])
+        .index('by_user', ['userId']),
+
+    // IAP receipts — Apple App Store / Google Play subscription receipts.
+    iapReceipts: defineTable({
+        userId: v.string(),
+        platform: v.union(v.literal('ios'), v.literal('android')),
+        productId: v.string(), // App Store / Play Console product identifier
+        transactionId: v.string(),
+        originalTransactionId: v.optional(v.string()),
+        purchaseToken: v.optional(v.string()), // Android only
+        expiresAt: v.optional(v.string()),
+        status: v.union(
+            v.literal('active'),
+            v.literal('expired'),
+            v.literal('cancelled'),
+            v.literal('grace_period'),
+            v.literal('refunded'),
+        ),
+        raw: v.optional(v.any()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index("by_user", ["userId"])
+        .index("by_transaction", ["transactionId"])
+        .index("by_original_transaction", ["originalTransactionId"]),
 });

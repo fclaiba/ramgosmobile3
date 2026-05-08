@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireActor } from "./authHelpers";
 
 // PHASE 4: Dispute Chat and Evidence Management
@@ -60,6 +61,27 @@ export const addDisputeMessage = mutation({
             attachments: args.attachments,
             sentAt: new Date().toISOString(),
         });
+
+        // Notify the OTHER party (or both buyer + seller when sender is support).
+        const shortOrderId = String(args.orderId).slice(-6);
+        const preview = args.body.length > 80 ? args.body.slice(0, 77) + '…' : args.body;
+        const recipients: string[] = [];
+        if (args.sender === 'buyer') recipients.push(order.sellerId);
+        else if (args.sender === 'seller') recipients.push(order.userId);
+        else if (args.sender === 'support') {
+            if (order.userId !== actor.idString) recipients.push(order.userId);
+            if (order.sellerId !== actor.idString) recipients.push(order.sellerId);
+        }
+
+        for (const recipientId of recipients) {
+            await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                userId: recipientId,
+                title: `Nuevo mensaje en disputa #${shortOrderId}`,
+                body: preview,
+                category: 'dispute',
+                data: { type: 'dispute_message', orderId: args.orderId, sender: args.sender },
+            });
+        }
     },
 });
 
@@ -124,6 +146,23 @@ export const addEvidence = mutation({
             description: args.description,
             uploadedAt: new Date().toISOString(),
         });
+
+        // Notify the other party that new evidence was uploaded.
+        const shortOrderId = String(args.orderId).slice(-6);
+        const otherPartyId = args.uploadedBy === 'buyer'
+            ? order.sellerId
+            : args.uploadedBy === 'seller'
+                ? order.userId
+                : null; // support → don't push to anyone synchronously
+        if (otherPartyId) {
+            await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                userId: otherPartyId,
+                title: `Nueva evidencia en disputa #${shortOrderId}`,
+                body: `${args.uploadedBy === 'buyer' ? 'El comprador' : 'El vendedor'} agregó ${args.type === 'photo' ? 'una foto' : args.type === 'video' ? 'un video' : 'una nota'}.`,
+                category: 'dispute',
+                data: { type: 'dispute_evidence', orderId: args.orderId, evidenceType: args.type },
+            });
+        }
     },
 });
 

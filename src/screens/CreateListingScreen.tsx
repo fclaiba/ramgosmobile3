@@ -10,7 +10,7 @@ import {
     Platform,
     useWindowDimensions,
 } from 'react-native';
-import { Package, Calendar, Wrench, AlertTriangle, Truck, Image as ImageIcon, X, ChevronDown, CheckCircle, Tag, Briefcase, Percent, Circle, Lock, MapPin } from 'lucide-react-native';
+import { Package, Calendar, Wrench, AlertTriangle, Truck, Image as ImageIcon, X, ChevronDown, CheckCircle, Tag, Briefcase, Percent, Circle, Lock, MapPin, Megaphone } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MobileHeader } from '../components/MobileHeader';
 import { Card } from '../components/ui/card';
@@ -70,7 +70,16 @@ export default function CreateListingScreen({ navigation, route }: any) {
         // Common
         photos: [] as string[],
         selectedLocation: initialData?.location || null as { lat: number, lng: number, address?: string } | null,
-        location: initialData?.location || null as { lat: number, lng: number, address?: string } | null // Kept for compatibility if used elsewhere
+        location: initialData?.location || null as { lat: number, lng: number, address?: string } | null, // Kept for compatibility if used elsewhere
+        // Influencer Campaign Backend — open promotion. Business-only;
+        // server (`convex/listings.ts`) rejects the toggle if the
+        // current seller doesn't have role='business'. UI mirrors the
+        // backend by hiding the section unless the role matches.
+        openPromotion: !!initialData?.openPromotion,
+        openCommissionRate:
+            typeof initialData?.openCommissionRate === 'number'
+                ? String(Math.round(initialData.openCommissionRate * 100))
+                : '5',
     };
 
     const [form, setForm] = useState(initialFormState);
@@ -259,6 +268,15 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 lat: -34.6037, lng: -58.3816, name: 'Online', address: 'Online', distanceKm: 0
             };
 
+            // Resolve openPromotion + rate (only meaningful for business
+            // role; the toggle is hidden from the UI otherwise but we
+            // still guard here in case state was prefilled from edit).
+            const isBusiness = user?.role === 'business' || user?.role === 'admin';
+            const wantsOpenPromotion = isBusiness && form.openPromotion;
+            const openCommissionRateValue = wantsOpenPromotion
+                ? Math.max(0.01, Math.min(0.5, (Number(form.openCommissionRate) || 0) / 100))
+                : undefined;
+
             if (editMode && initialData?._id) {
                 // UPDATE LOGIC
                 await updateListingMutation({
@@ -275,6 +293,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         gallery: uploadedImages.length > 0 ? uploadedImages : undefined,
                         condition: form.condition,
                         location: locationData,
+                        openPromotion: isBusiness ? wantsOpenPromotion : undefined,
+                        openCommissionRate: isBusiness ? openCommissionRateValue : undefined,
                     }
                 });
                 show('Publicación actualizada exitosamente!', 'success');
@@ -299,6 +319,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         allowPickup: true,
                     },
                     location: locationData,
+                    openPromotion: wantsOpenPromotion || undefined,
+                    openCommissionRate: openCommissionRateValue,
                 });
                 show('¡Publicado con éxito!', 'success');
                 navigation.navigate('Marketplace');
@@ -399,6 +421,71 @@ export default function CreateListingScreen({ navigation, route }: any) {
         </TouchableOpacity>
     );
 
+    // Open Promotion section — visible to business sellers only. When
+    // ON, ANY influencer can earn `openCommissionRate` on this listing
+    // without an explicit campaign with the seller. Backend enforces
+    // role and rate validity in `convex/listings.ts`.
+    const isBusinessRole = user?.role === 'business' || user?.role === 'admin';
+    const renderOpenPromotionSection = () => {
+        if (!isBusinessRole) return null;
+        return (
+            <View style={styles.formGroup}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Megaphone size={16} color={isDark ? '#A78BFA' : '#7C3AED'} />
+                            <Text style={[styles.label, { marginBottom: 0 }]}>Promoción abierta para influencers</Text>
+                        </View>
+                        <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                            Cualquier influencer podrá promocionar este publicación con su código personal y cobrar la comisión definida abajo.
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => setForm((prev) => ({ ...prev, openPromotion: !prev.openPromotion }))}
+                        style={{
+                            width: 50,
+                            height: 28,
+                            borderRadius: 14,
+                            backgroundColor: form.openPromotion ? '#7C3AED' : (isDark ? '#374151' : '#E5E7EB'),
+                            justifyContent: 'center',
+                            paddingHorizontal: 3,
+                        }}
+                    >
+                        <View
+                            style={{
+                                width: 22,
+                                height: 22,
+                                borderRadius: 11,
+                                backgroundColor: '#fff',
+                                alignSelf: form.openPromotion ? 'flex-end' : 'flex-start',
+                            }}
+                        />
+                    </TouchableOpacity>
+                </View>
+
+                {form.openPromotion && (
+                    <View style={{ marginTop: 12 }}>
+                        <Text style={styles.label}>Comisión para influencer (%)</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="5"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="numeric"
+                            value={form.openCommissionRate}
+                            onChangeText={(t: string) => {
+                                const sanitized = t.replace(/[^0-9.]/g, '');
+                                setForm((prev) => ({ ...prev, openCommissionRate: sanitized }));
+                            }}
+                        />
+                        <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4 }}>
+                            Entre 1% y 50%. Se descuenta de tu cobro neto, no del precio que paga el cliente.
+                        </Text>
+                    </View>
+                )}
+            </View>
+        );
+    };
+
     // Dynamic Picker
     const renderCategoryPicker = (currentValue: string, onSelect: (val: string) => void, options: string[]) => (
         <View style={styles.formGroup}>
@@ -489,6 +576,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         maxImages={3}
                     />
                 </View>
+
+                {renderOpenPromotionSection()}
             </Card>
             <Button onPress={handlePublish} style={{ backgroundColor: '#10B981' }}>
                 <Text style={styles.buttonTextLight}>Publicar Bono</Text>
@@ -558,6 +647,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         maxImages={3}
                     />
                 </View>
+
+                {renderOpenPromotionSection()}
             </Card>
             <Button onPress={handlePublish} style={{ backgroundColor: '#F59E0B' }}>
                 <Text style={styles.buttonTextLight}>Publicar Evento</Text>
@@ -614,6 +705,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         maxImages={5}
                     />
                 </View>
+
+                {renderOpenPromotionSection()}
             </Card>
 
             <Button onPress={handlePublish} style={{ backgroundColor: '#7C3AED' }}>
@@ -712,6 +805,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         maxImages={8}
                     />
                 </View>
+
+                {renderOpenPromotionSection()}
             </Card>
 
             <Button onPress={handlePublish} style={{ backgroundColor: '#2563EB' }}>
@@ -755,7 +850,6 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* Todo: Add Location Modal here */}
             <LocationPickerModal
                 visible={showLocationModal}
                 onClose={() => setShowLocationModal(false)}

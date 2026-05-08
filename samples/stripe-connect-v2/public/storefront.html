@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Storefront - Stripe Connect V2 sample</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <div class="page">
+            <div class="header">
+                <div class="brand">Stripe Connect V2 sample</div>
+                <nav class="nav">
+                    <a href="/">Home</a>
+                    <a href="/storefront.html">Storefront</a>
+                </nav>
+            </div>
+
+            <h1>Storefront</h1>
+            <p class="subtitle">
+                Every product across every connected account. Buying triggers a
+                hosted Checkout with a 10% application fee and a transfer to the
+                seller's connected account.
+            </p>
+
+            <div id="error" class="error" hidden></div>
+            <div id="empty" class="notice" hidden>
+                No products yet. Onboard a seller and create one from the
+                dashboard.
+            </div>
+            <div id="products" class="product-list"></div>
+
+            <footer>
+                Use any test card such as
+                <span class="code">4242 4242 4242 4242</span>, any future expiry,
+                any CVC.
+            </footer>
+        </div>
+
+        <script>
+            const els = {
+                error: document.getElementById("error"),
+                empty: document.getElementById("empty"),
+                products: document.getElementById("products"),
+            };
+
+            load();
+
+            async function load() {
+                try {
+                    const res = await fetch("/api/products");
+                    const json = await res.json();
+                    if (!res.ok)
+                        throw new Error(json.error || "Could not load products");
+                    render(json.products || []);
+                } catch (err) {
+                    els.error.textContent = err.message;
+                    els.error.hidden = false;
+                }
+            }
+
+            function render(products) {
+                if (products.length === 0) {
+                    els.empty.hidden = false;
+                    return;
+                }
+                els.empty.hidden = true;
+                els.products.innerHTML = products
+                    .map(
+                        (p, idx) => `
+                            <div class="product">
+                                <div><strong>${escapeHtml(p.name)}</strong></div>
+                                <div class="muted">by ${escapeHtml(p.sellerDisplayName)}</div>
+                                <div class="muted">${escapeHtml(p.description ?? "")}</div>
+                                <div class="price">$${(p.priceInCents / 100).toFixed(2)} ${p.currency.toUpperCase()}</div>
+                                <button data-idx="${idx}" data-product="${p.productId}">
+                                    Buy
+                                </button>
+                            </div>
+                        `,
+                    )
+                    .join("");
+
+                els.products
+                    .querySelectorAll("button[data-product]")
+                    .forEach((btn) => {
+                        btn.addEventListener("click", () => buy(btn));
+                    });
+            }
+
+            async function buy(btn) {
+                const productId = btn.getAttribute("data-product");
+                btn.disabled = true;
+                btn.textContent = "Opening Checkout...";
+                els.error.hidden = true;
+                try {
+                    const res = await fetch("/api/checkout", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ productId }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok)
+                        throw new Error(json.error || "Could not create checkout");
+                    window.location.href = json.url;
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = "Buy";
+                    els.error.textContent = err.message;
+                    els.error.hidden = false;
+                }
+            }
+
+            function escapeHtml(s) {
+                return String(s)
+                    .replaceAll("&", "&amp;")
+                    .replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;")
+                    .replaceAll('"', "&quot;");
+            }
+        </script>
+    </body>
+</html>

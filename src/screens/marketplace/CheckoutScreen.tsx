@@ -11,9 +11,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { useRewards } from '../../contexts/RewardsContext';
 import { useReferral } from '../../contexts/ReferralContext';
 
-import { useWallet } from '../../contexts/WalletContext';
 import { useActionGate } from '../../utils/useActionGate';
-import { useAction } from 'convex/react';
+import { useAction, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { StripePaymentModal } from '../../components/stripe/StripePaymentModal';
 
@@ -21,8 +20,6 @@ export default function CheckoutScreen({ navigation }: any) {
     const { items, totalPrice, clearCart } = useCart();
     const { placeOrder } = useMarketplace();
     const { points, getAvailableDiscounts, redeemPoints, trackPurchase, previewPurchasePoints } = usePoints();
-    const { validateCoupon, processCheckoutTransaction } = useWallet();
-    const { updateSubscription } = useAuth();
     const { registerQuarterlyPurchase } = useRewards();
     const { notifyMyFirstPurchase } = useReferral();
     const { colorScheme } = useTheme();
@@ -33,14 +30,27 @@ export default function CheckoutScreen({ navigation }: any) {
 
     const [loading, setLoading] = useState(false);
     const [selectedDiscount, setSelectedDiscount] = useState<{ points: number; discount: number } | null>(null);
-    const [couponCode, setCouponCode] = useState('');
-    const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; campaignId: string } | null>(null);
+    // Optional referral code input — propagated to every line item that
+    // doesn't already have one, so the buyer can credit an influencer at
+    // checkout. The server (convex/stripe.ts) is the source of truth for
+    // resolving + validating the attribution; we DON'T grant a discount
+    // here. (The legacy discount-coupon path was removed when campaigns
+    // moved to the backend; influencer commission is paid out of the
+    // platform/seller take, not deducted from the buyer.)
+    const [referralCodeInput, setReferralCodeInput] = useState('');
 
     // Stripe
     const [stripeModalVisible, setStripeModalVisible] = useState(false);
     const [clientSecret, setClientSecret] = useState('');
     const stripeCreatePaymentIntentRef = (api as any).stripe?.createPaymentIntent;
     const createPaymentIntent = useAction(stripeCreatePaymentIntentRef || api.users.syncUser);
+
+    // Event capacity holds — call BEFORE the PaymentIntent. If hold fails
+    // (sold out / oversold) we never charge the buyer.
+    const holdEventCapacityFn = (api as any).events?.holdEventCapacity;
+    const releaseEventCapacityFn = (api as any).events?.releaseEventCapacity;
+    const holdEventCapacity = useMutation(holdEventCapacityFn || api.users.syncUser);
+    const releaseEventCapacity = useMutation(releaseEventCapacityFn || api.users.syncUser);
 
     // Mock Form State
     const [address, setAddress] = useState('Av. Libertador 1234');
@@ -53,25 +63,8 @@ export default function CheckoutScreen({ navigation }: any) {
     useEffect(() => {
         if (items.length > 0 && items.every(i => i.type === 'subscription')) {
             setSelectedDiscount(null);
-            setAppliedCoupon(null);
         }
     }, [items]);
-
-    const validatePromocode = () => {
-        if (!couponCode.trim()) return;
-        const result = validateCoupon(couponCode);
-        if (result.valid && result.campaign) {
-            setAppliedCoupon({
-                code: result.campaign.code,
-                discountPercent: result.discountPercent || 0,
-                campaignId: result.campaign.id
-            });
-            show('¡Cupón aplicado correctamente!', 'success');
-        } else {
-            setAppliedCoupon(null);
-            show(result.message || 'Cupón inválido', 'error');
-        }
-    };
 
     // Calculate eligible total for discounts (exclude subscriptions)
     const subscriptionTotal = items
@@ -85,12 +78,7 @@ export default function CheckoutScreen({ navigation }: any) {
     // Calculate Points Discount
     const pointsDiscountAmount = Math.min(selectedDiscount?.discount || 0, eligibleForDiscountTotal);
 
-    // Calculate Coupon Discount (Applied AFTER points or BEFORE? Usually independent. Let's apply to the eligible portion)
-    const couponDiscountAmount = appliedCoupon
-        ? (eligibleForDiscountTotal * (appliedCoupon.discountPercent / 100))
-        : 0;
-
-    const totalDiscount = Math.min(pointsDiscountAmount + couponDiscountAmount, eligibleForDiscountTotal);
+    const totalDiscount = Math.min(pointsDiscountAmount, eligibleForDiscountTotal);
 
     const finalTotal = Math.max(0, totalPrice + shippingCost - totalDiscount);
 
@@ -125,9 +113,107 @@ export default function CheckoutScreen({ navigation }: any) {
                     setLoading(false);
                     return;
                 }
-                // Request Payment Intent
-                const amountInCents = Math.round(finalTotal * 100);
-                const intentResult = await createPaymentIntent({ amountInCents });
+
+                // Build lineItems with full split context per item:
+                //   - sellerId: who receives the seller leg of the transfer
+                //   - influencerId: optional, derived from item-level
+                //     referralCode (server-side will resolve later in Sprint 5)
+                //   - type: drives commissionRate (bonos = 30%, others = 12%)
+                //   - amountInCents per UNIT (server multiplies by quantity)
+                //
+                // Subscriptions are EXCLUDED from this checkout in Sprint 4
+                // (they go through Stripe Subscriptions / IAP, not the cart).
+                // Until Sprint 4 lands we still allow them through to avoid
+                // breaking the demo flow — they just have no sellerId so
+                // the transfer step is a no-op for them.
+                const totalCents = Math.round(finalTotal * 100);
+                const subtotalCents = Math.round(totalPrice * 100);
+
+                // Step A: hold capacity for any event line item. If the hold
+                // fails for any item we abort and rollback the previous holds.
+                const eventItems = items.filter((it) => it.type === 'event');
+                const heldEvents: Array<{ listingId: string; quantity: number }> = [];
+                for (const ev of eventItems) {
+                    try {
+                        await holdEventCapacity({
+                            actorId: undefined as any,
+                            listingId: String(ev.id) as any,
+                            quantity: ev.quantity,
+                        });
+                        heldEvents.push({ listingId: String(ev.id), quantity: ev.quantity });
+                    } catch (e: any) {
+                        // Rollback any previously held capacity for THIS checkout.
+                        for (const held of heldEvents) {
+                            try {
+                                await releaseEventCapacity({
+                                    actorId: undefined as any,
+                                    listingId: held.listingId as any,
+                                    quantity: held.quantity,
+                                });
+                            } catch (_) { /* best-effort */ }
+                        }
+                        show(e?.message || 'Capacidad agotada en uno de los eventos.', 'error');
+                        setLoading(false);
+                        return;
+                    }
+                }
+
+                // Step B: build line items with proportional discount/shipping.
+                const linesRaw = items
+                    .filter((it) => it.type !== 'subscription')
+                    .map((it) => {
+                        const lineSubtotalCents = Math.round(it.price * it.quantity * 100);
+                        const proportion = subtotalCents > 0 ? lineSubtotalCents / subtotalCents : 0;
+                        const shippingShareCents = Math.round(shippingCost * 100 * proportion);
+                        const discountShareCents = Math.round(totalDiscount * 100 * proportion);
+                        const adjustedLineCents = Math.max(
+                            0,
+                            lineSubtotalCents + shippingShareCents - discountShareCents,
+                        );
+                        return {
+                            listingId: String(it.id),
+                            sellerId: it.sellerId,
+                            type: it.type,
+                            amountInCents: adjustedLineCents,
+                            // referralCode is the influencer attribution
+                            // hint. The server resolves it to a userId via
+                            // users.by_referral_code and credits the
+                            // influencer's wallet on payment_intent.succeeded.
+                            // Cart-item code wins over the manual checkout
+                            // input fallback so deep-linked attribution
+                            // can't be silently overridden.
+                            referralCode:
+                                it.referralCode ||
+                                (referralCodeInput.trim().toUpperCase() || undefined),
+                            // We bake quantity into amountInCents already, but
+                            // we still pass `quantity` in metadata so the
+                            // bono / event emitter knows how many units to
+                            // emit downstream.
+                            quantity: 1,
+                            description: it.name,
+                        };
+                    });
+
+                let intentResult: any;
+                try {
+                    intentResult = await createPaymentIntent({
+                        amountInCents: linesRaw.length > 0 ? undefined : totalCents,
+                        lineItems: linesRaw.length > 0 ? linesRaw : undefined,
+                    });
+                } catch (intentErr: any) {
+                    // PaymentIntent creation failed — release held event
+                    // capacity so we don't oversell.
+                    for (const held of heldEvents) {
+                        try {
+                            await releaseEventCapacity({
+                                actorId: undefined as any,
+                                listingId: held.listingId as any,
+                                quantity: held.quantity,
+                            });
+                        } catch (_) { /* best-effort */ }
+                    }
+                    throw intentErr;
+                }
                 if (intentResult && intentResult.clientSecret) {
                     setClientSecret(intentResult.clientSecret);
                     setStripeModalVisible(true);
@@ -152,9 +238,6 @@ export default function CheckoutScreen({ navigation }: any) {
     const finalizeOrderProcess = async () => {
         setLoading(true);
         try {
-            // Simulate API delay (demo-only)
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
             if (selectedDiscount) {
                 const redeemed = redeemPoints(
                     selectedDiscount.points,
@@ -180,31 +263,22 @@ export default function CheckoutScreen({ navigation }: any) {
                     country: 'Argentina',
                 },
                 paymentDetails: {
-                    // Double check: if eligible total is 0, discount MUST be 0
                     discountApplied: eligibleForDiscountTotal > 0 ? totalDiscount : 0,
                     finalAmount: finalTotal,
                 },
             });
 
-            // Process Financials (Escrow & Commissions)
-            if (result.success && result.orders) {
-                // Process transaction for each created order (multi-vendor support)
-                result.orders.forEach((order: any) => {
-                    processCheckoutTransaction({
-                        id: order.id,
-                        sellerId: order.sellerId,
-                        totalAmount: order.totals.grandTotal,
-                        items: order.items,
-                        couponCode: appliedCoupon?.code,
-                    });
-                });
-            }
+            // Financial splits are handled server-side by the Stripe webhook (internalMarkPaymentSucceeded).
+            // No client-side processCheckoutTransaction needed.
 
-            // Subscription Activation Logic (Sprint 2)
-            const subscriptionItem = items.find((i) => i.type === 'subscription' && i.subscriptionTier);
-            if (result.success && subscriptionItem?.subscriptionTier) {
-                await updateSubscription(subscriptionItem.subscriptionTier, 'active');
-                show('Membresía activada correctamente', 'success');
+            // Subscriptions are NOT handled through the cart anymore (Sprint 4):
+            //   - business merchant → Stripe Subscriptions (SubscriptionPlansScreen).
+            //   - consumer pro      → Apple IAP / Google Play Billing.
+            // If a subscription somehow still slipped into the cart we just log it
+            // — `users.subscriptionTier` is now driven by the webhook stream.
+            const stillHasSubscriptionInCart = items.some((i) => i.type === 'subscription');
+            if (stillHasSubscriptionInCart) {
+                console.warn('[Checkout] Subscription item in cart ignored — use SubscriptionPlansScreen instead.');
             }
 
             // Rewards v2: only non-subscription purchases award points (1 punto por $1) and count for quarterly mission.
@@ -277,38 +351,28 @@ export default function CheckoutScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Points Redemption */}
-                {/* Coupon Code */}
+                {/* Influencer Referral Code (optional) — does NOT change
+                    the buyer's price. The server uses it to credit a
+                    commission to the influencer when the listing's
+                    business has either openPromotion enabled or an
+                    active campaign with that influencer. */}
                 {!items.every(item => item.type === 'subscription') && (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <Tag size={20} color="#4B5563" />
-                            <Text style={styles.sectionTitle}>Código de Descuento / Influencer</Text>
+                            <Text style={styles.sectionTitle}>Código de Influencer (opcional)</Text>
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TextInput
-                                style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                                placeholder="Ej: JORGE10"
-                                value={couponCode}
-                                onChangeText={setCouponCode}
-                                autoCapitalize="characters"
-                                placeholderTextColor={isDark ? '#9CA3AF' : '#9CA3AF'}
-                            />
-                            <TouchableOpacity
-                                onPress={validatePromocode}
-                                style={{ backgroundColor: '#4B5563', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 8 }}
-                            >
-                                <Text style={{ color: '#fff', fontWeight: '600' }}>Aplicar</Text>
-                            </TouchableOpacity>
-                        </View>
-                        {appliedCoupon && (
-                            <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <CheckCircle size={14} color="#16a34a" />
-                                <Text style={{ color: '#16a34a', fontSize: 13 }}>
-                                    Cupón {appliedCoupon.code} aplicado (-{appliedCoupon.discountPercent}%)
-                                </Text>
-                            </View>
-                        )}
+                        <TextInput
+                            style={[styles.input, { marginBottom: 4 }]}
+                            placeholder="Ej: JORGE10"
+                            value={referralCodeInput}
+                            onChangeText={setReferralCodeInput}
+                            autoCapitalize="characters"
+                            placeholderTextColor={isDark ? '#9CA3AF' : '#9CA3AF'}
+                        />
+                        <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                            Acreditá tu compra al influencer que te recomendó. El precio no cambia.
+                        </Text>
                     </View>
                 )}
 
@@ -424,15 +488,6 @@ export default function CheckoutScreen({ navigation }: any) {
                         <View style={styles.row}>
                             <Text style={[styles.label, { color: '#7C3AED' }]}>Descuento (Puntos)</Text>
                             <Text style={[styles.value, { color: '#7C3AED' }]}>-${pointsDiscountAmount.toFixed(2)}</Text>
-                        </View>
-                    )}
-                    {appliedCoupon && (
-                        <View style={styles.row}>
-                            <Text style={[styles.label, { color: '#16a34a' }]}>Descuento ({appliedCoupon.code})</Text>
-                            {/* We need to recalculate or access the variable. Since render is one pass, we can use the variable defined in body */}
-                            <Text style={[styles.value, { color: '#16a34a' }]}>
-                                -${(eligibleForDiscountTotal * (appliedCoupon.discountPercent / 100)).toFixed(2)}
-                            </Text>
                         </View>
                     )}
                     <View style={[styles.row, styles.totalRow]}>

@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { MobileHeader } from '../components/MobileHeader';
 import { LinearGradient } from 'expo-linear-gradient';
-import { submitSupportTicket, getSupportEmail } from '../utils/support';
+import { submitSupportTicket, getSupportEmail, isZendeskEnabled } from '../utils/support';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
@@ -34,15 +34,43 @@ export default function SupportScreen({ navigation }: any) {
     ]), []);
 
     const supportEmail = getSupportEmail();
+    const zendeskEnabled = isZendeskEnabled();
+
+    // WhatsApp Business number for live support. The number is configured at
+    // build time via EXPO_PUBLIC_SUPPORT_WHATSAPP. If unset, falls back to
+    // mailto: so the button always lands somewhere usable.
+    const whatsappNumber = (
+        process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP ?? ''
+    ).replace(/[^\d]/g, '');
+    const liveChatUrl = whatsappNumber
+        ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+              'Hola Ramgos, necesito ayuda con la app.',
+          )}`
+        : `mailto:${supportEmail}?subject=${encodeURIComponent(
+              'Soporte en vivo',
+          )}&body=${encodeURIComponent('Hola Ramgos, necesito asistencia urgente.')}`;
 
     const contactMethods = [
         {
             icon: MessageCircle,
-            title: 'Chat en Vivo',
-            description: 'Respuesta inmediata',
-            available: 'Disponible ahora',
+            title: whatsappNumber ? 'Chat por WhatsApp' : 'Chat en Vivo',
+            description: whatsappNumber
+                ? 'Hablemos por WhatsApp Business'
+                : 'Te respondemos por email mientras armamos el chat',
+            available: 'Respuesta < 1h en horario',
             colors: ['#3b82f6', '#06b6d4'],
-            action: () => show('Chat en vivo próximamente', 'info'),
+            action: async () => {
+                try {
+                    const canOpen = await Linking.canOpenURL(liveChatUrl);
+                    if (canOpen) {
+                        await Linking.openURL(liveChatUrl);
+                    } else {
+                        show('No se pudo abrir el chat. Probá con email.', 'error');
+                    }
+                } catch (err) {
+                    show('No se pudo abrir el chat. Probá con email.', 'error');
+                }
+            },
         },
         {
             icon: Mail,
@@ -70,12 +98,17 @@ export default function SupportScreen({ navigation }: any) {
         },
         {
             icon: Inbox,
-            title: 'Zendesk (desactivado)',
+            title: zendeskEnabled ? 'Zendesk' : 'Zendesk (desactivado)',
             description: 'Portal de tickets',
-            available: 'Temporalmente deshabilitado',
+            available: zendeskEnabled ? 'Gestionado por backend' : 'Temporalmente deshabilitado',
             colors: ['#6366f1', '#8b5cf6'],
             action: () => {
-                show('Zendesk está desactivado temporalmente. Usa Email para soporte.', 'info');
+                show(
+                    zendeskEnabled
+                        ? 'Zendesk habilitado: crea tu ticket desde el formulario.'
+                        : 'Zendesk está desactivado temporalmente. Usa Email para soporte.',
+                    'info',
+                );
             },
         },
     ];

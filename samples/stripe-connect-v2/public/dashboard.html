@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Seller dashboard - Stripe Connect V2 sample</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <div class="page">
+            <div class="header">
+                <div class="brand">Stripe Connect V2 sample</div>
+                <nav class="nav">
+                    <a href="/">Home</a>
+                    <a href="/storefront.html">Storefront</a>
+                </nav>
+            </div>
+
+            <h1>Seller dashboard</h1>
+            <p class="subtitle">
+                Live status pulled from
+                <span class="code">v2.core.accounts.retrieve</span> on every
+                load.
+            </p>
+
+            <div class="card" id="status-card">
+                <h2 id="display-name">Loading account...</h2>
+                <p class="muted" id="account-id"></p>
+
+                <div style="margin-top: 12px">
+                    <span class="badge" id="ready-badge">unknown</span>
+                    <span class="badge" id="onboarding-badge">unknown</span>
+                </div>
+
+                <p class="muted" id="status-detail" style="margin-top: 12px"></p>
+
+                <div style="margin-top: 16px">
+                    <button id="onboard-btn">Onboard to collect payments</button>
+                    <button
+                        id="refresh-btn"
+                        type="button"
+                        class="btn-secondary"
+                        style="margin-left: 8px"
+                    >
+                        Refresh status
+                    </button>
+                </div>
+                <div id="status-error" class="error" hidden></div>
+            </div>
+
+            <div class="card">
+                <h2>Create a product</h2>
+                <p class="muted">
+                    Products are created at the platform level. The connected
+                    account is stored in
+                    <span class="code">metadata.connected_account_id</span>.
+                </p>
+
+                <p class="notice" id="product-gate" hidden>
+                    Finish onboarding before creating products. Once
+                    <span class="code">stripe_transfers</span> is
+                    <span class="code">active</span>, this form will unlock.
+                </p>
+
+                <form id="create-product-form">
+                    <div class="field">
+                        <label for="name">Name</label>
+                        <input id="name" name="name" required />
+                    </div>
+                    <div class="field">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="priceUsd">Price (USD)</label>
+                        <input
+                            id="priceUsd"
+                            name="priceUsd"
+                            type="number"
+                            min="0.50"
+                            step="0.01"
+                            value="9.99"
+                            required
+                        />
+                    </div>
+                    <button type="submit" id="create-product-btn">
+                        Create product
+                    </button>
+                    <div id="product-error" class="error" hidden></div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>This account's products</h2>
+                <div id="my-products" class="product-list"></div>
+                <p class="muted" id="my-products-empty" hidden>
+                    No products yet for this account.
+                </p>
+            </div>
+
+            <footer>Account is fetched from Stripe live, not from a cache.</footer>
+        </div>
+
+        <script>
+            const params = new URLSearchParams(window.location.search);
+            const accountId = params.get("accountId");
+
+            const els = {
+                displayName: document.getElementById("display-name"),
+                accountId: document.getElementById("account-id"),
+                readyBadge: document.getElementById("ready-badge"),
+                onboardingBadge: document.getElementById("onboarding-badge"),
+                statusDetail: document.getElementById("status-detail"),
+                statusError: document.getElementById("status-error"),
+                onboardBtn: document.getElementById("onboard-btn"),
+                refreshBtn: document.getElementById("refresh-btn"),
+                productGate: document.getElementById("product-gate"),
+                productForm: document.getElementById("create-product-form"),
+                productBtn: document.getElementById("create-product-btn"),
+                productError: document.getElementById("product-error"),
+                myProducts: document.getElementById("my-products"),
+                myProductsEmpty: document.getElementById("my-products-empty"),
+            };
+
+            if (!accountId) {
+                els.displayName.textContent = "Missing accountId in URL";
+                els.statusError.textContent =
+                    "Add ?accountId=acct_xxx to the URL or create an account from the home page.";
+                els.statusError.hidden = false;
+                els.onboardBtn.disabled = true;
+                els.refreshBtn.disabled = true;
+                els.productBtn.disabled = true;
+            } else {
+                els.accountId.textContent = accountId;
+                refreshStatus();
+                refreshProducts();
+            }
+
+            els.refreshBtn?.addEventListener("click", refreshStatus);
+
+            els.onboardBtn?.addEventListener("click", async () => {
+                els.statusError.hidden = true;
+                els.onboardBtn.disabled = true;
+                els.onboardBtn.textContent = "Opening Stripe...";
+                try {
+                    const res = await fetch(
+                        `/api/accounts/${encodeURIComponent(accountId)}/onboarding-link`,
+                        { method: "POST" },
+                    );
+                    const json = await res.json();
+                    if (!res.ok)
+                        throw new Error(json.error || "Could not create onboarding link");
+                    window.location.href = json.url;
+                } catch (err) {
+                    els.statusError.textContent = err.message;
+                    els.statusError.hidden = false;
+                    els.onboardBtn.disabled = false;
+                    els.onboardBtn.textContent = "Onboard to collect payments";
+                }
+            });
+
+            els.productForm?.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                els.productError.hidden = true;
+                els.productBtn.disabled = true;
+                els.productBtn.textContent = "Creating...";
+                try {
+                    const data = new FormData(els.productForm);
+                    const usd = Number(data.get("priceUsd"));
+                    const res = await fetch("/api/products", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            accountId,
+                            name: data.get("name"),
+                            description: data.get("description") || undefined,
+                            currency: "usd",
+                            priceInCents: Math.round(usd * 100),
+                        }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok)
+                        throw new Error(json.error || "Could not create product");
+                    els.productForm.reset();
+                    document.getElementById("priceUsd").value = "9.99";
+                    refreshProducts();
+                } catch (err) {
+                    els.productError.textContent = err.message;
+                    els.productError.hidden = false;
+                } finally {
+                    els.productBtn.disabled = false;
+                    els.productBtn.textContent = "Create product";
+                }
+            });
+
+            async function refreshStatus() {
+                els.statusError.hidden = true;
+                try {
+                    const res = await fetch(
+                        `/api/accounts/${encodeURIComponent(accountId)}/status`,
+                    );
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error || "Status error");
+
+                    els.displayName.textContent =
+                        json.displayName || "(no display name)";
+
+                    // Ready-to-receive badge.
+                    if (json.readyToReceivePayments) {
+                        els.readyBadge.textContent =
+                            "Ready to receive payments";
+                        els.readyBadge.className = "badge badge-success";
+                    } else {
+                        els.readyBadge.textContent =
+                            "Payments not yet enabled";
+                        els.readyBadge.className = "badge badge-warning";
+                    }
+
+                    // Onboarding badge.
+                    if (json.onboardingComplete) {
+                        els.onboardingBadge.textContent = "Onboarding complete";
+                        els.onboardingBadge.className = "badge badge-success";
+                    } else if (json.requirementsStatus === "past_due") {
+                        els.onboardingBadge.textContent =
+                            "Action required (past due)";
+                        els.onboardingBadge.className = "badge badge-danger";
+                    } else {
+                        els.onboardingBadge.textContent = "Onboarding pending";
+                        els.onboardingBadge.className = "badge badge-warning";
+                    }
+
+                    els.statusDetail.textContent = `transfers status: ${json.transfersStatus ?? "n/a"} | requirements status: ${json.requirementsStatus ?? "n/a"}`;
+
+                    // Gate the product form on ready-to-receive.
+                    const ready = json.readyToReceivePayments;
+                    els.productBtn.disabled = !ready;
+                    els.productGate.hidden = ready;
+                    document.getElementById("name").disabled = !ready;
+                    document.getElementById("description").disabled = !ready;
+                    document.getElementById("priceUsd").disabled = !ready;
+                } catch (err) {
+                    els.statusError.textContent = err.message;
+                    els.statusError.hidden = false;
+                }
+            }
+
+            async function refreshProducts() {
+                try {
+                    const res = await fetch("/api/products");
+                    const json = await res.json();
+                    const mine = (json.products || []).filter(
+                        (p) => p.accountId === accountId,
+                    );
+                    if (mine.length === 0) {
+                        els.myProducts.innerHTML = "";
+                        els.myProductsEmpty.hidden = false;
+                        return;
+                    }
+                    els.myProductsEmpty.hidden = true;
+                    els.myProducts.innerHTML = mine
+                        .map(
+                            (p) => `
+                                <div class="product">
+                                    <div><strong>${escapeHtml(p.name)}</strong></div>
+                                    <div class="muted">${escapeHtml(p.description ?? "")}</div>
+                                    <div class="price">$${(p.priceInCents / 100).toFixed(2)} ${p.currency.toUpperCase()}</div>
+                                    <div class="muted code">${p.productId}</div>
+                                </div>
+                            `,
+                        )
+                        .join("");
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+
+            function escapeHtml(s) {
+                return String(s)
+                    .replaceAll("&", "&amp;")
+                    .replaceAll("<", "&lt;")
+                    .replaceAll(">", "&gt;")
+                    .replaceAll('"', "&quot;");
+            }
+        </script>
+    </body>
+</html>

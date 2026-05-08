@@ -29,13 +29,22 @@
       "package": "com.fclaiba.ramgosmobile",
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyDfd3Eto5_NnPaPKj69l0BSytUhCDqUZVs"
+          "apiKey": "__SET_GOOGLE_MAPS_ANDROID_API_KEY__"
         }
       }
     },
     "web": {
       "favicon": "./logo.jpeg"
     },
+    "plugins": [
+      "@sentry/react-native/expo",
+      [
+        "react-native-iap",
+        {
+          "paymentProvider": "Play Store"
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "49ae7444-e479-4437-be05-fa5fdf9cf6db"

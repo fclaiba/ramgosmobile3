@@ -1,7 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { UserListItem } from '../../components/social/UserListItem';
 import { MobileHeader } from '../../components/MobileHeader';
@@ -12,7 +15,8 @@ export default function UserListScreen() {
     const { userId, type } = route.params || {};
     // type: 'followers' | 'following'
 
-    const { getFollowers, getFollowing, getUserById } = useSocial();
+    const { getUserById } = useSocial();
+    const { user: authUser } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -20,11 +24,43 @@ export default function UserListScreen() {
     const user = getUserById(userId);
     const title = type === 'followers' ? 'Seguidores' : 'Siguiendo';
 
-    const users = useMemo(() => {
-        if (type === 'followers') return getFollowers(userId);
-        if (type === 'following') return getFollowing(userId);
+    const followersRows = useQuery(
+        api.social.getFollowers,
+        authUser && type === 'followers' ? { actorId: authUser.id as any, userId } : 'skip',
+    );
+    const followingRows = useQuery(
+        api.social.getFollowing,
+        authUser && type === 'following' ? { actorId: authUser.id as any, userId } : 'skip',
+    );
+
+    const otherIds = useMemo(() => {
+        if (type === 'followers') return (followersRows ?? []).map((r: any) => r.followerUserId);
+        if (type === 'following') return (followingRows ?? []).map((r: any) => r.followeeUserId);
         return [];
-    }, [userId, type, getFollowers, getFollowing]);
+    }, [type, followersRows, followingRows]);
+
+    // Hydrate via socialUsers — one query per ID is fine for v1 list sizes.
+    const profilesArr = useQuery(
+        api.social.searchUsers,
+        authUser ? { actorId: authUser.id as any, term: '', limit: 1 } : 'skip',
+    );
+    void profilesArr; // Placeholder so the query slot is reserved for future bulk lookup.
+
+    const users = useMemo(
+        () => otherIds.map((id: string) => ({
+            id,
+            name: getUserById(id)?.name ?? 'Usuario',
+            displayName: getUserById(id)?.displayName ?? 'Usuario',
+            username: getUserById(id)?.username ?? 'usuario',
+            avatar: getUserById(id)?.avatar ?? '',
+            bio: getUserById(id)?.bio ?? '',
+            followers: getUserById(id)?.followers ?? 0,
+            following: getUserById(id)?.following ?? 0,
+            isInfluencer: false,
+            verified: false,
+        })),
+        [otherIds, getUserById],
+    );
 
     return (
         <View style={styles.container}>

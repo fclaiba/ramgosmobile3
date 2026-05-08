@@ -67,7 +67,9 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     const responseListener = useRef<any | undefined>(undefined);
     const { user } = useAuth(); // Tie storage to user potentially, or just global for now
     const { show } = useToast();
-    const registerPushToken = useMutation((api as any).notifications?.registerPushToken || api.users.syncUser);
+    const registerPushToken = useMutation(api.notifications.registerPushToken);
+    const removePushToken = useMutation(api.notifications.removePushToken);
+    const tokenRegistrationRef = useRef<string | null>(null);
 
     // Load history on mount
     useEffect(() => {
@@ -80,23 +82,36 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
             .catch(err => console.error('Failed to save notifications', err));
     }, [notifications]);
 
-    // Register for push notifications
+    // Register for push notifications. We dedupe per (userId,token) so a
+    // re-render of the provider doesn't re-POST the same token to Convex.
     useEffect(() => {
         if (user && user.id) {
             registerForPushNotificationsAsync()
                 .then((token) => {
-                    if (token) {
-                        setExpoPushToken(token);
-                        setPermissionStatus('granted');
-                        // Persist token in Convex
-                        registerPushToken({ actorId: user.id as any, token }).catch(err => {
-                            console.warn("Could not register token on server", err);
-                        });
-                    }
+                    if (!token) return;
+                    setExpoPushToken(token);
+                    setPermissionStatus('granted');
+                    const registrationKey = `${user.id}:${token}`;
+                    if (tokenRegistrationRef.current === registrationKey) return;
+                    tokenRegistrationRef.current = registrationKey;
+                    registerPushToken({ actorId: user.id as any, token }).catch(err => {
+                        console.warn("Could not register token on server", err);
+                        tokenRegistrationRef.current = null; // allow retry
+                    });
                 })
                 .catch(error => {
                     console.warn('Failed to register for push notifications:', error);
                 });
+        } else {
+            // User logged out: try to detach the previously-registered token.
+            const previous = tokenRegistrationRef.current;
+            if (previous && expoPushToken) {
+                const [previousUserId, previousToken] = previous.split(':');
+                removePushToken({ actorId: previousUserId as any, token: previousToken }).catch(() => {
+                    // best-effort, swallow errors
+                });
+                tokenRegistrationRef.current = null;
+            }
         }
 
         // This listener is fired whenever a notification is received while the app is foregrounded
@@ -158,18 +173,23 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         setNotifications([]);
     };
 
+    // Local-only simulator. No-op in production builds — push notifications
+    // there must arrive from Convex via Expo Push API. Kept on the context
+    // so existing dev tooling/debug screens don't break.
     const simulateNotification = async (title: string, body: string, type: NotificationType = 'system') => {
-        // Schedule a local notification
+        if (!__DEV__) {
+            console.warn('[notifications] simulateNotification ignored in production');
+            return;
+        }
         await Notifications.scheduleNotificationAsync({
             content: {
                 title,
                 body,
                 data: { type },
             },
-            trigger: null, // Send immediately
+            trigger: null,
         });
 
-        // Mocking behavior for now since notifications are disabled
         const newNotif: AppNotification = {
             id: Date.now().toString(),
             title,

@@ -14,36 +14,12 @@ export type SupportTicketResult = {
 };
 
 const SUPPORT_EMAIL = 'support@ramgos.com';
-const ZENDESK_ENABLED = false;
-const ZENDESK_SUBDOMAIN = process.env.EXPO_PUBLIC_ZENDESK_SUBDOMAIN;
-const ZENDESK_EMAIL = process.env.EXPO_PUBLIC_ZENDESK_EMAIL;
-const ZENDESK_API_TOKEN = process.env.EXPO_PUBLIC_ZENDESK_API_TOKEN;
+const ZENDESK_ENABLED = process.env.EXPO_PUBLIC_ZENDESK_ENABLED === 'true';
 
-const toBase64 = (input: string): string => {
-    if (typeof globalThis.btoa === 'function') {
-        return globalThis.btoa(input);
-    }
-
-    const BufferRef = (globalThis as any).Buffer;
-    if (BufferRef?.from) {
-        return BufferRef.from(input, 'utf8').toString('base64');
-    }
-
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-    let str = input;
-    let output = '';
-    for (let block = 0, charCode, i = 0, map = chars;
-        str.charAt(i | 0) || (map = '=', i % 1);
-        output += map.charAt(63 & (block >> (8 - (i % 1) * 8)))
-    ) {
-        charCode = str.charCodeAt(i += 3 / 4);
-        if (charCode > 0xff) {
-            throw new Error('toBase64 solo admite caracteres ASCII.');
-        }
-        block = (block << 8) | charCode;
-    }
-
-    return output;
+const getConvexSiteUrl = (): string | null => {
+    const convexCloudUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
+    if (!convexCloudUrl) return null;
+    return convexCloudUrl.replace('.convex.cloud', '.convex.site');
 };
 
 const formatBody = (payload: SupportTicketPayload) => (
@@ -58,38 +34,31 @@ const tryZendesk = async (payload: SupportTicketPayload): Promise<boolean> => {
         return false;
     }
 
-    if (!ZENDESK_SUBDOMAIN || !ZENDESK_EMAIL || !ZENDESK_API_TOKEN) {
+    const convexSiteUrl = getConvexSiteUrl();
+    if (!convexSiteUrl) {
         return false;
     }
 
-    const endpoint = `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/requests.json`;
-    const credentials = `${ZENDESK_EMAIL}/token:${ZENDESK_API_TOKEN}`;
+    const endpoint = `${convexSiteUrl}/support-ticket`;
 
     try {
-        const subjectLine = payload.subject?.trim() || 'Solicitud de soporte';
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Basic ${toBase64(credentials)}`,
             },
-            body: JSON.stringify({
-                request: {
-                    requester: {
-                        name: payload.name,
-                        email: payload.email,
-                    },
-                    subject: `[${payload.category}] ${subjectLine}`,
-                    comment: {
-                        body: formatBody(payload),
-                    },
-                },
-            }),
+            body: JSON.stringify(payload),
         });
 
-        return response.ok;
+        if (!response.ok) {
+            console.warn('Zendesk endpoint error', response.status);
+            return false;
+        }
+
+        const data = await response.json();
+        return Boolean(data?.success);
     } catch (error) {
-        console.warn('Zendesk request error', error);
+        console.warn('Zendesk endpoint request error', error);
         return false;
     }
 };
@@ -118,4 +87,5 @@ export const submitSupportTicket = async (payload: SupportTicketPayload): Promis
 };
 
 export const getSupportEmail = () => SUPPORT_EMAIL;
+export const isZendeskEnabled = () => ZENDESK_ENABLED;
 

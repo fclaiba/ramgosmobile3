@@ -1,4 +1,4 @@
-import type { PublicUser, SubscriptionTier } from '../services/auth/mockConvexStore';
+import type { PublicUser, SubscriptionTier } from '../contexts/AuthContext';
 
 export type PaidSubscriptionTier = Exclude<SubscriptionTier, 'free'>; // 'pro' | 'business'
 

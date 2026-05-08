@@ -1,0 +1,14 @@
+# Local-only environment configuration (never commit real keys).
+.env
+
+# Local persistence — re-created at runtime.
+data/store.json
+
+# Node toolchain output.
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# OS noise.
+.DS_Store
+Thumbs.db

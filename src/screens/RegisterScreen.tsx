@@ -187,15 +187,15 @@ export default function RegisterScreen({ navigation, route }: any) {
             if (formData.acceptTerms) {
                 // Use backend mutation directly since AuthContext user might not be synced yet
                 await acceptTermsMutation({
-                    id: result.userId as any,
+                    id: result.user.id as any,
                     version: CURRENT_TERMS_VERSION
                 });
             }
 
-            // Referral attribution (demo/mock): store pending code and redeem after auth is established.
+            // Referral attribution: store pending code and redeem after auth is established.
             if (formData.referralCode) {
                 await AsyncStorage.setItem(
-                    `@ramgos/referrals/pending/${result.userId}`,
+                    `@ramgos/referrals/pending/${result.user.id}`,
                     formData.referralCode.trim().toUpperCase()
                 );
             }

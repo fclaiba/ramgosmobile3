@@ -1,66 +1,77 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation } from '@react-navigation/native';
 import { X, Zap, CheckCircle, AlertTriangle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function BusinessScannerScreen() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
+    const { user } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<'success' | 'error' | null>(null);
+    const [resultMessage, setResultMessage] = useState<string>('');
     const [torchOn, setTorchOn] = useState(false);
 
-    // Function to handle successful scan
-    const handleBarCodeScanned = async ({ type, data }: any) => {
+    // Real bono redemption — server enforces:
+    //   - actor is the bono's seller (or admin)
+    //   - bono is in 'issued' state and not expired
+    //   - on success it auto-releases the order's escrow
+    const _api = api as any;
+    const redeemBonoMutation = useMutation(_api.bonos?.redeemBono || api.users.syncUser);
+
+    // Function to handle successful scan. Accepts either:
+    //   - the raw bonoCode (e.g. "BNO-123-XYZ"), or
+    //   - a JSON envelope `{ "type":"bonus_redemption", "code":"BNO-..." }`
+    //     emitted by older client builds.
+    const handleBarCodeScanned = async ({ data }: any) => {
         if (scanned || loading) return;
 
         setScanned(true);
         setLoading(true);
 
+        let bonoCode: string | null = null;
+
         try {
-            // Simulate backend validation
-            console.log('Scanned Data:', data);
-            let parsedData;
+            const trimmed = String(data ?? '').trim();
+            if (!trimmed) throw new Error('QR vacío');
+
             try {
-                parsedData = JSON.parse(data);
+                const parsed = JSON.parse(trimmed);
+                bonoCode = parsed?.code ?? parsed?.bonoCode ?? null;
             } catch {
-                // If it's not JSON, assume invalid
-                throw new Error("Invalid Format");
+                bonoCode = trimmed;
             }
 
-            setTimeout(() => {
-                setLoading(false);
+            if (!bonoCode) throw new Error('Código no reconocido.');
 
-                // Mock validation logic
-                // If the QR is a valid bonus redemption format
-                if (parsedData && parsedData.type === 'bonus_redemption') {
-                    // Check if not expired (mock: if created more than 5 mins ago, invalid)
-                    const now = new Date().getTime();
-                    if (parsedData.validUntil && now > parsedData.validUntil) {
-                        setResult('error'); // Expired
-                        return;
-                    }
-                    setResult('success');
-                } else {
-                    setResult('error'); // Invalid format
-                }
-            }, 1500);
+            await redeemBonoMutation({
+                actorId: user?.id as any,
+                bonoCode,
+            });
 
-        } catch (e) {
+            setLoading(false);
+            setResult('success');
+            setResultMessage('Canje confirmado. El pago al negocio se libera automáticamente.');
+        } catch (e: any) {
             setLoading(false);
             setResult('error');
+            setResultMessage(e?.message || 'No se pudo validar el bono.');
         }
     };
 
     const resetScanner = () => {
         setScanned(false);
         setResult(null);
+        setResultMessage('');
     };
 
     if (!permission) {
@@ -125,17 +136,17 @@ export default function BusinessScannerScreen() {
                         {result === 'success' ? (
                             <>
                                 <CheckCircle size={64} color="#fff" />
-                                <Text style={styles.resultTitle}>Bono Válido</Text>
-                                <Text style={styles.resultSub}>Descuento del 20% autorizado</Text>
+                                <Text style={styles.resultTitle}>Bono canjeado</Text>
+                                <Text style={styles.resultSub}>{resultMessage || 'Canje confirmado.'}</Text>
                                 <TouchableOpacity style={styles.confirmBtn} onPress={resetScanner}>
-                                    <Text style={styles.confirmBtnText}>Confirmar Canje</Text>
+                                    <Text style={styles.confirmBtnText}>Escanear otro</Text>
                                 </TouchableOpacity>
                             </>
                         ) : (
                             <>
                                 <AlertTriangle size={64} color="#fff" />
-                                <Text style={styles.resultTitle}>QR Inválido</Text>
-                                <Text style={styles.resultSub}>El código expiró o no es válido</Text>
+                                <Text style={styles.resultTitle}>No se pudo canjear</Text>
+                                <Text style={styles.resultSub}>{resultMessage || 'El código no es válido.'}</Text>
                                 <TouchableOpacity style={[styles.confirmBtn, styles.errorBtn]} onPress={resetScanner}>
                                     <Text style={[styles.confirmBtnText, { color: '#EF4444' }]}>Intentar de nuevo</Text>
                                 </TouchableOpacity>

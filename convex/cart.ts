@@ -16,7 +16,7 @@ export const addToCart = mutation({
             price: v.number(),
             image: v.optional(v.string()),
             sellerId: v.optional(v.string()),
-            type: v.optional(v.union(v.literal('product'), v.literal('bono'), v.literal('event'), v.literal('subscription'))),
+            type: v.optional(v.union(v.literal('product'), v.literal('service'), v.literal('bono'), v.literal('event'), v.literal('subscription'))),
             subscriptionTier: v.optional(v.union(v.literal('pro'), v.literal('business'))),
             location: v.optional(v.string()),
             sellerName: v.optional(v.string()),
@@ -59,17 +59,26 @@ export const addToCart = mutation({
         let snapshot = args.snapshot;
 
         if (!isVirtual) {
-            // Get listing details for snapshot
             const listing = await ctx.db.get(args.listingId as Id<"listings">);
             if (!listing) {
                 throw new Error("Producto no encontrado");
             }
+            // Map listing.type ('product' | 'service' | 'event' | 'bono')
+            // to a cart snapshot type. Services and bonos and events keep their
+            // semantic so downstream (PaymentIntent, redemption flows, event
+            // reservations) can branch on it.
+            const listingType = (listing as any).type as
+                | 'product'
+                | 'service'
+                | 'event'
+                | 'bono'
+                | undefined;
             snapshot = {
                 title: listing.title,
                 price: listing.price,
                 image: listing.image,
                 sellerId: listing.sellerId,
-                type: 'product',
+                type: listingType ?? 'product',
                 sellerName: (listing as any).sellerName,
                 condition: (listing as any).condition,
                 shippingWeightKg: (listing as any).shippingWeightKg,

@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react-native';
+import * as Sentry from '@sentry/react-native';
 
 interface Props {
     children: ReactNode;
@@ -24,6 +25,11 @@ export class CrashHandler extends Component<Props, State> {
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error("CrashHandler caught error:", error, errorInfo);
+        Sentry.captureException(error, {
+            extra: {
+                componentStack: errorInfo.componentStack,
+            },
+        });
     }
 
     handleReset = async () => {

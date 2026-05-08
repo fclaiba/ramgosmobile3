@@ -1,14 +1,25 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
-import { useWallet, Campaign } from '../../contexts/WalletContext';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { Megaphone, Plus, Copy, TrendingUp, DollarSign, Users } from 'lucide-react-native';
+import { Plus, Copy, TrendingUp, DollarSign, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
+/**
+ * CampaignManagerScreen — influencer-side view to propose campaigns to
+ * a business. Replaces the legacy `WalletContext.campaigns` mock with
+ * `api.campaigns.*` queries/mutations against the Convex
+ * `influencerCampaigns` table.
+ *
+ * Note: actual sales / earnings stats per campaign live on the
+ * `payments` table and need a future aggregator query
+ * (`api.campaigns.getCampaignStats`); for now we render zeros until that
+ * lands so the UI stays honest about what's wired up.
+ */
 export default function CampaignManagerScreen() {
-    const { campaigns, createCampaign } = useWallet();
     const { user } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -16,37 +27,59 @@ export default function CampaignManagerScreen() {
     const { show } = useToast();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newCode, setNewCode] = useState('');
-    const [storeName, setStoreName] = useState('');
+    const [businessLookup, setBusinessLookup] = useState('');
+    const [commissionPct, setCommissionPct] = useState('5');
+    const [submitting, setSubmitting] = useState(false);
 
-    // Filter campaigns for current user (influencer)
-    // For demo: assume current user is 'inf_1' if not set, or match user.id
-    const myId = user?.id || 'inf_1'; // fallback
+    const myId = user?.id;
+    const campaigns = useQuery(
+        api.campaigns.getMyCampaigns,
+        myId ? { actorId: myId as any, influencerId: myId as any } : 'skip',
+    ) ?? [];
 
-    // In our mock WalletContext, we initialized with 'inf_1'. If we want to test effectively, 
-    // we should align IDs. But let's just show ALL campaigns for demo purposes if ID doesn't match,
-    // or strictly filter. Let's strictly filter but ensure WalletContext has a match or we create one.
-    // Actually, let's just show all for the demo to ensure visibility.
-    const myCampaigns = campaigns; // .filter(c => c.influencerId === myId);
+    const proposeCampaign = useMutation(api.campaigns.proposeCampaign);
 
-    const handleCreate = () => {
-        if (!newCode || !storeName) {
-            show('Completa todos los campos', 'error');
+    const handleCreate = async () => {
+        if (!myId) {
+            show('Iniciá sesión para crear una campaña.', 'error');
             return;
         }
-        createCampaign(myId, 'store_temp', storeName, newCode);
-        setIsModalOpen(false);
-        setNewCode('');
-        setStoreName('');
-        show('Campaña creada correctamente.', 'success');
+        const businessId = businessLookup.trim();
+        const ratePct = Number(commissionPct);
+        if (!businessId) {
+            show('Pegá el ID del negocio.', 'error');
+            return;
+        }
+        if (!Number.isFinite(ratePct) || ratePct <= 0 || ratePct > 50) {
+            show('La comisión debe ser entre 1% y 50%.', 'error');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await proposeCampaign({
+                actorId: myId as any,
+                influencerId: myId as any,
+                businessId: businessId as any,
+                commissionRate: ratePct / 100,
+            });
+            setIsModalOpen(false);
+            setBusinessLookup('');
+            setCommissionPct('5');
+            show('Propuesta enviada al negocio.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo crear la campaña.', 'error');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.headerTitle}>Campañas Activas</Text>
-                    <Text style={styles.headerSubtitle}>Gestiona tus códigos de influencer</Text>
+                    <Text style={styles.headerTitle}>Mis Campañas</Text>
+                    <Text style={styles.headerSubtitle}>Propuestas y campañas activas con negocios</Text>
                 </View>
                 <TouchableOpacity style={styles.createBtn} onPress={() => setIsModalOpen(true)}>
                     <Plus size={20} color="#fff" />
@@ -54,42 +87,59 @@ export default function CampaignManagerScreen() {
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 0, gap: 16 }}>
-                {myCampaigns.map(camp => (
-                    <CampaignCard key={camp.id} campaign={camp} isDark={isDark} styles={styles} />
+                {campaigns.length === 0 && (
+                    <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginTop: 32 }}>
+                        Todavía no tenés campañas. Tocá + para proponerle una a un negocio.
+                    </Text>
+                )}
+                {campaigns.map((camp: any) => (
+                    <CampaignCard key={camp._id} campaign={camp} isDark={isDark} styles={styles} />
                 ))}
             </ScrollView>
 
-            {/* Create Campaign Modal */}
             <Modal visible={isModalOpen} animationType="slide" transparent>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Nueva Campaña</Text>
+                        <Text style={styles.modalTitle}>Proponer Campaña</Text>
 
-                        <Text style={styles.label}>Nombre de la Tienda / Marca</Text>
+                        <Text style={styles.label}>ID del Negocio</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Ej: Nike Store"
+                            placeholder="users/abc123..."
                             placeholderTextColor="#9CA3AF"
-                            value={storeName}
-                            onChangeText={setStoreName}
+                            value={businessLookup}
+                            onChangeText={setBusinessLookup}
+                            autoCapitalize="none"
                         />
 
-                        <Text style={styles.label}>Código Promocional</Text>
+                        <Text style={styles.label}>Comisión (%)</Text>
                         <TextInput
                             style={styles.input}
-                            placeholder="Ej: JORGE10"
-                            autoCapitalize="characters"
+                            placeholder="5"
                             placeholderTextColor="#9CA3AF"
-                            value={newCode}
-                            onChangeText={setNewCode}
+                            value={commissionPct}
+                            onChangeText={setCommissionPct}
+                            keyboardType="numeric"
                         />
 
                         <View style={styles.modalActions}>
-                            <TouchableOpacity onPress={() => setIsModalOpen(false)} style={styles.cancelBtn}>
+                            <TouchableOpacity
+                                onPress={() => setIsModalOpen(false)}
+                                style={styles.cancelBtn}
+                                disabled={submitting}
+                            >
                                 <Text style={styles.cancelText}>Cancelar</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={handleCreate} style={styles.confirmBtn}>
-                                <Text style={styles.confirmText}>Crear Campaña</Text>
+                            <TouchableOpacity
+                                onPress={handleCreate}
+                                style={styles.confirmBtn}
+                                disabled={submitting}
+                            >
+                                {submitting ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.confirmText}>Enviar Propuesta</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -99,7 +149,15 @@ export default function CampaignManagerScreen() {
     );
 }
 
-function CampaignCard({ campaign, isDark, styles }: { campaign: Campaign, isDark: boolean, styles: any }) {
+function CampaignCard({ campaign, isDark, styles }: { campaign: any; isDark: boolean; styles: any }) {
+    const statusColor =
+        campaign.status === 'active'
+            ? '#10B981'
+            : campaign.status === 'pending'
+                ? '#F59E0B'
+                : campaign.status === 'paused'
+                    ? '#6B7280'
+                    : '#EF4444';
     return (
         <View style={styles.card}>
             <LinearGradient
@@ -107,40 +165,55 @@ function CampaignCard({ campaign, isDark, styles }: { campaign: Campaign, isDark
                 style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
             />
             <View style={styles.cardHeader}>
-                <View>
-                    <Text style={styles.storeName}>{campaign.targetStoreName}</Text>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.storeName}>{campaign.businessName ?? 'Negocio'}</Text>
                     <View style={styles.codeBadge}>
-                        <Text style={styles.codeText}>{campaign.code}</Text>
+                        <Text style={styles.codeText}>
+                            {(campaign.commissionRate * 100).toFixed(1)}% por venta
+                        </Text>
                         <Copy size={12} color="#7C3AED" />
                     </View>
                 </View>
-                <View style={styles.statusBadge}>
-                    <View style={styles.activeDot} />
-                    <Text style={styles.activeText}>Activa</Text>
+                <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
+                    <View style={[styles.activeDot, { backgroundColor: statusColor }]} />
+                    <Text style={[styles.activeText, { color: statusColor }]}>
+                        {labelForStatus(campaign.status)}
+                    </Text>
                 </View>
             </View>
 
             <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                     <Users size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                    <Text style={styles.statValue}>{campaign.stats.uses}</Text>
+                    <Text style={styles.statValue}>—</Text>
                     <Text style={styles.statLabel}>Usos</Text>
                 </View>
                 <View style={styles.verticalDivider} />
                 <View style={styles.statItem}>
                     <TrendingUp size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                    <Text style={styles.statValue}>${campaign.stats.totalSales.toFixed(0)}</Text>
+                    <Text style={styles.statValue}>—</Text>
                     <Text style={styles.statLabel}>Ventas</Text>
                 </View>
                 <View style={styles.verticalDivider} />
                 <View style={styles.statItem}>
                     <DollarSign size={16} color="#10B981" />
-                    <Text style={[styles.statValue, { color: '#10B981' }]}>${campaign.stats.totalEarnings.toFixed(2)}</Text>
+                    <Text style={[styles.statValue, { color: '#10B981' }]}>—</Text>
                     <Text style={styles.statLabel}>Comisión</Text>
                 </View>
             </View>
         </View>
     );
+}
+
+function labelForStatus(status: string) {
+    switch (status) {
+        case 'active': return 'Activa';
+        case 'pending': return 'Pendiente';
+        case 'paused': return 'Pausada';
+        case 'ended': return 'Finalizada';
+        case 'rejected': return 'Rechazada';
+        default: return status;
+    }
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
@@ -185,7 +258,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 2,
-        backgroundColor: isDark ? '#1F2937' : '#fff', // fallback
+        backgroundColor: isDark ? '#1F2937' : '#fff',
     },
     cardHeader: {
         flexDirection: 'row',
@@ -260,8 +333,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         height: 30,
         backgroundColor: isDark ? '#374151' : '#F3F4F6',
     },
-
-    // Modal
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',

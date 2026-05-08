@@ -1,78 +1,173 @@
-import React, { useState, useMemo } from 'react';
+/**
+ * WithdrawalScreen — Stripe Connect payout management.
+ *
+ * Sprint 6 rewrite: this screen no longer collects raw bank details (the
+ * legacy ACH form was a mock — `finance.createWithdrawal` only flipped a
+ * status flag and never moved money). The seller's bank lives inside their
+ * Stripe Connect account now (added during onboarding via Stripe-hosted
+ * KYC), so all this screen does is:
+ *
+ *   1. Show the live Connect balance (available + pending) read from
+ *      Stripe with no DB cache.
+ *   2. Let the seller pick an automatic payout schedule
+ *      (manual / daily / weekly / monthly), persisted on the connected
+ *      account via `accounts.update({ settings.payouts.schedule })`.
+ *   3. Trigger an on-demand payout via `payouts.create` scoped to the
+ *      connected account (Stripe-Account header).
+ *
+ * If the seller hasn't completed Connect onboarding yet, the screen guides
+ * them back to the dashboard banner (we do NOT replicate the onboarding UI
+ * here — single source of truth lives on BusinessDashboardScreen /
+ * InfluencerDashboardScreen).
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { MobileHeader } from '../components/MobileHeader';
-import { useFintech } from '../contexts/FintechContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Building, DollarSign, Wallet, CheckCircle2, AlertCircle, ChevronDown, Lock } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useToast } from '../contexts/ToastContext';
+import { Wallet, DollarSign, Calendar, Send, AlertCircle, CheckCircle2 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+
+type Interval = 'manual' | 'daily' | 'weekly' | 'monthly';
+
+const INTERVALS: { id: Interval; label: string; description: string }[] = [
+    { id: 'manual', label: 'Manual', description: 'Disparo on-demand desde esta pantalla.' },
+    { id: 'daily', label: 'Diario', description: 'Stripe envía tu balance todos los días hábiles.' },
+    { id: 'weekly', label: 'Semanal', description: 'Stripe envía tu balance una vez por semana.' },
+    { id: 'monthly', label: 'Mensual', description: 'Stripe envía tu balance una vez al mes.' },
+];
 
 export default function WithdrawalScreen({ navigation, route }: any) {
     const { user } = useAuth();
-    const { getWalletByOwner, requestWithdrawal } = useFintech();
-    const [amount, setAmount] = useState('');
-    const [loading, setLoading] = useState(false);
     const { show } = useToast();
 
-    // US Bank Details State
-    const [bankName, setBankName] = useState('');
-    const [routingNumber, setRoutingNumber] = useState('');
-    const [accountNumber, setAccountNumber] = useState('');
-    const [accountType, setAccountType] = useState<'checking' | 'savings'>('checking');
+    const [amount, setAmount] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [scheduleSaving, setScheduleSaving] = useState(false);
+    const [interval, setInterval] = useState<Interval>('manual');
+    const [balance, setBalance] = useState<{
+        accountId: string | null;
+        availableCents: number;
+        pendingCents: number;
+        currency: string;
+    } | null>(null);
+    const [refreshing, setRefreshing] = useState(true);
 
-    // Get wallet based on context passed or user ID fallback
-    const ownerId = route.params?.ownerId ?? user?.id; // Fallback to user ID but ideally should be passed
-    const wallet = getWalletByOwner(ownerId);
+    const _api = api as any;
+    const getConnectBalance = useAction(_api.connect?.getConnectBalance || api.users.syncUser);
+    const updatePayoutSchedule = useAction(_api.connect?.updatePayoutSchedule || api.users.syncUser);
+    const requestInstantPayout = useAction(_api.connect?.requestInstantPayout || api.users.syncUser);
 
-    const availableBalance = wallet?.balances.available ?? 0;
+    const userId = user?.id ?? route.params?.ownerId;
+    const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
 
-    const handleWithdraw = async () => {
-        const withdrawAmount = parseFloat(amount);
-
-        if (isNaN(withdrawAmount) || withdrawAmount < 10) {
-            show('Monto inválido. Mínimo $10.00 USD', 'error');
+    useEffect(() => {
+        let cancelled = false;
+        if (!userId) {
+            setRefreshing(false);
             return;
         }
+        (async () => {
+            try {
+                const result: any = await getConnectBalance({
+                    actorId: userId as any,
+                    userId: userId as any,
+                });
+                if (!cancelled && result) {
+                    setBalance({
+                        accountId: result.accountId,
+                        availableCents: result.availableCents,
+                        pendingCents: result.pendingCents,
+                        currency: result.currency,
+                    });
+                }
+            } catch (e: any) {
+                console.warn('[Connect V2] getConnectBalance failed', e);
+            } finally {
+                if (!cancelled) setRefreshing(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [userId, getConnectBalance]);
 
-        if (withdrawAmount > availableBalance) {
-            show('Saldo insuficiente', 'error');
+    const availableUSD = useMemo(
+        () => (balance ? balance.availableCents / 100 : 0),
+        [balance],
+    );
+    const pendingUSD = useMemo(
+        () => (balance ? balance.pendingCents / 100 : 0),
+        [balance],
+    );
+
+    const onboardingMissing = !stripeConnectAccountId || !balance?.accountId;
+
+    const handleSchedule = async (next: Interval) => {
+        if (!userId) return;
+        setScheduleSaving(true);
+        try {
+            await updatePayoutSchedule({
+                actorId: userId as any,
+                userId: userId as any,
+                interval: next,
+            });
+            setInterval(next);
+            show(`Payouts ahora se envían en modo "${next}".`, 'success');
+        } catch (e: any) {
+            show(e.message || 'No se pudo actualizar el calendario.', 'error');
+        } finally {
+            setScheduleSaving(false);
+        }
+    };
+
+    const handleInstantPayout = async () => {
+        const usd = parseFloat(amount);
+        if (isNaN(usd) || usd <= 0) {
+            show('Monto inválido.', 'error');
             return;
         }
-
-        // Validate US Bank Details
-        if (!bankName || routingNumber.length !== 9 || accountNumber.length < 4) {
-            show('Completa los datos bancarios correctamente', 'error');
+        if (usd < 1) {
+            show('El monto mínimo de payout es $1.00 USD.', 'error');
             return;
         }
+        if (usd > availableUSD) {
+            show('Saldo disponible insuficiente.', 'error');
+            return;
+        }
+        if (!userId) return;
 
         setLoading(true);
         try {
-            // Simulate API call delay
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            const destinationLabel = `${bankName} •••• ${accountNumber.slice(-4)}`;
-
-            requestWithdrawal({
-                accountId: wallet?.ownerId ?? '',
-                amount: withdrawAmount,
-                destination: {
-                    type: 'bank',
-                    label: destinationLabel
-                },
-                metadata: {
-                    bankName,
-                    routingNumber,
-                    accountNumber,
-                    accountType,
-                    market: 'US-NY'
-                },
-                notes: `Retiro a cuenta ${accountType} en ${bankName}`
+            const result: any = await requestInstantPayout({
+                actorId: userId as any,
+                userId: userId as any,
+                amountInCents: Math.round(usd * 100),
+                currency: balance?.currency ?? 'usd',
             });
-
-            show(`Solicitud Enviada. $${withdrawAmount.toFixed(2)} a ${destinationLabel}`, 'success');
-            setTimeout(() => navigation.goBack(), 1500);
-        } catch (error: any) {
-            show(error.message || 'No se pudo procesar la solicitud', 'error');
+            const arrives = result?.arrivalDate
+                ? new Date(result.arrivalDate * 1000).toLocaleDateString('es-ES')
+                : 'pronto';
+            show(`Payout solicitado. Llega aprox. ${arrives}.`, 'success');
+            setAmount('');
+            // Re-pull balance.
+            try {
+                const fresh: any = await getConnectBalance({
+                    actorId: userId as any,
+                    userId: userId as any,
+                });
+                if (fresh) {
+                    setBalance({
+                        accountId: fresh.accountId,
+                        availableCents: fresh.availableCents,
+                        pendingCents: fresh.pendingCents,
+                        currency: fresh.currency,
+                    });
+                }
+            } catch (_) { /* best-effort */ }
+        } catch (e: any) {
+            show(e.message || 'No se pudo procesar el payout.', 'error');
         } finally {
             setLoading(false);
         }
@@ -80,135 +175,117 @@ export default function WithdrawalScreen({ navigation, route }: any) {
 
     return (
         <View style={styles.container}>
-            <MobileHeader title="Retirar Fondos" showBack onBack={() => navigation.goBack()} />
+            <MobileHeader title="Retirar Fondos" backButton onBack={() => navigation.goBack()} />
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
-                    {/* Balance Card */}
-                    <LinearGradient
-                        colors={['#1e293b', '#0f172a']}
-                        style={styles.balanceCard}
-                    >
+                    {/* Balance card — sourced directly from the connected
+                        account, not from our internal wallet, so the user
+                        sees the same number Stripe will pay out from. */}
+                    <LinearGradient colors={['#1e293b', '#0f172a']} style={styles.balanceCard}>
                         <View style={styles.balanceHeader}>
-                            <Text style={styles.balanceLabel}>Saldo Disponible</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Wallet size={18} color="#94a3b8" />
+                                <Text style={styles.balanceLabel}>Saldo disponible</Text>
+                            </View>
                             <View style={styles.usdBadge}>
-                                <Text style={styles.usdText}>USD</Text>
+                                <Text style={styles.usdText}>{(balance?.currency ?? 'USD').toUpperCase()}</Text>
                             </View>
                         </View>
-                        <Text style={styles.balanceValue}>${availableBalance.toFixed(2)}</Text>
-                        <Text style={styles.balanceHint}>Fondos listos para transferir a tu cuenta en EE.UU.</Text>
+                        {refreshing ? (
+                            <ActivityIndicator color="#fff" style={{ marginTop: 8 }} />
+                        ) : (
+                            <Text style={styles.balanceValue}>${availableUSD.toFixed(2)}</Text>
+                        )}
+                        <Text style={styles.balanceHint}>
+                            Pendiente: ${pendingUSD.toFixed(2)} · liquidado por Stripe en 1–3 días.
+                        </Text>
                     </LinearGradient>
 
-                    {/* Withdrawal Form */}
-                    <View style={styles.formSection}>
-                        <Text style={styles.sectionTitle}>Monto a retirar</Text>
-                        <View style={styles.amountInputContainer}>
-                            <DollarSign size={20} color="#374151" />
-                            <TextInput
-                                style={styles.amountInput}
-                                value={amount}
-                                onChangeText={setAmount}
-                                placeholder="0.00"
-                                keyboardType="numeric"
-                                placeholderTextColor="#9CA3AF"
-                            />
-                        </View>
-                        <Text style={styles.helperText}>Mínimo $10.00 USD</Text>
-                    </View>
-
-                    <View style={styles.formSection}>
-                        <Text style={styles.sectionTitle}>Datos Bancarios (US)</Text>
-                        <View style={styles.infoBox}>
-                            <AlertCircle size={16} color="#2563EB" style={{ marginTop: 2 }} />
-                            <Text style={styles.infoText}>
-                                Solo transferencias a cuentas bancarias de Estados Unidos (ACH).
-                            </Text>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Nombre del Banco</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={bankName}
-                                onChangeText={setBankName}
-                                placeholder="Ej: Chase, Bank of America"
-                                placeholderTextColor="#9CA3AF"
-                            />
-                        </View>
-
-                        <View style={styles.row}>
-                            <View style={[styles.inputGroup, { flex: 1 }]}>
-                                <Text style={styles.label}>Routing Number (ABA)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={routingNumber}
-                                    onChangeText={(t) => setRoutingNumber(t.replace(/\D/g, '').slice(0, 9))}
-                                    placeholder="9 dígitos"
-                                    keyboardType="numeric"
-                                    maxLength={9}
-                                    placeholderTextColor="#9CA3AF"
-                                />
-                            </View>
-                            <View style={[styles.inputGroup, { flex: 1 }]}>
-                                <Text style={styles.label}>Número de Cuenta</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={accountNumber}
-                                    onChangeText={(t) => setAccountNumber(t.replace(/\D/g, ''))}
-                                    placeholder="Account Number"
-                                    keyboardType="numeric"
-                                    secureTextEntry
-                                    placeholderTextColor="#9CA3AF"
-                                />
+                    {onboardingMissing ? (
+                        <View style={styles.warningCard}>
+                            <AlertCircle size={20} color="#B45309" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.warningTitle}>Conecta tu cuenta de pagos</Text>
+                                <Text style={styles.warningDesc}>
+                                    Aún no tienes una cuenta de Stripe Connect activa. Completa el onboarding desde el panel principal para habilitar payouts.
+                                </Text>
                             </View>
                         </View>
+                    ) : (
+                        <>
+                            {/* Payout schedule */}
+                            <View style={styles.formSection}>
+                                <Text style={styles.sectionTitle}>Calendario automático</Text>
+                                <Text style={styles.sectionHelp}>
+                                    Stripe envía automáticamente tu balance disponible según este calendario. Puedes pasar a "Manual" si prefieres disparar payouts on-demand.
+                                </Text>
+                                <View style={{ gap: 10, marginTop: 10 }}>
+                                    {INTERVALS.map((opt) => {
+                                        const active = interval === opt.id;
+                                        return (
+                                            <TouchableOpacity
+                                                key={opt.id}
+                                                onPress={() => handleSchedule(opt.id)}
+                                                style={[styles.scheduleRow, active && styles.scheduleRowActive]}
+                                                disabled={scheduleSaving}
+                                            >
+                                                <Calendar size={18} color={active ? '#1D4ED8' : '#475569'} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.scheduleLabel, active && { color: '#1D4ED8' }]}>{opt.label}</Text>
+                                                    <Text style={styles.scheduleDesc}>{opt.description}</Text>
+                                                </View>
+                                                {active && <CheckCircle2 size={18} color="#1D4ED8" />}
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
 
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Tipo de Cuenta</Text>
-                            <View style={styles.radioGroup}>
+                            {/* On-demand payout */}
+                            <View style={styles.formSection}>
+                                <Text style={styles.sectionTitle}>Payout instantáneo</Text>
+                                <Text style={styles.sectionHelp}>
+                                    Envía un payout estándar desde tu balance disponible a la cuenta bancaria registrada en Stripe.
+                                </Text>
+                                <View style={[styles.amountInputContainer, { marginTop: 10 }]}>
+                                    <DollarSign size={20} color="#374151" />
+                                    <TextInput
+                                        style={styles.amountInput}
+                                        value={amount}
+                                        onChangeText={setAmount}
+                                        placeholder="0.00"
+                                        keyboardType="numeric"
+                                        placeholderTextColor="#9CA3AF"
+                                    />
+                                </View>
+                                <Text style={styles.helperText}>Mínimo $1.00 USD</Text>
                                 <TouchableOpacity
-                                    style={[styles.radioOption, accountType === 'checking' && styles.radioActive]}
-                                    onPress={() => setAccountType('checking')}
+                                    style={[
+                                        styles.withdrawButton,
+                                        (loading || !amount || parseFloat(amount) <= 0) && styles.disabledButton,
+                                    ]}
+                                    onPress={handleInstantPayout}
+                                    disabled={loading || !amount || parseFloat(amount) <= 0}
                                 >
-                                    <View style={[styles.radioCircle, accountType === 'checking' && styles.radioCircleActive]} />
-                                    <Text style={[styles.radioText, accountType === 'checking' && styles.radioTextActive]}>Checking</Text>
+                                    {loading ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <>
+                                            <Send size={18} color="#fff" style={{ marginRight: 8 }} />
+                                            <Text style={styles.withdrawButtonText}>Enviar payout</Text>
+                                        </>
+                                    )}
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.radioOption, accountType === 'savings' && styles.radioActive]}
-                                    onPress={() => setAccountType('savings')}
-                                >
-                                    <View style={[styles.radioCircle, accountType === 'savings' && styles.radioCircleActive]} />
-                                    <Text style={[styles.radioText, accountType === 'savings' && styles.radioTextActive]}>Savings</Text>
-                                </TouchableOpacity>
+                                <Text style={styles.securityNote}>
+                                    Los datos bancarios viven en Stripe. Para cambiarlos, ve al dashboard de Stripe Express vinculado a tu cuenta.
+                                </Text>
                             </View>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity
-                        style={[
-                            styles.withdrawButton,
-                            (loading || !amount || parseFloat(amount) <= 0) && styles.disabledButton
-                        ]}
-                        onPress={handleWithdraw}
-                        disabled={loading || !amount || parseFloat(amount) <= 0}
-                    >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <>
-                                <Lock size={18} color="#fff" style={{ marginRight: 8 }} />
-                                <Text style={styles.withdrawButtonText}>Retirar Fondos</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-
-                    <Text style={styles.securityNote}>
-                        Tus datos bancarios se transmiten de forma encriptada y segura.
-                    </Text>
-
+                        </>
+                    )}
                 </ScrollView>
             </KeyboardAvoidingView>
         </View>
@@ -234,10 +311,38 @@ const styles = StyleSheet.create({
     usdBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     usdText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
     balanceValue: { fontSize: 42, fontWeight: '800', color: '#fff', marginBottom: 8 },
-    balanceHint: { color: '#64748b', fontSize: 13 },
+    balanceHint: { color: '#94a3b8', fontSize: 13 },
+
+    warningCard: {
+        flexDirection: 'row',
+        gap: 12,
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FEF3C7',
+        borderWidth: 1,
+        borderRadius: 14,
+        padding: 16,
+        alignItems: 'flex-start',
+    },
+    warningTitle: { fontWeight: '800', color: '#78350F' },
+    warningDesc: { color: '#92400E', fontSize: 13, marginTop: 4, lineHeight: 18 },
 
     formSection: { marginBottom: 24 },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 12 },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
+    sectionHelp: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+
+    scheduleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    scheduleRowActive: { borderColor: '#1D4ED8', backgroundColor: '#EFF6FF' },
+    scheduleLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
+    scheduleDesc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
 
     amountInputContainer: {
         flexDirection: 'row',
@@ -258,31 +363,6 @@ const styles = StyleSheet.create({
     },
     helperText: { fontSize: 12, color: '#6B7280', marginTop: 6, marginLeft: 4 },
 
-    infoBox: { flexDirection: 'row', gap: 10, backgroundColor: '#EFF6FF', padding: 12, borderRadius: 12, marginBottom: 16, borderColor: '#BFDBFE', borderWidth: 1 },
-    infoText: { flex: 1, fontSize: 13, color: '#1E40AF', lineHeight: 18 },
-
-    inputGroup: { marginBottom: 16 },
-    row: { flexDirection: 'row', gap: 12 },
-    label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
-    input: {
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        fontSize: 15,
-        color: '#111827',
-    },
-
-    radioGroup: { flexDirection: 'row', gap: 12 },
-    radioOption: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, gap: 10 },
-    radioActive: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
-    radioCircle: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#D1D5DB' },
-    radioCircleActive: { borderColor: '#2563EB', borderWidth: 5 },
-    radioText: { fontSize: 14, color: '#374151', fontWeight: '500' },
-    radioTextActive: { color: '#1E40AF' },
-
     withdrawButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -290,10 +370,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#111827',
         paddingVertical: 16,
         borderRadius: 16,
-        marginTop: 8,
+        marginTop: 14,
         shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
     },
     disabledButton: { opacity: 0.6, backgroundColor: '#4B5563' },
     withdrawButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    securityNote: { textAlign: 'center', fontSize: 11, color: '#9CA3AF', marginTop: 16, marginBottom: 30 },
+    securityNote: { textAlign: 'center', fontSize: 11, color: '#9CA3AF', marginTop: 12 },
 });

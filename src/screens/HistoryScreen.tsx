@@ -8,13 +8,13 @@ import { Input } from '../components/ui/input';
 import { MobileHeader } from '../components/MobileHeader';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { MARKETPLACE_ESCROW_RELEASE_DAYS, useMarketplace } from '../contexts/MarketplaceContext';
-import { useFintech, PaymentRecord } from '../contexts/FintechContext';
+import { useFintech } from '../contexts/FintechContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { useAuth } from '../contexts/AuthContext';
 import { useEscrow } from '../contexts/EscrowContext';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 
@@ -120,10 +120,16 @@ export default function HistoryScreen({ navigation }: any) {
     const [purchaseKindFilter, setPurchaseKindFilter] = useState<PurchaseKindFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const { orders, products } = useMarketplace();
-    const { payments, releasePayment } = useFintech();
     const { openEscrow } = useEscrow();
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
     const [filtersOpen, setFiltersOpen] = useState(false);
+
+    // Payments from Convex (persistent, server source-of-truth)
+    const _api = api as any;
+    const convexPayments = useQuery(
+        _api.finance?.getPaymentsByUser,
+        user?.id ? { actorId: user.id as any, userId: user.id } : 'skip',
+    ) ?? [];
 
     // #region agent log
     // Removed debug logging
@@ -305,33 +311,35 @@ export default function HistoryScreen({ navigation }: any) {
 
     const fintechHistoryItems = useMemo<HistoryItem[]>(() => {
         const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
-        return payments.map((payment: PaymentRecord) => {
+        return (convexPayments as any[]).map((payment: any) => {
             const status: HistoryItem['status'] =
                 payment.status === 'succeeded'
                     ? 'completed'
-                    : payment.status === 'processing'
+                    : payment.status === 'pending' || payment.status === 'processing'
                         ? 'pending'
                         : 'cancelled';
 
             return {
-                id: `fintech-${payment.id}`,
-                type: 'purchase',
-                kind: 'products',
-                title: (payment.metadata?.description as string) ?? 'Compra Ramgos',
-                business: payment.split.sellerName,
+                id: `fintech-${payment._id}`,
+                type: 'purchase' as const,
+                kind: 'products' as const,
+                title: (payment.description as string) ?? 'Compra Ramgos',
+                business: payment.sellerId ?? 'Ramgos',
                 image: (payment.metadata?.image as string) ?? fallbackImage,
                 price: payment.amount,
                 location: (payment.metadata?.location as string) ?? 'Online',
                 date: payment.createdAt,
                 status,
-                orderId: payment.id,
+                orderId: payment.orderId ?? payment._id,
                 category: (payment.metadata?.category as string) ?? 'Fintech',
-                paymentMethod: `${payment.method.brand} •••• ${payment.method.last4}`,
+                paymentMethod: payment.paymentMethodBrand
+                    ? `${payment.paymentMethodBrand} •••• ${payment.paymentMethodLast4 ?? '****'}`
+                    : 'Stripe',
                 quantity: payment.metadata?.quantity ? Number(payment.metadata.quantity) : undefined,
-                source: 'fintech_payment',
+                source: 'fintech_payment' as const,
             };
         });
-    }, [payments]);
+    }, [convexPayments]);
 
     const historyItems = useMemo(() => {
         const combinedPurchases = [...purchaseOrderHistoryItems, ...fintechHistoryItems, ...baseHistoryItems];
@@ -416,18 +424,12 @@ export default function HistoryScreen({ navigation }: any) {
             return;
         }
 
-        const released = releasePayment(item.orderId);
-        if (released) {
-            show('Pago liberado al vendedor', 'success');
-            return;
-        }
-
-        // Use Convex Mutation
+        // Confirm receipt via Convex (releases escrow server-side)
         confirmReceiptMutation({ orderId: item.orderId as any, userId: user?.id ?? '' })
             .then(() => {
-                show('Entrega confirmada. El pago se liberará pronto', 'success');
+                show('Entrega confirmada. El pago se liberará al vendedor', 'success');
             })
-            .catch((err) => {
+            .catch((err: any) => {
                 show(err.message ?? 'No pudimos confirmar la entrega', 'error');
             });
     };

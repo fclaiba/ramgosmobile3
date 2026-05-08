@@ -10,7 +10,7 @@ export interface CartItem {
     price: number;
     quantity: number;
     image: string;
-    type: 'product' | 'bono' | 'event' | 'subscription';
+    type: 'product' | 'service' | 'bono' | 'event' | 'subscription';
     subscriptionTier?: 'pro' | 'business';
     location?: string;
     sellerId?: string;
@@ -87,13 +87,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const virtualId = virtualParts.slice(2).join(':');
         const listing = item.listing;
 
+        // Source-of-truth for `type`:
+        //   1. Snapshot type (preferred — set by addToCart from listing.type).
+        //   2. Listing.type (live).
+        //   3. Fallback to 'product'.
+        // This unblocks bonos/events/services going through checkout with
+        // their correct semantic so the per-type Sprint 3 flows can branch.
+        const resolvedType: CartItem['type'] = isVirtual
+            ? virtualType
+            : ((item.snapshot?.type as CartItem['type'])
+                ?? (listing?.type as CartItem['type'])
+                ?? 'product');
+
         return {
             id: isVirtual ? virtualId : item.listingId,
             name: item.snapshot?.title || listing?.title || 'Item',
             price: Number(item.snapshot?.price ?? listing?.price ?? 0),
             quantity: item.quantity,
             image: item.snapshot?.image || listing?.image || '',
-            type: isVirtual ? virtualType : 'product',
+            type: resolvedType,
             subscriptionTier: item.snapshot?.subscriptionTier,
             location: item.snapshot?.location,
             sellerId: item.snapshot?.sellerId || listing?.sellerId,

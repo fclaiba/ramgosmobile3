@@ -1,6 +1,7 @@
 import React from 'react';
 import './global.css';
 import { View, StyleSheet, Text } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
@@ -32,6 +33,18 @@ if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
     throw new Error('Missing EXPO_PUBLIC_STRIPE_KEY. Configure Stripe publishable key for production builds.');
 }
 const stripePublishableKey = STRIPE_PUBLISHABLE_KEY ?? 'pk_test_mock_fallback';
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+
+if (sentryDsn && !(globalThis as any).__RAMGOS_SENTRY_INITIALIZED__) {
+    Sentry.init({
+        dsn: sentryDsn,
+        enabled: true,
+        debug: __DEV__,
+        environment: __DEV__ ? 'development' : 'production',
+        tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+    });
+    (globalThis as any).__RAMGOS_SENTRY_INITIALIZED__ = true;
+}
 
 // #endregion
 
@@ -56,7 +69,10 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import SavedScreen from './src/screens/SavedScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
+import PaymentMethodsScreen from './src/screens/PaymentMethodsScreen';
 import HelpCenterScreen from './src/screens/HelpCenterScreen';
+import HelpArticleDetailScreen from './src/screens/HelpArticleDetailScreen';
 import SupportScreen from './src/screens/SupportScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import BusinessDashboardScreen from './src/screens/BusinessDashboardScreen';
@@ -66,6 +82,7 @@ import BasicProfileSetupScreen from './src/screens/BasicProfileSetupScreen';
 import BusinessCreateScreen from './src/screens/BusinessCreateScreen';
 import InfluencerDashboardScreen from './src/screens/InfluencerDashboardScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
+import AdminFinanceScreen from './src/screens/admin/AdminFinanceScreen';
 import ItemDetailScreen from './src/screens/ItemDetailScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import WithdrawalScreen from './src/screens/WithdrawalScreen';
@@ -169,7 +186,10 @@ const AppNavigator = () => {
                     <Stack.Screen name="Saved" component={SavedScreen} />
                     <Stack.Screen name="History" component={HistoryScreen} />
                     <Stack.Screen name="Settings" component={SettingsScreen} />
+                    <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+                    <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
                     <Stack.Screen name="HelpCenter" component={HelpCenterScreen} />
+                    <Stack.Screen name="HelpArticleDetail" component={HelpArticleDetailScreen} />
                     <Stack.Screen name="Support" component={SupportScreen} />
                     <Stack.Screen name="About" component={AboutScreen} />
                     <Stack.Screen name="BusinessDashboard" component={BusinessDashboardScreen} />
@@ -183,6 +203,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="BusinessQR" component={BusinessQRScannerScreen} />
                     <Stack.Screen name="InfluencerDashboard" component={InfluencerDashboardScreen} />
                     <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+                    <Stack.Screen name="AdminFinance" component={AdminFinanceScreen} />
                     <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
                     <Stack.Screen name="Payment" component={PaymentScreen} />
                     <Stack.Screen name="Dispute" component={DisputeScreen} />
@@ -216,7 +237,7 @@ const convex = new ConvexReactClient(convexUrl, {
 
 import { CrashHandler } from './src/components/CrashHandler';
 
-export default function App() {
+function App() {
     console.log('[DEBUG] App: Rendering started');
     return (
         <CrashHandler>
@@ -265,6 +286,8 @@ export default function App() {
         </CrashHandler>
     );
 }
+
+export default Sentry.wrap(App);
 
 const styles = StyleSheet.create({
     container: {

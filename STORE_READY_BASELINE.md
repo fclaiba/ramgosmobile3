@@ -10,6 +10,7 @@ Fecha baseline: `2026-03-30`
 - Google Maps restringido por `package + SHA1`.
 - Ficha Play completa (metadata, Data Safety, rating, audiencia, politica).
 - Closed testing ejecutado con smoke funcional y evidencia.
+- API key de Maps no hardcodeada real en repo (placeholder + carga final pre-release).
 
 ### iOS (App Store / TestFlight)
 - Config iOS de release completa (`bundleIdentifier`, `buildNumber`).
@@ -17,6 +18,7 @@ Fecha baseline: `2026-03-30`
 - Distribucion TestFlight realizada.
 - Smoke funcional iOS ejecutado con evidencia.
 - Compliance Apple completo (privacy labels, ATT/export compliance si aplica).
+- Submission preparada en App Store Connect (metadata + pricing + review info).
 
 ## Version freeze
 

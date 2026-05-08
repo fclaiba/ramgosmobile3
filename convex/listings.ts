@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // --- QUERIES ---
@@ -123,6 +123,11 @@ export const createListing = mutation({
         discountValue: v.optional(v.number()),
         discountType: v.optional(v.string()),
         condition: v.optional(v.string()), // 'new' | 'used'
+        // Open promotion: any influencer can earn commission on this
+        // listing without an explicit campaign. Only allowed for sellers
+        // with role='business'.
+        openPromotion: v.optional(v.boolean()),
+        openCommissionRate: v.optional(v.number()), // 0–0.5
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
@@ -145,6 +150,17 @@ export const createListing = mutation({
         if (type === 'event' || type === 'bono') {
             if (role !== 'business' && role !== 'admin') {
                 throw new Error(`Los usuarios de tipo ${role} no pueden crear ${type}s. Exclusivo para Negocios.`);
+            }
+        }
+
+        // openPromotion is business-only and the rate must be sane.
+        if (args.openPromotion) {
+            if (role !== 'business' && role !== 'admin') {
+                throw new Error('La promoción abierta solo está disponible para negocios.');
+            }
+            const rate = args.openCommissionRate ?? 0;
+            if (rate <= 0 || rate > 0.5) {
+                throw new Error('La comisión de promoción abierta debe estar entre 1% y 50%.');
             }
         }
 
@@ -232,6 +248,9 @@ export const updateListing = mutation({
                 address: v.optional(v.string()),
                 distanceKm: v.optional(v.number()),
             })),
+            // Same business-only constraint enforced in createListing.
+            openPromotion: v.optional(v.boolean()),
+            openCommissionRate: v.optional(v.number()),
         })
     },
     handler: async (ctx, args) => {
@@ -245,9 +264,53 @@ export const updateListing = mutation({
         if (!isOwner && !isAdmin) {
             throw new Error("No autorizado.");
         }
+
+        // If toggling openPromotion ON, verify the seller is a business
+        // and the rate is sane. We re-check on patch because the seller
+        // role could have changed since creation (admin demotion, etc.).
+        if (args.updates.openPromotion === true) {
+            const sellerNormId = ctx.db.normalizeId('users', listing.sellerId);
+            const seller: any = sellerNormId ? await ctx.db.get(sellerNormId) : null;
+            if (!seller || (seller.role !== 'business' && seller.role !== 'admin')) {
+                throw new Error('La promoción abierta solo está disponible para negocios.');
+            }
+            const rate = args.updates.openCommissionRate ?? listing.openCommissionRate ?? 0;
+            if (rate <= 0 || rate > 0.5) {
+                throw new Error('La comisión de promoción abierta debe estar entre 1% y 50%.');
+            }
+        }
+
         await ctx.db.patch(args.id, args.updates);
         return { success: true };
     }
+});
+
+// ---------------------------------------------------------------------------
+// internal — used by the Stripe PI attribution validator. Returns just the
+// fields needed to decide whether a referralCode earns commission.
+// ---------------------------------------------------------------------------
+export const internalGetListingForAttribution = internalQuery({
+    args: { listingId: v.string() },
+    handler: async (ctx, args) => {
+        const normId = ctx.db.normalizeId('listings', args.listingId);
+        if (!normId) return null;
+        const listing: any = await ctx.db.get(normId);
+        if (!listing) return null;
+
+        const sellerNormId = ctx.db.normalizeId('users', listing.sellerId);
+        const seller: any = sellerNormId ? await ctx.db.get(sellerNormId) : null;
+
+        return {
+            listingId: String(listing._id),
+            sellerId: listing.sellerId,
+            sellerRole: seller?.role ?? null,
+            openPromotion: listing.openPromotion === true,
+            openCommissionRate:
+                typeof listing.openCommissionRate === 'number'
+                    ? listing.openCommissionRate
+                    : null,
+        };
+    },
 });
 
 export const deleteListing = mutation({

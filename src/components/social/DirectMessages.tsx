@@ -1,59 +1,98 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Image, SafeAreaView } from 'react-native';
-import { ArrowLeft, Search, Send, Image as ImageIcon, Smile, Phone, Video, Info } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, SafeAreaView } from 'react-native';
+import { ArrowLeft, Search, Send, Image as ImageIcon, Phone, Video } from 'lucide-react-native';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Sheet, SheetContent, SheetHeader } from '../ui/sheet';
+import { Sheet, SheetContent } from '../ui/sheet';
 
 interface DirectMessagesProps {
     onClose: () => void;
 }
 
 export const DirectMessages = ({ onClose }: DirectMessagesProps) => {
-    const { getUserById, currentUser, chats, sendMessage, searchUsers, createChat } = useSocial();
+    const { currentUser, sendMessage, createChat } = useSocial();
+    const { user: authUser } = useAuth();
     const [selectedChat, setSelectedChat] = useState<string | null>(null);
     const [messageText, setMessageText] = useState('');
     const [searchText, setSearchText] = useState('');
 
-    const { theme, colorScheme } = useTheme();
+    const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    // Derived Conversations List
-    const conversations = chats.map(chat => {
-        const otherUserId = chat.participants.find(id => id !== currentUser.id) || '';
-        const otherUser = getUserById(otherUserId);
-        const lastMsg = chat.messages[chat.messages.length - 1];
+    // Reactive queries.
+    const chatsRows = useQuery(
+        api.social.getMyChats,
+        authUser ? { actorId: authUser.id as any } : 'skip',
+    );
+    const userSearchResult = useQuery(
+        api.social.searchUsers,
+        authUser && searchText ? { actorId: authUser.id as any, term: searchText, limit: 20 } : 'skip',
+    );
+    const messagesResult = useQuery(
+        api.social.getChatMessages,
+        authUser && selectedChat
+            ? { actorId: authUser.id as any, chatId: selectedChat as any, limit: 100 }
+            : 'skip',
+    );
+    const markAsReadMut = useMutation(api.social.markChatAsRead);
 
+    // Mark chat as read whenever it's opened.
+    useEffect(() => {
+        if (selectedChat && authUser) {
+            markAsReadMut({ actorId: authUser.id as any, chatId: selectedChat as any }).catch(() => {});
+        }
+    }, [selectedChat, authUser, markAsReadMut]);
+
+    const conversations = (chatsRows ?? []).map((chat: any) => {
+        const other = chat.otherParticipants?.[0];
+        const otherUserId = chat.participantIds?.find((id: string) => id !== currentUser.id) ?? '';
         return {
-            id: chat.id,
+            id: chat._id,
             userId: otherUserId,
-            otherUser,
-            lastMessage: lastMsg ? lastMsg.text : 'Nuevo chat',
-            time: lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-            unread: chat.messages.filter(m => !m.read && m.senderId !== currentUser.id).length
+            otherUser: other
+                ? {
+                    id: other.userId,
+                    name: other.displayName,
+                    username: other.username,
+                    avatar: other.avatar ?? '',
+                }
+                : null,
+            lastMessage: chat.lastMessagePreview ?? 'Nuevo chat',
+            time: chat.lastMessageAt
+                ? new Date(chat.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '',
+            unread: chat.unreadCount ?? 0,
         };
-    }).filter(c => c.otherUser); // Filter out invalid users
+    }).filter((c: any) => c.otherUser);
 
-    // Search Results
-    const searchResults = useMemo(() => {
-        if (!searchText) return [];
-        const users = searchUsers(searchText);
-        return users.filter(u => u.id !== currentUser.id);
-    }, [searchText, searchUsers, currentUser.id]);
+    const searchResults = (userSearchResult ?? [])
+        .filter((u: any) => u.userId !== currentUser.id)
+        .map((u: any) => ({
+            id: u.userId,
+            name: u.displayName,
+            username: u.username,
+            avatar: u.avatar ?? '',
+        }));
 
-    const handleSelectUser = (userId: string) => {
-        const chatId = createChat(userId);
-        setSelectedChat(chatId);
-        setSearchText('');
+    const handleSelectUser = async (userId: string) => {
+        try {
+            const chatId = await Promise.resolve(createChat(userId));
+            setSelectedChat(chatId);
+            setSearchText('');
+        } catch (err) {
+            console.warn('[DM] createChat failed', err);
+        }
     };
 
-    // Mock Conversations
-
-
-    const activeChatData = selectedChat ? chats.find(c => c.id === selectedChat) : null;
-    const currentChatUser = activeChatData ? getUserById(activeChatData.participants.find(id => id !== currentUser.id) || '') : null;
+    const activeChat = selectedChat
+        ? conversations.find((c: any) => c.id === selectedChat)
+        : null;
+    const currentChatUser = activeChat?.otherUser ?? null;
 
     const handleSendMessage = () => {
         if (!messageText.trim() || !selectedChat) return;
@@ -153,11 +192,11 @@ export const DirectMessages = ({ onClose }: DirectMessagesProps) => {
                 </View>
 
                 <ScrollView style={styles.chatContent} contentContainerStyle={{ padding: 16 }}>
-                    {activeChatData?.messages.map((msg) => {
-                        const isMe = msg.senderId === currentUser.id;
+                    {(messagesResult?.items ?? []).map((msg: any) => {
+                        const isMe = msg.senderUserId === currentUser.id;
                         return (
-                            <View key={msg.id} style={[styles.messageBubble, isMe ? styles.messageSent : styles.messageReceived]}>
-                                <Text style={[styles.messageText, isMe && styles.sentText]}>{msg.text}</Text>
+                            <View key={msg._id} style={[styles.messageBubble, isMe ? styles.messageSent : styles.messageReceived]}>
+                                <Text style={[styles.messageText, isMe && styles.sentText]}>{msg.body}</Text>
                             </View>
                         );
                     })}

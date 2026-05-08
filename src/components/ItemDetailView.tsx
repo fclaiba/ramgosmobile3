@@ -17,6 +17,7 @@ import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ReviewsList } from './ReviewsList';
 import { AddReviewModal } from './AddReviewModal';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ItemPreview {
     id: string | number;
@@ -55,21 +56,20 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
 
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const recordView = useMutation(api.listings.recordView);
+    const { user } = useAuth();
 
     useEffect(() => {
         if (open && item) {
-            // Simple session ID for MVP (random per mount or persisted if needed)
             const sessionId = 'session-' + Math.random().toString(36).substr(2, 9);
-            // Ensure ID is defined
             if (!item.id) return;
-            
+
             recordView({
                 listingId: String(item.id),
                 sessionId,
-                userId: undefined, // TODO: Pass userId if logged in
+                userId: user?.id ? (user.id as any) : undefined,
             }).catch(e => console.log("View record failed", e));
         }
-    }, [open, item]);
+    }, [open, item, user]);
 
     const gallery = useMemo(() => {
         if (!item) return [];

@@ -38,7 +38,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { useEscrow } from '../../contexts/EscrowContext'; // New Context
 import type { EscrowPhase } from '../../contexts/EscrowContext';
 import type { Order } from '../../contexts/MarketplaceContext';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -186,10 +186,10 @@ export interface EscrowSheetProps {
 
 export function EscrowSheet(props: EscrowSheetProps = {}) {
     const { colorScheme } = useTheme();
-    // Legacy context removed: const { initiateDispute, ... } = useMarketplace();
     const { user } = useAuth();
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
     const openDisputeMutation = useMutation(api.orders.openDispute);
+    const addDisputeMessageMutation = useMutation(api.disputes.addDisputeMessage);
 
     const { isOpen: ctxIsOpen, closeEscrow: ctxCloseEscrow, activeOrder: ctxOrder, role: ctxRole, phase: ctxPhase, setPhase: ctxSetPhase } = useEscrow();
     const { show } = useToast();
@@ -231,6 +231,12 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
     const [chatInput, setChatInput] = useState<string>('');
     const scrollViewRef = useRef<ScrollView>(null);
 
+    // Live dispute messages from Convex
+    const liveMessages = useQuery(
+        api.disputes.getDisputeMessages,
+        order?.id && user?.id ? { orderId: order.id as any, actorId: user.id as any, requesterId: user.id } : 'skip',
+    ) ?? [];
+
     // Reset state when opening/closing
     useEffect(() => {
         if (!isOpen) {
@@ -245,13 +251,13 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
 
     // Scroll to bottom on new messages
     useEffect(() => {
-        if (order?.dispute?.messages && isOpen && phase === 'chat') {
+        if (liveMessages.length > 0 && isOpen && phase === 'chat') {
             const t = setTimeout(() => {
                 scrollViewRef.current?.scrollToEnd({ animated: true });
             }, 100);
             return () => clearTimeout(t);
         }
-    }, [order?.dispute?.messages.length, isOpen, phase]);
+    }, [liveMessages.length, isOpen, phase]);
 
     // Responsive breakpoints
     const isSmall = width < 375;
@@ -333,14 +339,22 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         }
     };
 
-    const handleSendMessage = () => {
-        if (!order || !chatInput.trim()) return;
-        // Legacy: addDisputeMessage.
-        // For now, no-op or TODO since chat backend isn't in requirements checklist.
-        // We leave UI interaction but no backend call to prevent crash.
-        // addDisputeMessage(order.id, { ... });
-        show('Chat no implementado en backend v1', 'info');
+    const handleSendMessage = async () => {
+        if (!order || !user || !chatInput.trim()) return;
+        const body = chatInput.trim();
         setChatInput('');
+        try {
+            await addDisputeMessageMutation({
+                orderId: order.id as any,
+                actorId: user.id as any,
+                senderId: user.id,
+                sender: role === 'buyer' ? 'buyer' : 'seller',
+                body,
+            });
+        } catch (e: any) {
+            show(e.message || 'Error al enviar mensaje', 'error');
+            setChatInput(body);
+        }
     };
 
     const progressSteps = [
@@ -510,17 +524,22 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                 {/* Header Info */}
                 <View style={{ padding: cardPadding, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2', borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: isDark ? '#FCA5A5' : '#991B1B' }}>Disputa: {order?.dispute?.reason}</Text>
-                        <Text style={{ fontSize: fontSize.xs, color: isDark ? '#FCA5A5' : '#991B1B' }}>{order?.dispute?.status}</Text>
+                        <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: isDark ? '#FCA5A5' : '#991B1B' }}>Disputa: {order?.dispute?.reason ?? 'En curso'}</Text>
+                        <Text style={{ fontSize: fontSize.xs, color: isDark ? '#FCA5A5' : '#991B1B' }}>{order?.status}</Text>
                     </View>
                     <Text style={{ fontSize: fontSize.xs, color: isDark ? '#FCA5A5' : '#991B1B', marginTop: 4 }}>{order?.dispute?.description}</Text>
                 </View>
-                {/* Messages */}
+                {/* Messages from Convex */}
                 <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ padding: cardPadding, gap: 12 }}>
-                    {order?.dispute?.messages.map((msg) => {
-                        const isMe = msg.sender === role;
+                    {liveMessages.length === 0 && (
+                        <Text style={{ textAlign: 'center', color: isDark ? '#6B7280' : '#9CA3AF', fontSize: fontSize.sm, marginTop: 24 }}>
+                            No hay mensajes aún. Enviá el primero.
+                        </Text>
+                    )}
+                    {liveMessages.map((msg: any) => {
+                        const isMe = msg.senderUserId === user?.id;
                         return (
-                            <View key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                            <View key={msg._id ?? msg.sentAt} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                                 <View style={{ backgroundColor: isMe ? '#3B82F6' : (isDark ? '#374151' : '#F3F4F6'), borderRadius: 16, borderBottomRightRadius: isMe ? 4 : 16, borderBottomLeftRadius: isMe ? 16 : 4, paddingHorizontal: 16, paddingVertical: 10 }}>
                                     <Text style={{ color: isMe ? '#fff' : (isDark ? '#F9FAFB' : '#111827'), fontSize: fontSize.sm }}>{msg.body}</Text>
                                 </View>

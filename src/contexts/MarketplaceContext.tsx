@@ -150,6 +150,11 @@ interface ProductInput {
     validUntil?: string;
     discountValue?: number;
     discountType?: 'percentage' | 'fixed';
+    // Influencer Campaign Backend — open promotion lets ANY influencer
+    // promote this listing without a campaign with the seller. Server
+    // rejects this if the seller is not a business.
+    openPromotion?: boolean;
+    openCommissionRate?: number;
 }
 
 interface ProductUpdateInput extends Partial<ProductInput> {
@@ -556,7 +561,9 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                 eventTime: input.eventTime,
                 validUntil: input.validUntil,
                 discountValue: input.discountValue,
-                discountType: input.discountType
+                discountType: input.discountType,
+                openPromotion: input.openPromotion,
+                openCommissionRate: input.openCommissionRate,
             });
 
             return { success: true, product: { ...input, id: newId } as any };
@@ -654,25 +661,51 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                 payload.shippingQuote ??
                 computeShippingQuote(payload.cartItems, payload.shippingMethod, payload.shippingDestination.postalCode);
 
-            // Execute Transactions per Seller
-            // Note: If one fails, others might succeed. Ideal is all-or-nothing but for MVP partial is acceptable
-            // or we do sequential and stop on error.
+            // Multi-seller shipping split:
+            //   We have ONE shipping quote (the platform-level rate the buyer
+            //   accepted at checkout) but we may need to split the cart into
+            //   N seller orders. Each seller's order should reflect its
+            //   proportional share of the shipping cost so that:
+            //     a) the buyer is not charged shipping multiple times, and
+            //     b) each seller's earnings reconcile against the right
+            //        portion of the shipping fee in the wallet ledger.
+            //
+            // We split by subtotal weight: a seller whose items account for
+            // 60% of the cart subtotal gets 60% of the shipping fee. The
+            // last seller absorbs any rounding remainder so the sum equals
+            // shippingQuote.cost exactly to the cent.
+            const totalSubtotal = payload.cartItems.reduce(
+                (acc, i) => acc + i.price * i.quantity,
+                0,
+            );
+            const sellerEntries = Array.from(itemsBySeller.entries());
+            const shippingPerSeller = new Map<string, number>();
+            let assignedShipping = 0;
+            sellerEntries.forEach(([sid, items], idx) => {
+                const sellerSubtotal = items.reduce(
+                    (acc, i) => acc + i.price * i.quantity,
+                    0,
+                );
+                const isLast = idx === sellerEntries.length - 1;
+                const proportional = totalSubtotal > 0
+                    ? Math.round(((sellerSubtotal / totalSubtotal) * shippingQuote.cost) * 100) / 100
+                    : 0;
+                const cost = isLast
+                    ? Math.max(0, Math.round((shippingQuote.cost - assignedShipping) * 100) / 100)
+                    : proportional;
+                shippingPerSeller.set(sid, cost);
+                assignedShipping = Math.round((assignedShipping + cost) * 100) / 100;
+            });
 
             const createdOrders: Order[] = [];
 
-            for (const [sellerId, items] of itemsBySeller.entries()) {
+            for (const [sellerId, items] of sellerEntries) {
                 const subtotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
                 const orderRequestKey = payload.requestId
                     ? `${payload.requestId}_${sellerId}`
                     : `ord_${user.id}_${sellerId}_${Date.now()}`;
+                const sellerShipping = shippingPerSeller.get(sellerId) ?? 0;
 
-                // Distribute shipping cost proportionally or per order?
-                // Simplification for MVP: full shipping cost on first order or split? 
-                // Let's attach full shipping to the "primary" order or first one. 
-                // Or simply duplicate shipping cost (bad).
-                // Let's assume shipping is PER SELLER in this logic if we grouped by seller.
-
-                // Construct Backend Order Payload
                 const createdOrderId = await createOrderMutation({
                     actorId: user.id as any,
                     userId: user.id,
@@ -688,7 +721,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                     currency: 'USD',
                     shipping: {
                         method: payload.shippingMethod,
-                        cost: shippingQuote.cost, // Ideally split this if multi-seller
+                        cost: sellerShipping,
                         address: payload.shippingDestination
                     }
                 });
@@ -713,10 +746,10 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                     })),
                     totals: {
                         items: subtotal,
-                        shipping: shippingQuote.cost,
+                        shipping: sellerShipping,
                         fees: 0,
                         discount: payload.paymentDetails?.discountApplied || 0,
-                        grandTotal: Math.max(0, subtotal + shippingQuote.cost - (payload.paymentDetails?.discountApplied || 0)),
+                        grandTotal: Math.max(0, subtotal + sellerShipping - (payload.paymentDetails?.discountApplied || 0)),
                         currency: 'USD',
                     },
                     shipping: {

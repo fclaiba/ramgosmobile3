@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
-import { X, Send, Heart, Trash2 } from 'lucide-react-native';
-import { useSocial, Post, Comment } from '../../contexts/SocialContext';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import { X, Send, Trash2 } from 'lucide-react-native';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
@@ -13,49 +16,63 @@ interface PostCommentsModalProps {
     isInstagram?: boolean;
 }
 
-export const PostCommentsModal = ({ postId, visible, onClose, isInstagram = false }: PostCommentsModalProps) => {
-    const { posts, instagramPosts, addComment, currentUser, deleteComment } = useSocial();
+export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModalProps) => {
+    const { addComment, currentUser } = useSocial();
+    const { user: authUser } = useAuth();
     const [commentText, setCommentText] = useState('');
 
-    const { theme, colorScheme } = useTheme();
+    const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const post = isInstagram
-        ? instagramPosts.find(p => p.id === postId)
-        : posts.find(p => p.id === postId);
+    const commentsResult = useQuery(
+        api.social.getCommentsForPost,
+        authUser ? { actorId: authUser.id as any, postId: postId as any, limit: 100 } : 'skip',
+    );
+    const deleteCommentMut = useMutation(api.social.deleteComment);
 
-    if (!post) return null;
+    const comments = commentsResult?.items ?? [];
 
     const handleSendComment = () => {
         if (!commentText.trim()) return;
-        addComment(postId, commentText, isInstagram);
+        addComment(postId, commentText);
         setCommentText('');
     };
 
-    const renderComment = ({ item }: { item: Comment }) => (
-        <View style={styles.commentItem}>
-            <Avatar style={styles.commentAvatar}>
-                <AvatarImage src={item.user.avatar} />
-                <AvatarFallback>{item.user.name[0]}</AvatarFallback>
-            </Avatar>
-            <View style={styles.commentContent}>
-                <View style={styles.commentHeader}>
-                    <Text style={styles.commentUser}>{item.user.name}</Text>
-                    <Text style={styles.commentTime}>
-                        {new Date(item.timestamp).toLocaleDateString()}
-                    </Text>
+    const handleDelete = (commentId: string) => {
+        if (!authUser) return;
+        deleteCommentMut({ actorId: authUser.id as any, commentId: commentId as any }).catch(
+            (err) => console.warn('[comments] delete failed', err),
+        );
+    };
+
+    const renderComment = ({ item }: { item: any }) => {
+        const author = item.author;
+        const authorName = author?.displayName ?? 'Usuario';
+        const authorAvatar = author?.avatar;
+        return (
+            <View style={styles.commentItem}>
+                <Avatar style={styles.commentAvatar}>
+                    {authorAvatar ? <AvatarImage src={authorAvatar} /> : null}
+                    <AvatarFallback>{authorName[0] ?? 'U'}</AvatarFallback>
+                </Avatar>
+                <View style={styles.commentContent}>
+                    <View style={styles.commentHeader}>
+                        <Text style={styles.commentUser}>{authorName}</Text>
+                        <Text style={styles.commentTime}>
+                            {new Date(item.createdAt).toLocaleDateString()}
+                        </Text>
+                    </View>
+                    <Text style={styles.commentText}>{item.content}</Text>
                 </View>
-                <Text style={styles.commentText}>{item.content}</Text>
+                {item.authorUserId === currentUser.id && (
+                    <TouchableOpacity onPress={() => handleDelete(item._id)}>
+                        <Trash2 size={16} color={isDark ? "#9CA3AF" : "#9CA3AF"} />
+                    </TouchableOpacity>
+                )}
             </View>
-            {/* Delete option for own comments */}
-            {item.userId === currentUser.id && (
-                <TouchableOpacity onPress={() => deleteComment(postId, item.id, isInstagram)}>
-                    <Trash2 size={16} color={isDark ? "#9CA3AF" : "#9CA3AF"} />
-                </TouchableOpacity>
-            )}
-        </View>
-    );
+        );
+    };
 
     return (
         <Sheet open={visible} onOpenChange={(val: boolean) => !val && onClose()}>
@@ -68,9 +85,9 @@ export const PostCommentsModal = ({ postId, visible, onClose, isInstagram = fals
                 </SheetHeader>
 
                 <FlatList
-                    data={post.comments}
+                    data={comments}
                     renderItem={renderComment}
-                    keyExtractor={item => item.id}
+                    keyExtractor={item => item._id}
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={
                         <View style={styles.emptyState}>

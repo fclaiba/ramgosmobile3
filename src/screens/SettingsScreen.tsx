@@ -115,7 +115,7 @@ export default function SettingsScreen({ navigation }: any) {
                         <SettingRow
                             icon={CreditCard}
                             label="Métodos de Pago"
-                            onPress={() => show('Gestión de tarjetas próximamente', 'info')}
+                            onPress={() => navigation.navigate('PaymentMethods')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
@@ -147,7 +147,7 @@ export default function SettingsScreen({ navigation }: any) {
                         <SettingRow
                             icon={Key}
                             label="Cambiar Contraseña"
-                            onPress={() => show('Seguridad: Formulario de cambio de contraseña próximamente', 'info')}
+                            onPress={() => navigation.navigate('ChangePassword')}
                         />
                         <View style={styles.divider} />
                         <SettingRow

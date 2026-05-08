@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions, Platform, Linking, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,12 @@ import {
     ChevronRight,
     MoreHorizontal,
     ShieldAlert,
-    AlertTriangle
+    AlertTriangle,
+    CreditCard,
+    CheckCircle2,
+    ExternalLink,
+    UserPlus,
+    X,
 } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Badge } from '../components/ui/badge';
@@ -25,13 +30,17 @@ import { useFintech } from '../contexts/FintechContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
+import { useAction, useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from '../contexts/AuthContext';
 
-type DashboardTab = 'overview' | 'bonos' | 'reviews';
+type DashboardTab = 'overview' | 'bonos' | 'reviews' | 'influencers';
 
 const TABS: Array<{ id: DashboardTab; label: string }> = [
     { id: 'overview', label: 'Resumen' },
     { id: 'bonos', label: 'Mis Bonos' },
     { id: 'reviews', label: 'Reseñas' },
+    { id: 'influencers', label: 'Influencers' },
 ];
 
 const formatCurrency = (value: number) =>
@@ -62,12 +71,208 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
     const insets = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
     const { businessInfo, metrics, coupons, reviews } = useBusiness();
-    const { ensureWalletAccount, getWalletByOwner, requestWithdrawal, payments, getKycStatus } = useFintech();
+    const { ensureWalletAccount, getWalletByOwner, requestWithdrawal, getKycStatus } = useFintech();
     const { gateWithdraw } = useActionGate();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { user } = useAuth();
+
+    // Stripe Connect V2 — onboarding to receive marketplace payouts.
+    // Flow:
+    //   1) ensureConnectAccount — creates a V2 account if user has none, else returns existing id.
+    //   2) createOnboardingLink — returns a Stripe-hosted KYC URL we open in browser.
+    //   3) On return, poll getAccountStatus to refresh the banner state.
+    const _api = api as any;
+    const ensureConnectAccountAction = useAction(_api.connect?.ensureConnectAccount || api.users.syncUser);
+    const createOnboardingLinkAction = useAction(_api.connect?.createOnboardingLink || api.users.syncUser);
+    const getAccountStatusAction = useAction(_api.connect?.getAccountStatus || api.users.syncUser);
+    const [connectLoading, setConnectLoading] = useState(false);
+    const [connectStatus, setConnectStatus] = useState<{
+        readyToReceivePayments: boolean;
+        onboardingComplete: boolean;
+    } | null>(null);
+    const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
+
+    // ─── Influencer campaigns (server-backed) ──────────────────────────
+    // List the campaigns where this business is the counterparty plus
+    // mutations to invite a new influencer / accept-or-reject pending
+    // proposals from influencers / pause or end live campaigns. Backed
+    // by `convex/campaigns.ts` and the `influencerCampaigns` table.
+    const businessCampaigns = useQuery(
+        api.campaigns.getBusinessCampaigns,
+        user?.id ? { actorId: user.id as any, businessId: user.id as any } : 'skip',
+    ) ?? [];
+    const inviteInfluencerMutation = useMutation(api.campaigns.inviteInfluencer);
+    const respondToCampaignMutation = useMutation(api.campaigns.respondToCampaign);
+    const endCampaignMutation = useMutation(api.campaigns.endCampaign);
+    const pauseCampaignMutation = useMutation(api.campaigns.pauseCampaign);
+
+    // Lookup by email or referralCode — used by the Invite modal so the
+    // business doesn't have to copy/paste a Convex id manually.
+    const [inviteModalVisible, setInviteModalVisible] = useState(false);
+    const [inviteLookupTerm, setInviteLookupTerm] = useState('');
+    const [invitedInfluencerId, setInvitedInfluencerId] = useState<string | null>(null);
+    const [inviteRatePct, setInviteRatePct] = useState('5');
+    const [submittingInvite, setSubmittingInvite] = useState(false);
+    const lookupResult = useQuery(
+        api.campaigns.lookupInfluencer,
+        user?.id && inviteLookupTerm.trim().length > 0
+            ? { actorId: user.id as any, emailOrCode: inviteLookupTerm }
+            : 'skip',
+    );
+
+    const pendingProposalsFromInfluencers = useMemo(
+        () =>
+            businessCampaigns.filter(
+                (c: any) => c.status === 'pending' && c.initiatedBy === 'influencer',
+            ),
+        [businessCampaigns],
+    );
+    const pendingMyInvitations = useMemo(
+        () =>
+            businessCampaigns.filter(
+                (c: any) => c.status === 'pending' && c.initiatedBy === 'business',
+            ),
+        [businessCampaigns],
+    );
+    const activeBusinessCampaigns = useMemo(
+        () =>
+            businessCampaigns.filter(
+                (c: any) => c.status === 'active' || c.status === 'paused',
+            ),
+        [businessCampaigns],
+    );
+
+    const handleInviteInfluencer = async () => {
+        if (!user?.id) return;
+        const targetId = invitedInfluencerId ?? (lookupResult as any)?._id;
+        if (!targetId) {
+            show('Buscá primero al influencer por email o código.', 'warning');
+            return;
+        }
+        const ratePct = Number(inviteRatePct);
+        if (!Number.isFinite(ratePct) || ratePct <= 0 || ratePct > 50) {
+            show('Comisión inválida (1–50%).', 'warning');
+            return;
+        }
+        setSubmittingInvite(true);
+        try {
+            await inviteInfluencerMutation({
+                actorId: user.id as any,
+                businessId: user.id as any,
+                influencerId: targetId as any,
+                commissionRate: ratePct / 100,
+            });
+            setInviteModalVisible(false);
+            setInviteLookupTerm('');
+            setInvitedInfluencerId(null);
+            setInviteRatePct('5');
+            show('Invitación enviada al influencer.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo invitar.', 'error');
+        } finally {
+            setSubmittingInvite(false);
+        }
+    };
+
+    const handleRespondToInfluencerProposal = async (
+        campaignId: string,
+        decision: 'accept' | 'reject',
+    ) => {
+        if (!user?.id) return;
+        try {
+            await respondToCampaignMutation({
+                actorId: user.id as any,
+                campaignId: campaignId as any,
+                decision,
+            });
+            show(decision === 'accept' ? 'Propuesta aceptada.' : 'Propuesta rechazada.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo responder.', 'error');
+        }
+    };
+
+    const handlePauseCampaign = async (campaignId: string) => {
+        if (!user?.id) return;
+        try {
+            await pauseCampaignMutation({
+                actorId: user.id as any,
+                campaignId: campaignId as any,
+            });
+            show('Campaña pausada.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo pausar.', 'error');
+        }
+    };
+
+    const handleEndBusinessCampaign = async (campaignId: string) => {
+        if (!user?.id) return;
+        try {
+            await endCampaignMutation({
+                actorId: user.id as any,
+                campaignId: campaignId as any,
+            });
+            show('Campaña finalizada.', 'success');
+        } catch (e: any) {
+            show(e?.message ?? 'No se pudo finalizar.', 'error');
+        }
+    };
+
+    // Refresh status whenever we have an account id (cheap; reads live from Stripe).
+    useEffect(() => {
+        let cancelled = false;
+        if (!stripeConnectAccountId) {
+            setConnectStatus(null);
+            return;
+        }
+        (async () => {
+            try {
+                const status = await getAccountStatusAction({
+                    actorId: user?.id as any,
+                    accountId: stripeConnectAccountId,
+                });
+                if (!cancelled && status) {
+                    setConnectStatus({
+                        readyToReceivePayments: !!(status as any).readyToReceivePayments,
+                        onboardingComplete: !!(status as any).onboardingComplete,
+                    });
+                }
+            } catch (err) {
+                console.warn('[Connect V2] status fetch failed', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [stripeConnectAccountId, getAccountStatusAction, user?.id]);
+
+    const handleStripeConnectOnboarding = async () => {
+        if (!user) { show('Inicia sesión primero', 'error'); return; }
+        setConnectLoading(true);
+        try {
+            // Step 1: ensure account exists (idempotent — creates only if missing).
+            const ensured = await ensureConnectAccountAction({
+                actorId: user.id as any,
+                userId: user.id as any,
+                displayName: businessInfo.name || user.name || 'Ramgos seller',
+                contactEmail: user.email,
+            });
+            const accountId = (ensured as any)?.accountId;
+            if (!accountId) throw new Error('No se obtuvo accountId de Stripe.');
+
+            // Step 2: open Stripe-hosted onboarding URL.
+            const link = await createOnboardingLinkAction({
+                actorId: user.id as any,
+                accountId,
+            });
+            const url = (link as any)?.url;
+            if (url) await Linking.openURL(url);
+        } catch (e: any) {
+            show(e.message || 'Error al iniciar onboarding de Stripe', 'error');
+        } finally {
+            setConnectLoading(false);
+        }
+    };
 
     useEffect(() => {
         ensureWalletAccount(businessInfo.id, 'business', businessInfo.name);
@@ -224,6 +429,63 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                             {!verificationPending && <ChevronRight size={18} color={isDark ? '#9CA3AF' : '#9CA3AF'} />}
                         </TouchableOpacity>
                     )}
+
+                    {/* Stripe Connect — seller bank onboarding (V2) */}
+                    {(() => {
+                        // Banner state has 3 modes:
+                        //  - no account: prompt onboarding (creates V2 account on click)
+                        //  - account but onboarding incomplete: prompt to finish KYC
+                        //  - account with payouts active: show "Cuenta lista para recibir pagos"
+                        const hasAccount = !!stripeConnectAccountId;
+                        const ready = !!connectStatus?.readyToReceivePayments;
+                        const onboardingDone = !!connectStatus?.onboardingComplete;
+                        const isReadyState = hasAccount && ready;
+                        const isPendingState = hasAccount && !ready;
+
+                        const palette = isReadyState
+                            ? { border: isDark ? '#064E3B' : '#A7F3D0', bg: isDark ? 'rgba(5,150,105,0.15)' : '#ECFDF5', icoBg: isDark ? '#065F46' : '#D1FAE5', text: isDark ? '#6EE7B7' : '#065F46', desc: isDark ? '#A7F3D0' : '#047857' }
+                            : isPendingState
+                                ? { border: isDark ? '#78350F' : '#FEF3C7', bg: isDark ? 'rgba(120,53,15,0.15)' : '#FFFBEB', icoBg: isDark ? '#92400E' : '#FDE68A', text: isDark ? '#FCD34D' : '#92400E', desc: isDark ? '#FDE68A' : '#B45309' }
+                                : { border: isDark ? '#1E3A5F' : '#BFDBFE', bg: isDark ? 'rgba(37,99,235,0.15)' : '#EFF6FF', icoBg: isDark ? '#1E40AF' : '#DBEAFE', text: isDark ? '#93C5FD' : '#1D4ED8', desc: isDark ? '#BFDBFE' : '#1E40AF' };
+
+                        const title = isReadyState
+                            ? 'Cuenta de pagos lista'
+                            : isPendingState
+                                ? 'Completa tu onboarding de Stripe'
+                                : 'Conectar cuenta de pagos';
+
+                        const desc = isReadyState
+                            ? `Stripe Connect activo · ${stripeConnectAccountId!.slice(0, 16)}...`
+                            : isPendingState
+                                ? (onboardingDone
+                                    ? 'Stripe está revisando tu cuenta. Te avisamos cuando esté lista.'
+                                    : 'Faltan datos para activar tus pagos. Continúa el onboarding.')
+                                : 'Vincula tu cuenta bancaria para recibir tus pagos vía Stripe Connect.';
+
+                        const Icon = isReadyState ? CheckCircle2 : CreditCard;
+
+                        return (
+                            <TouchableOpacity
+                                activeOpacity={isReadyState ? 1 : 0.85}
+                                onPress={isReadyState ? undefined : handleStripeConnectOnboarding}
+                                style={[
+                                    styles.kycBanner,
+                                    { borderColor: palette.border, backgroundColor: palette.bg },
+                                ]}
+                            >
+                                <View style={[styles.kycIcon, { backgroundColor: palette.icoBg }]}>
+                                    <Icon size={18} color={palette.text} />
+                                </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={[styles.kycTitle, { color: palette.text }]} numberOfLines={1}>{title}</Text>
+                                    <Text style={[styles.kycDesc, { color: palette.desc }]} numberOfLines={2}>{desc}</Text>
+                                </View>
+                                {connectLoading
+                                    ? <ActivityIndicator size="small" color={palette.text} />
+                                    : !isReadyState && <ExternalLink size={18} color={palette.text} />}
+                            </TouchableOpacity>
+                        );
+                    })()}
 
                     {/* Tabs */}
                     <View style={styles.tabsContainer}>
@@ -462,8 +724,226 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                             ))}
                         </View>
                     )}
+
+                    {/* --- INFLUENCERS TAB --- */}
+                    {activeTab === 'influencers' && (
+                        <View style={styles.sectionGap}>
+                            <TouchableOpacity
+                                style={styles.bigCreateBtn}
+                                onPress={() => setInviteModalVisible(true)}
+                            >
+                                <LinearGradient colors={['#7C3AED', '#5B21B6']} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+                                <UserPlus size={24} color="#fff" />
+                                <Text style={styles.bigCreateText}>Invitar influencer</Text>
+                            </TouchableOpacity>
+
+                            {/* Pending proposals from influencers */}
+                            {pendingProposalsFromInfluencers.length > 0 && (
+                                <View style={{ gap: 12 }}>
+                                    <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' }}>
+                                        Propuestas recibidas
+                                    </Text>
+                                    {pendingProposalsFromInfluencers.map((c: any) => (
+                                        <View
+                                            key={c._id}
+                                            style={[styles.couponCard, { borderLeftWidth: 3, borderLeftColor: '#F59E0B' }]}
+                                        >
+                                            <View style={styles.couponHeader}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.couponTitle}>{c.influencerName}</Text>
+                                                    <Text style={styles.couponCode}>
+                                                        {(c.commissionRate * 100).toFixed(1)}% por venta
+                                                        {c.influencerReferralCode ? ` • código ${c.influencerReferralCode}` : ''}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                                                <TouchableOpacity
+                                                    style={{ flex: 1, backgroundColor: '#16a34a', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                                                    onPress={() => handleRespondToInfluencerProposal(c._id, 'accept')}
+                                                >
+                                                    <Text style={{ color: '#fff', fontWeight: '700' }}>Aceptar</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={{ flex: 1, borderWidth: 1, borderColor: '#ef4444', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                                                    onPress={() => handleRespondToInfluencerProposal(c._id, 'reject')}
+                                                >
+                                                    <Text style={{ color: '#ef4444', fontWeight: '700' }}>Rechazar</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            {/* My pending invitations */}
+                            {pendingMyInvitations.length > 0 && (
+                                <View style={{ gap: 12 }}>
+                                    <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' }}>
+                                        Invitaciones enviadas
+                                    </Text>
+                                    {pendingMyInvitations.map((c: any) => (
+                                        <View key={c._id} style={styles.couponCard}>
+                                            <View style={styles.couponHeader}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.couponTitle}>{c.influencerName}</Text>
+                                                    <Text style={styles.couponCode}>
+                                                        {(c.commissionRate * 100).toFixed(1)}% propuesto
+                                                    </Text>
+                                                </View>
+                                                <View style={[styles.statusTag, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' }]}>
+                                                    <Text style={[styles.statusText, { color: isDark ? '#FBBF24' : '#B45309' }]}>Pendiente</Text>
+                                                </View>
+                                            </View>
+                                            <TouchableOpacity onPress={() => handleEndBusinessCampaign(c._id)} style={{ marginTop: 8, alignSelf: 'flex-start' }}>
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Cancelar invitación</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            {/* Active / paused campaigns */}
+                            <View style={{ gap: 12 }}>
+                                <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' }}>
+                                    Influencers activos
+                                </Text>
+                                {activeBusinessCampaigns.length === 0 ? (
+                                    <View style={styles.emptyState}>
+                                        <Users size={48} color={isDark ? '#4B5563' : '#E5E7EB'} />
+                                        <Text style={styles.emptyTitle}>Sin influencers asignados</Text>
+                                        <Text style={styles.emptyDesc}>
+                                            Invitá un influencer para que promocione tus productos. También podés activar la promoción abierta en cada listing para que cualquier influencer cobre comisión.
+                                        </Text>
+                                    </View>
+                                ) : (
+                                    activeBusinessCampaigns.map((c: any) => {
+                                        const isActive = c.status === 'active';
+                                        return (
+                                            <View key={c._id} style={styles.couponCard}>
+                                                <View style={styles.couponHeader}>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={styles.couponTitle}>{c.influencerName}</Text>
+                                                        <Text style={styles.couponCode}>
+                                                            {(c.commissionRate * 100).toFixed(1)}% por venta
+                                                            {c.influencerReferralCode ? ` • código ${c.influencerReferralCode}` : ''}
+                                                        </Text>
+                                                    </View>
+                                                    <View
+                                                        style={[
+                                                            styles.statusTag,
+                                                            { backgroundColor: isActive ? (isDark ? 'rgba(22, 101, 52, 0.2)' : '#DCFCE7') : (isDark ? 'rgba(107, 114, 128, 0.2)' : '#F3F4F6') },
+                                                        ]}
+                                                    >
+                                                        <Text style={[styles.statusText, { color: isActive ? (isDark ? '#4ADE80' : '#166534') : (isDark ? '#9CA3AF' : '#6B7280') }]}>
+                                                            {isActive ? 'Activa' : 'Pausada'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                                                    {isActive && (
+                                                        <TouchableOpacity
+                                                            style={{ flex: 1, borderWidth: 1, borderColor: isDark ? '#9CA3AF' : '#D1D5DB', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                                                            onPress={() => handlePauseCampaign(c._id)}
+                                                        >
+                                                            <Text style={{ color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '700' }}>Pausar</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                    <TouchableOpacity
+                                                        style={{ flex: 1, borderWidth: 1, borderColor: '#ef4444', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                                                        onPress={() => handleEndBusinessCampaign(c._id)}
+                                                    >
+                                                        <Text style={{ color: '#ef4444', fontWeight: '700' }}>Finalizar</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        );
+                                    })
+                                )}
+                            </View>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
+
+            {/* --- Invite Influencer Modal --- */}
+            <Modal
+                visible={inviteModalVisible}
+                animationType="slide"
+                transparent
+                onRequestClose={() => setInviteModalVisible(false)}
+            >
+                <View style={[styles.modalOverlay, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Invitar influencer</Text>
+                            <TouchableOpacity onPress={() => setInviteModalVisible(false)} style={styles.modalCloseBtn}>
+                                <X size={18} color={isDark ? '#CBD5E1' : '#64748b'} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.modalLabel}>Email o código del influencer</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="ana@ejemplo.com o JORGE10"
+                            placeholderTextColor="#9CA3AF"
+                            value={inviteLookupTerm}
+                            onChangeText={(v) => {
+                                setInviteLookupTerm(v);
+                                setInvitedInfluencerId(null);
+                            }}
+                            autoCapitalize="none"
+                        />
+                        {inviteLookupTerm.trim().length > 0 && lookupResult && (
+                            <View style={{ backgroundColor: isDark ? '#0f172a' : '#f0fdf4', padding: 10, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#16a34a' }}>
+                                <Text style={{ color: isDark ? '#86efac' : '#166534', fontSize: 13, fontWeight: '600' }}>
+                                    {(lookupResult as any).name}
+                                </Text>
+                                <Text style={{ color: isDark ? '#86efac' : '#166534', fontSize: 12 }}>
+                                    {(lookupResult as any).email}
+                                    {(lookupResult as any).referralCode ? ` • ${(lookupResult as any).referralCode}` : ''}
+                                </Text>
+                            </View>
+                        )}
+                        {inviteLookupTerm.trim().length > 0 && !lookupResult && (
+                            <Text style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>
+                                No se encontró un influencer con ese email/código.
+                            </Text>
+                        )}
+
+                        <Text style={styles.modalLabel}>Comisión por venta (%)</Text>
+                        <TextInput
+                            style={styles.modalInput}
+                            placeholder="5"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="numeric"
+                            value={inviteRatePct}
+                            onChangeText={setInviteRatePct}
+                        />
+
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                            <TouchableOpacity
+                                style={[styles.modalCancelBtn, { flex: 1 }]}
+                                onPress={() => setInviteModalVisible(false)}
+                                disabled={submittingInvite}
+                            >
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '600' }}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalConfirmBtn, { flex: 1 }]}
+                                onPress={handleInviteInfluencer}
+                                disabled={submittingInvite || !lookupResult}
+                            >
+                                {submittingInvite ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ color: '#fff', fontWeight: '700' }}>Enviar invitación</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -609,4 +1089,63 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     starDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     starDotActive: { backgroundColor: '#F59E0B' },
     reviewText: { fontSize: 13, color: isDark ? '#D1D5DB' : '#4B5563', lineHeight: 20 },
+
+    /* Influencer Invite Modal */
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        borderRadius: 16,
+        padding: 20,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: isDark ? '#F9FAFB' : '#111827',
+    },
+    modalCloseBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+    },
+    modalLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: isDark ? '#D1D5DB' : '#374151',
+        marginBottom: 6,
+    },
+    modalInput: {
+        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        borderRadius: 8,
+        padding: 12,
+        color: isDark ? '#F9FAFB' : '#111827',
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#E5E7EB',
+    },
+    modalCancelBtn: {
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        alignItems: 'center',
+    },
+    modalConfirmBtn: {
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: '#7C3AED',
+        alignItems: 'center',
+    },
 });

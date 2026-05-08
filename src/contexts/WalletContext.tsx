@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
-import { calculateCommission, calculateInfluencerCommission } from '../utils/CommissionUtils';
 import { useAuth } from './AuthContext';
 import { usePoints } from './PointsContext'; // Standard Import
 
@@ -34,46 +33,24 @@ export interface Transaction {
     relatedUserId: string; // The user whose wallet is affected (or 'RAMGOS')
 }
 
-export interface Campaign {
-    id: string;
-    influencerId: string;
-    targetStoreId: string;
-    targetStoreName: string;
-    code: string;
-    splitPercentage: number; // e.g., 5
-    stats: {
-        totalSales: number;
-        totalEarnings: number;
-        uses: number;
-    };
-    isActive: boolean;
-}
-
-export interface InfluencerContract {
-    id: string;
-    influencerId: string;
-    storeId: string;
-    storeName: string;
-    commissionRate: number; // e.g. 0.05 => 5%
-    status: 'active' | 'paused' | 'ended';
-    startsAt: string;
-    endsAt?: string;
-}
+// NOTE — Campaigns and influencer contracts USED to live here as a
+// client-side mock (a JSON blob serialised under `economyState.walletState`).
+// They were migrated to the Convex `influencerCampaigns` table and are now
+// served by `api.campaigns.*` queries/mutations. See:
+//   - convex/campaigns.ts
+//   - src/screens/InfluencerDashboardScreen.tsx
+//   - src/screens/BusinessDashboardScreen.tsx
+// Coupon validation has been removed entirely; influencer attribution is
+// resolved server-side inside `convex/stripe.ts` via referralCode.
 
 // --- Context Interface ---
 
 interface WalletContextType {
     wallets: Record<string, Wallet>;
     transactions: Transaction[];
-    campaigns: Campaign[];
-    contracts: InfluencerContract[];
 
     // Actions
     getWallet: (userId: string) => Wallet;
-    createCampaign: (influencerId: string, storeId: string, storeName: string, code: string, split?: number) => void;
-    createContract: (influencerId: string, storeId: string, storeName: string, commissionRate?: number) => void;
-    endContract: (contractId: string) => void;
-    validateCoupon: (code: string) => { valid: boolean; discountPercent?: number; campaign?: Campaign; message?: string };
 
     // Core Payment Process
     processCheckoutTransaction: (order: {
@@ -94,8 +71,6 @@ const WalletContext = createContext<WalletContextType | undefined>(undefined);
 const serializeWalletState = (state: {
     wallets: Record<string, Wallet>;
     transactions: Transaction[];
-    campaigns: Campaign[];
-    contracts: InfluencerContract[];
 }) => ({
     ...state,
     transactions: state.transactions.map((tx) => ({
@@ -114,8 +89,6 @@ const deserializeWalletState = (raw: any) => ({
             releaseDate: tx.releaseDate ? new Date(tx.releaseDate) : undefined,
         }))
         : [],
-    campaigns: Array.isArray(raw?.campaigns) ? raw.campaigns : [],
-    contracts: Array.isArray(raw?.contracts) ? raw.contracts : [],
 });
 
 // --- Provider ---
@@ -138,32 +111,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-    const [campaigns, setCampaigns] = useState<Campaign[]>([
-        // Mock Campaigns
-        {
-            id: 'camp_1',
-            influencerId: 'inf_1', // Assume some influencer ID
-            targetStoreId: 'store_1', // Assume some store ID
-            targetStoreName: 'Nike Official',
-            code: 'JORGE10',
-            splitPercentage: 5,
-            stats: { totalSales: 0, totalEarnings: 0, uses: 0 },
-            isActive: true
-        }
-    ]);
-
-    const [contracts, setContracts] = useState<InfluencerContract[]>([
-        {
-            id: 'contract_1',
-            influencerId: 'inf_1',
-            storeId: 'store_1',
-            storeName: 'Nike Official',
-            commissionRate: 0.05,
-            status: 'active',
-            startsAt: new Date('2025-01-15T00:00:00Z').toISOString(),
-        },
-    ]);
-
     useEffect(() => {
         if (!user || hasHydratedFromBackend) return;
         if (!economyState?.walletState) {
@@ -174,8 +121,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const hydrated = deserializeWalletState(economyState.walletState);
         setWallets(hydrated.wallets);
         setTransactions(hydrated.transactions);
-        setCampaigns(hydrated.campaigns.length > 0 ? hydrated.campaigns : campaigns);
-        setContracts(hydrated.contracts.length > 0 ? hydrated.contracts : contracts);
         setHasHydratedFromBackend(true);
     }, [user, economyState, hasHydratedFromBackend]);
 
@@ -187,13 +132,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
             walletState: serializeWalletState({
                 wallets,
                 transactions,
-                campaigns,
-                contracts,
             }),
         }).catch((error: any) => {
             console.warn('[WalletContext] Failed to persist wallet state', error);
         });
-    }, [user, hasHydratedFromBackend, wallets, transactions, campaigns, contracts, saveWalletState]);
+    }, [user, hasHydratedFromBackend, wallets, transactions, saveWalletState]);
 
     // Helpers
     const getWallet = (userId: string): Wallet => {
@@ -247,147 +190,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     // --- Actions ---
 
-    const createCampaign = (influencerId: string, storeId: string, storeName: string, code: string, split = 5) => {
-        const newCampaign: Campaign = {
-            id: `camp_${Date.now()}`,
-            influencerId,
-            targetStoreId: storeId,
-            targetStoreName: storeName,
-            code: code.toUpperCase(),
-            splitPercentage: split,
-            stats: { totalSales: 0, totalEarnings: 0, uses: 0 },
-            isActive: true
-        };
-        setCampaigns(prev => [...prev, newCampaign]);
-    };
-
-    const createContract = (influencerId: string, storeId: string, storeName: string, commissionRate = 0.05) => {
-        const newContract: InfluencerContract = {
-            id: `contract_${Date.now()}`,
-            influencerId,
-            storeId,
-            storeName,
-            commissionRate,
-            status: 'active',
-            startsAt: new Date().toISOString(),
-        };
-        setContracts((prev) => [newContract, ...prev]);
-    };
-
-    const endContract = (contractId: string) => {
-        setContracts((prev) =>
-            prev.map((c) =>
-                c.id === contractId
-                    ? { ...c, status: 'ended', endsAt: new Date().toISOString() }
-                    : c
-            )
-        );
-    };
-
-    const validateCoupon = (code: string) => {
-        const campaign = campaigns.find(c => c.code === code.toUpperCase() && c.isActive);
-        if (campaign) {
-            return { valid: true, discountPercent: 10, campaign }; // Hardcoded 10% discount for buyers
-        }
-        return { valid: false, message: 'Cupón inválido o expirado' };
-    };
-
     // --- MAIN FINANCIAL ENGINE ---
-
-    const processCheckoutTransaction = (order: { id: string; sellerId: string; totalAmount: number; items: any[]; couponCode?: string }) => {
-        // 0. HIGH TICKET BONUS CHECK (Strategic Plan v2.0)
-        if (order.totalAmount >= 100) {
-            addPoints(25, 'Bono Compra Mayor a $100', { type: 'earn', source: 'bonus', metadata: { orderId: order.id } });
-        }
-
-        // 1. Determine Splits
-        let influencerCommission = 0;
-        let influencerId = '';
-        let campaignId = '';
-
-        if (order.couponCode) {
-            const { valid, campaign } = validateCoupon(order.couponCode);
-            if (valid && campaign) {
-                // If coupon was used, the 'totalAmount' is already discounted? 
-                // Let's assume passed 'totalAmount' is what the USER PAID.
-                // We base commission on the Pre-Discount amount usually, OR the paid amount. 
-                // Let's use Paid Amount for simplicity now.
-                influencerCommission = calculateInfluencerCommission(order.totalAmount, campaign.splitPercentage);
-                influencerId = campaign.influencerId;
-                campaignId = campaign.id;
-
-                // Update Campaign Stats
-                setCampaigns(prev => prev.map(c =>
-                    c.id === campaign.id
-                        ? {
-                            ...c,
-                            stats: {
-                                uses: c.stats.uses + 1,
-                                totalSales: c.stats.totalSales + order.totalAmount,
-                                totalEarnings: c.stats.totalEarnings + influencerCommission
-                            }
-                        }
-                        : c
-                ));
-            }
-        }
-
-        // 2. Calculate Ramgos Fee
-        // Simplified: iterate items and sum fees.
-        let ramgosFee = 0;
-        order.items.forEach(item => {
-            const itemTotal = item.price * item.quantity;
-            const cat = item.category || 'general'; // Needs category on item
-            ramgosFee += calculateCommission(itemTotal, cat);
-        });
-
-        // 3. Calculate Seller Net
-        // Net = TotalPaid - RamgosFee - InfluencerCommission
-        const sellerNet = order.totalAmount - ramgosFee - influencerCommission;
-
-        // 4. Create Ledger Entries
-
-        const now = new Date();
-        const releaseDate = new Date();
-        // ESCROW UPDATE: 10 Days (Strategy v2.0)
-        releaseDate.setDate(now.getDate() + 10);
-
-        // 4.1 Payment In (To Ramgos Holding - Implicit, we just track the allocation)
-
-        // 4.2 Seller Payout (PENDING)
-        addTransaction({
-            id: `tx_${Date.now()}_seller`,
-            orderId: order.id,
-            type: 'PAYOUT_SELLER',
-            amount: sellerNet,
-            status: 'PENDING',
-            source: 'USER_PAYMENT',
-            destination: 'SELLER_WALLET',
-            date: now,
-            releaseDate: releaseDate,
-            description: `Venta Orden #${order.id}`,
-            relatedUserId: order.sellerId
-        });
-
-        // 4.3 Influencer Commission (PENDING - usually has same escrow or shorter)
-        if (influencerCommission > 0 && influencerId) {
-            addTransaction({
-                id: `tx_${Date.now()}_inf`,
-                orderId: order.id,
-                type: 'COMMISSION_INFLUENCER',
-                amount: influencerCommission,
-                status: 'PENDING',
-                source: 'USER_PAYMENT',
-                destination: 'INFLUENCER_WALLET',
-                date: now,
-                releaseDate: releaseDate,
-                description: `Comisión Ref Orden #${order.id}`,
-                relatedUserId: influencerId
-            });
-        }
-
-        // 4.4 Ramgos Fee (COMPLETED immediately as it stays in house)
-        // We could log this to a 'ramgos_admin' wallet if we wanted.
+    // NOTE: Splits and escrow are now handled server-side by Convex (stripe.internalMarkPaymentSucceeded).
+    // This function is kept as a no-op for backward compatibility; do not re-add local finance logic here.
+    const processCheckoutTransaction = (_order: { id: string; sellerId: string; totalAmount: number; items: any[]; couponCode?: string }) => {
+        // no-op: financial splits are handled by Convex webhook
     };
 
     const confirmDelivery = (orderId: string) => {
@@ -444,13 +251,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         <WalletContext.Provider value={{
             wallets,
             transactions,
-            campaigns,
-            contracts,
             getWallet,
-            createCampaign,
-            createContract,
-            endContract,
-            validateCoupon,
             processCheckoutTransaction,
             confirmDelivery,
             simulateTimePass
