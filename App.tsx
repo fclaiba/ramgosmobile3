@@ -21,6 +21,7 @@ import { BusinessProvider } from './src/contexts/BusinessContext';
 import { MarketplaceProvider } from './src/contexts/MarketplaceContext';
 import { ToastProvider } from './src/contexts/ToastContext';
 import { ReferralProvider } from './src/contexts/ReferralContext';
+import { StripeConnectProvider } from './src/contexts/StripeConnectContext';
 import { EscrowProvider } from './src/contexts/EscrowContext';
 import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
 import CartSidebar from './src/components/CartSidebar';
@@ -102,6 +103,7 @@ import DisputeReasonScreen from './src/screens/marketplace/DisputeReasonScreen';
 import DisputeChatScreen from './src/screens/marketplace/DisputeChatScreen';
 import SellerWalletScreen from './src/screens/marketplace/SellerWalletScreen';
 import DisputeScreen from './src/screens/marketplace/DisputeScreen';
+import StripeConnectScreen from './src/screens/marketing/StripeConnectScreen';
 
 // Business Screens
 import BusinessProfileScreen from './src/screens/business/BusinessProfileScreen';
@@ -209,6 +211,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="Dispute" component={DisputeScreen} />
                     <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
                     <Stack.Screen name="MyListings" component={MyListingsScreen} />
+                    <Stack.Screen name="StripeConnect" component={StripeConnectScreen} />
 
                     {/* Maps & QR Module */}
                     {/* MapExplorer integrated into Marketplace */}
@@ -261,8 +264,10 @@ function App() {
                                                                                 <NotificationsProvider>
                                                                                     <SocialProvider>
                                                                                         <ReferralProvider>
-                                                                                            <PointsFeedback />
-                                                                                            <AppNavigator />
+                                                                                            <StripeConnectProvider>
+                                                                                                <PointsFeedback />
+                                                                                                <AppNavigator />
+                                                                                            </StripeConnectProvider>
                                                                                         </ReferralProvider>
                                                                                     </SocialProvider>
                                                                                 </NotificationsProvider>

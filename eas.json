@@ -9,24 +9,21 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://academic-lapwing-311.convex.cloud",
-        "EXPO_PUBLIC_STRIPE_KEY": "pk_test_replace_me",
-        "EXPO_PUBLIC_SENTRY_DSN": ""
+        "EXPO_PUBLIC_STRIPE_KEY": "pk_test_replace_me"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://academic-lapwing-311.convex.cloud",
-        "EXPO_PUBLIC_STRIPE_KEY": "pk_test_replace_me",
-        "EXPO_PUBLIC_SENTRY_DSN": ""
+        "EXPO_PUBLIC_STRIPE_KEY": "pk_test_replace_me"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://deafening-turtle-227.convex.cloud",
-        "EXPO_PUBLIC_STRIPE_KEY": "pk_live_replace_me",
-        "EXPO_PUBLIC_SENTRY_DSN": ""
+        "EXPO_PUBLIC_STRIPE_KEY": "pk_live_51R3hWPA7Fz349bFU5V7xyr1WWDbOdXT6Y1RdOxcTc8dzULNkr93VNW4o9rdYSyVUr9wx5sDqpPeQu6vUb79glmr500u8dzLvAf"
       }
     }
   },

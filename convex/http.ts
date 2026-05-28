@@ -483,4 +483,56 @@ http.route({
     }),
 });
 
+// ---------------------------------------------------------------------------
+// /stripe-connect-webhook — receives Stripe Connect V2 Thin Events.
+// ---------------------------------------------------------------------------
+http.route({
+    path: "/stripe-connect-webhook",
+    method: "POST",
+    handler: httpAction(async (ctx, request) => {
+        if (!stripeWebhookSecret) {
+            return new Response("Stripe webhook no configurado para este entorno.", { status: 503 });
+        }
+
+        const body = await request.text();
+        const signature = request.headers.get("stripe-signature");
+
+        if (!signature) {
+            return new Response("Missing stripe-signature header", { status: 400 });
+        }
+
+        try {
+            // 1. Parse the thin event
+            const thinEvent = stripe.webhooks.constructEvent(body, signature, stripeWebhookSecret);
+
+            // 2. Fetch the full event data from the API
+            const event = await stripe.v2.core.events.retrieve(thinEvent.id);
+
+            // 3. Handle the event
+            console.log(`[Connect Webhook] Received thin event: ${event.type} for account: ${(event as any).related_object?.id}`);
+
+            switch (event.type) {
+                case "v2.core.account[requirements].updated":
+                case "v2.core.account[configuration.recipient].capability_status_updated": {
+                    const accountId = (event as any).related_object?.id;
+                    if (accountId) {
+                        console.log(`[Connect Webhook] Updating account ${accountId}`);
+                        await ctx.runAction(internal.connect.internalApplyV2AccountUpdate, {
+                            accountId: accountId,
+                        });
+                    }
+                    break;
+                }
+                default:
+                    console.log(`[Connect Webhook] Unhandled thin event type: ${event.type}`);
+            }
+
+            return new Response(null, { status: 200 });
+        } catch (err: any) {
+            console.error(`Connect Webhook Error: ${err.message}`);
+            return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+        }
+    }),
+});
+
 export default http;

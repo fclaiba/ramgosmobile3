@@ -888,4 +888,18 @@ export default defineSchema({
         .index("by_user", ["userId"])
         .index("by_transaction", ["transactionId"])
         .index("by_original_transaction", ["originalTransactionId"]),
+
+    // Platform Products (Stripe Connect Demo)
+    platformProducts: defineTable({
+        stripeProductId: v.string(),
+        stripePriceId: v.string(),
+        name: v.string(),
+        description: v.optional(v.string()),
+        priceInCents: v.number(),
+        currency: v.string(),
+        connectedAccountId: v.string(), // Mapping to the connected account
+        createdAt: v.string(),
+    })
+        .index("by_connected_account", ["connectedAccountId"])
+        .index("by_product", ["stripeProductId"]),
 });

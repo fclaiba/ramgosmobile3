@@ -13,6 +13,7 @@ import type * as bonos from "../bonos.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cart from "../cart.js";
 import type * as connect from "../connect.js";
+import type * as connectV2 from "../connectV2.js";
 import type * as crons from "../crons.js";
 import type * as developer from "../developer.js";
 import type * as disputes from "../disputes.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   campaigns: typeof campaigns;
   cart: typeof cart;
   connect: typeof connect;
+  connectV2: typeof connectV2;
   crons: typeof crons;
   developer: typeof developer;
   disputes: typeof disputes;

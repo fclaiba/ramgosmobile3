@@ -1,14 +1,14 @@
 # Diagnostico Integral - ramgos-mobile v1.0.0
 
-Fecha: `2026-04-29T15:57:49-03:00`  
+Fecha: `2026-05-19T17:47:40-03:00`  
 Generado por: `scripts/app_integral_audit.py`  
-Modo: `run_checks=True online_checks=True`
+Modo: `run_checks=False online_checks=False`
 
 ## 1) Resumen ejecutivo
 
-- **Estado global: `NO_GO`**
-- Score global ponderado: **91.3/100**
-- Checks ejecutados: 82 (PASS: 76, WARN: 3, CRITICAL/FAIL: 1, HIGH/FAIL: 1)
+- **Estado global: `GO`**
+- Score global ponderado: **89.7/100**
+- Checks ejecutados: 81 (PASS: 74, WARN: 5, CRITICAL/FAIL: 0, HIGH/FAIL: 0)
 
 Interpretacion:
 - `GO`: sin bloqueantes, listo para release con riesgos menores.
@@ -21,31 +21,31 @@ Interpretacion:
 |---|---:|---:|---:|
 | Arquitectura y dominio | 100.0 | 28 | 28 |
 | Pagos / Escrow / Comisiones | 100.0 | 21 | 21 |
-| Seguridad y credenciales | 81.2 | 6 | 8 |
-| Build / Release readiness | 100.0 | 11 | 11 |
-| Testing y calidad | 100.0 | 5 | 5 |
-| Integraciones externas | 66.7 | 5 | 9 |
+| Seguridad y credenciales | 87.5 | 6 | 8 |
+| Build / Release readiness | 95.5 | 10 | 11 |
+| Testing y calidad | 80.0 | 4 | 5 |
+| Integraciones externas | 75.0 | 5 | 8 |
 
 ## 3) Hallazgos por severidad
 
 ### CRITICAL
-- [FAIL] **eas.production.stripe_key** (seguridad) - eas.json -> production tiene EXPO_PUBLIC_STRIPE_KEY real (pk_live_...)
-  - Evidencia: `valor actual: 'pk_live_replace_me'`
-  - Remediacion: Cargar clave publica de Stripe live en eas.json (production).
+_Sin hallazgos critical._
 
 ### HIGH
-- [FAIL] **integrations.crash_analytics** (integraciones) - SDK de crash reporting / analytics integrado
-  - Evidencia: `ninguna lib instalada`
-  - Remediacion: Integrar Sentry o Firebase Crashlytics para monitoreo en produccion.
 - [WARN] **integrations.app_stores** (integraciones) - Documentacion para Apple/Play presente (credenciales pendientes)
   - Evidencia: `apple_doc=True play_doc=True`
   - Remediacion: Crear app records en App Store Connect / Play Console y subir builds.
 - [WARN] **maps.apikey_restriccion** (seguridad) - Google Maps API key embebida en app.json (verificar restriccion en GCP)
-  - Evidencia: `key presente: AIzaSy...UZVs`
+  - Evidencia: `key presente: __SET_...EY__`
   - Remediacion: Restringir la API key por package + SHA1 en Google Cloud Console.
 
 ### MEDIUM
-_Sin hallazgos medium._
+- [WARN] **mocks.flags_explicitas** (seguridad) - Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK)
+  - Evidencia: `stripe=False kyc=True`
+  - Remediacion: Asegurar que mocks solo se activen con ALLOW_*_MOCK=true.
+- [WARN] **release.android.apk_artifact** (release) - No se encontro APK release reciente
+  - Evidencia: `android/app/build/outputs/apk/release/app-release.apk no existe`
+  - Remediacion: Ejecutar build-release.ps1 para generar APK/AAB.
 
 ### LOW
 - [WARN] **integrations.zendesk** (integraciones) - Zendesk preparado en env (modulo deshabilitado)
@@ -55,15 +55,16 @@ _Sin hallazgos medium._
 ## 4) Plan de accion priorizado
 
 ### Bloqueantes (CRITICAL/FAIL)
-- `eas.production.stripe_key` - eas.json -> production tiene EXPO_PUBLIC_STRIPE_KEY real (pk_live_...)
-    - Accion: Cargar clave publica de Stripe live en eas.json (production).
+- (ninguno)
 
 ### Riesgos altos (HIGH/FAIL)
-- `integrations.crash_analytics` - SDK de crash reporting / analytics integrado
-    - Accion: Integrar Sentry o Firebase Crashlytics para monitoreo en produccion.
+- (ninguno)
 
 ### Quick wins (MEDIUM/WARN)
-- (ninguno)
+- `mocks.flags_explicitas` - Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK)
+    - Accion: Asegurar que mocks solo se activen con ALLOW_*_MOCK=true.
+- `release.android.apk_artifact` - No se encontro APK release reciente
+    - Accion: Ejecutar build-release.ps1 para generar APK/AAB.
 
 ## 5) Matriz de integraciones externas
 
@@ -87,7 +88,7 @@ _Sin hallazgos medium._
 | `stripe.action.payment_intent_persistido` | finanzas | CRITICAL | PASS | createPaymentIntent persiste registro en payments |
 | `webhook.idempotencia` | finanzas | CRITICAL | PASS | Webhook Stripe usa paymentEvents para idempotencia |
 | `integrations.stripe` | integraciones | CRITICAL | PASS | Stripe (RN + Node SDK) integrado en codigo |
-| `eas.production.stripe_key` | seguridad | CRITICAL | FAIL | eas.json -> production tiene EXPO_PUBLIC_STRIPE_KEY real (pk_live_...) |
+| `eas.production.stripe_key` | seguridad | CRITICAL | PASS | eas.json -> production tiene EXPO_PUBLIC_STRIPE_KEY real (pk_live_...) |
 | `env.local.gitignored` | seguridad | CRITICAL | PASS | .env.local (si existe) esta gitignorado |
 | `convex.generated.modules` | arquitectura | HIGH | PASS | convex/_generated/api.d.ts registra modulos clave |
 | `convex.module.authHelpers` | arquitectura | HIGH | PASS | Modulo Convex presente: convex/authHelpers.ts |
@@ -95,7 +96,7 @@ _Sin hallazgos medium._
 | `convex.module.http` | arquitectura | HIGH | PASS | Modulo Convex presente: convex/http.ts |
 | `convex.module.stripe` | arquitectura | HIGH | PASS | Modulo Convex presente: convex/stripe.ts |
 | `frontend.contexts.criticos` | arquitectura | HIGH | PASS | Contextos React criticos presentes |
-| `cmd.typecheck` | calidad | HIGH | PASS | `npm run typecheck` (tsc -p tsconfig.check.json --noEmit) |
+| `cmd.typecheck` | calidad | HIGH | SKIP | `npm run typecheck` no fue ejecutado (use --run-checks) |
 | `economy.idempotencia` | finanzas | HIGH | PASS | Economy (points/wallet/rewards) usa eventKey/claimKey |
 | `fintech.sin_charge_local` | finanzas | HIGH | PASS | FintechContext no simula cargos locales (provider.charge / setTimeout) |
 | `kyc.stripe_identity` | finanzas | HIGH | PASS | KYC integrado con Stripe Identity con flag explicito de mock |
@@ -114,8 +115,7 @@ _Sin hallazgos medium._
 | `stripe.connect.payouts` | finanzas | HIGH | PASS | Soporte de Stripe Connect (onboarding + payout) |
 | `webhook.eventos_cubiertos` | finanzas | HIGH | PASS | Webhook Stripe cubre eventos criticos del ciclo de vida del pago |
 | `integrations.app_stores` | integraciones | HIGH | WARN | Documentacion para Apple/Play presente (credenciales pendientes) |
-| `integrations.crash_analytics` | integraciones | HIGH | FAIL | SDK de crash reporting / analytics integrado |
-| `online.convex_reachable` | integraciones | HIGH | PASS | Convex deployment alcanzable (HEAD/GET) |
+| `integrations.crash_analytics` | integraciones | HIGH | PASS | SDK de crash reporting / analytics integrado |
 | `release.eas.profile_production` | release | HIGH | PASS | eas.json tiene perfil 'production' configurado |
 | `app.bundle.identifiers` | seguridad | HIGH | PASS | app.json define bundleIdentifier (iOS) y package (Android) |
 | `backend.auth_helpers` | seguridad | HIGH | PASS | Backend usa requireActor / assertSelfOrAdmin / assertAdminOrDeveloper |
@@ -146,17 +146,17 @@ _Sin hallazgos medium._
 | `integrations.expo_push` | integraciones | MEDIUM | PASS | Expo push notifications integrado |
 | `integrations.maps` | integraciones | MEDIUM | PASS | Google Maps integrado (deps + key embebida) |
 | `integrations.resend` | integraciones | MEDIUM | PASS | Resend (emails transaccionales) integrado |
-| `release.android.apk_artifact` | release | MEDIUM | PASS | Artefacto Android release disponible |
+| `release.android.apk_artifact` | release | MEDIUM | WARN | No se encontro APK release reciente |
 | `release.ios.encryption_declaration` | release | MEDIUM | PASS | iOS declara ITSAppUsesNonExemptEncryption=false (export compliance) |
 | `release.version_metadata` | release | MEDIUM | PASS | app.json define version y android.versionCode |
 | `env.example.documenta_variables` | seguridad | MEDIUM | PASS | .env.example documenta todas las variables criticas |
-| `mocks.flags_explicitas` | seguridad | MEDIUM | PASS | Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK) |
+| `mocks.flags_explicitas` | seguridad | MEDIUM | WARN | Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK) |
 | `testing.constitution` | calidad | LOW | PASS | Suite 'constitution' de tests presente |
 | `testing.health_check_script` | calidad | LOW | PASS | Script de health-check Node presente |
 | `testing.jest_config` | calidad | LOW | PASS | Configuracion Jest presente |
 | `testing.tsconfig_check` | calidad | LOW | PASS | tsconfig.check.json para typecheck dedicado |
 | `integrations.zendesk` | integraciones | LOW | WARN | Zendesk preparado en env (modulo deshabilitado) |
-| `online.stripe_api` | integraciones | LOW | SKIP | Sin STRIPE_SECRET_KEY en env, se omite chequeo Stripe |
+| `online.checks` | integraciones | LOW | SKIP | Chequeos online deshabilitados (use --online-checks) |
 | `release.build_script` | release | LOW | PASS | Script de build release presente (build-release.ps1) |
 | `release.doc.CREDENTIALS_HANDOFF_CHECKLIST.md` | release | LOW | PASS | Documentacion de release: Handoff de credenciales |
 | `release.doc.IOS_RELEASE_ENABLEMENT.md` | release | LOW | PASS | Documentacion de release: Habilitacion iOS |

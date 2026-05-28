@@ -453,6 +453,18 @@ export const saveStripeConnectAccount = mutation({
     }
 });
 
+export const internalUpdateStripeConnectId = internalMutation({
+    args: {
+        userId: v.id("users"),
+        stripeConnectAccountId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.userId, {
+            stripeConnectAccountId: args.stripeConnectAccountId,
+        } as any);
+    }
+});
+
 // ---------------------------------------------------------------------------
 // Influencer attribution helpers.
 //
