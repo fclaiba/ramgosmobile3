@@ -6,7 +6,6 @@ import { assertSelfOrAdmin, requireActor } from './authHelpers';
 // Add to cart
 export const addToCart = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
         userId: v.optional(v.string()),
         listingId: v.string(),
         quantity: v.number(),
@@ -32,9 +31,9 @@ export const addToCart = mutation({
         })),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
-        const userId = args.userId ?? actor.idString;
-        assertSelfOrAdmin(actor, userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const userId = actor.idString;
+
         // Check if item already in cart
         const existing = await ctx.db
             .query("cart")
@@ -63,10 +62,6 @@ export const addToCart = mutation({
             if (!listing) {
                 throw new Error("Producto no encontrado");
             }
-            // Map listing.type ('product' | 'service' | 'event' | 'bono')
-            // to a cart snapshot type. Services and bonos and events keep their
-            // semantic so downstream (PaymentIntent, redemption flows, event
-            // reservations) can branch on it.
             const listingType = (listing as any).type as
                 | 'product'
                 | 'service'
@@ -108,13 +103,17 @@ export const addToCart = mutation({
 // Get user's cart
 export const getMyCart = query({
     args: {
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string())
+        userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
-        const userId = args.userId ?? actor.idString;
-        assertSelfOrAdmin(actor, userId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        } catch {
+            return [];
+        }
+        const userId = actor.idString;
+
         const cartItems = await ctx.db
             .query("cart")
             .withIndex("by_user", q => q.eq("userId", userId))
@@ -136,15 +135,14 @@ export const getMyCart = query({
 // Update cart item quantity
 export const updateCartQuantity = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
         userId: v.optional(v.string()),
         cartItemId: v.id("cart"),
         quantity: v.number(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
-        const userId = args.userId ?? actor.idString;
-        assertSelfOrAdmin(actor, userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const userId = actor.idString;
+
         const current = await ctx.db.get(args.cartItemId);
         if (!current || current.userId !== userId) throw new Error("No autorizado.");
 
@@ -162,14 +160,13 @@ export const updateCartQuantity = mutation({
 // Remove from cart
 export const removeFromCart = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
         userId: v.optional(v.string()),
         cartItemId: v.id("cart"),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
-        const userId = args.userId ?? actor.idString;
-        assertSelfOrAdmin(actor, userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const userId = actor.idString;
+
         const current = await ctx.db.get(args.cartItemId);
         if (!current || current.userId !== userId) throw new Error("No autorizado.");
         await ctx.db.delete(args.cartItemId);
@@ -179,13 +176,12 @@ export const removeFromCart = mutation({
 // Clear user's cart
 export const clearCart = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string())
+        userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
-        const userId = args.userId ?? actor.idString;
-        assertSelfOrAdmin(actor, userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const userId = actor.idString;
+
         const cartItems = await ctx.db
             .query("cart")
             .withIndex("by_user", q => q.eq("userId", userId))

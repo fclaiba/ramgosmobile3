@@ -18,6 +18,7 @@ import { useTheme } from '../contexts/ThemeContext';
 export default function PaymentMethodsScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     return (
         <View style={[styles.container, isDark && styles.containerDark]}>
@@ -49,7 +50,7 @@ export default function PaymentMethodsScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F9FAFB' },
     containerDark: { backgroundColor: '#111827' },
     body: {
@@ -63,21 +64,21 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 20,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 8,
     },
     iconBoxDark: { backgroundColor: '#1F2937' },
     title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-    titleDark: { color: '#F3F4F6' },
+    titleDark: { color: isDark ? '#1F2937' : '#F3F4F6' },
     subtitle: {
         fontSize: 14,
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
         textAlign: 'center',
         lineHeight: 20,
     },
-    subtitleDark: { color: '#9CA3AF' },
+    subtitleDark: { color: isDark ? '#6B7280' : '#9CA3AF' },
     backBtn: {
         marginTop: 16,
         backgroundColor: '#7C3AED',
@@ -85,5 +86,5 @@ const styles = StyleSheet.create({
         paddingHorizontal: 32,
         borderRadius: 12,
     },
-    backBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    backBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '700', fontSize: 15 },
 });

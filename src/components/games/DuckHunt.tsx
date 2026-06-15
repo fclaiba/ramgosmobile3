@@ -8,6 +8,8 @@ import { useGameLevel } from './useGameLevel';
 import { GAME_LEVEL_THRESHOLDS, getArcadeParams } from './gameDifficultyConfig';
 import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
+import { useTheme } from '../../contexts/ThemeContext';
+import { GameThemeTokens } from './gameContracts';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,9 +34,13 @@ interface DuckHuntProps {
     onEnd?: (summary: GameEndSummary) => void;
     gameId?: GameAdapterProps['gameId'];
     family?: GameAdapterProps['family'];
+    theme?: GameThemeTokens;
 }
 
 export const DuckHunt = (props: DuckHuntProps) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const {
         onGameEnd,
         onClose,
@@ -44,6 +50,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
         onEnd,
         gameId = 'duck',
         family = 'arcade',
+        theme,
     } = props;
 
     const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
@@ -237,7 +244,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
         const currentScore = scoreRef.current;
         const spawnMult = params?.gameId === 'duck' ? params.spawnMultiplier : 1;
         const speedMult = params?.gameId === 'duck' ? params.duckSpeedMultiplier : 1;
-        const difficulty = 1 + (currentScore / 1500);
+        const difficulty = 1 + (currentScore / 3000);
 
         // Spawn Logic
         // Base chance doubled
@@ -248,7 +255,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
                 const rand = Math.random();
                 let type: FlyingObject['type'] = 'duck';
                 let emoji = '🦆';
-                let speedX = (Math.random() * 2 + 2) * difficulty * speedMult;
+                let speedX = (Math.random() * 1.5 + 1.5) * difficulty * speedMult;
                 let speedY = 0;
                 let x = 0;
                 // Use explicit height or fallback
@@ -272,7 +279,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
                     // Clock (Fast)
                     type = 'clock';
                     emoji = '⏰';
-                    speedX = (Math.random() * 5 + 5) * difficulty * speedMult; // Very fast
+                    speedX = (Math.random() * 3 + 4) * difficulty * speedMult; // Very fast
                 }
 
                 if (type !== 'ammo') {
@@ -326,7 +333,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
 
         setAmmo(prev => {
             const newAmmo = prev - 1;
-            if (newAmmo < 0) {
+            if (newAmmo <= 0) {
                 endGame();
                 return 0;
             }
@@ -358,66 +365,15 @@ export const DuckHunt = (props: DuckHuntProps) => {
         // Decrement Ammo for shooting
         setAmmo(prev => {
             const val = prev - 1;
-            if (val < 0) { endGame(); return 0; }
+            if (val <= 0) { endGame(); return 0; }
             return val;
         });
     };
 
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={['#87CEEB', '#E0F7FA']} style={StyleSheet.absoluteFill} />
-
-            {uiMode !== 'wrapped' && (
-                <View style={styles.hud}>
-                    <View style={styles.scoreContainer}>
-                        <Trophy size={20} color="#F59E0B" />
-                        <Text style={styles.scoreText}>{score}</Text>
-                        <Text style={styles.highScoreText}>Hi: {highScore}</Text>
-                    </View>
-                    <View style={styles.ammoContainer}>
-                        {/* Ammo Shells */}
-                        {[...Array(Math.max(0, ammo))].map((_, i) => (
-                            <View key={i} style={styles.shell} />
-                        ))}
-                        {ammo === 0 && <Text style={{ color: 'red', fontWeight: 'bold' }}>EMPTY</Text>}
-                    </View>
-                    <View style={styles.timerContainer}>
-                        <Text style={[styles.timerText, timeLeft < 10 && { color: 'red' }]}>{timeLeft}s</Text>
-                    </View>
-                </View>
-            )}
-
-            {uiMode !== 'wrapped' && gameState === 'IDLE' && (
-                <View style={styles.centerContainer}>
-                    <Text style={styles.title}>Duck Hunt</Text>
-                    <Text style={styles.subtitle}>¡Toca los objetivos!</Text>
-                    <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                        <Crosshair size={24} color="#fff" />
-                        <Text style={styles.btnText}>EMPEZAR</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && (
-                <View style={styles.centerContainer}>
-                    <Text style={styles.gameOverText}>
-                        {ammo < 0 ? 'SIN MUNICIÓN' : 'TIEMPO FUERA'}
-                    </Text>
-                    <Text style={styles.finalScore}>Puntos: {score}</Text>
-                    <View style={{ gap: 10 }}>
-                        <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
-                            if (onGameEnd) onGameEnd(score); // Save Coins
-                            if (onClose) onClose();
-                        }}>
-                            <Coins size={24} color="#fff" />
-                            <Text style={styles.btnText}>GUARDAR {Math.floor(score / 5)} MONEDAS</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                            <RotateCcw size={24} color="#fff" />
-                            <Text style={styles.btnText}>REINTENTAR</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
+        <View style={[styles.container, uiMode === 'wrapped' && theme && { backgroundColor: theme.background }]}>
+            {theme?.surfaceGradient && (
+                <LinearGradient colors={theme.surfaceGradient} style={StyleSheet.absoluteFill} />
             )}
 
             {/* Game Area Wrapper for Misses */}
@@ -439,7 +395,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
                             {
                                 left: item.x,
                                 top: item.y,
-                                transform: [{ scaleX: item.type === 'ammo' ? 1 : item.direction }]
+                                transform: [{ rotateY: item.type === 'duck' && item.direction === 1 ? '180deg' : '0deg' }]
                             }
                         ]}
                     >
@@ -451,7 +407,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
         width: '100%',
@@ -479,7 +435,7 @@ const styles = StyleSheet.create({
     },
     highScoreText: {
         fontSize: 12,
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
         marginLeft: 4
     },
     ammoContainer: {
@@ -533,7 +489,7 @@ const styles = StyleSheet.create({
     },
     subtitle: {
         fontSize: 16,
-        color: '#4B5563',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563',
         marginBottom: 24
     },
     gameOverText: {
@@ -559,7 +515,7 @@ const styles = StyleSheet.create({
         ...Platform.select({
             web: { boxShadow: '0 2px 4px rgba(0,0,0,0.2)' } as any,
             default: {
-                shadowColor: '#000',
+                shadowColor: isDark ? '#F9FAFB' : '#000',
                 shadowOpacity: 0.2,
                 shadowRadius: 4,
                 shadowOffset: { width: 0, height: 2 },
@@ -567,7 +523,7 @@ const styles = StyleSheet.create({
         }),
     },
     btnText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 16
     },

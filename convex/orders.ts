@@ -8,11 +8,15 @@ import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authH
 
 export const getMyOrders = query({
     args: {
-        actorId: v.optional(v.id("users")),
         userId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        } catch {
+            return [];
+        }
         const targetUserId = args.userId ?? actor.idString;
         assertSelfOrAdmin(actor, targetUserId);
 
@@ -28,11 +32,15 @@ export const getMyOrders = query({
 
 export const getOrdersBySeller = query({
     args: {
-        actorId: v.optional(v.id("users")),
         sellerId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        } catch {
+            return [];
+        }
         const targetSellerId = args.sellerId ?? actor.idString;
         const isSelf = actor.idString === targetSellerId;
         if (!isSelf) {
@@ -52,8 +60,7 @@ export const getOrdersBySeller = query({
 
 export const createOrder = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string()), // Buyer
+        userId: v.optional(v.string()), // Buyer (optional, defaults to self)
         sellerId: v.string(),
         idempotencyKey: v.optional(v.string()),
         items: v.array(v.object({
@@ -77,7 +84,7 @@ export const createOrder = mutation({
         })),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const buyerId = args.userId ?? actor.idString;
         assertSelfOrAdmin(actor, buyerId);
 
@@ -140,6 +147,12 @@ export const createOrder = mutation({
             data: { type: 'order_created', orderId: String(orderId) },
         });
 
+        // 4. Issue bonos if any items in the order are of type 'bono'
+        const hasBonos = args.items.some(i => i.title.toLowerCase().includes('bono')); // Fast heuristic, true check is in the mutation
+        await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, {
+            orderId: orderId,
+        });
+
         return orderId;
     },
 });
@@ -165,11 +178,9 @@ export const markAsShipped = mutation({
         orderId: v.id("orders"),
         trackingNumber: v.string(),
         carrier: v.string(),
-        actorId: v.optional(v.id("users")),
-        sellerId: v.optional(v.string()), // legacy fallback
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -211,11 +222,9 @@ export const markAsShipped = mutation({
 export const markAsDelivered = mutation({
     args: {
         orderId: v.id("orders"),
-        actorId: v.optional(v.id("users")),
-        sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -249,26 +258,12 @@ export const markAsDelivered = mutation({
 });
 
 // 3. Confirm Receipt (Releases Escrow)
-//
-// This is the ONLY entry point for normal escrow release. It:
-//   1. Flips the order to completed/released.
-//   2. Hands off to `internal.stripe.internalReleasePayment` which:
-//      - moves seller + influencer wallets pending → available
-//      - schedules Stripe transfers to each Connect account
-//      - updates `payouts` rows
-//   3. Ramgos commission stays on the platform balance by NOT being
-//      transferred (the destination of "platform fees" IS the platform).
-//
-// The legacy `users.balance += order.total` patch was REMOVED — it was
-// double-counting and ignoring all the splits.
 export const confirmReceipt = mutation({
     args: {
         orderId: v.id("orders"),
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string()), // Legacy buyer
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -277,9 +272,7 @@ export const confirmReceipt = mutation({
             throw new Error("No autorizado. Solo el comprador puede confirmar recepción.");
         }
 
-        // Validate State — allow `delivered` (products), `completed` is no-op,
-        // and `payment_received` for instant-fulfillment types (events / bonos
-        // can release immediately on redemption — Sprint 3 wires those paths).
+        // Validate State
         if (order.status !== 'delivered' && order.status !== 'payment_received') {
             throw new Error("Estado inválido. La orden debe estar entregada o lista para liberar.");
         }
@@ -290,8 +283,7 @@ export const confirmReceipt = mutation({
             updatedAt: new Date().toISOString()
         });
 
-        // Hand off to the Stripe-aware release flow. This is the single
-        // source of truth for fund release; do not also patch users.balance.
+        // Hand off to the Stripe-aware release flow.
         await ctx.runMutation(internal.stripe.internalReleasePayment, {
             orderId: args.orderId,
         });
@@ -311,11 +303,9 @@ export const confirmReceipt = mutation({
 export const cancelOrder = mutation({
     args: {
         orderId: v.id("orders"),
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string()), // Buyer (legacy)
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -336,21 +326,6 @@ export const cancelOrder = mutation({
             updatedAt: new Date().toISOString()
         });
 
-        // Refund Buyer (Mirroring the deduction logic)
-        try {
-            // In a real implementation we would have deducted this amount at creation.
-            // We return it here.
-            const buyerId = order.userId as Id<"users">;
-            const buyer = await ctx.db.get(buyerId);
-            if (buyer) {
-                await ctx.db.patch(buyerId, {
-                    balance: (buyer.balance ?? 0) + order.total
-                });
-            }
-        } catch (e) {
-            console.error("Failed to refund buyer", e);
-        }
-
         // Restore Stock
         for (const item of order.items) {
             const listingId = ctx.db.normalizeId("listings", item.listingId);
@@ -370,12 +345,10 @@ export const cancelOrder = mutation({
 export const openDispute = mutation({
     args: {
         orderId: v.id("orders"),
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string()), // Buyer or Seller (legacy)
         reason: v.string()
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -392,11 +365,11 @@ export const openDispute = mutation({
         // FREEZE FUNDS
         await ctx.db.patch(args.orderId, {
             status: "disputed",
-            escrowState: "frozen",
+            escrowState: "disputed",
             updatedAt: new Date().toISOString()
         });
 
-        // Notify the OTHER party (the one that didn't open the dispute).
+        // Notify the OTHER party
         const initiatorIsBuyer = actor.idString === order.userId;
         const otherPartyId = initiatorIsBuyer ? order.sellerId : order.userId;
         const shortOrderId = String(args.orderId).slice(-6);
@@ -413,12 +386,10 @@ export const openDispute = mutation({
 export const escalateDispute = mutation({
     args: {
         orderId: v.id("orders"),
-        actorId: v.optional(v.id("users")),
-        userId: v.optional(v.string()),
         role: v.union(v.literal('buyer'), v.literal('seller')),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 

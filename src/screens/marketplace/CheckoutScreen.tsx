@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { usePoints } from '../../contexts/PointsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCart } from '../../contexts/CartContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { MobileHeader } from '../../components/MobileHeader';
-import { CreditCard, ShieldCheck, MapPin, Truck, CheckCircle, Tag, Ticket, Sparkles } from 'lucide-react-native';
+import { CreditCard, ShieldCheck, MapPin, Truck, CheckCircle, Tag, Ticket, Sparkles, User, Calendar, Lock } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useRewards } from '../../contexts/RewardsContext';
 import { useReferral } from '../../contexts/ReferralContext';
+import { useSecurePayment } from '../../hooks/useSecurePayment';
 
 import { useActionGate } from '../../utils/useActionGate';
 import { useAction, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { StripePaymentModal } from '../../components/stripe/StripePaymentModal';
 
 export default function CheckoutScreen({ navigation }: any) {
     const { items, totalPrice, clearCart } = useCart();
@@ -27,71 +27,46 @@ export default function CheckoutScreen({ navigation }: any) {
     const styles = getStyles(isDark);
     const { show } = useToast();
     const { gateCheckout } = useActionGate();
+    const { processPayment } = useSecurePayment();
+    const createPaymentIntent = useAction(api.stripe.createPaymentIntent);
 
     const [loading, setLoading] = useState(false);
     const [selectedDiscount, setSelectedDiscount] = useState<{ points: number; discount: number } | null>(null);
-    // Optional referral code input — propagated to every line item that
-    // doesn't already have one, so the buyer can credit an influencer at
-    // checkout. The server (convex/stripe.ts) is the source of truth for
-    // resolving + validating the attribution; we DON'T grant a discount
-    // here. (The legacy discount-coupon path was removed when campaigns
-    // moved to the backend; influencer commission is paid out of the
-    // platform/seller take, not deducted from the buyer.)
     const [referralCodeInput, setReferralCodeInput] = useState('');
 
-    // Stripe
-    const [stripeModalVisible, setStripeModalVisible] = useState(false);
-    const [clientSecret, setClientSecret] = useState('');
-    const stripeCreatePaymentIntentRef = (api as any).stripe?.createPaymentIntent;
-    const createPaymentIntent = useAction(stripeCreatePaymentIntentRef || api.users.syncUser);
 
-    // Event capacity holds — call BEFORE the PaymentIntent. If hold fails
-    // (sold out / oversold) we never charge the buyer.
-    const holdEventCapacityFn = (api as any).events?.holdEventCapacity;
-    const releaseEventCapacityFn = (api as any).events?.releaseEventCapacity;
-    const holdEventCapacity = useMutation(holdEventCapacityFn || api.users.syncUser);
-    const releaseEventCapacity = useMutation(releaseEventCapacityFn || api.users.syncUser);
+    // Event capacity holds
+    const holdEventCapacity = useMutation(api.events.holdEventCapacity);
+    const releaseEventCapacity = useMutation(api.events.releaseEventCapacity);
 
-    // Mock Form State
+    // Form State
     const [address, setAddress] = useState('Av. Libertador 1234');
     const [city, setCity] = useState('Buenos Aires');
-    const [cardNumber, setCardNumber] = useState('');
+    const [focusedField, setFocusedField] = useState<string>('');
 
     const availableDiscounts = getAvailableDiscounts();
 
-    // Force clear discount if only subscriptions are in cart
     useEffect(() => {
         if (items.length > 0 && items.every(i => i.type === 'subscription')) {
             setSelectedDiscount(null);
         }
     }, [items]);
 
-    // Calculate eligible total for discounts (exclude subscriptions)
     const subscriptionTotal = items
         .filter(item => item.type === 'subscription')
         .reduce((sum, item) => sum + item.price * item.quantity, 0);
 
     const eligibleForDiscountTotal = totalPrice - subscriptionTotal;
-
     const shippingCost = items.every((i) => i.type === 'subscription') ? 0 : 12.0;
-
-    // Calculate Points Discount
     const pointsDiscountAmount = Math.min(selectedDiscount?.discount || 0, eligibleForDiscountTotal);
-
     const totalDiscount = Math.min(pointsDiscountAmount, eligibleForDiscountTotal);
-
     const finalTotal = Math.max(0, totalPrice + shippingCost - totalDiscount);
-
-    // Rewards v2: preview points for the cash portion paid (pure calc, NO mutation)
-    const purchaseEligible = Math.max(0, eligibleForDiscountTotal - totalDiscount);
-    const purchasePointsPreview = previewPurchasePoints(purchaseEligible);
 
     const handlePlaceOrder = async () => {
         if (!gateCheckout()) {
             return;
         }
 
-        // Only require card if there's something to pay
         const requiresPayment = finalTotal > 0;
         
         if (!address) {
@@ -99,16 +74,16 @@ export default function CheckoutScreen({ navigation }: any) {
             return;
         }
         
-        if (requiresPayment && !cardNumber) {
-            show('Completa los datos de pago', 'error');
-            return;
+        if (requiresPayment) {
+            // Con PaymentSheet, los datos de la tarjeta se piden en el modal nativo.
+            // Ya no validamos isCardComplete o name aquí.
         }
 
         setLoading(true);
 
         try {
             if (requiresPayment) {
-                if (!stripeCreatePaymentIntentRef) {
+                if (!createPaymentIntent) {
                     show('Stripe no está inicializado en el backend. Configura y redeploya credenciales antes de cobrar.', 'error');
                     setLoading(false);
                     return;
@@ -136,7 +111,6 @@ export default function CheckoutScreen({ navigation }: any) {
                 for (const ev of eventItems) {
                     try {
                         await holdEventCapacity({
-                            actorId: undefined as any,
                             listingId: String(ev.id) as any,
                             quantity: ev.quantity,
                         });
@@ -146,7 +120,6 @@ export default function CheckoutScreen({ navigation }: any) {
                         for (const held of heldEvents) {
                             try {
                                 await releaseEventCapacity({
-                                    actorId: undefined as any,
                                     listingId: held.listingId as any,
                                     quantity: held.quantity,
                                 });
@@ -201,26 +174,65 @@ export default function CheckoutScreen({ navigation }: any) {
                         lineItems: linesRaw.length > 0 ? linesRaw : undefined,
                     });
                 } catch (intentErr: any) {
-                    // PaymentIntent creation failed — release held event
-                    // capacity so we don't oversell.
+                    // Release held event capacity on failure
                     for (const held of heldEvents) {
                         try {
                             await releaseEventCapacity({
-                                actorId: undefined as any,
                                 listingId: held.listingId as any,
                                 quantity: held.quantity,
                             });
                         } catch (_) { /* best-effort */ }
                     }
-                    throw intentErr;
+                    show(intentErr.message || 'No se pudo procesar el pago.', 'error');
+                    setLoading(false);
+                    return;
                 }
-                if (intentResult && intentResult.clientSecret) {
-                    setClientSecret(intentResult.clientSecret);
-                    setStripeModalVisible(true);
-                    setLoading(false); // Modal will handle its own presentation
-                    return; // Wait for onPaymentSuccess
+
+                if (intentResult && intentResult.success && intentResult.clientSecret) {
+                    const confirmRes = await processPayment(intentResult.clientSecret);
+
+                    if (!confirmRes.success) {
+                        // Release held event capacity on failure
+                        for (const held of heldEvents) {
+                            try {
+                                await releaseEventCapacity({
+                                    listingId: held.listingId as any,
+                                    quantity: held.quantity,
+                                });
+                            } catch (_) { /* best-effort */ }
+                        }
+                        show(confirmRes.error || 'Error al confirmar el pago en la pasarela.', 'error');
+                        setLoading(false);
+                        return;
+                    }
+
+                    // Payment confirmed — finalize order
+                    await finalizeOrderProcess();
+                    return;
+                } else if (intentResult && intentResult.status) {
+                    // Release held event capacity on failure
+                    for (const held of heldEvents) {
+                        try {
+                            await releaseEventCapacity({
+                                listingId: held.listingId as any,
+                                quantity: held.quantity,
+                            });
+                        } catch (_) { /* best-effort */ }
+                    }
+                    show(`El pago requiere validación o falló: ${intentResult.status}`, 'error');
+                    setLoading(false);
+                    return;
                 } else {
-                    show('Error al iniciar el pago seguro', 'error');
+                    // Release held event capacity on failure
+                    for (const held of heldEvents) {
+                        try {
+                            await releaseEventCapacity({
+                                listingId: held.listingId as any,
+                                quantity: held.quantity,
+                            });
+                        } catch (_) { /* best-effort */ }
+                    }
+                    show(intentResult?.error || 'Error al procesar el pago', 'error');
                     setLoading(false);
                     return;
                 }
@@ -249,7 +261,6 @@ export default function CheckoutScreen({ navigation }: any) {
                 }
             }
 
-            // Create Order
             const checkoutRequestId = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             const result = await placeOrder({
                 cartItems: items,
@@ -268,39 +279,17 @@ export default function CheckoutScreen({ navigation }: any) {
                 },
             });
 
-            // Financial splits are handled server-side by the Stripe webhook (internalMarkPaymentSucceeded).
-            // No client-side processCheckoutTransaction needed.
-
-            // Subscriptions are NOT handled through the cart anymore (Sprint 4):
-            //   - business merchant → Stripe Subscriptions (SubscriptionPlansScreen).
-            //   - consumer pro      → Apple IAP / Google Play Billing.
-            // If a subscription somehow still slipped into the cart we just log it
-            // — `users.subscriptionTier` is now driven by the webhook stream.
-            const stillHasSubscriptionInCart = items.some((i) => i.type === 'subscription');
-            if (stillHasSubscriptionInCart) {
-                console.warn('[Checkout] Subscription item in cart ignored — use SubscriptionPlansScreen instead.');
-            }
-
-            // Rewards v2: only non-subscription purchases award points (1 punto por $1) and count for quarterly mission.
             if (result.success) {
-                // Award points for the cash portion paid (1 point per $1)
-                if (purchaseEligible > 0) {
-                    trackPurchase(purchaseEligible);
-                    notifyMyFirstPurchase(purchaseEligible).catch((err) => {
+                if (eligibleForDiscountTotal > 0) {
+                    trackPurchase(eligibleForDiscountTotal);
+                    notifyMyFirstPurchase(eligibleForDiscountTotal).catch((err) => {
                         console.warn('[Checkout] notifyMyFirstPurchase failed', err);
                     });
-                }
-                
-                // Quarterly mission counts even if paid fully with points (it's still a purchase)
-                if (eligibleForDiscountTotal > 0) {
                     registerQuarterlyPurchase();
                 }
-            }
-
-            if (result.success) {
                 clearCart();
                 show('¡Compra Exitosa! Orden procesada', 'success');
-                setTimeout(() => navigation.navigate('OrderHistory'), 1000);
+                setTimeout(() => navigation.navigate('History', { tab: 'purchases' }), 1000);
             } else {
                 show('Error al procesar la orden', 'error');
             }
@@ -314,7 +303,6 @@ export default function CheckoutScreen({ navigation }: any) {
             <MobileHeader title="Finalizar Compra" showBack onBack={() => navigation.goBack()} />
 
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-                {/* Shipping */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <MapPin size={20} color="#4B5563" />
@@ -336,7 +324,6 @@ export default function CheckoutScreen({ navigation }: any) {
                     />
                 </View>
 
-                {/* Delivery Method */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Truck size={20} color="#4B5563" />
@@ -351,11 +338,6 @@ export default function CheckoutScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Influencer Referral Code (optional) — does NOT change
-                    the buyer's price. The server uses it to credit a
-                    commission to the influencer when the listing's
-                    business has either openPromotion enabled or an
-                    active campaign with that influencer. */}
                 {!items.every(item => item.type === 'subscription') && (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
@@ -376,7 +358,6 @@ export default function CheckoutScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {/* Points Redemption - Hidden if only subscriptions in cart */}
                 {!items.every(item => item.type === 'subscription') && (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
@@ -430,24 +411,19 @@ export default function CheckoutScreen({ navigation }: any) {
                     </View>
                 )}
 
-                {/* Payment - only show if there's something to pay */}
                 {finalTotal > 0 ? (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <CreditCard size={20} color="#4B5563" />
                             <Text style={styles.sectionTitle}>Método de Pago</Text>
                         </View>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Número de Tarjeta"
-                            keyboardType="numeric"
-                            value={cardNumber}
-                            onChangeText={setCardNumber}
-                            placeholderTextColor={isDark ? '#9CA3AF' : '#9CA3AF'}
-                        />
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <TextInput style={[styles.input, { flex: 1 }]} placeholder="MM/YY" placeholderTextColor={isDark ? '#9CA3AF' : '#9CA3AF'} />
-                            <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVC" placeholderTextColor={isDark ? '#9CA3AF' : '#9CA3AF'} />
+                        <View style={styles.inputGroup}>
+                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#374151' : '#F3F4F6', borderColor: 'transparent' }]}>
+                                <Lock size={20} color="#059669" style={styles.inputIcon} />
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#4B5563', flex: 1 }}>
+                                    Los datos de tu tarjeta se solicitarán de forma segura en el siguiente paso.
+                                </Text>
+                            </View>
                         </View>
                     </View>
                 ) : (
@@ -457,12 +433,11 @@ export default function CheckoutScreen({ navigation }: any) {
                             <Text style={[styles.sectionTitle, { color: '#059669' }]}>¡Compra gratis con puntos!</Text>
                         </View>
                         <Text style={{ color: isDark ? '#A7F3D0' : '#047857', fontSize: 13 }}>
-                            Has cubierto el total con tus puntos. No necesitas ingresar datos de pago.
+                            Has cubierto el total con tus puntos. <Text style={{ color: isDark ? '#A7F3D0' : '#047857', fontWeight: 'bold' }}>+{previewPurchasePoints(eligibleForDiscountTotal).totalPoints} Puntos Ramgos</Text>. No necesitas ingresar datos de pago.
                         </Text>
                     </View>
                 )}
 
-                {/* Legal / Escrow Notice */}
                 <View style={styles.escrowNotice}>
                     <ShieldCheck size={28} color="#059669" />
                     <View style={{ flex: 1 }}>
@@ -474,7 +449,6 @@ export default function CheckoutScreen({ navigation }: any) {
                     </View>
                 </View>
 
-                {/* Summary */}
                 <View style={styles.summary}>
                     <View style={styles.row}>
                         <Text style={styles.label}>Subtotal</Text>
@@ -495,22 +469,16 @@ export default function CheckoutScreen({ navigation }: any) {
                         <Text style={styles.totalValue}>${finalTotal.toFixed(2)}</Text>
                     </View>
 
-                    {/* Points preview (non-mutating) - compact version */}
-                    {eligibleForDiscountTotal > 0 && purchaseEligible > 0 && (
+                    {eligibleForDiscountTotal > 0 && (
                         <View style={styles.pointsPreviewRow}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Sparkles size={14} color="#F59E0B" />
                                 <Text style={styles.pointsPreviewLabel}>Ganás con esta compra</Text>
                             </View>
                             <Text style={styles.pointsPreviewValue}>
-                                +{purchasePointsPreview.totalPoints} pts
+                                ¡Completá tu compra y sumá {previewPurchasePoints(eligibleForDiscountTotal).totalPoints} puntos!
                             </Text>
                         </View>
-                    )}
-                    {eligibleForDiscountTotal > 0 && purchaseEligible > 0 && (
-                        <Text style={styles.pointsPreviewHint}>
-                            1 pt por cada $1 pagado{purchasePointsPreview.bonusPoints > 0 ? ` + bonus ${purchasePointsPreview.tierLabel}` : ''}
-                        </Text>
                     )}
                 </View>
             </ScrollView>
@@ -532,24 +500,7 @@ export default function CheckoutScreen({ navigation }: any) {
                 </TouchableOpacity>
             </View>
 
-            {stripeModalVisible && (
-                <StripePaymentModal
-                    visible={stripeModalVisible}
-                    clientSecret={clientSecret}
-                    onPaymentSuccess={() => {
-                        setStripeModalVisible(false);
-                        finalizeOrderProcess();
-                    }}
-                    onPaymentError={(err) => {
-                        setStripeModalVisible(false);
-                        show(err, 'error');
-                    }}
-                    onCancel={() => {
-                        setStripeModalVisible(false);
-                        show('Pago cancelado', 'info');
-                    }}
-                />
-            )}
+
         </View>
     );
 }
@@ -559,7 +510,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     section: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 12, marginBottom: 16 },
     sectionHeader: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
     sectionTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#1F2937' },
-    input: { backgroundColor: isDark ? '#374151' : '#F3F4F6', color: isDark ? '#F9FAFB' : '#000', padding: 12, borderRadius: 8, marginBottom: 8, fontSize: 16 },
+    inputGroup: { gap: 16 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e5e7eb', borderRadius: 12, height: 50, paddingHorizontal: 12 },
+    inputIcon: { marginRight: 10 },
+    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', height: '100%' },
 
     optionSelected: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? 'rgba(30, 64, 175, 0.2)' : '#EFF6FF', padding: 12, borderRadius: 8, borderColor: isDark ? '#1E40AF' : '#BFDBFE', borderWidth: 1 },
     optionTitle: { fontWeight: '600', color: isDark ? '#60A5FA' : '#1E40AF' },

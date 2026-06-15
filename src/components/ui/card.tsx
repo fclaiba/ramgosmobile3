@@ -6,23 +6,25 @@ import { useTheme } from '../../contexts/ThemeContext';
 export const Card = ({ children, style }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return (
-        <View style={[styles.card, { backgroundColor: isDark ? '#1F2937' : 'white' }, style]}>
+        <View style={[styles.card, style]}>
             {children}
         </View>
     );
 };
 
-export const CardContent = ({ children, style }: any) => (
-    <View style={[styles.content, style]}>
-        {children}
-    </View>
-);
+export const CardContent = ({ children, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    return <View style={[styles.content, style]}>{children}</View>;
+};
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     card: {
-        borderRadius: 16, // bg color handled dynamically
-        marginVertical: 8,
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        borderRadius: 12,
         shadowColor: '#000',
         shadowOpacity: 0.1,
         shadowRadius: 8,
@@ -48,10 +50,21 @@ const styles = StyleSheet.create({
     }
 });
 
-export const CardHeader = ({ children, style }: any) => <View style={[styles.header, style]}>{children}</View>;
+export const CardHeader = ({ children, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    return <View style={[styles.header, style]}>{children}</View>;
+};
 export const CardTitle = ({ children, style }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#1a1a1a' }, style]}>{children}</Text>;
 };
-export const CardFooter = ({ children, style }: any) => <View style={[styles.footer, style]}>{children}</View>;
+export const CardFooter = ({ children, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    return <View style={[styles.footer, style]}>{children}</View>;
+};

@@ -5,6 +5,80 @@ import { requireActor } from "./authHelpers";
 
 // PHASE 4: Dispute Chat and Evidence Management
 
+/**
+ * Creates a new dispute for an order.
+ * - Transitions order status to 'disputed'.
+ * - Creates an initial dispute message with the reason.
+ * - Notifies the counter-party.
+ */
+export const createDispute = mutation({
+    args: {
+        orderId: v.string(),
+        reason: v.string(),
+        description: v.string(),
+        role: v.union(v.literal('buyer'), v.literal('seller')),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+
+        // Validate order
+        const orderId = ctx.db.normalizeId("orders", args.orderId);
+        if (!orderId) throw new Error("Orden no encontrada");
+        const order = await ctx.db.get(orderId);
+        if (!order) throw new Error("Orden no encontrada");
+
+        // Verify the caller is either buyer or seller
+        if (args.role === 'buyer' && order.userId !== actor.idString) {
+            throw new Error("No autorizado — solo el comprador puede abrir una disputa como buyer.");
+        }
+        if (args.role === 'seller' && order.sellerId !== actor.idString) {
+            throw new Error("No autorizado — solo el vendedor puede abrir una disputa como seller.");
+        }
+
+        // Prevent duplicate disputes
+        if (order.status === 'disputed') {
+            throw new Error("Esta orden ya tiene una disputa abierta.");
+        }
+
+        // Only allow disputes on certain statuses
+        const disputeableStatuses = ['payment_received', 'awaiting_shipment', 'in_transit', 'delivered', 'completed'];
+        if (!disputeableStatuses.includes(order.status)) {
+            throw new Error(`No se puede disputar una orden con estado "${order.status}".`);
+        }
+
+        // Transition order to disputed
+        await ctx.db.patch(orderId, {
+            status: 'disputed',
+            updatedAt: new Date().toISOString(),
+        });
+
+        // Create the opening dispute message
+        const now = new Date().toISOString();
+        await ctx.db.insert("disputeMessages", {
+            orderId: args.orderId,
+            sender: args.role,
+            senderUserId: actor.idString,
+            body: `**Motivo:** ${args.reason}\n\n${args.description}`,
+            sentAt: now,
+        });
+
+        // Notify the counter-party
+        const shortOrderId = String(args.orderId).slice(-6);
+        const counterPartyId = args.role === 'buyer' ? order.sellerId : order.userId;
+        const senderLabel = args.role === 'buyer' ? 'El comprador' : 'El vendedor';
+
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            userId: counterPartyId,
+            title: `Disputa abierta en orden #${shortOrderId}`,
+            body: `${senderLabel} ha abierto una disputa: ${args.reason}`,
+            category: 'dispute',
+            data: { type: 'dispute_created', orderId: args.orderId, reason: args.reason },
+        });
+
+        return { success: true, orderId: args.orderId };
+    },
+});
+
 const isSupportUser = async (ctx: any, userId: string) => {
     const normalized = ctx.db.normalizeId("users", userId);
     if (!normalized) return false;
@@ -23,8 +97,6 @@ const assertOrderParticipantOrSupport = async (ctx: any, order: any, requesterId
 export const addDisputeMessage = mutation({
     args: {
         orderId: v.string(),
-        actorId: v.optional(v.id("users")),
-        senderId: v.optional(v.string()),
         sender: v.union(v.literal('buyer'), v.literal('seller'), v.literal('support')),
         body: v.string(),
         attachments: v.optional(v.array(v.object({
@@ -34,7 +106,7 @@ export const addDisputeMessage = mutation({
         }))),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.senderId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         // Verify order exists
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
@@ -62,7 +134,7 @@ export const addDisputeMessage = mutation({
             sentAt: new Date().toISOString(),
         });
 
-        // Notify the OTHER party (or both buyer + seller when sender is support).
+        // Notify the OTHER party
         const shortOrderId = String(args.orderId).slice(-6);
         const preview = args.body.length > 80 ? args.body.slice(0, 77) + '…' : args.body;
         const recipients: string[] = [];
@@ -88,11 +160,9 @@ export const addDisputeMessage = mutation({
 export const getDisputeMessages = query({
     args: {
         orderId: v.string(),
-        actorId: v.optional(v.id("users")),
-        requesterId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.requesterId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
         const order = await ctx.db.get(orderId);
@@ -110,15 +180,13 @@ export const getDisputeMessages = query({
 export const addEvidence = mutation({
     args: {
         orderId: v.string(),
-        actorId: v.optional(v.id("users")),
         uploadedBy: v.union(v.literal('buyer'), v.literal('seller'), v.literal('support')),
-        uploadedByUserId: v.optional(v.string()),
         type: v.union(v.literal('photo'), v.literal('video'), v.literal('note')),
         url: v.optional(v.string()),
         description: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.uploadedByUserId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         // Verify order exists
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
@@ -153,7 +221,7 @@ export const addEvidence = mutation({
             ? order.sellerId
             : args.uploadedBy === 'seller'
                 ? order.userId
-                : null; // support → don't push to anyone synchronously
+                : null;
         if (otherPartyId) {
             await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
                 userId: otherPartyId,
@@ -169,11 +237,9 @@ export const addEvidence = mutation({
 export const getDisputeEvidence = query({
     args: {
         orderId: v.string(),
-        actorId: v.optional(v.id("users")),
-        requesterId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.requesterId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
         const order = await ctx.db.get(orderId);
@@ -191,11 +257,9 @@ export const getDisputeEvidence = query({
 export const getDisputeDetails = query({
     args: {
         orderId: v.string(),
-        actorId: v.optional(v.id("users")),
-        requesterId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.requesterId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
         const order = await ctx.db.get(orderId);

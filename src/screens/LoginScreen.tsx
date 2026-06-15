@@ -11,6 +11,23 @@ import { useToast } from '../contexts/ToastContext';
 
 // Existing icons...
 
+const getCleanErrorMessage = (error: unknown, fallback: string): string => {
+    if (error instanceof Error) {
+        const msg = error.message;
+        if (msg.includes('[ConvexError]')) {
+            return msg.split('[ConvexError]')[1].split('\n')[0].trim();
+        }
+        if (msg.includes('Uncaught ConvexError:')) {
+            return msg.split('Uncaught ConvexError:')[1].split('\n')[0].trim();
+        }
+        if (msg.includes('Uncaught Error:')) {
+            return msg.split('Uncaught Error:')[1].split('\n')[0].trim();
+        }
+        return msg;
+    }
+    return fallback;
+};
+
 // SVG Icons matching WelcomeScreen
 const GoogleIcon = () => (
     <Svg width={20} height={20} viewBox="0 0 24 24">
@@ -34,7 +51,7 @@ const AppleIcon = ({ isDark }: { isDark: boolean }) => (
 );
 
 export default function LoginScreen({ navigation }: any) {
-    const { loginWithEmail, loginWithSocial, pendingVerification, isProcessing } = useAuth();
+    const { loginWithEmail, loginWithSocial, pendingVerification, isProcessing, status, user } = useAuth();
     const { colorScheme } = useTheme();
     const { show } = useToast();
     const isDark = colorScheme === 'dark';
@@ -45,6 +62,15 @@ export default function LoginScreen({ navigation }: any) {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
+
+    useEffect(() => {
+        if (status === 'authenticated' && user) {
+            const timer = setTimeout(() => {
+                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [status, user, navigation]);
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -92,7 +118,10 @@ export default function LoginScreen({ navigation }: any) {
             if (error instanceof Error && error.message === 'EMAIL_VERIFICATION_REQUIRED') {
                 const accountType = mapRoleToAccountType(pendingVerification?.user?.role);
                 navigation.navigate('Verification', { email: email.trim(), accountType });
+                return;
             }
+            const cleanMsg = getCleanErrorMessage(error, 'Credenciales inválidas. Por favor, intenta de nuevo.');
+            show(cleanMsg, 'error');
         } finally {
             setIsLoading(false);
         }
@@ -105,9 +134,9 @@ export default function LoginScreen({ navigation }: any) {
             const decision = await loginWithSocial(provider);
             navigateAfterAuth(decision);
         } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'No pudimos completar el inicio con tu cuenta social.';
-            show(message, 'error');
+            console.error('[LoginScreen] loginWithSocial error:', error);
+            const cleanMsg = getCleanErrorMessage(error, 'No pudimos completar el inicio con tu cuenta social.');
+            show(cleanMsg, 'error');
         } finally {
             setIsLoading(false);
         }

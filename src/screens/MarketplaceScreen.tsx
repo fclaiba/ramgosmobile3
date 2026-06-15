@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView, Platform, useWindowDimensions, Image, Animated, Modal, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView, Platform, useWindowDimensions, Image, Modal, StatusBar } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Extrapolation, useAnimatedScrollHandler, FadeInUp, Layout } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ShoppingCart, Heart, Search, Filter, LayoutGrid, List, MapPin, Plus as PlusIcon, Tag, Ticket, Star, Calendar, Wrench, X } from 'lucide-react-native';
 import { api } from '../../convex/_generated/api';
@@ -42,6 +45,7 @@ type MarketplaceFeedItem = {
     price: number;
     originalPrice?: number;
     discount?: number;
+    discountValue?: number;
     rating?: number;
     reviews?: number;
     image: string;
@@ -98,18 +102,26 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
 
     // Map List Overlay
     const [isMapListVisible, setIsMapListVisible] = useState(false);
-    const mapListAnim = useRef(new Animated.Value(MAP_LIST_HEIGHT)).current;
+    const mapListAnim = useSharedValue(MAP_LIST_HEIGHT);
 
     useEffect(() => {
-        Animated.timing(mapListAnim, {
-            toValue: isMapListVisible ? 0 : MAP_LIST_HEIGHT,
-            duration: 300,
-            useNativeDriver: true,
-        }).start();
+        mapListAnim.value = withTiming(isMapListVisible ? 0 : MAP_LIST_HEIGHT, { duration: 300 });
     }, [isMapListVisible]);
+
+    // Scroll Animation
+    const scrollY = useSharedValue(0);
+    const scrollHandler = useAnimatedScrollHandler((event) => {
+        scrollY.value = event.contentOffset.y;
+    });
+
+    const toggleFavWithHaptic = (item: any) => {
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        toggleFavorite(item);
+    };
 
 
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
+    // React to param changes
     // React to param changes
     useEffect(() => {
         if (activeParams?.filter) {
@@ -125,9 +137,8 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                                 : 'all'
             );
         }
-        if (activeParams?.viewMode) {
-            setViewMode(activeParams.viewMode);
-        }
+        // Do not force setViewMode from params here to avoid resetting when user changes mode
+
         // Handle focus location from navigation (e.g. after creating a listing)
         if (activeParams?.focusLocation) {
             setAdvancedFilters(prev => ({
@@ -137,7 +148,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             // Ensure map centers on it
             setCurrentMapCenter(activeParams.focusLocation);
         }
-    }, [activeParams]);
+    }, [activeParams?.filter, activeParams?.viewMode, activeParams?.focusLocation]);
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -186,11 +197,12 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
 
         return {
             id: item.id || item._id, // Handle both id formats
-            type: (item.listingType ?? 'product') as MarketplaceFeedItem['type'],
+            type: (item.listingType ?? item.type ?? 'product') as MarketplaceFeedItem['type'],
             name: item.title,
             price: item.price,
             originalPrice,
             discount,
+            discountValue: item.discountValue,
             rating: item.rating?.average,
             reviews: item.rating?.count,
             image: primaryImage,
@@ -305,6 +317,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     };
 
     const handleAddToCart = (item: MarketplaceFeedItem) => {
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         addItem({
             id: item.id,
             name: item.name,
@@ -333,38 +346,46 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
         return products.find((product) => product.id === productId) ?? null;
     }, [products, selectedItem]);
 
-    const renderGridItem = ({ item }: any) => {
+    const renderGridItem = ({ item, index }: any) => {
         const Icon = getItemIcon(item.type);
         const saved = isFavorite(item.id);
 
         return (
+            <Animated.View 
+                entering={FadeInUp.delay(Math.min(index, 10) * 50).springify().damping(15)} 
+                layout={Layout.springify()} 
+                style={[styles.gridCardWrapper, { width: (width - 48) / 2 }]}
+            >
             <TouchableOpacity
-                style={[styles.gridCard, { width: (width - 48) / 2 }]}
-                activeOpacity={0.9}
-                onPress={() => setDetailItemId(item.id)}
+                style={styles.gridCard}
+                activeOpacity={0.8}
+                onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.selectionAsync();
+                    setDetailItemId(item.id);
+                }}
             >
                 <View style={styles.gridImgContainer}>
                     <ImageWithFallback src={item.image} style={styles.cardImg} />
                     {item.discount > 0 && (
-                        <View style={styles.discountBadge}>
+                        <BlurView intensity={80} tint="dark" style={styles.discountBadge}>
                             <Text style={styles.discountText}>-{item.discount}%</Text>
-                        </View>
+                        </BlurView>
                     )}
                     {/* Favorites Button */}
                     <TouchableOpacity
                         style={[styles.favBtn, saved && styles.favBtnActive]}
                         onPress={(e) => {
                             e.stopPropagation();
-                            toggleFavorite(item);
+                            toggleFavWithHaptic(item);
                         }}
                     >
-                        <Heart size={16} color={saved ? '#EF4444' : isDark ? '#D1D5DB' : '#6B7280'} fill={saved ? '#EF4444' : 'transparent'} />
+                        <Heart size={16} color={saved ? '#EF4444' : isDark ? '#E5E7EB' : '#4B5563'} fill={saved ? '#EF4444' : 'transparent'} />
                     </TouchableOpacity>
 
-                    <View style={styles.categoryBadge}>
-                        <Icon size={10} color={isDark ? '#F9FAFB' : '#374151'} style={{ marginRight: 4 }} />
+                    <BlurView intensity={isDark ? 40 : 80} tint={isDark ? "dark" : "light"} style={styles.categoryBadge}>
+                        <Icon size={10} color={isDark ? '#F9FAFB' : '#111827'} style={{ marginRight: 4 }} />
                         <Text style={styles.categoryText}>{item.category}</Text>
-                    </View>
+                    </BlurView>
                 </View>
 
                 <View style={styles.gridContent}>
@@ -389,12 +410,19 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         </View>
                     )}
 
-                    <View style={styles.priceRow}>
-                        <Text style={styles.price}>${item.price}</Text>
-                        {item.originalPrice && (
-                            <Text style={styles.originalPrice}>${item.originalPrice}</Text>
-                        )}
-                    </View>
+                    {item.type === 'bono' && item.discountValue ? (
+                        <View style={styles.priceRow}>
+                            <Text style={[styles.originalPrice, { textDecorationLine: 'none', color: '#10B981', fontWeight: '700' }]}>Valor real: ${item.discountValue}</Text>
+                            <Text style={styles.price}>${item.price}</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.priceRow}>
+                            <Text style={styles.price}>${item.price}</Text>
+                            {item.originalPrice && (
+                                <Text style={styles.originalPrice}>${item.originalPrice}</Text>
+                            )}
+                        </View>
+                    )}
 
                     {item.type === 'business' ? (
                         <TouchableOpacity
@@ -419,36 +447,45 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                     )}
                 </View>
             </TouchableOpacity>
+            </Animated.View>
         );
     };
 
-    const renderListItem = ({ item }: any) => {
+    const renderListItem = ({ item, index }: any) => {
         const Icon = getItemIcon(item.type);
         const saved = isFavorite(item.id);
 
         return (
+            <Animated.View 
+                entering={FadeInUp.delay(Math.min(index, 10) * 50).springify().damping(15)} 
+                layout={Layout.springify()} 
+                style={{ width: '100%' }}
+            >
             <TouchableOpacity
                 style={styles.listCard}
-                activeOpacity={0.9}
-                onPress={() => setDetailItemId(item.id)}
+                activeOpacity={0.8}
+                onPress={() => {
+                    if (Platform.OS !== 'web') Haptics.selectionAsync();
+                    setDetailItemId(item.id);
+                }}
             >
                 <View style={styles.listImgContainer}>
                     <ImageWithFallback src={item.image} style={styles.cardImg} />
                     {item.discount > 0 && (
-                        <View style={[styles.discountBadge, { top: 4, right: 4 }]}>
+                        <BlurView intensity={80} tint="dark" style={[styles.discountBadge, { top: 4, right: 4 }]}>
                             <Text style={styles.discountText}>-{item.discount}%</Text>
-                        </View>
+                        </BlurView>
                     )}
                     {/* Favorites Button (Image - Bottom Left) */}
                     <TouchableOpacity
                         style={[styles.favBtn, saved && styles.favBtnActive]}
                         onPress={(e) => {
                             e.stopPropagation();
-                            toggleFavorite(item);
+                            toggleFavWithHaptic(item);
                         }}
                         accessibilityLabel="Guardar"
                     >
-                        <Heart size={16} color={saved ? '#EF4444' : isDark ? '#D1D5DB' : '#6B7280'} fill={saved ? '#EF4444' : 'transparent'} />
+                        <Heart size={16} color={saved ? '#EF4444' : isDark ? '#E5E7EB' : '#4B5563'} fill={saved ? '#EF4444' : 'transparent'} />
                     </TouchableOpacity>
                 </View>
 
@@ -469,9 +506,16 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                     {item.type === 'bono' && <Text style={styles.descText} numberOfLines={1}>{item.description}</Text>}
 
                     <View style={styles.listFooter}>
-                        <View style={styles.priceRow}>
-                            <Text style={styles.price}>${item.price}</Text>
-                        </View>
+                        {item.type === 'bono' && item.discountValue ? (
+                            <View style={styles.priceRow}>
+                                <Text style={[styles.originalPrice, { textDecorationLine: 'none', color: '#10B981', fontWeight: '700' }]}>Valor real: ${item.discountValue}</Text>
+                                <Text style={styles.price}>${item.price}</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.priceRow}>
+                                <Text style={styles.price}>${item.price}</Text>
+                            </View>
+                        )}
                         {item.type === 'business' ? (
                             <TouchableOpacity
                                 style={[styles.btnSm, { backgroundColor: '#10B981', width: 'auto', paddingHorizontal: 16 }]}
@@ -496,6 +540,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                     </View>
                 </View>
             </TouchableOpacity>
+            </Animated.View>
         );
     };
 
@@ -551,6 +596,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         }}
                         onRadiusChange={setRadius}
                         bottomInset={NAV_CONTENT_HEIGHT + insets.bottom}
+                        topInset={195 + insets.top}
                         // Props passed to satisfy interface, though map handles overlay now?
                         // Actually I reverted overlay in MapView, so these might be unused there, but needed to match props if strict
                         // Checking MapView interface... I didn't revert the interface, just the implementation content.
@@ -590,19 +636,22 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                 <View style={[styles.headerControls, viewMode === 'map' && styles.mapHeaderControls]}>
                     {/* Search & Filter Row (always visible) */}
                     <View style={styles.searchRow}>
-                        <View style={styles.searchInputContainer}>
-                            <Search size={18} color="#9CA3AF" style={{ marginLeft: 12 }} />
+                        <View style={styles.searchInputWrapper}>
+                            <Search size={20} color={isDark ? "#9CA3AF" : "#6B7280"} style={{ marginLeft: 16 }} />
                             <TextInput
                                 style={styles.searchInput}
                                 placeholder="Buscar productos, bonos..."
-                                placeholderTextColor="#9CA3AF"
+                                placeholderTextColor={isDark ? "#9CA3AF" : "#6B7280"}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                             />
                         </View>
                         <TouchableOpacity
                             style={styles.filterBtn}
-                            onPress={() => setAdvancedFiltersOpen(true)}
+                            onPress={() => {
+                                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                setAdvancedFiltersOpen(true);
+                            }}
                             accessibilityLabel="Abrir filtros avanzados"
                         >
                             <Filter size={20} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -627,7 +676,10 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                                     <TouchableOpacity
                                         key={mode.id}
                                         style={[styles.viewModeBtn, active && styles.viewModeBtnActive]}
-                                        onPress={() => setViewMode(mode.id as ViewMode)}
+                                        onPress={() => {
+                                            if (Platform.OS !== 'web') Haptics.selectionAsync();
+                                            setViewMode(mode.id as ViewMode);
+                                        }}
                                         accessibilityLabel={`Ver en ${mode.label}`}
                                     >
                                         <mode.Icon size={16} color={active ? '#7C3AED' : (isDark ? '#D1D5DB' : '#6B7280')} />
@@ -654,7 +706,10 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                                     <TouchableOpacity
                                         key={t}
                                         style={[styles.categoryChip, active && styles.categoryChipActive]}
-                                        onPress={() => setFilter(t as any)}
+                                        onPress={() => {
+                                            if (Platform.OS !== 'web') Haptics.selectionAsync();
+                                            setFilter(t as any);
+                                        }}
                                         accessibilityLabel={`Filtrar: ${label}`}
                                     >
                                         <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
@@ -674,7 +729,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             {/* Content Area */}
             <View style={{ flex: 1, zIndex: 1 }} pointerEvents="box-none">
                 {viewMode !== 'map' && (
-                    <FlatList
+                    <Animated.FlatList
                         data={filteredItems}
                         key={viewMode}
                         numColumns={viewMode === 'grid' ? 2 : 1}
@@ -682,8 +737,10 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         contentContainerStyle={{ padding: 16, paddingBottom: NAV_CONTENT_HEIGHT + insets.bottom + 20 }}
                         columnWrapperStyle={viewMode === 'grid' ? { justifyContent: 'space-between' } : undefined}
                         renderItem={viewMode === 'grid' ? renderGridItem : renderListItem}
-                        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+                        ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
                         showsVerticalScrollIndicator={false}
+                        onScroll={scrollHandler}
+                        scrollEventThrottle={16}
                     />
                 )}
             </View >
@@ -697,6 +754,10 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         onClose={() => setDetailItemId(null)}
                         onAddToCart={() => handleAddToCart(selectedItem)}
                         onOpenCart={openCart}
+                        onViewSellerProfile={(sellerId) => {
+                            setDetailItemId(null);
+                            navigation.navigate('CommercialProfile', { sellerId });
+                        }}
                     />
                 )
             }
@@ -748,15 +809,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
 
     // Favorites
-    favBtn: { position: 'absolute', bottom: 8, left: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: isDark ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255,255,255,0.9)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-    favBtnActive: { backgroundColor: isDark ? '#1F2937' : '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
+    favBtnActive: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
 
     // Search
-    searchRow: { flexDirection: 'row', gap: 12, marginBottom: 10 },
-    searchInputContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 24, borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6', height: 48 },
-    searchInput: { flex: 1, paddingHorizontal: 16, fontSize: 14, color: isDark ? '#F9FAFB' : '#1F2937' },
-    filterBtn: { width: 48, height: 48, borderRadius: 16, backgroundColor: isDark ? '#1F2937' : '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
-    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#1F2937' : '#fff' },
+    searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'center' },
+    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 26, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', height: 52, overflow: 'hidden' },
+    searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, color: isDark ? '#F9FAFB' : '#1F2937', height: '100%', outlineStyle: 'none' } as any,
+    filterBtn: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#1F2937' : '#FFFFFF' },
+    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#1F2937' : '#fff' },
     activeFilterText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
 
     // Compact Controls (View mode + Categories)
@@ -806,12 +867,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     tabTextActive: { color: '#fff' },
 
     // Grid Card
-    gridCard: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
+    gridCardWrapper: { marginBottom: 4 },
+    gridCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
     gridImgContainer: { height: 144, backgroundColor: isDark ? '#374151' : '#F3F4F6', position: 'relative' },
     cardImg: { width: '100%', height: '100%' },
-    discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
     discountText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-    categoryBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: isDark ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255,255,255,0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center' },
+    categoryBadge: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
     categoryText: { fontSize: 10, color: isDark ? '#F9FAFB' : '#374151', fontWeight: '500' },
     gridContent: { padding: 12 },
     cardTitle: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4, height: 36 },

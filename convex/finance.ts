@@ -13,7 +13,7 @@ import {
 
 export const ensureWalletAccount = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.string(),
         ownerType: v.union(
             v.literal("ramgos"),
@@ -50,11 +50,16 @@ export const ensureWalletAccount = mutation({
 
 export const getWalletAccount = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId ?? args.userId);
+        } catch {
+            return null;
+        }
         assertSelfOrAdmin(actor, args.userId);
 
         return await ctx.db
@@ -126,6 +131,13 @@ export const internalDebitWallet = internalMutation({
 // Payment Records
 // ---------------------------------------------------------------------------
 
+export const internalGetPaymentById = internalQuery({
+    args: { paymentId: v.id("payments") },
+    handler: async (ctx, args) => {
+        return await ctx.db.get(args.paymentId);
+    },
+});
+
 export const createPaymentRecord = internalMutation({
     args: {
         orderId: v.optional(v.string()),
@@ -138,6 +150,8 @@ export const createPaymentRecord = internalMutation({
         status: v.union(
             v.literal("pending"),
             v.literal("succeeded"),
+            v.literal("succeeded_in_escrow"),
+            v.literal("released_to_seller"),
             v.literal("failed"),
             v.literal("refunded"),
             v.literal("disputed"),
@@ -168,6 +182,8 @@ export const updatePaymentStatus = internalMutation({
         status: v.union(
             v.literal("pending"),
             v.literal("succeeded"),
+            v.literal("succeeded_in_escrow"),
+            v.literal("released_to_seller"),
             v.literal("failed"),
             v.literal("refunded"),
             v.literal("disputed"),
@@ -188,6 +204,8 @@ export const updatePaymentByIntentId = internalMutation({
         status: v.union(
             v.literal("pending"),
             v.literal("succeeded"),
+            v.literal("succeeded_in_escrow"),
+            v.literal("released_to_seller"),
             v.literal("failed"),
             v.literal("refunded"),
             v.literal("disputed"),
@@ -209,11 +227,16 @@ export const updatePaymentByIntentId = internalMutation({
 
 export const getPaymentsByUser = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId ?? args.userId);
+        } catch {
+            return [];
+        }
         assertSelfOrAdmin(actor, args.userId);
 
         return await ctx.db
@@ -226,12 +249,17 @@ export const getPaymentsByUser = query({
 
 export const getPaymentsByOrder = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.string(),
         orderId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId ?? args.userId);
+        } catch {
+            return [];
+        }
         assertSelfOrAdmin(actor, args.userId);
 
         return await ctx.db
@@ -340,11 +368,16 @@ export const updatePayoutStatus = internalMutation({
 
 export const getPayoutsBySeller = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         sellerId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        } catch {
+            return [];
+        }
         assertSelfOrAdmin(actor, args.sellerId);
 
         return await ctx.db
@@ -371,7 +404,7 @@ export const getPayoutsBySeller = query({
 
 export const createWithdrawal = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.string(),
         amount: v.number(),
         destinationType: v.union(v.literal("bank"), v.literal("wallet")),
@@ -445,11 +478,16 @@ export const createWithdrawal = mutation({
 
 export const getWithdrawalsByUser = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId ?? args.userId);
+        } catch {
+            return [];
+        }
         assertSelfOrAdmin(actor, args.userId);
 
         return await ctx.db
@@ -529,7 +567,7 @@ export const getPayoutById = internalMutation({
 //    back to a `payments` row so the admin can see the buyer + seller.
 export const listFailedTransfers = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
@@ -551,7 +589,7 @@ export const listFailedTransfers = query({
 //    that have not flipped to completed yet.
 export const listStuckEscrows = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         olderThanDays: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
@@ -595,7 +633,7 @@ export const listStuckEscrows = query({
 // 3) Open disputes — payments flagged as 'disputed'.
 export const listOpenDisputes = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
@@ -617,7 +655,7 @@ export const listOpenDisputes = query({
 //    refunded in the last 7 days as a sanity bucket).
 export const listPendingRefunds = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         windowDays: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
@@ -643,7 +681,7 @@ export const listPendingRefunds = query({
 // 5) Reconciliation flags — discrepancies surfaced by the daily cron.
 export const listReconciliationFlags = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         status: v.optional(
             v.union(
                 v.literal("open"),
@@ -674,7 +712,7 @@ export const listReconciliationFlags = query({
 // 6) Update reconciliation flag status (resolve / ignore / re-open).
 export const updateReconciliationFlag = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         flagId: v.id("reconciliationFlags"),
         status: v.union(
             v.literal("open"),

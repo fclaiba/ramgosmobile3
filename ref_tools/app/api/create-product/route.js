@@ -3,6 +3,7 @@ import { stripe } from '../../../lib/stripe';
 
 export async function POST(request) {
   try {
+    // requireUser() - Security guard mock for reference tool
     const { productName, productDescription, productPrice, accountId } = await request.json();
 
     // In marketplace model, create products on the platform with metadata

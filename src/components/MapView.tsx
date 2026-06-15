@@ -1,7 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 export const MapView = ({ items, radius, onItemClick }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return (
         <View style={styles.container}>
             <Text style={styles.text}>Vista de Mapa Interactiva</Text>
@@ -18,7 +22,7 @@ export const MapView = ({ items, radius, onItemClick }: any) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         height: 400,
         backgroundColor: '#e1e1e1',

@@ -17,6 +17,7 @@ export const KYCRequiredModal: React.FC<KYCRequiredModalProps> = ({ visible, onC
     const { width } = useWindowDimensions();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const isNarrow = width < 420;
 
     return (
@@ -79,7 +80,7 @@ export const KYCRequiredModal: React.FC<KYCRequiredModalProps> = ({ visible, onC
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     sheetContent: {
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
         marginBottom: 16
     },
     primaryBtnText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: '600',
         fontSize: 16
     },
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     secondaryBtnText: {
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
         fontWeight: '500',
         fontSize: 14
     }

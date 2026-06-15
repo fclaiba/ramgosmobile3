@@ -27,7 +27,7 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
 
     const chatsRows = useQuery(
         api.social.getMyChats,
-        authUser ? { actorId: authUser.id as any } : 'skip',
+        authUser ? {} : 'skip',
     );
 
     const flat = (chatsRows ?? []).map((c: any) => {

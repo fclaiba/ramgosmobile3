@@ -95,9 +95,9 @@ const assertInfluencerRole = async (ctx: any, influencerId: string) => {
  */
 export const proposeCampaign = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
-        influencerId: v.id('users'),
-        businessId: v.id('users'),
+        actorId: v.optional(v.any()),
+        influencerId: v.id("users"),
+        businessId: v.id("users"),
         commissionRate: v.number(),
         notes: v.optional(v.string()),
     },
@@ -159,9 +159,9 @@ export const proposeCampaign = mutation({
  */
 export const inviteInfluencer = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
-        businessId: v.id('users'),
-        influencerId: v.id('users'),
+        actorId: v.optional(v.any()),
+        businessId: v.id("users"),
+        influencerId: v.id("users"),
         commissionRate: v.number(),
         notes: v.optional(v.string()),
     },
@@ -221,7 +221,7 @@ export const inviteInfluencer = mutation({
  */
 export const respondToCampaign = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
         decision: v.union(v.literal('accept'), v.literal('reject')),
     },
@@ -274,7 +274,7 @@ export const respondToCampaign = mutation({
  */
 export const pauseCampaign = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
     },
     handler: async (ctx, args): Promise<void> => {
@@ -318,7 +318,7 @@ export const pauseCampaign = mutation({
  */
 export const resumeCampaign = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
     },
     handler: async (ctx, args): Promise<void> => {
@@ -350,7 +350,7 @@ export const resumeCampaign = mutation({
  */
 export const endCampaign = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
     },
     handler: async (ctx, args): Promise<void> => {
@@ -402,12 +402,17 @@ export const endCampaign = mutation({
  */
 export const getMyCampaigns = query({
     args: {
-        actorId: v.optional(v.id('users')),
-        influencerId: v.id('users'),
+        actorId: v.optional(v.any()),
+        influencerId: v.id("users"),
         includeFinal: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
         assertSelfOrAdmin(actor, String(args.influencerId));
 
         const rows = await ctx.db
@@ -442,12 +447,17 @@ export const getMyCampaigns = query({
  */
 export const getBusinessCampaigns = query({
     args: {
-        actorId: v.optional(v.id('users')),
-        businessId: v.id('users'),
+        actorId: v.optional(v.any()),
+        businessId: v.id("users"),
         includeFinal: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
         assertSelfOrAdmin(actor, String(args.businessId));
 
         const rows = await ctx.db
@@ -489,7 +499,7 @@ export const getBusinessCampaigns = query({
  */
 export const lookupInfluencer = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         emailOrCode: v.string(),
     },
     handler: async (ctx, args) => {
@@ -558,7 +568,7 @@ export const internalFindActiveCampaign = internalQuery({
 // Admin helper: list every campaign (for AdminFinanceScreen / debugging).
 export const listAllCampaigns = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         status: v.optional(
             v.union(
                 v.literal('pending'),
@@ -586,4 +596,93 @@ export const listAllCampaigns = query({
             .order('desc')
             .take(500);
     },
+});
+
+/**
+ * Calculates cart-level influencer attribution based on active campaigns,
+ * open promotion flags, and whitelists.
+ */
+export const internalResolveCartAttribution = internalQuery({
+    args: {
+        lineItems: v.array(v.object({
+            listingId: v.optional(v.string()), // Added for listing lookup
+            sellerId: v.optional(v.string()),
+            referralCode: v.optional(v.string()),
+            amountInCents: v.number(),
+            quantity: v.number(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        let finalInfluencerId: string | undefined = undefined;
+        let totalInfluencerAmount = 0;
+        let finalInfluencerRate = 0;
+
+        for (const item of args.lineItems) {
+            if (!item.referralCode || !item.sellerId || !item.listingId) continue;
+            
+            const upperCode = item.referralCode.trim().toUpperCase();
+            const influencer = await ctx.db
+                .query('users')
+                .withIndex('by_referral_code', (q) => q.eq('referralCode', upperCode))
+                .first();
+                
+            if (!influencer || (influencer as any).role !== 'influencer') continue;
+
+            // 1. Try Custom Active Campaign first
+            const campaigns = await ctx.db
+                .query('influencerCampaigns')
+                .withIndex('by_influencer_business', (q) =>
+                    q
+                        .eq('influencerId', influencer._id)
+                        .eq('businessId', item.sellerId as string)
+                )
+                .collect();
+            
+            const activeCampaign = campaigns.find((c: any) => c.status === 'active');
+            let resolvedRate = 0;
+
+            if (activeCampaign) {
+                resolvedRate = activeCampaign.commissionRate;
+            } else {
+                // 2. Fallback to Open Promotion or Whitelist logic
+                const normId = ctx.db.normalizeId('listings', item.listingId);
+                const listing: any = normId ? await ctx.db.get(normId) : null;
+                
+                if (listing && listing.openCommissionRate && listing.openCommissionRate > 0) {
+                    if (listing.openPromotion === true) {
+                        // Inscription is free
+                        resolvedRate = listing.openCommissionRate;
+                    } else {
+                        // Requires Whitelist
+                        const whitelistEntry = await ctx.db
+                            .query("influencerWhitelists")
+                            .withIndex("by_business_and_influencer", (q) => 
+                                q.eq("businessId", item.sellerId as string).eq("influencerId", influencer._id)
+                            )
+                            .first();
+                            
+                        if (whitelistEntry && whitelistEntry.status === 'active') {
+                            resolvedRate = listing.openCommissionRate;
+                        }
+                    }
+                }
+            }
+
+            if (resolvedRate > 0) {
+                const itemTotal = item.amountInCents * item.quantity;
+                totalInfluencerAmount += Math.round(itemTotal * resolvedRate);
+                
+                if (!finalInfluencerId) {
+                    finalInfluencerId = influencer._id;
+                    finalInfluencerRate = resolvedRate;
+                }
+            }
+        }
+
+        return {
+            influencerId: finalInfluencerId,
+            influencerAmount: totalInfluencerAmount,
+            influencerRate: finalInfluencerRate,
+        };
+    }
 });

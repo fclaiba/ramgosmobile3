@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'; // Context
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react'; // Context
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
@@ -96,155 +96,88 @@ const deserializeWalletState = (raw: any) => ({
 export function WalletProvider({ children }: { children: ReactNode }) {
     const { user } = useAuth();
     const { addPoints } = usePoints();
+    
+    // Get wallet summary from backend
+    const walletSummary = useQuery(
+        api.economy.getWalletSummary,
+        user ? { userId: user.id } : 'skip',
+    );
+
     const economyState = useQuery(
         api.economy.getState,
-        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+        user ? { userId: user.id } : 'skip',
     );
     const saveWalletState = useMutation(api.economy.saveWalletState);
     const applyWalletEvent = useMutation(api.economy.applyWalletEvent);
+
     const [hasHydratedFromBackend, setHasHydratedFromBackend] = useState(false);
 
-    // Mock Database
-    const [wallets, setWallets] = useState<Record<string, Wallet>>({
-        'ramgos_holding': { userId: 'ramgos_holding', balanceAvailable: 0, balancePending: 0, currency: 'ARS' }
-    });
+    // Mapped data from backend
+    const wallets = useMemo((): Record<string, Wallet> => {
+        const userWallet: Wallet = {
+            userId: user?.id ?? 'guest',
+            balanceAvailable: walletSummary?.balanceAvailable ?? 0,
+            balancePending: walletSummary?.balancePending ?? 0,
+            currency: 'ARS',
+        };
+        const holdingWallet: Wallet = {
+            userId: 'ramgos_holding',
+            balanceAvailable: 0,
+            balancePending: 0,
+            currency: 'ARS',
+        };
+        return {
+            [user?.id ?? 'guest']: userWallet,
+            'ramgos_holding': holdingWallet
+        };
+    }, [user, walletSummary]);
 
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-
-    useEffect(() => {
-        if (!user || hasHydratedFromBackend) return;
-        if (!economyState?.walletState) {
-            setHasHydratedFromBackend(true);
-            return;
-        }
-
-        const hydrated = deserializeWalletState(economyState.walletState);
-        setWallets(hydrated.wallets);
-        setTransactions(hydrated.transactions);
-        setHasHydratedFromBackend(true);
-    }, [user, economyState, hasHydratedFromBackend]);
-
-    useEffect(() => {
-        if (!user || !hasHydratedFromBackend) return;
-        saveWalletState({
-            actorId: user.id as any,
-            userId: user.id,
-            walletState: serializeWalletState({
-                wallets,
-                transactions,
-            }),
-        }).catch((error: any) => {
-            console.warn('[WalletContext] Failed to persist wallet state', error);
-        });
-    }, [user, hasHydratedFromBackend, wallets, transactions, saveWalletState]);
+    const transactions = useMemo((): Transaction[] => 
+        (walletSummary?.events ?? []).map((ev: any) => ({
+            id: ev.eventKey,
+            orderId: ev.orderId ?? '',
+            type: ev.metadata?.txType ?? 'PAYMENT_IN',
+            amount: ev.amount,
+            status: ev.type === 'hold' ? 'PENDING' : 'COMPLETED',
+            source: ev.metadata?.source ?? 'USER_PAYMENT',
+            destination: ev.metadata?.destination ?? 'SELLER_WALLET',
+            date: new Date(ev.createdAt),
+            description: ev.description,
+            relatedUserId: ev.userId,
+        })), [walletSummary]);
 
     // Helpers
     const getWallet = (userId: string): Wallet => {
-        return wallets[userId] || { userId, balanceAvailable: 0, balancePending: 0, currency: 'ARS' };
+        return wallets[userId] || { userId, balanceAvailable: 0, balancePending: 0, currency: 'ARS' as const };
     };
-
-    const updateWallet = (userId: string, changes: Partial<Wallet>) => {
-        setWallets(prev => ({
-            ...prev,
-            [userId]: { ...getWallet(userId), ...changes }
-        }));
-    };
-
-    const addTransaction = (tx: Transaction) => {
-        setTransactions(prev => [tx, ...prev]);
-        if (user?.id && tx.relatedUserId === user.id) {
-            applyWalletEvent({
-                actorId: user.id as any,
-                userId: tx.relatedUserId,
-                eventKey: tx.id,
-                type: tx.status === 'PENDING' ? 'hold' : tx.type === 'PAYOUT_SELLER' ? 'credit' : 'debit',
-                amount: tx.amount,
-                description: tx.description,
-                orderId: tx.orderId,
-                metadata: {
-                    source: tx.source,
-                    destination: tx.destination,
-                    txType: tx.type,
-                    txStatus: tx.status,
-                },
-            }).catch((error: any) => {
-                console.warn('[WalletContext] Failed to persist wallet ledger event', error);
-            });
-        }
-
-        // Update Wallet Balances Logic
-        // PENDING transactions go to balancePending
-        // COMPLETED transactions go to balanceAvailable
-
-        const targetUser = tx.relatedUserId;
-        const wallet = getWallet(targetUser);
-
-        if (targetUser === 'RAMGOS_HOLDING') return; // We track holding loosely or separate
-
-        if (tx.status === 'PENDING') {
-            updateWallet(targetUser, { balancePending: wallet.balancePending + tx.amount });
-        } else if (tx.status === 'COMPLETED') {
-            updateWallet(targetUser, { balanceAvailable: wallet.balanceAvailable + tx.amount });
-        }
-    };
-
-    // --- Actions ---
 
     // --- MAIN FINANCIAL ENGINE ---
-    // NOTE: Splits and escrow are now handled server-side by Convex (stripe.internalMarkPaymentSucceeded).
-    // This function is kept as a no-op for backward compatibility; do not re-add local finance logic here.
     const processCheckoutTransaction = (_order: { id: string; sellerId: string; totalAmount: number; items: any[]; couponCode?: string }) => {
         // no-op: financial splits are handled by Convex webhook
     };
 
-    const confirmDelivery = (orderId: string) => {
-        // Find pending transactions for this order and COMPLETE them
-        setTransactions(prev => prev.map(tx => {
-            if (tx.orderId === orderId && tx.status === 'PENDING') {
-                return { ...tx, status: 'COMPLETED', date: new Date() }; // Update date to release date
-            }
-            return tx;
-        }));
-
-        // Need to update wallet balances too. 
-        // Since 'transactions' state update is async, we can't rely on it immediately loop.
-        // We'll effectively re-calculate balances based on transaction status changes.
-        // Or simpler: find the txs, and call a helper to move money.
-
-        // For simplicity in this mock:
-        // iterate transactions, if matches, deduct from pending, add to available.
-        const txsToRelease = transactions.filter(tx => tx.orderId === orderId && tx.status === 'PENDING');
-
-        txsToRelease.forEach(tx => {
-            const wallet = getWallet(tx.relatedUserId);
-            updateWallet(tx.relatedUserId, {
-                balancePending: wallet.balancePending - tx.amount,
-                balanceAvailable: wallet.balanceAvailable + tx.amount // simplified
+    const confirmDelivery = async (orderId: string) => {
+        // In a real system, this would trigger the 'release' event in the backend.
+        // We find the 'hold' transaction and send a 'release' event.
+        const holdTx = transactions.find((tx: Transaction) => tx.orderId === orderId && tx.status === 'PENDING');
+        if (holdTx && user?.id) {
+            await applyWalletEvent({
+                userId: user.id,
+                eventKey: `release_${orderId}_${Date.now()}`,
+                type: 'release',
+                amount: holdTx.amount,
+                description: `Liberación de fondos: ${holdTx.description}`,
+                orderId: orderId,
+                metadata: {
+                    ...holdTx,
+                    txStatus: 'COMPLETED',
+                },
             });
-        });
-
-        // Update transaction status (visual)
-        setTransactions(prev => prev.map(tx => {
-            if (tx.orderId === orderId && tx.status === 'PENDING') {
-                return { ...tx, status: 'COMPLETED' };
-            }
-            return tx;
-        }));
+        }
     };
 
     const simulateTimePass = (days: number) => {
-        // Find transactions where releaseDate <= new simulated date
-        // For simulation, we just release ALL pending for now to show it works
-        const pendingTxs = transactions.filter(tx => tx.status === 'PENDING');
-        pendingTxs.forEach(tx => {
-            const wallet = getWallet(tx.relatedUserId);
-            updateWallet(tx.relatedUserId, {
-                balancePending: wallet.balancePending - tx.amount,
-                balanceAvailable: wallet.balanceAvailable + tx.amount
-            });
-        });
-
-        setTransactions(prev => prev.map(tx => (tx.status === 'PENDING' ? { ...tx, status: 'COMPLETED' } : tx)));
+        // Simulation moved to backend logic in real production scenario
     };
 
     return (

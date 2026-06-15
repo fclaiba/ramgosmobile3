@@ -43,28 +43,41 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
         if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             quality: 0.7,
         });
         if (result.canceled || !result.assets[0]) return;
 
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({ actorId: user.id as any, userId: user.id as any });
+            const uploadUrl = await generateUploadUrl({});
             const asset = result.assets[0];
+            let blob: Blob;
+            try {
+                const fetchResponse = await fetch(asset.uri);
+                blob = await fetchResponse.blob();
+            } catch (err) {
+                blob = await new Promise<Blob>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.onload = function() { resolve(xhr.response); };
+                    xhr.onerror = function(e) { reject(new TypeError('Network request failed')); };
+                    xhr.responseType = 'blob';
+                    xhr.open('GET', asset.uri, true);
+                    xhr.send(null);
+                });
+            }
+
             const response = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
-                body: { uri: asset.uri } as any,
+                body: blob,
             });
             const { storageId } = await response.json();
             const fileUrl = `convex-storage:${storageId}`;
 
             await addEvidence({
                 orderId,
-                actorId: user.id as any,
                 uploadedBy: 'buyer',
-                uploadedByUserId: user.id,
                 type: 'photo',
                 url: fileUrl,
                 description: description || reason || 'Evidencia fotográfica',

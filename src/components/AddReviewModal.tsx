@@ -39,21 +39,24 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
         setIsSubmitting(true);
         try {
             await addReview({
-                actorId: user.id as any,
                 listingId,
                 rating,
                 comment,
-                userId: user.id,
-                // orderId: "...", 
+                userId: user.id as string,
             });
             setRating(0);
             setComment('');
             onSuccess?.();
             onClose();
             show('Reseña publicada correctamente.', 'success');
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to add review", e);
-            show('No se pudo publicar la reseña.', 'error');
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg.includes('Ya has publicado')) {
+                show('Ya has publicado una reseña para este artículo.', 'error');
+            } else {
+                show('No se pudo publicar la reseña.', 'error');
+            }
         } finally {
             setIsSubmitting(false);
         }

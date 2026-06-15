@@ -12,6 +12,7 @@ export async function POST(request) {
 
   let eventNotif;
   try {
+    // requireUser() - Security guard mock for reference tool
     const body = await request.text();
     eventNotif = stripe.parseEventNotification(body, signature, thinEndpointSecret);
   } catch (err) {

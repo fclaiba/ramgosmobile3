@@ -32,7 +32,7 @@ const AppleIcon = ({ isDark }: { isDark: boolean }) => (
 );
 
 export default function WelcomeScreen({ navigation }: any) {
-    const { loginWithSocial, isProcessing } = useAuth();
+    const { loginWithSocial, isProcessing, status, user } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -40,6 +40,15 @@ export default function WelcomeScreen({ navigation }: any) {
 
     const [isLoading, setIsLoading] = useState(false);
     const busy = isProcessing || isLoading;
+
+    useEffect(() => {
+        if (status === 'authenticated' && user) {
+            const timer = setTimeout(() => {
+                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [status, user, navigation]);
 
     // Animations
     const iconScale = useRef(new Animated.Value(0)).current;

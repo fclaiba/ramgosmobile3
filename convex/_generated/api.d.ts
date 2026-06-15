@@ -8,10 +8,12 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as bonos from "../bonos.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cart from "../cart.js";
+import type * as casino from "../casino.js";
 import type * as connect from "../connect.js";
 import type * as connectV2 from "../connectV2.js";
 import type * as crons from "../crons.js";
@@ -26,6 +28,7 @@ import type * as http from "../http.js";
 import type * as iap from "../iap.js";
 import type * as iapActions from "../iapActions.js";
 import type * as identity from "../identity.js";
+import type * as influencers from "../influencers.js";
 import type * as listings from "../listings.js";
 import type * as notifications from "../notifications.js";
 import type * as observability from "../observability.js";
@@ -46,10 +49,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   authHelpers: typeof authHelpers;
   bonos: typeof bonos;
   campaigns: typeof campaigns;
   cart: typeof cart;
+  casino: typeof casino;
   connect: typeof connect;
   connectV2: typeof connectV2;
   crons: typeof crons;
@@ -64,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   iap: typeof iap;
   iapActions: typeof iapActions;
   identity: typeof identity;
+  influencers: typeof influencers;
   listings: typeof listings;
   notifications: typeof notifications;
   observability: typeof observability;

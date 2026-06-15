@@ -55,7 +55,6 @@ export default function ChangePasswordScreen({ navigation }: any) {
         setBusy(true);
         try {
             await changePassword({
-                actorId: user.id as any,
                 currentPassword,
                 newPassword,
             });

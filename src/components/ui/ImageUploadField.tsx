@@ -31,8 +31,7 @@ export const ImageUploadField = ({ images, onChange, maxImages = 5, title = "Fot
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            // @ts-ignore - MediaTypeOptions deprecated but MediaType is undefined at runtime on some versions
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [4, 3],
             quality: 0.8,

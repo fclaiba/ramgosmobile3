@@ -63,7 +63,7 @@ export function DailyChallenges() {
         <View style={styles.container}>
             {/* Daily Streak Card */}
             <LinearGradient
-                colors={isDark ? ['#7C2D12', '#450A0A'] : ['#FFF7ED', '#FEF2F2']} // Darker orange/red for dark mode
+                colors={isDark ? ['rgba(249, 115, 22, 0.1)', 'rgba(249, 115, 22, 0.05)'] : ['#FFF7ED', '#FEF2F2']}
                 style={styles.streakCard}
             >
                 <View style={styles.cardContent}>
@@ -242,7 +242,7 @@ const ChallengeCard = ({ challenge, onClaim, getIcon, isWeekly = false, isDark, 
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { gap: 16 },
-    streakCard: { borderRadius: 16, padding: 1, overflow: 'hidden', borderWidth: 1, borderColor: isDark ? '#7C2D12' : '#FED7AA' },
+    streakCard: { borderRadius: 16, padding: 1, overflow: 'hidden', borderWidth: 1, borderColor: isDark ? 'rgba(249, 115, 22, 0.2)' : '#FED7AA' },
     cardContent: { padding: 16 },
     streakHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     streakInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -251,7 +251,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     cardSubtitle: { fontSize: 13, color: isDark ? '#D1D5DB' : '#6B7280' },
     cardMiniText: { fontSize: 10, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
 
-    claimBtn: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 12 },
+    claimBtn: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 12, overflow: 'hidden' },
     claimBtnDisabled: { backgroundColor: isDark ? '#374151' : '#E5E7EB' },
     claimBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
     claimBtnTextDisabled: { color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', fontSize: 13 },

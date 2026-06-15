@@ -16,11 +16,15 @@ import { Badge } from '../../components/ui/badge';
 import { useBusiness, BranchInput, CatalogItemInput } from '../../contexts/BusinessContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const formatCurrency = (value: number) =>
     `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function BusinessProfileScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const isNarrow = width < 420;
@@ -581,10 +585,10 @@ export default function BusinessProfileScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f8fafc' },
     contentContainer: { padding: 16, paddingBottom: 48, gap: 16 },
-    sectionCard: { padding: 18, borderRadius: 18, backgroundColor: '#fff', gap: 12 },
+    sectionCard: { padding: 18, borderRadius: 18, backgroundColor: isDark ? '#1F2937' : '#fff', gap: 12 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
     sectionIcon: {
@@ -596,8 +600,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-    sectionSubtitle: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-    buttonTextLight: { color: '#fff', fontWeight: '600', fontSize: 14 },
+    sectionSubtitle: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginTop: 2 },
+    buttonTextLight: { color: isDark ? '#1F2937' : '#fff', fontWeight: '600', fontSize: 14 },
     buttonTextDark: { color: '#111827', fontWeight: '600', fontSize: 14 },
     divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 8 },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -626,7 +630,7 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 999,
     },
-    branchToggleText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    branchToggleText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '700', fontSize: 12 },
     catalogSummary: { flexDirection: 'row', gap: 8 },
     catalogItem: {
         flexDirection: 'row',
@@ -647,9 +651,9 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 999,
     },
-    catalogToggleText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    catalogToggleText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '700', fontSize: 12 },
     sheetContent: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         height: '90%',
@@ -671,7 +675,7 @@ const styles = StyleSheet.create({
         padding: 24,
     },
     modalCard: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRadius: 20,
         padding: 20,
         gap: 12,
@@ -697,7 +701,7 @@ const styles = StyleSheet.create({
         borderTopColor: '#e2e8f0',
         paddingHorizontal: 24,
         paddingTop: 12,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
     },
     modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
 });

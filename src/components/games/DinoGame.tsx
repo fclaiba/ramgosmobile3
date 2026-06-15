@@ -32,6 +32,7 @@ interface DinoGameProps {
     onEnd?: (summary: GameEndSummary) => void;
     gameId?: GameAdapterProps['gameId'];
     family?: GameAdapterProps['family'];
+    theme?: GameAdapterProps['theme'];
 }
 
 export const DinoGame = (props: DinoGameProps) => {
@@ -44,6 +45,7 @@ export const DinoGame = (props: DinoGameProps) => {
         onEnd,
         gameId = 'dino',
         family = 'arcade',
+        theme,
     } = props;
 
     const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
@@ -345,58 +347,20 @@ export const DinoGame = (props: DinoGameProps) => {
 
     return (
         <View style={styles.container} {...panResponder.panHandlers}>
-            <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={StyleSheet.absoluteFill} />
+            {theme?.gradients?.bg ? (
+                <LinearGradient colors={theme.gradients.bg} style={StyleSheet.absoluteFill} />
+            ) : (
+                <LinearGradient colors={['#FEF3C7', '#FDE68A']} style={StyleSheet.absoluteFill} />
+            )}
 
             {/* Ground */}
-            <View style={styles.ground} />
+            <View style={[styles.ground, theme ? { backgroundColor: theme.colors.accent, borderTopColor: theme.colors.border } : {}]} />
 
             {/* Clouds / Deco */}
             <View style={{ position: 'absolute', top: 50, left: 100, opacity: 0.5 }}><Text style={{ fontSize: 40 }}>☁️</Text></View>
             <View style={{ position: 'absolute', top: 80, left: 250, opacity: 0.5 }}><Text style={{ fontSize: 40 }}>☁️</Text></View>
 
-            {/* HUD */}
-            {uiMode !== 'wrapped' && (
-                <View style={styles.hud}>
-                    <View style={styles.scoreBox}>
-                        <Text style={styles.scoreText}>HI: {highScore}</Text>
-                        <Text style={styles.scoreText}>SCORE: {score}</Text>
-                    </View>
-                    <View style={styles.instructions}>
-                        <ArrowDown size={16} color="#B45309" />
-                        <Text style={styles.instText}>Desliza para agacharte</Text>
-                    </View>
-                </View>
-            )}
-
-            {uiMode !== 'wrapped' && gameState === 'IDLE' && (
-                <View style={styles.centerContainer}>
-                    <Text style={styles.title}>Dino Run</Text>
-                    <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                        <Play size={24} color="#fff" />
-                        <Text style={styles.btnText}>COMENZAR</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && (
-                <View style={styles.centerContainer}>
-                    <Text style={styles.gameOverText}>GAME OVER</Text>
-                    <Text style={styles.finalScore}>Puntos: {score}</Text>
-                    <View style={{ gap: 10 }}>
-                        <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
-                            if (onGameEnd) onGameEnd(score); // Save Coins
-                            if (onClose) onClose();
-                        }}>
-                            <Coins size={24} color="#fff" />
-                            <Text style={styles.btnText}>GUARDAR {Math.floor(score / 5)} MONEDAS</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                            <RotateCcw size={24} color="#fff" />
-                            <Text style={styles.btnText}>JUGAR OTRA VEZ</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            )}
+            {/* Removed Standalone HUD and Menus */}
 
             {/* Dino */}
             <Animated.View style={[
@@ -407,7 +371,9 @@ export const DinoGame = (props: DinoGameProps) => {
                     height: isCrouching ? 30 : 50,
                 }
             ]}>
-                <Text style={{ fontSize: 40 }}>{isCrouching ? '🦎' : '🦖'}</Text>
+                <View style={{ transform: [{ rotateY: '180deg' }] }}>
+                    <Text style={{ fontSize: 40 }}>{isCrouching ? '🦎' : '🦖'}</Text>
+                </View>
             </Animated.View>
 
             {/* Obstacles */}

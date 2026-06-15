@@ -22,6 +22,7 @@ export default defineSchema({
         // PHASE 1 ADDITIONS - User Profile Enhancement
         bio: v.optional(v.string()),
         phoneNumber: v.optional(v.string()),
+        nickname: v.optional(v.string()),
         phoneVerified: v.optional(v.boolean()),
         emailVerified: v.optional(v.boolean()),
         
@@ -52,9 +53,9 @@ export default defineSchema({
         lastActiveAt: v.optional(v.string()), // Kept only one instance
         followerCount: v.optional(v.number()), // For Influencer metrics
 
-        // Influencer attribution: short, unique, shareable code that maps
         // back to this user. Resolved server-side at PaymentIntent time.
         referralCode: v.optional(v.string()),
+        referredByUserId: v.optional(v.string()),
     })
         .index("by_email", ["email"])
         .index("by_uid", ["uid"])
@@ -247,6 +248,18 @@ export default defineSchema({
         updatedAt: v.string(),
     }).index("by_user", ["userId"]),
 
+    // PHASE 4: Influencer Whitelist
+    influencerWhitelists: defineTable({
+        businessId: v.string(), // ID del negocio
+        influencerId: v.string(), // ID del influencer
+        status: v.union(v.literal('active'), v.literal('revoked')),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+    .index("by_business", ["businessId"])
+    .index("by_influencer", ["influencerId"])
+    .index("by_business_and_influencer", ["businessId", "influencerId"]),
+
     searchHistory: defineTable({
         userId: v.string(),
         query: v.string(),
@@ -414,6 +427,8 @@ export default defineSchema({
         status: v.union(
             v.literal('pending'),
             v.literal('succeeded'),
+            v.literal('succeeded_in_escrow'),
+            v.literal('released_to_seller'),
             v.literal('failed'),
             v.literal('refunded'),
             v.literal('disputed'),
@@ -661,6 +676,37 @@ export default defineSchema({
         runsCompleted: v.number(),
     }).index("by_scope", ["scope"]),
 
+    // ===== GAMIFICATION MODULE (PHASE 1) =====
+    // gameConfigs — store RTP, costs, and paytables for each game.
+    gameConfigs: defineTable({
+        gameId: v.string(), // 'roulette', 'slots'
+        costPerSpin: v.number(), // in points
+        status: v.union(v.literal('active'), v.literal('maintenance'), v.literal('disabled')),
+        paytable: v.array(v.object({
+            id: v.string(),
+            label: v.string(),
+            weight: v.number(), // for probabilistic engine
+            multiplier: v.number(), // prize = cost * multiplier
+            fixedPrize: v.optional(v.number()), // if present, overrides multiplier
+        })),
+        updatedAt: v.string(),
+    }).index("by_game", ["gameId"]),
+
+    // gameSpins — audit log of every spin for fairness and anti-fraud.
+    gameSpins: defineTable({
+        userId: v.string(),
+        gameId: v.string(),
+        cost: v.number(),
+        outcome: v.object({
+            paytableId: v.string(),
+            prizePoints: v.number(),
+            metadata: v.optional(v.any()), // symbols for slots, angle for roulette
+        }),
+        ledgerId: v.id('pointsLedger'), // FK to the transaction that deducted/added points
+        createdAt: v.string(),
+    }).index("by_user", ["userId"])
+        .index("by_game_user", ["gameId", "userId"]),
+
     // ===== SOCIAL MODULE =====
     // socialUsers — extends `users` with the social-specific profile fields
     // (handle, bio override, counters). We keep this OUT of `users` to
@@ -796,7 +842,6 @@ export default defineSchema({
         participantIds: v.array(v.string()),
         lastMessagePreview: v.optional(v.string()),
         lastMessageAt: v.string(),
-        // Per-participant unread counters keyed by userId. Stored as a
         // JSON-ish object (Convex `v.any()`) because the participant set
         // is dynamic and small.
         unreadCounts: v.optional(v.any()),
@@ -823,6 +868,31 @@ export default defineSchema({
     })
         .index('by_chat', ['chatId'])
         .index('by_chat_created', ['chatId', 'createdAt']),
+
+    socialSavedPosts: defineTable({
+        userId: v.string(),
+        postId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_user', ['userId'])
+        .index('by_user_post', ['userId', 'postId']),
+
+    socialRetweets: defineTable({
+        userId: v.string(),
+        postId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_user_post', ['userId', 'postId'])
+        .index('by_post', ['postId']),
+
+    socialHighlights: defineTable({
+        userId: v.string(),
+        title: v.string(),
+        coverImage: v.string(),
+        storyIds: v.array(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_user', ['userId']),
 
     // Push deliveries — audit log of every push notification dispatched by
     // `notifications.notifyUser`. Persisted before/after the Expo Push API

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { BlurView } from 'expo-blur';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Pause, Play, RotateCcw, X, Coins, Heart, Clock } from 'lucide-react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 import {
   type GameAction,
   type GameEndSummary,
@@ -57,6 +58,9 @@ export function GameWrapper({
   autoCloseOnSave = false,
   gameProps,
 }: GameWrapperProps) {
+  const { colorScheme } = useTheme();
+  const isDark = colorScheme === 'dark';
+  const styles = getStyles(isDark);
   const family = GAME_FAMILY_BY_ID[gameId];
   const theme = useMemo(() => getGameTheme(gameId), [gameId]);
   const overlayBg =
@@ -221,8 +225,8 @@ export function GameWrapper({
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       {/* HUD */}
       <BlurView
-        intensity={Platform.OS === 'ios' ? 30 : 60}
-        tint={family === 'casino' ? 'dark' : 'light'}
+        intensity={Platform.OS === 'ios' ? 50 : 80}
+        tint={family === 'casino' ? 'dark' : (isDark ? 'dark' : 'light')}
         style={[
           styles.hud,
           {
@@ -403,7 +407,7 @@ export function GameWrapper({
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
   container: { flex: 1 },
   hud: {
     paddingHorizontal: 12,
@@ -443,8 +447,13 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     borderRadius: 24,
     borderWidth: 1,
-    padding: 20,
+    padding: 24,
     backgroundColor: 'rgba(15,23,42,0.95)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   overlayTitle: { fontSize: 28, fontWeight: '900', textAlign: 'center', marginBottom: 12 },
   primaryBtn: {
@@ -455,7 +464,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 999,
   },
-  primaryBtnText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  primaryBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '900', fontSize: 16 },
   secondaryBtn: {
     flexDirection: 'row',
     gap: 10,
@@ -476,7 +485,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
   },
-  levelupText: { color: '#fff', fontWeight: '900', letterSpacing: 1 },
+  levelupText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '900', letterSpacing: 1 },
   timerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -488,10 +497,9 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   timerText: {
-    color: '#fff',
+    color: isDark ? '#1F2937' : '#fff',
     fontSize: 12,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
 });
-

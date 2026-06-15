@@ -5,7 +5,8 @@ import { Play, RotateCcw, Brain, Trophy, Eye, Heart, Coins, Lock } from 'lucide-
 import Animated, { useAnimatedStyle, withSpring, useSharedValue, withTiming, interpolate, Extrapolate } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { GameActionSignal } from './GameWrapper';
-import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
+import type { GameAdapterProps, GameEndSummary, GameEvent, GameThemeTokens } from './gameContracts';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const EMOJIS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵'];
 const getRandomLifeInterval = () => (Math.random() < 0.5 ? 2 : 3);
@@ -19,6 +20,9 @@ interface CardItem {
 }
 
 const Card = ({ item, onPress, forcedFlip }: { item: CardItem; onPress: () => void; forcedFlip: boolean }) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const rotate = useSharedValue(0);
 
     const showFace = item.isFlipped || item.isMatched || forcedFlip;
@@ -82,30 +86,37 @@ interface MemoryGameProps {
     onEnd?: (summary: GameEndSummary) => void;
     gameId?: GameAdapterProps['gameId'];
     family?: GameAdapterProps['family'];
+    theme?: GameThemeTokens;
 }
 
 export const MemoryGame = (props: MemoryGameProps) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const {
         onGameEnd,
         onClose,
         actionSignal,
         uiMode = 'standalone',
         onEvent,
+        onEnd,
         gameId = 'memory',
         family = 'arcade',
+        theme,
     } = props;
 
     const [gameState, setGameState] = useState<'IDLE' | 'PREVIEW' | 'PLAYING' | 'PAUSED' | 'LEVEL_COMPLETE' | 'GAMEOVER'>('IDLE');
     const [level, setLevel] = useState(1);
-    const [lives, setLives] = useState(3);
+    const [lives, setLives] = useState(5);
     const [cards, setCards] = useState<CardItem[]>([]);
-    const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
+    const flippedIndicesRef = useRef<number[]>([]);
     const [score, setScore] = useState(0);
     const [peeking, setPeeking] = useState(false);
 
     // Logic refs
     const processingRef = useRef(false);
     const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const matchTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastActionNonce = useRef(0);
     const lastLevelReported = useRef(1);
     const nextLifeLevelRef = useRef<number>(1 + getRandomLifeInterval());
@@ -143,6 +154,7 @@ export const MemoryGame = (props: MemoryGameProps) => {
     useEffect(() => {
         return () => {
             if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+            if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
         };
     }, []);
 
@@ -199,10 +211,13 @@ export const MemoryGame = (props: MemoryGameProps) => {
         deck = deck.sort(() => Math.random() - 0.5);
 
         setCards(deck);
-        setFlippedIndices([]);
+        flippedIndicesRef.current = [];
         setGameState('PREVIEW');
         setPeeking(false);
         processingRef.current = false;
+
+        // Clear any running match/mismatch timers
+        if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
 
         // Preview Timer
         if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
@@ -216,7 +231,7 @@ export const MemoryGame = (props: MemoryGameProps) => {
     const startGame = () => {
         setLevel(1);
         setScore(0);
-        setLives(3);
+        setLives(5);
         nextLifeLevelRef.current = 1 + getRandomLifeInterval();
         startLevel(1);
         if (uiMode === 'wrapped') emitStatus('playing');
@@ -232,43 +247,40 @@ export const MemoryGame = (props: MemoryGameProps) => {
 
     const handleCardPress = (index: number) => {
         if (gameState !== 'PLAYING' || peeking || processingRef.current) return;
+        if (flippedIndicesRef.current.includes(index)) return;
         if (cards[index].isFlipped || cards[index].isMatched) return;
 
-        // Flip
-        const newCards = [...cards];
-        newCards[index].isFlipped = true;
-        setCards(newCards);
+        flippedIndicesRef.current.push(index);
 
-        const newFlipped = [...flippedIndices, index];
-        setFlippedIndices(newFlipped);
-
-        if (newFlipped.length === 2) {
+        if (flippedIndicesRef.current.length === 2) {
             processingRef.current = true;
-            const idx1 = newFlipped[0];
-            const idx2 = newFlipped[1];
+        }
 
-            if (newCards[idx1].emoji === newCards[idx2].emoji) {
+        setCards(prevCards => {
+            if (prevCards[index].isFlipped || prevCards[index].isMatched) return prevCards;
+            const newCards = [...prevCards];
+            newCards[index] = { ...newCards[index], isFlipped: true };
+            return newCards;
+        });
+
+        if (flippedIndicesRef.current.length === 2) {
+            const idx1 = flippedIndicesRef.current[0];
+            const idx2 = flippedIndicesRef.current[1];
+
+            if (cards[idx1].emoji === cards[idx2].emoji) {
                 // Match
-                setTimeout(() => {
+                matchTimerRef.current = setTimeout(() => {
                     setCards(prev => {
                         const copy = [...prev];
-                        copy[idx1].isMatched = true;
-                        copy[idx2].isMatched = true;
-                        // Special Check
-                        if (copy[idx1].isSpecial) {
+                        copy[idx1] = { ...copy[idx1], isMatched: true };
+                        copy[idx2] = { ...copy[idx2], isMatched: true };
+                        if (copy[idx1]?.isSpecial) {
                             setLives(l => Math.min(5, l + 1));
                         }
-                        return copy;
-                    });
-                    setFlippedIndices([]);
-                    setScore(s => s + (10 * level));
-
-                    // Check completion
-                    setCards(current => {
-                        const allMatched = current.every(c => c.isMatched);
+                        const allMatched = copy.every(c => c.isMatched);
                         if (allMatched) {
+                            setGameState('LEVEL_COMPLETE');
                             if (uiMode === 'wrapped') {
-                                // Auto-advance with a brief pause, wrapper will also show levelup toast.
                                 setTimeout(() => {
                                     setLevel(l => {
                                         const next = l + 1;
@@ -280,23 +292,34 @@ export const MemoryGame = (props: MemoryGameProps) => {
                                 setTimeout(() => setGameState('LEVEL_COMPLETE'), 500);
                             }
                         }
-                        return current;
+                        return copy;
                     });
-
+                    setScore(s => s + (10 * level));
+                    flippedIndicesRef.current = [];
                     processingRef.current = false;
                 }, 500);
             } else {
                 // Mismatch
-                setTimeout(() => {
+                matchTimerRef.current = setTimeout(() => {
                     setCards(prev => {
                         const copy = [...prev];
-                        copy[idx1].isFlipped = false;
-                        copy[idx2].isFlipped = false;
+                        if (copy[idx1]) copy[idx1] = { ...copy[idx1], isFlipped: false };
+                        if (copy[idx2]) copy[idx2] = { ...copy[idx2], isFlipped: false };
                         return copy;
                     });
-                    setFlippedIndices([]);
+                    setLives(l => {
+                        const nextLives = l - 1;
+                        if (nextLives <= 0) {
+                            setGameState('GAMEOVER');
+                            if (uiMode === 'wrapped') {
+                                onEvent?.({ type: 'gameover', final: { score, level, lives: 0, progressToNext } });
+                                onEnd?.({ gameId, family, score, finalMetrics: { score, level, lives: 0, progressToNext } });
+                            }
+                        }
+                        return nextLives;
+                    });
+                    flippedIndicesRef.current = [];
                     processingRef.current = false;
-                    // Optional: Lose life on mismatch? User didn't specify.
                 }, 1000);
             }
         }
@@ -305,7 +328,18 @@ export const MemoryGame = (props: MemoryGameProps) => {
     const handlePeek = () => {
         if (lives <= 0 || gameState !== 'PLAYING' || peeking || processingRef.current) return;
 
-        setLives(l => l - 1);
+        setLives(l => {
+            const nextLives = l - 1;
+            if (nextLives <= 0) {
+                setGameState('GAMEOVER');
+                if (uiMode === 'wrapped') {
+                    onEvent?.({ type: 'gameover', final: { score, level, lives: 0, progressToNext } });
+                    onEnd?.({ gameId, family, score, finalMetrics: { score, level, lives: 0, progressToNext } });
+                }
+            }
+            return nextLives;
+        });
+        
         setPeeking(true);
 
         setTimeout(() => {
@@ -313,88 +347,11 @@ export const MemoryGame = (props: MemoryGameProps) => {
         }, 1500); // 1.5s peek
     };
 
-    const renderLevelComplete = () => (
-        <View style={styles.centerContainer}>
-            <Trophy size={64} color="#F59E0B" />
-            <Text style={styles.winTitle}>LEVEL {level} COMPLETE!</Text>
-            <View style={{ gap: 10, marginTop: 20 }}>
-                <TouchableOpacity style={styles.startBtn} onPress={nextLevel}>
-                    <Play size={24} color="#fff" />
-                    <Text style={styles.btnText}>NEXT LEVEL</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
-                    if (onGameEnd) onGameEnd(score);
-                    if (onClose) onClose();
-                }}>
-                    <Coins size={24} color="#fff" />
-                    <Text style={styles.btnText}>SAVE & EXIT</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-
-    const renderGameOver = () => (
-        <View style={styles.centerContainer}>
-            <Text style={styles.gameOverText}>GAME OVER</Text>
-            <Text style={styles.finalScore}>Final Score: {score}</Text>
-            <View style={{ gap: 10 }}>
-                <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
-                    if (onGameEnd) onGameEnd(score);
-                    if (onClose) onClose();
-                }}>
-                    <Coins size={24} color="#fff" />
-                    <Text style={styles.btnText}>GUARDAR {Math.floor(score / 5)} MONEDAS</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                    <RotateCcw size={24} color="#fff" />
-                    <Text style={styles.btnText}>PLAY AGAIN</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
-
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={['#A78BFA', '#DDD6FE']} style={StyleSheet.absoluteFill} />
-
-            {uiMode !== 'wrapped' && (
-                <View style={styles.header}>
-                <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>LEVEL</Text>
-                    <Text style={styles.statValue}>{level}</Text>
-                </View>
-                <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>LIVES</Text>
-                    <View style={{ flexDirection: 'row' }}>
-                        {[...Array(3)].map((_, i) => (
-                            <Heart key={i} size={16}
-                                color={i < lives ? "#EF4444" : "#9CA3AF"}
-                                fill={i < lives ? "#EF4444" : "none"}
-                            />
-                        ))}
-                        {lives > 3 && <Text style={{ marginLeft: 4, fontWeight: 'bold', color: '#EF4444' }}>+{lives - 3}</Text>}
-                    </View>
-                </View>
-                <View style={styles.statBox}>
-                    <Text style={styles.statLabel}>SCORE</Text>
-                    <Text style={styles.statValue}>{score}</Text>
-                </View>
-                </View>
+        <View style={[styles.container, uiMode === 'wrapped' && theme && { backgroundColor: theme.background }]}>
+            {theme?.surfaceGradient && (
+                <LinearGradient colors={theme.surfaceGradient} style={StyleSheet.absoluteFill} />
             )}
-
-            {uiMode !== 'wrapped' && gameState === 'IDLE' && (
-                <View style={styles.centerContainer}>
-                    <Brain size={64} color="#7C3AED" />
-                    <Text style={styles.title}>Memory</Text>
-                    <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                        <Play size={24} color="#fff" />
-                        <Text style={styles.btnText}>START GAME</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && renderGameOver()}
-            {uiMode !== 'wrapped' && gameState === 'LEVEL_COMPLETE' && renderLevelComplete()}
 
             <View style={styles.gridContainer}>
                 <View style={styles.grid}>
@@ -424,11 +381,11 @@ export const MemoryGame = (props: MemoryGameProps) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
         width: '100%',
-        backgroundColor: '#F3F4F6',
+        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
     },
     header: {
         flexDirection: 'row',
@@ -439,7 +396,7 @@ const styles = StyleSheet.create({
     },
     statBox: {
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         paddingHorizontal: 12,
         paddingVertical: 4,
         borderRadius: 8,
@@ -448,7 +405,7 @@ const styles = StyleSheet.create({
     statLabel: {
         fontSize: 10,
         fontWeight: 'bold',
-        color: '#6B7280'
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280'
     },
     statValue: {
         fontSize: 18,
@@ -477,7 +434,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         backfaceVisibility: 'hidden',
-        shadowColor: "#000",
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
@@ -489,9 +446,9 @@ const styles = StyleSheet.create({
         borderColor: '#7C3AED'
     },
     cardFront: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderWidth: 2,
-        borderColor: '#E5E7EB'
+        borderColor: isDark ? '#374151' : '#e5e7eb'
     },
     emoji: {
         fontSize: 28
@@ -517,11 +474,11 @@ const styles = StyleSheet.create({
         borderRadius: 30,
         alignItems: 'center',
         gap: 8,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         elevation: 5
     },
     btnText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 16
     },
@@ -539,7 +496,7 @@ const styles = StyleSheet.create({
     },
     finalScore: {
         fontSize: 20,
-        color: '#4B5563',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563',
         marginBottom: 20
     },
     footer: {
@@ -557,6 +514,6 @@ const styles = StyleSheet.create({
     },
     disabledBtn: {
         opacity: 0.5,
-        backgroundColor: '#9CA3AF'
+        backgroundColor: isDark ? '#6B7280' : '#9CA3AF'
     }
 });

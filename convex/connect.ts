@@ -35,19 +35,18 @@ import Stripe from "stripe";
 import { withStripeBreadcrumb } from "./observability";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const allowStripeMock = process.env.ALLOW_STRIPE_MOCK === "true";
-const isMockMode = !stripeKey;
+if (!stripeKey) {
+    throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
+}
 
-const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
+const stripe = new Stripe(stripeKey, {
     apiVersion: "2024-04-10" as any,
 });
 
 const assertStripeConfigured = () => {
-    if (!isMockMode) return;
-    if (allowStripeMock) return;
-    throw new Error(
-        "Stripe no configurado. Define STRIPE_SECRET_KEY en Convex o habilita ALLOW_STRIPE_MOCK=true solo para desarrollo.",
-    );
+    if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -77,7 +76,7 @@ export const internalGetConnectAccountId = internalQuery({
 });
 
 export const internalGetActorRole = internalQuery({
-    args: { actorId: v.id("users") },
+    args: { actorId: v.any() },
     handler: async (
         ctx,
         args,
@@ -118,7 +117,7 @@ const assertSelfOrAdminAction = async (
 // ---------------------------------------------------------------------------
 export const createConnectAccount = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         displayName: v.string(),
         contactEmail: v.string(),
@@ -130,15 +129,6 @@ export const createConnectAccount = action({
     ): Promise<{ accountId: string; isMock: boolean }> => {
         assertStripeConfigured();
         await assertSelfOrAdminAction(ctx, args.actorId, String(args.userId));
-
-        if (isMockMode) {
-            const mockId = `acct_mock_${args.userId}_${Date.now()}`;
-            await ctx.runMutation(internal.connect.internalSaveConnectAccount, {
-                userId: args.userId,
-                stripeConnectAccountId: mockId,
-            });
-            return { accountId: mockId, isMock: true };
-        }
 
         try {
             // EXACT shape required by V2 — no top-level `type`. Capabilities
@@ -199,18 +189,11 @@ export const createConnectAccount = action({
 // ---------------------------------------------------------------------------
 export const createOnboardingLink = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         accountId: v.string(),
     },
     handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
         assertStripeConfigured();
-
-        if (isMockMode) {
-            return {
-                url: `https://connect.stripe.com/mock-onboarding?account=${args.accountId}`,
-                isMock: true,
-            };
-        }
 
         // Light auth: must have an actor at minimum (actions can't run
         // assertSelfOrAdmin without an internal query on a known target user;
@@ -249,7 +232,7 @@ export const createOnboardingLink = action({
 // ---------------------------------------------------------------------------
 export const getAccountStatus = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         accountId: v.string(),
     },
     handler: async (
@@ -264,17 +247,6 @@ export const getAccountStatus = action({
         isMock: boolean;
     }> => {
         assertStripeConfigured();
-
-        if (isMockMode) {
-            return {
-                accountId: args.accountId,
-                readyToReceivePayments: true,
-                onboardingComplete: true,
-                requirementsStatus: null,
-                transfersStatus: "active",
-                isMock: true,
-            };
-        }
 
         try {
             const account = await (stripe as any).v2.core.accounts.retrieve(
@@ -317,7 +289,7 @@ export const getAccountStatus = action({
 // ---------------------------------------------------------------------------
 export const ensureConnectAccount = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         displayName: v.string(),
         contactEmail: v.string(),
@@ -367,15 +339,6 @@ export const internalCreateConnectAccountAction = internalAction({
     ): Promise<{ accountId: string; isMock: boolean }> => {
         assertStripeConfigured();
 
-        if (isMockMode) {
-            const mockId = `acct_mock_${args.userId}_${Date.now()}`;
-            await ctx.runMutation(internal.connect.internalSaveConnectAccount, {
-                userId: args.userId,
-                stripeConnectAccountId: mockId,
-            });
-            return { accountId: mockId, isMock: true };
-        }
-
         const account = await (stripe as any).v2.core.accounts.create({
             display_name: args.displayName,
             contact_email: args.contactEmail,
@@ -416,13 +379,6 @@ export const internalCreateConnectAccountAction = internalAction({
 export const internalApplyV2AccountUpdate = internalAction({
     args: { accountId: v.string() },
     handler: async (ctx, args): Promise<void> => {
-        if (isMockMode) {
-            console.log(
-                `[Connect V2 webhook] Mock mode: skip applyV2AccountUpdate for ${args.accountId}`,
-            );
-            return;
-        }
-
         try {
             const account = await (stripe as any).v2.core.accounts.retrieve(
                 args.accountId,
@@ -520,7 +476,7 @@ export const internalSaveConnectFlags = internalMutation({
 
 export const getConnectBalance = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
     },
     handler: async (
@@ -546,18 +502,7 @@ export const getConnectBalance = action({
                 availableCents: 0,
                 pendingCents: 0,
                 currency: "usd",
-                isMock: isMockMode,
-            };
-        }
-
-        if (isMockMode) {
-            // Echo a friendly mock so dashboards render even without Stripe.
-            return {
-                accountId,
-                availableCents: 18_5075, // $185.07
-                pendingCents: 4_2000, // $42.00
-                currency: "usd",
-                isMock: true,
+                isMock: false,
             };
         }
 
@@ -601,7 +546,7 @@ export const getConnectBalance = action({
 
 export const updatePayoutSchedule = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         // 'manual' disables auto-payouts (sellers must call requestInstantPayout).
         interval: v.union(
@@ -625,10 +570,6 @@ export const updatePayoutSchedule = action({
             throw new Error(
                 "No tienes una cuenta de Stripe Connect. Completa el onboarding primero.",
             );
-        }
-
-        if (isMockMode) {
-            return { updated: true, isMock: true };
         }
 
         try {
@@ -661,7 +602,7 @@ export const updatePayoutSchedule = action({
 
 export const requestInstantPayout = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         amountInCents: v.number(),
         currency: v.optional(v.string()), // 'usd' default
@@ -691,17 +632,6 @@ export const requestInstantPayout = action({
             throw new Error(
                 "No tienes una cuenta de Stripe Connect. Completa el onboarding primero.",
             );
-        }
-
-        if (isMockMode) {
-            return {
-                payoutId: `po_mock_${Date.now()}`,
-                amountInCents: args.amountInCents,
-                currency: args.currency ?? "usd",
-                status: "pending",
-                arrivalDate: null,
-                isMock: true,
-            };
         }
 
         try {

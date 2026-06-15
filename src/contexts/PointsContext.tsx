@@ -268,14 +268,40 @@ const initialQuarter = createQuarterSummary(new Date());
 
 export function PointsProvider({ children }: { children: ReactNode }) {
     const { user } = useAuth();
-    const [points, setPoints] = useState<number>(0);
+    
+    // Get summary from backend (Ledger-based)
+    const pointsSummary = useQuery(
+        api.economy.getPointsSummary,
+        user ? { userId: user.id } : 'skip',
+    );
+
+    // Map backend data to local structure
+    const points = useMemo(() => pointsSummary?.balance ?? 0, [pointsSummary]);
     const pointsRef = useRef(points);
+    useEffect(() => { pointsRef.current = points; }, [points]);
 
-    const [lifetimePoints, setLifetimePoints] = useState<number>(0);
-    const lifetimePointsRef = useRef(lifetimePoints);
-
-    const [transactions, setTransactions] = useState<PointsTransaction[]>([]);
+    const transactions = useMemo(() => 
+        (pointsSummary?.events ?? []).map((ev: any) => ({
+            id: ev.eventKey,
+            type: ev.type as any,
+            amount: ev.amount,
+            description: ev.description,
+            date: ev.createdAt,
+            source: ev.source as any,
+            metadata: ev.metadata,
+        })), [pointsSummary]);
+    
     const transactionsRef = useRef(transactions);
+    useEffect(() => { transactionsRef.current = transactions; }, [transactions]);
+
+    const lifetimePoints = useMemo(() => 
+        (pointsSummary?.events ?? [])
+            .filter((ev: any) => ev.type === 'earn')
+            .reduce((acc: number, ev: any) => acc + ev.amount, 0),
+        [pointsSummary]
+    );
+    const lifetimePointsRef = useRef(lifetimePoints);
+    useEffect(() => { lifetimePointsRef.current = lifetimePoints; }, [lifetimePoints]);
 
     const [lastEarnTransactionId, setLastEarnTransactionId] = useState<string | null>(null);
 
@@ -284,40 +310,14 @@ export function PointsProvider({ children }: { children: ReactNode }) {
 
     const [quarterSummary, setQuarterSummaryState] = useState<QuarterSummary>(initialQuarter);
     const quarterSummaryRef = useRef<QuarterSummary>(initialQuarter);
+    
     const economyState = useQuery(
         api.economy.getState,
-        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+        user ? { userId: user.id } : 'skip',
     );
     const savePointsState = useMutation(api.economy.savePointsState);
     const applyPointsEvent = useMutation(api.economy.applyPointsEvent);
     const hasHydratedFromBackend = useRef(false);
-
-    const updatePoints = useCallback((delta: number) => {
-        setPoints((prev) => {
-            const next = Math.max(prev + delta, 0);
-            pointsRef.current = next;
-            return next;
-        });
-    }, []);
-
-    const updateLifetimePoints = useCallback((delta: number) => {
-        if (delta <= 0) {
-            return;
-        }
-        setLifetimePoints((prev) => {
-            const next = prev + delta;
-            lifetimePointsRef.current = next;
-            return next;
-        });
-    }, []);
-
-    const updateTransactions = useCallback((updater: (prev: PointsTransaction[]) => PointsTransaction[]) => {
-        setTransactions((prev) => {
-            const next = updater(prev);
-            transactionsRef.current = next;
-            return next;
-        });
-    }, []);
 
     const updateQuarterSummary = useCallback((updater: (prev: QuarterSummary) => QuarterSummary) => {
         setQuarterSummaryState((prev) => {
@@ -327,76 +327,19 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         });
     }, []);
 
-    const expireGamePointsForQuarter = useCallback((quarterKey: string) => {
-        let expiredSum = 0;
-
-        updateTransactions((prev) => {
-            const updated = prev.map((tx) => {
-                if (
-                    tx.amount > 0 &&
-                    tx.source === 'game' &&
-                    tx.metadata?.quarter === quarterKey &&
-                    !tx.metadata?.expired
-                ) {
-                    expiredSum += tx.amount;
-                    return {
-                        ...tx,
-                        metadata: { ...tx.metadata, expired: true },
-                    };
-                }
-                return tx;
-            });
-
-            if (expiredSum > 0) {
-                const expirationTx = buildTransaction({
-                    amount: -expiredSum,
-                    description: `Expiración de puntos de juegos ${quarterKey}`,
-                    source: 'game',
-                    type: 'redeem',
-                    date: new Date(),
-                    metadata: { expiration: true, quarter: quarterKey },
-                });
-                return [expirationTx, ...updated];
-            }
-
-            return updated;
-        });
-
-        if (expiredSum > 0) {
-            updatePoints(-expiredSum);
-        }
-
-        return expiredSum;
-    }, [updatePoints, updateTransactions]);
-
     const ensureQuarterForDate = useCallback((eventDate: Date) => {
-        const closedSummaries: QuarterSummary[] = [];
-
         updateQuarterSummary((prev) => {
             let working = prev;
             const eventTime = eventDate.getTime();
 
             while (eventTime > new Date(working.endDate).getTime()) {
-                closedSummaries.push(working);
                 const nextSeed = addDays(new Date(working.endDate), 1);
                 working = createQuarterSummary(nextSeed);
             }
 
             return working;
         });
-
-        closedSummaries.forEach((summary) => {
-            if (summary.purchasePoints < QUARTER_PURCHASE_GOAL && summary.gamePoints > 0) {
-                const expired = expireGamePointsForQuarter(summary.key);
-                if (expired > 0) {
-                    updateQuarterSummary((prev) => ({
-                        ...prev,
-                        expiredGamePoints: prev.expiredGamePoints + expired,
-                    }));
-                }
-            }
-        });
-    }, [expireGamePointsForQuarter, updateQuarterSummary]);
+    }, [updateQuarterSummary]);
 
     const updateQuarterContribution = useCallback((source: PointSource, amount: number, metadata: Record<string, unknown>, eventDate: Date) => {
         if (amount <= 0) {
@@ -439,43 +382,39 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         ensureQuarterForDate(eventDate);
 
         const resolvedType = type ?? (amount >= 0 ? 'earn' : 'redeem');
-        const transaction = buildTransaction({
-            amount,
-            description,
-            source,
-            type: resolvedType,
-            date: eventDate,
-            metadata: { ...metadata, countsTowardPurchaseGoal },
-        });
-
-        updateTransactions((prev) => [transaction, ...prev]);
-        updatePoints(amount);
+        const transactionId = generateTransactionId();
 
         if (user?.id) {
             applyPointsEvent({
-                actorId: user.id as any,
                 userId: user.id,
-                eventKey: transaction.id,
-                type: transaction.type,
+                eventKey: transactionId,
+                type: resolvedType,
                 source,
                 amount,
                 description,
-                metadata: transaction.metadata,
+                metadata: { ...metadata, countsTowardPurchaseGoal, quarter: getQuarterKey(eventDate) },
             }).catch((error: any) => {
                 console.error('Failed to persist points ledger event', error);
             });
         }
 
         if (amount > 0) {
-            updateLifetimePoints(amount);
-            updateQuarterContribution(source, amount, transaction.metadata ?? {}, eventDate);
+            updateQuarterContribution(source, amount, { ...metadata, countsTowardPurchaseGoal }, eventDate);
             if (resolvedType === 'earn') {
-                setLastEarnTransactionId(transaction.id);
+                setLastEarnTransactionId(transactionId);
             }
         }
 
-        return transaction;
-    }, [ensureQuarterForDate, updateLifetimePoints, updatePoints, updateTransactions, updateQuarterContribution, user?.id, applyPointsEvent]);
+        return {
+            id: transactionId,
+            type: resolvedType,
+            amount,
+            description,
+            date: eventDate.toISOString(),
+            source,
+            metadata: { ...metadata, countsTowardPurchaseGoal },
+        };
+    }, [ensureQuarterForDate, updateQuarterContribution, user?.id, applyPointsEvent]);
 
     const getTierForPoints = useCallback((balance: number): MembershipTier => {
         const sorted = [...MEMBERSHIP_TIERS].sort((a, b) => a.minPoints - b.minPoints);
@@ -579,18 +518,15 @@ export function PointsProvider({ children }: { children: ReactNode }) {
 
             didClaim = true;
 
-            // Check if streak continues (yesterday was claimed)
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayKey = getDateKey(yesterday);
 
             let newStreak = 1;
             if (prev.dailyClaimDate === yesterdayKey) {
-                newStreak = Math.min(prev.currentStreak + 1, 3); // Max streak level 3
+                newStreak = Math.min(prev.currentStreak + 1, 3);
             }
 
-            // Calculate points based on new streak level
-            // Level 1: 10 pts, Level 2: 20 pts, Level 3+: 30 pts
             if (newStreak === 2) rewardPoints = 20;
             if (newStreak >= 3) rewardPoints = 30;
 
@@ -604,10 +540,6 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         if (!didClaim) {
             return false;
         }
-
-        // We need to trigger the update after state calculation, but for sync logic in valid flow:
-        // We assume success if we reached here uncaught, but strict state access requires effects.
-        // Simplified for this context: we grant the points calculated.
 
         setChallenges((prev) =>
             prev.map((challenge) => {
@@ -655,8 +587,8 @@ export function PointsProvider({ children }: { children: ReactNode }) {
             });
         }
 
-        const weekStartKey = getWeekStartKey(eventDate);
         let purchasesForWeek = 0;
+        const weekStartKey = getWeekStartKey(eventDate);
 
         setChallengeProgress((prev) => {
             const sameWeek = prev.weekStartDate === weekStartKey;
@@ -690,7 +622,7 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         };
     }, [ensureQuarterForDate, getTierForPoints, registerPoints]);
 
-    const previewPurchasePoints = useCallback((amount: number): PurchaseRewardPreview => {
+    const previewPurchasePoints = useCallback((amount: number) => {
         const basePoints = Math.max(Math.floor(amount), 0);
         const tier = getTierForPoints(lifetimePointsRef.current);
         const bonusPoints = basePoints > 0 ? Math.floor(basePoints * tier.bonusMultiplier) : 0;
@@ -779,16 +711,8 @@ export function PointsProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        setPoints(typeof persisted.points === 'number' ? persisted.points : 0);
-        pointsRef.current = typeof persisted.points === 'number' ? persisted.points : 0;
-        setLifetimePoints(typeof persisted.lifetimePoints === 'number' ? persisted.lifetimePoints : 0);
-        lifetimePointsRef.current = typeof persisted.lifetimePoints === 'number' ? persisted.lifetimePoints : 0;
-
-        const persistedTransactions = Array.isArray(persisted.transactions) ? persisted.transactions : [];
-        setTransactions(persistedTransactions);
-        transactionsRef.current = persistedTransactions;
-
-        setLastEarnTransactionId(typeof persisted.lastEarnTransactionId === 'string' ? persisted.lastEarnTransactionId : null);
+        // Transactions and Points are now handled by getPointsSummary,
+        // but challenges and progress still need this state.
         setChallenges(Array.isArray(persisted.challenges) ? persisted.challenges : defaultChallenges);
         setChallengeProgress(persisted.challengeProgress ?? defaultChallengeProgress);
 
@@ -802,13 +726,8 @@ export function PointsProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user || !hasHydratedFromBackend.current) return;
         savePointsState({
-            actorId: user.id as any,
             userId: user.id,
             pointsState: {
-                points,
-                lifetimePoints,
-                transactions,
-                lastEarnTransactionId,
                 challenges,
                 challengeProgress,
                 quarterSummary,
@@ -818,10 +737,6 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         });
     }, [
         user,
-        points,
-        lifetimePoints,
-        transactions,
-        lastEarnTransactionId,
         challenges,
         challengeProgress,
         quarterSummary,

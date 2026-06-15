@@ -149,13 +149,16 @@ export interface GameThemeTokens {
     hudBorder: string;
   };
 
+  background?: string; // Legacy fallback
+  surfaceGradient?: readonly [string, string, ...string[]]; // Legacy fallback
+
   gradients: {
     /** Fondo principal del juego (si aplica). */
-    bg: readonly string[];
+    bg: readonly [string, string, ...string[]];
     /** Call-to-action principal. */
-    cta: readonly string[];
+    cta: readonly [string, string, ...string[]];
     /** HUD (si se usa). */
-    hud: readonly string[];
+    hud: readonly [string, string, ...string[]];
   };
 
   typography: {

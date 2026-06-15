@@ -1,74 +1,33 @@
-
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform, TextInput, ScrollView, Keyboard, Animated } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from '../components/NativeMap';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform, TextInput, ScrollView, Keyboard, Animated, FlatList } from 'react-native';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, Search, Navigation as NavIcon, Star, ArrowRight, MapPin, Globe } from 'lucide-react-native';
+import { ArrowLeft, Search, Navigation as NavIcon, Star, ArrowRight, MapPin, Globe, List, Map as MapIcon, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useMarketplace } from '../contexts/MarketplaceContext';
+import { useUserLocation } from '../hooks/useUserLocation';
+import DarkMapView, { Marker, Circle } from '../components/map/DarkMapView';
+import { CustomMapMarker, type ListingType } from '../components/map/CustomMapMarker';
 
 const { width, height } = Dimensions.get('window');
 
-// Mock Data for Map Markers - Expanded
-const BUSINESS_MARKERS = [
-    {
-        id: '1',
-        name: 'Sushi Supreme',
-        category: 'Restaurante',
-        rating: 4.8,
-        reviews: 124,
-        latitude: -34.6037, // Buenos Aires approx
-        longitude: -58.3816,
-        image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400',
-        address: 'Av. Corrientes 1234',
-        type: 'food'
-    },
-    {
-        id: '2',
-        name: 'PowerGym Center',
-        category: 'Gimnasio',
-        rating: 4.5,
-        reviews: 89,
-        latitude: -34.6080,
-        longitude: -58.3750,
-        image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400',
-        address: 'Florida 500',
-        type: 'health'
-    },
-    {
-        id: '3',
-        name: 'Moda Urbana',
-        category: 'Ropa',
-        rating: 4.6,
-        reviews: 56,
-        latitude: -34.5990,
-        longitude: -58.3900,
-        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400',
-        address: 'Santa Fe 2000',
-        type: 'shop'
-    },
-    {
-        id: '4',
-        name: 'Café del Sol',
-        category: 'Cafetería',
-        rating: 4.9,
-        reviews: 210,
-        latitude: -34.6050,
-        longitude: -58.3850,
-        image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400',
-        address: 'Callao 450',
-        type: 'food'
-    },
-];
-
 const FILTERS = [
     { id: 'all', label: 'Todos' },
-    { id: 'food', label: 'Restaurantes' },
-    { id: 'health', label: 'Salud' },
-    { id: 'shop', label: 'Tiendas' },
+    { id: 'product', label: 'Productos' },
+    { id: 'service', label: 'Servicios' },
+    { id: 'event', label: 'Eventos' },
+];
+
+const RADIUS_OPTIONS = [
+    { label: '100m', value: 0.1 },
+    { label: '1km', value: 1 },
+    { label: '5km', value: 5 },
+    { label: '10km', value: 10 },
+    { label: '25km', value: 25 },
+    { label: '50km', value: 50 },
 ];
 
 const INITIAL_REGION = {
@@ -78,41 +37,73 @@ const INITIAL_REGION = {
     longitudeDelta: 0.05,
 };
 
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+}
+
+let cachedViewMode: 'map' | 'list' = 'map';
+
 export default function MapExplorerScreen() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { show } = useToast();
+    const { products } = useMarketplace();
 
-    const mapRef = useRef<MapView>(null);
-    const [location, setLocation] = useState<Location.LocationObject | null>(null);
-    const [selectedMarker, setSelectedMarker] = useState<typeof BUSINESS_MARKERS[0] | null>(null);
+    const mapRef = useRef<any>(null);
+    const { location, errorMsg: hookError, refetch: refetchLocation } = useUserLocation();
+    const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
     const [activeFilter, setActiveFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [radius, setRadius] = useState<number>(10);
+    const [viewMode, setViewModeState] = useState<'map'|'list'>(cachedViewMode);
 
-    // Animation for card
+    const setViewMode = (mode: 'map'|'list') => {
+        cachedViewMode = mode;
+        setViewModeState(mode);
+    };
+
     const cardTranslateY = useRef(new Animated.Value(300)).current;
 
     useEffect(() => {
-        (async () => {
-            try {
-                let { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') return;
+        if (hookError) {
+            console.warn("Error getting location in MapExplorer", hookError);
+        }
+    }, [hookError]);
 
-                let loc = await Location.getCurrentPositionAsync({});
-                setLocation(loc);
+    const userLat = location?.coords.latitude ?? INITIAL_REGION.latitude;
+    const userLng = location?.coords.longitude ?? INITIAL_REGION.longitude;
 
-                // Don't auto-animate here to allow user to see default view first or let them choose
-            } catch (error) {
-                console.warn("Error getting location", error);
-            }
-        })();
-    }, []);
+    const filteredProducts = useMemo(() => {
+        return products.filter(p => {
+            if (!p.location) return false;
+            if (activeFilter !== 'all' && p.listingType !== activeFilter) return false;
+            if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            
+            const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
+            return dist <= radius;
+        }).map(p => {
+            const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
+            return { ...p, calculatedDistance: dist };
+        }).sort((a, b) => a.calculatedDistance - b.calculatedDistance);
+    }, [products, activeFilter, searchQuery, userLat, userLng, radius]);
 
-    // Animate card entrance/exit
+    const selectedMarker = useMemo(() => {
+        return filteredProducts.find(p => p.id === selectedMarkerId) || null;
+    }, [filteredProducts, selectedMarkerId]);
+
     useEffect(() => {
-        if (selectedMarker) {
+        if (selectedMarker && viewMode === 'map') {
             Animated.spring(cardTranslateY, {
                 toValue: 0,
                 friction: 8,
@@ -121,26 +112,25 @@ export default function MapExplorerScreen() {
             }).start();
         } else {
             Animated.timing(cardTranslateY, {
-                toValue: 300, // Slide down off-screen
+                toValue: 300,
                 duration: 200,
                 useNativeDriver: true,
             }).start();
         }
-    }, [selectedMarker]);
+    }, [selectedMarker, viewMode]);
 
-    const handleMarkerPress = (marker: typeof BUSINESS_MARKERS[0]) => {
-        setSelectedMarker(marker);
-        // Center map offset - IMPORTANT for UX so card doesn't cover marker
+    const handleMarkerPress = (product: any) => {
+        setSelectedMarkerId(product.id);
         mapRef.current?.animateToRegion({
-            latitude: marker.latitude - 0.002, // Slight offset up
-            longitude: marker.longitude,
+            latitude: product.location.lat - 0.002,
+            longitude: product.location.lng,
             latitudeDelta: 0.015,
             longitudeDelta: 0.015,
         }, 500);
     };
 
     const handleMapPress = () => {
-        if (selectedMarker) setSelectedMarker(null);
+        if (selectedMarkerId) setSelectedMarkerId(null);
         Keyboard.dismiss();
     };
 
@@ -153,73 +143,30 @@ export default function MapExplorerScreen() {
                 longitudeDelta: 0.01,
             }, 1000);
         } else {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                let loc = await Location.getCurrentPositionAsync({});
-                setLocation(loc);
-                mapRef.current?.animateToRegion({
-                    latitude: loc.coords.latitude,
-                    longitude: loc.coords.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
-                }, 1000);
-            } else {
-                show('Activa la localización para usar esta función', 'error');
-            }
+            refetchLocation();
         }
     };
 
-    const handleResetView = () => {
-        mapRef.current?.animateToRegion(INITIAL_REGION, 1000);
+    // Marker type mapping — used by CustomMapMarker
+    const getListingType = (type?: string): ListingType => {
+        switch(type) {
+            case 'service': return 'service';
+            case 'event': return 'event';
+            case 'bono': return 'bono';
+            case 'product': default: return 'product';
+        }
     };
-
-    const filteredMarkers = BUSINESS_MARKERS.filter(m =>
-        (activeFilter === 'all' || m.type === activeFilter) &&
-        (searchQuery === '' || m.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
 
     return (
         <View style={styles.container}>
-            <MapView
-                ref={mapRef}
-                style={styles.map}
-
-                initialRegion={INITIAL_REGION}
-                showsUserLocation={true}
-                showsMyLocationButton={false}
-                onPress={handleMapPress}
-                customMapStyle={isDark ? DARK_MAP_STYLE : []}
-                // Add padding so Google logo and legal links are visible above the bottom card area
-                mapPadding={{
-                    top: insets.top + 60,
-                    right: 0,
-                    bottom: selectedMarker ? 180 : 20,
-                    left: 0
-                }}
-            >
-                {filteredMarkers.map((marker) => (
-                    <Marker
-                        key={marker.id}
-                        coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-                        onPress={() => handleMarkerPress(marker)}
-                    >
-                        <View style={[styles.customMarker, selectedMarker?.id === marker.id && styles.selectedMarker]}>
-                            {marker.type === 'food' && <Text style={styles.emoji}>🍔</Text>}
-                            {marker.type === 'health' && <Text style={styles.emoji}>🏋️</Text>}
-                            {marker.type === 'shop' && <Text style={styles.emoji}>👗</Text>}
-                        </View>
-                    </Marker>
-                ))}
-            </MapView>
-
-            {/* Floating Header */}
-            <View style={[styles.header, { top: insets.top + 10 }]}>
+            {/* Header / Search & Filters */}
+            <View style={[styles.header, { top: insets.top + 10 }]} pointerEvents="box-none">
                 <View style={[styles.searchBar, isDark && styles.searchBarDark]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <ArrowLeft size={24} color={isDark ? "#D1D5DB" : "#374151"} />
                     </TouchableOpacity>
                     <TextInput
-                        placeholder="Buscar en el mapa..."
+                        placeholder="Buscar en tu zona..."
                         style={[styles.searchInput, isDark && { color: '#fff' }]}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -228,7 +175,30 @@ export default function MapExplorerScreen() {
                     <Search size={20} color="#9CA3AF" />
                 </View>
 
-                {/* Filter Chips */}
+                {/* Radius Filter */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.radiusScroll}>
+                    {RADIUS_OPTIONS.map(opt => (
+                        <TouchableOpacity
+                            key={opt.label}
+                            style={[
+                                styles.radiusChip,
+                                isDark && styles.radiusChipDark,
+                                radius === opt.value && styles.activeRadiusChip
+                            ]}
+                            onPress={() => setRadius(opt.value)}
+                        >
+                            <Text style={[
+                                styles.radiusText,
+                                isDark && { color: '#D1D5DB' },
+                                radius === opt.value && styles.activeRadiusText
+                            ]}>
+                                {opt.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                {/* Category Filters */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersScroll}>
                     {FILTERS.map(filter => (
                         <TouchableOpacity
@@ -252,143 +222,168 @@ export default function MapExplorerScreen() {
                 </ScrollView>
             </View>
 
-            {/* Map Controls (Right Side) */}
-            <View style={[styles.controlsContainer, { top: insets.top + 180 }]}>
-                {/* Reset View (Manual/Central) */}
-                <TouchableOpacity
-                    style={[styles.controlBtn, isDark && styles.controlBtnDark]}
-                    onPress={handleResetView}
-                >
-                    <Globe size={24} color={isDark ? '#fff' : '#374151'} />
-                </TouchableOpacity>
+            {viewMode === 'map' ? (
+                <>
+                    <DarkMapView
+                        ref={mapRef}
+                        style={styles.map}
+                        forceDark={true}
+                        initialRegion={INITIAL_REGION}
+                        showsUserLocation={true}
+                        onPress={handleMapPress}
+                        mapPadding={{
+                            top: insets.top + 130,
+                            right: 0,
+                            bottom: selectedMarker ? 180 : 80,
+                            left: 0
+                        }}
+                    >
+                        {/* Vision Radius Circle */}
+                        {location && (
+                            <Circle
+                                center={{
+                                    latitude: location.coords.latitude,
+                                    longitude: location.coords.longitude
+                                }}
+                                radius={radius * 1000}
+                                fillColor={isDark ? 'rgba(139, 92, 246, 0.12)' : 'rgba(124, 58, 237, 0.08)'}
+                                strokeColor={isDark ? 'rgba(139, 92, 246, 0.6)' : 'rgba(124, 58, 237, 0.5)'}
+                                strokeWidth={1.5}
+                            />
+                        )}
 
-                {/* My Location */}
+                        {filteredProducts.map((product) => (
+                            <Marker
+                                key={product.id}
+                                coordinate={{ latitude: product.location.lat, longitude: product.location.lng }}
+                                onPress={() => handleMarkerPress(product)}
+                                tracksViewChanges={false}
+                            >
+                                <CustomMapMarker
+                                    type={getListingType(product.listingType)}
+                                    isSelected={selectedMarkerId === product.id}
+                                />
+                            </Marker>
+                        ))}
+                    </DarkMapView>
+
+                    {/* Map Controls */}
+                    <View style={[styles.controlsContainer, { top: insets.top + 180 }]} pointerEvents="box-none">
+                        <TouchableOpacity
+                            style={[styles.controlBtn, isDark && styles.controlBtnDark]}
+                            onPress={handleMyLocation}
+                        >
+                            <NavIcon size={24} color={isDark ? '#fff' : '#374151'} fill={isDark ? '#fff' : 'transparent'} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Selected Marker Card */}
+                    {selectedMarker && (
+                        <Animated.View style={[
+                            styles.cardContainer,
+                            {
+                                bottom: Platform.OS === 'ios' ? insets.bottom + 80 : 80,
+                                transform: [{ translateY: cardTranslateY }]
+                            }
+                        ]} pointerEvents="box-none">
+                            <TouchableOpacity
+                                style={[styles.card, isDark && styles.cardDark]}
+                                activeOpacity={0.9}
+                                onPress={() => navigation.navigate('ItemDetail', { slug: selectedMarker.slug })}
+                            >
+                                <ImageWithFallback src={selectedMarker.images[0]?.url} style={styles.cardImage} />
+                                <View style={styles.cardContent}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.cardTitle, isDark && { color: '#fff' }]} numberOfLines={1}>{selectedMarker.title}</Text>
+                                        <Text style={styles.cardCategory}>{selectedMarker.category} • {selectedMarker.calculatedDistance.toFixed(1)}km</Text>
+                                        <Text style={styles.cardPrice}>${selectedMarker.price}</Text>
+                                    </View>
+                                    <View style={styles.actionBtn}>
+                                        <ArrowRight size={20} color="#fff" />
+                                    </View>
+                                </View>
+                                <TouchableOpacity 
+                                    style={styles.closeCardBtn}
+                                    onPress={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedMarkerId(null);
+                                    }}
+                                >
+                                    <X size={16} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    )}
+                </>
+            ) : (
+                /* List View */
+                <View style={[styles.listView, isDark && styles.listViewDark, { paddingTop: insets.top + 160 }]}>
+                    {filteredProducts.length === 0 ? (
+                        <View style={styles.emptyState}>
+                            <MapPin size={48} color="#9CA3AF" />
+                            <Text style={[styles.emptyStateText, isDark && { color: '#D1D5DB' }]}>No se encontraron productos en este radio.</Text>
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={filteredProducts}
+                            keyExtractor={(item) => item.id}
+                            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[styles.listItem, isDark && styles.listItemDark]}
+                                    onPress={() => navigation.navigate('ItemDetail', { slug: item.slug })}
+                                >
+                                    <ImageWithFallback src={item.images[0]?.url} style={styles.listItemImage} />
+                                    <View style={styles.listItemContent}>
+                                        <Text style={[styles.listItemTitle, isDark && { color: '#fff' }]} numberOfLines={1}>{item.title}</Text>
+                                        <Text style={styles.listItemCategory}>{item.category} • {item.calculatedDistance.toFixed(1)}km</Text>
+                                        <Text style={styles.listItemPrice}>${item.price}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                        />
+                    )}
+                </View>
+            )}
+
+            {/* View Toggle Button */}
+            <View style={[styles.viewToggleContainer, { bottom: Platform.OS === 'ios' ? insets.bottom + 20 : 20 }]} pointerEvents="box-none">
                 <TouchableOpacity
-                    style={[styles.controlBtn, isDark && styles.controlBtnDark]}
-                    onPress={handleMyLocation}
+                    style={[styles.viewToggleBtn, isDark && styles.viewToggleBtnDark]}
+                    onPress={() => setViewMode(viewMode === 'map' ? 'list' : 'map')}
                 >
-                    <NavIcon size={24} color={isDark ? '#fff' : '#374151'} fill={isDark ? '#fff' : 'transparent'} />
+                    {viewMode === 'map' ? (
+                        <>
+                            <List size={20} color={isDark ? '#fff' : '#111827'} />
+                            <Text style={[styles.viewToggleText, isDark && { color: '#fff' }]}>Ver {filteredProducts.length} resultados</Text>
+                        </>
+                    ) : (
+                        <>
+                            <MapIcon size={20} color={isDark ? '#fff' : '#111827'} />
+                            <Text style={[styles.viewToggleText, isDark && { color: '#fff' }]}>Ver Mapa</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
             </View>
-
-            {/* Bottom Card - Animated */}
-            {selectedMarker && (
-                <Animated.View style={[
-                    styles.cardContainer,
-                    {
-                        bottom: Platform.OS === 'ios' ? insets.bottom + 20 : 20,
-                        transform: [{ translateY: cardTranslateY }]
-                    }
-                ]}>
-                    <TouchableOpacity
-                        style={[styles.card, isDark && styles.cardDark]}
-                        activeOpacity={0.9}
-                        onPress={() => navigation.navigate('BusinessDetail', { businessId: selectedMarker.id, business: selectedMarker })}
-                    >
-                        <ImageWithFallback src={selectedMarker.image} style={styles.cardImage} />
-                        <View style={styles.cardContent}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.cardTitle, isDark && { color: '#fff' }]}>{selectedMarker.name}</Text>
-                                <Text style={styles.cardCategory}>{selectedMarker.category} • {selectedMarker.address}</Text>
-                                <View style={styles.ratingRow}>
-                                    <Star size={14} color="#F59E0B" fill="#F59E0B" />
-                                    <Text style={[styles.ratingText, isDark && { color: '#D1D5DB' }]}>{selectedMarker.rating} ({selectedMarker.reviews})</Text>
-                                </View>
-                            </View>
-                            <View style={styles.actionBtn}>
-                                <ArrowRight size={20} color="#fff" />
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
         </View>
     );
 }
 
-const DARK_MAP_STYLE = [
-    { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-    {
-        featureType: 'administrative.locality',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#d59563' }],
-    },
-    {
-        featureType: 'poi',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#d59563' }],
-    },
-    {
-        featureType: 'poi.park',
-        elementType: 'geometry',
-        stylers: [{ color: '#263c3f' }],
-    },
-    {
-        featureType: 'poi.park',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#6b9a76' }],
-    },
-    {
-        featureType: 'road',
-        elementType: 'geometry',
-        stylers: [{ color: '#38414e' }],
-    },
-    {
-        featureType: 'road',
-        elementType: 'geometry.stroke',
-        stylers: [{ color: '#212a37' }],
-    },
-    {
-        featureType: 'road',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#9ca5b3' }],
-    },
-    {
-        featureType: 'road.highway',
-        elementType: 'geometry',
-        stylers: [{ color: '#746855' }],
-    },
-    {
-        featureType: 'road.highway',
-        elementType: 'geometry.stroke',
-        stylers: [{ color: '#1f2835' }],
-    },
-    {
-        featureType: 'road.highway',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#f3d19c' }],
-    },
-    {
-        featureType: 'water',
-        elementType: 'geometry',
-        stylers: [{ color: '#17263c' }],
-    },
-    {
-        featureType: 'water',
-        elementType: 'labels.text.fill',
-        stylers: [{ color: '#515c6d' }],
-    },
-    {
-        featureType: 'water',
-        elementType: 'labels.text.stroke',
-        stylers: [{ color: '#17263c' }],
-    },
-];
+// Map styles are now centralized in src/constants/darkMapStyle.ts
+// and automatically applied by the <DarkMapView> component.
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+const getStyles = (isDark: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#0a0a0a' },
     map: { flex: 1 },
     header: { position: 'absolute', left: 16, right: 16, zIndex: 10 },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 10,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOpacity: 0.1,
         shadowRadius: 10,
         elevation: 5,
@@ -396,64 +391,60 @@ const styles = StyleSheet.create({
     },
     searchBarDark: {
         backgroundColor: '#1F2937',
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
     },
     backButton: { padding: 4 },
     searchInput: { flex: 1, fontSize: 16, color: '#111827' },
-    filtersScroll: { marginTop: 12, gap: 8, paddingBottom: 4 },
+    radiusScroll: { marginTop: 12, gap: 8, paddingBottom: 4 },
+    radiusChip: {
+        backgroundColor: isDark ? '#374151' : '#e5e7eb',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        marginRight: 8
+    },
+    radiusChipDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
+    activeRadiusChip: { backgroundColor: '#7C3AED' },
+    radiusText: { fontSize: 12, fontWeight: '600', color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
+    activeRadiusText: { color: isDark ? '#1F2937' : '#fff' },
+
+    filtersScroll: { marginTop: 8, gap: 8, paddingBottom: 4 },
     filterChip: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOpacity: 0.05,
         shadowRadius: 5,
         elevation: 2,
         marginRight: 8
     },
-    filterChipDark: { backgroundColor: '#374151' },
+    filterChipDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
     activeFilterChip: { backgroundColor: '#111827' },
-    filterText: { fontSize: 13, fontWeight: '600', color: '#374151' },
-    activeFilterText: { color: '#fff' },
+    filterText: { fontSize: 13, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
+    activeFilterText: { color: isDark ? '#1F2937' : '#fff' },
 
-    customMarker: {
-        backgroundColor: '#fff',
-        padding: 5,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: '#111827',
-        width: 36,
-        height: 36,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4
-    },
-    selectedMarker: { backgroundColor: '#F59E0B', borderColor: '#fff', transform: [{ scale: 1.2 }] },
-    emoji: { fontSize: 16 },
+    // Custom marker styles removed — now handled by <CustomMapMarker> component
 
     cardContainer: { position: 'absolute', left: 16, right: 16, zIndex: 10 },
     card: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRadius: 20,
         flexDirection: 'row',
         padding: 12,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
         elevation: 8
     },
     cardDark: { backgroundColor: '#1F2937' },
-    cardImage: { width: 80, height: 80, borderRadius: 16, backgroundColor: '#f3f4f6' },
+    cardImage: { width: 80, height: 80, borderRadius: 16, backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
     cardContent: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 12 },
     cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-    cardCategory: { fontSize: 12, color: '#6B7280', marginBottom: 6 },
-    ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    ratingText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+    cardCategory: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginBottom: 4 },
+    cardPrice: { fontSize: 15, fontWeight: '800', color: '#7C3AED' },
     actionBtn: {
         width: 40,
         height: 40,
@@ -462,6 +453,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginLeft: 8
+    },
+    closeCardBtn: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        padding: 4,
     },
 
     // Controls
@@ -472,19 +469,110 @@ const styles = StyleSheet.create({
         zIndex: 10
     },
     controlBtn: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         width: 48,
         height: 48,
         borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 5
     },
     controlBtnDark: {
         backgroundColor: '#1F2937'
-    }
-});
+    },
 
+    // View Toggle
+    viewToggleContainer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 20,
+    },
+    viewToggleBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 24,
+        gap: 8,
+        shadowColor: isDark ? '#F9FAFB' : '#000',
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    viewToggleBtnDark: {
+        backgroundColor: '#1F2937',
+    },
+    viewToggleText: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#111827',
+    },
+
+    // List View
+    listView: {
+        flex: 1,
+        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+    },
+    listViewDark: {
+        backgroundColor: '#111827',
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 32,
+    },
+    emptyStateText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
+        textAlign: 'center',
+    },
+    listItem: {
+        flexDirection: 'row',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        borderRadius: 16,
+        padding: 12,
+        marginBottom: 12,
+        shadowColor: isDark ? '#F9FAFB' : '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+        elevation: 2,
+    },
+    listItemDark: {
+        backgroundColor: '#1F2937',
+    },
+    listItemImage: {
+        width: 70,
+        height: 70,
+        borderRadius: 12,
+        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+    },
+    listItemContent: {
+        flex: 1,
+        marginLeft: 12,
+        justifyContent: 'center',
+    },
+    listItemTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+        color: '#111827',
+        marginBottom: 4,
+    },
+    listItemCategory: {
+        fontSize: 12,
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
+        marginBottom: 4,
+    },
+    listItemPrice: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#7C3AED',
+    },
+});

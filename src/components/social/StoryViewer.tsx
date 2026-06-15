@@ -4,6 +4,7 @@ import { X, Heart, Send, MoreHorizontal } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useSocial, Story } from '../../contexts/SocialContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,6 +38,9 @@ const StorySlide = ({
     // Safety check for empty items array
     const currentItem = story.items?.[currentIndex];
     const { markStoryAsViewed } = useSocial();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     // Reset state when story changes
     useEffect(() => {
@@ -216,6 +220,13 @@ export const StoryViewer = ({ storyId, onClose, onNavigateProfile }: { storyId: 
     const [activeIndex, setActiveIndex] = useState(initialIndex >= 0 ? initialIndex : 0);
     const scrollViewRef = useRef<ScrollView>(null);
 
+    // If stories haven't loaded yet, close the viewer
+    useEffect(() => {
+        if (stories.length === 0) {
+            onClose();
+        }
+    }, [stories.length]);
+
     // Initial Scroll
     useEffect(() => {
         if (scrollViewRef.current && initialIndex >= 0) {
@@ -247,6 +258,11 @@ export const StoryViewer = ({ storyId, onClose, onNavigateProfile }: { storyId: 
             onClose();
         }
     };
+
+    // If stories array is still empty (before auto-close fires), render nothing
+    if (stories.length === 0) {
+        return null;
+    }
 
     return (
         <Modal animationType="slide" visible={true} transparent={false} onRequestClose={onClose}>
@@ -284,7 +300,7 @@ export const StoryViewer = ({ storyId, onClose, onNavigateProfile }: { storyId: 
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     slideContainer: { flex: 1, backgroundColor: '#000', position: 'relative' },
     image: { width, height, position: 'absolute' },
     gradient: { ...StyleSheet.absoluteFillObject },
@@ -292,13 +308,13 @@ const styles = StyleSheet.create({
 
     progressContainer: { flexDirection: 'row', paddingHorizontal: 10, paddingTop: 10, gap: 4, height: 14 },
     progressBarBg: { flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, overflow: 'hidden' },
-    progressBarFill: { height: '100%', backgroundColor: '#fff' },
+    progressBarFill: { height: '100%', backgroundColor: isDark ? '#1F2937' : '#fff' },
 
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginTop: 12 },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     avatar: { width: 32, height: 32, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
     userName: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 13,
         ...Platform.select({
@@ -312,7 +328,7 @@ const styles = StyleSheet.create({
 
     footer: { position: 'absolute', bottom: Platform.OS === 'ios' ? 40 : 20, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 16 },
     inputContainer: { flex: 1, height: 48, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', paddingHorizontal: 20 },
-    input: { color: '#fff', fontSize: 16 },
+    input: { color: isDark ? '#1F2937' : '#fff', fontSize: 16 },
     actionBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
 
     tapContainer: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', zIndex: -1 }, // Behind UI

@@ -33,6 +33,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
 
+
     const translateY = useSharedValue(-100);
 
     const show = useCallback((msg: string, t: ToastType = 'success', duration = 3000) => {

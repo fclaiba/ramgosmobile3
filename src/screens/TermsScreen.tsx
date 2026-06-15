@@ -27,11 +27,9 @@ export default function TermsScreen({ navigation, route }: any) {
                 const next =
                     !user
                         ? { screen: 'Welcome', params: undefined as any }
-                        : user.requiresKyc && (user.kycStatus === 'unverified' || user.kycStatus === 'rejected')
-                            ? { screen: 'KYC', params: { accountType: user.role } }
-                            : !user.nickname
-                                ? { screen: 'BasicProfileSetup', params: undefined as any }
-                                : { screen: 'Home', params: undefined as any };
+                        : (!user.nickname && !user.name)
+                            ? { screen: 'BasicProfileSetup', params: undefined as any }
+                            : { screen: 'Home', params: undefined as any };
 
                 navigation.reset({
                     index: 0,

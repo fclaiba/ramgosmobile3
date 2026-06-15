@@ -94,7 +94,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
                     const registrationKey = `${user.id}:${token}`;
                     if (tokenRegistrationRef.current === registrationKey) return;
                     tokenRegistrationRef.current = registrationKey;
-                    registerPushToken({ actorId: user.id as any, token }).catch(err => {
+                    registerPushToken({ token }).catch(err => {
                         console.warn("Could not register token on server", err);
                         tokenRegistrationRef.current = null; // allow retry
                     });
@@ -107,7 +107,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
             const previous = tokenRegistrationRef.current;
             if (previous && expoPushToken) {
                 const [previousUserId, previousToken] = previous.split(':');
-                removePushToken({ actorId: previousUserId as any, token: previousToken }).catch(() => {
+                removePushToken({ token: previousToken }).catch(() => {
                     // best-effort, swallow errors
                 });
                 tokenRegistrationRef.current = null;
@@ -229,4 +229,6 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         </NotificationsContext.Provider>
     );
 };
+
+
 

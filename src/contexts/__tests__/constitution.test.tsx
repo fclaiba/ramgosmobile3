@@ -21,7 +21,7 @@ describe('Constitution (Rewards v2)', () => {
   });
 
   it('keeps tiers exact', () => {
-    const tiers = MEMBERSHIP_TIERS.map((t) => ({
+    const tiers = MEMBERSHIP_TIERS.map((t: any) => ({
       id: t.id,
       minPoints: t.minPoints,
       bonusMultiplier: t.bonusMultiplier,

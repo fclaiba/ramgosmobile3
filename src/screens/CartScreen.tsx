@@ -11,6 +11,7 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useMarketplace, ShippingMethod, ShippingQuote } from '../contexts/MarketplaceContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useActionGate } from '../utils/useActionGate';
 
 export default function CartScreen({ navigation }: any) {
     const { items, removeItem, updateQuantity, totalItems, totalPrice, clearCart } = useCart();
@@ -20,6 +21,7 @@ export default function CartScreen({ navigation }: any) {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { gateCheckout } = useActionGate();
 
     // Obtener descuentos disponibles
     const { getShippingOptions } = useMarketplace();
@@ -77,6 +79,9 @@ export default function CartScreen({ navigation }: any) {
     };
 
     const handleCheckout = () => {
+        // BUG-001 FIX: Block anonymous users from reaching PaymentScreen
+        if (!gateCheckout()) return;
+
         if (items.length === 0) {
             show('El carrito está vacío', 'error');
             return;

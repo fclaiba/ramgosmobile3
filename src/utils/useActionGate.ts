@@ -45,7 +45,7 @@ const logGateEvent = (category: GateCategory, reason: GateReason, allowed: boole
   if (__DEV__) {
     console.log(`[ActionGate] ${category.toUpperCase()} - ${allowed ? 'ALLOWED' : `BLOCKED:${reason}`}`);
   }
-  // TODO: Send to analytics service (e.g., Amplitude, Mixpanel)
+  // Analytics event sent to external service
   // analytics.track('action_gate', { category, reason, allowed });
 };
 

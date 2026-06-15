@@ -85,9 +85,9 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
     //   2) createOnboardingLink — returns a Stripe-hosted KYC URL we open in browser.
     //   3) On return, poll getAccountStatus to refresh the banner state.
     const _api = api as any;
-    const ensureConnectAccountAction = useAction(_api.connect?.ensureConnectAccount || api.users.syncUser);
-    const createOnboardingLinkAction = useAction(_api.connect?.createOnboardingLink || api.users.syncUser);
-    const getAccountStatusAction = useAction(_api.connect?.getAccountStatus || api.users.syncUser);
+    const ensureConnectAccountAction = useAction(_api.connect?.ensureConnectAccount as any);
+    const createOnboardingLinkAction = useAction(_api.connect?.createOnboardingLink as any);
+    const getAccountStatusAction = useAction(_api.connect?.getAccountStatus as any);
     const [connectLoading, setConnectLoading] = useState(false);
     const [connectStatus, setConnectStatus] = useState<{
         readyToReceivePayments: boolean;
@@ -102,12 +102,17 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
     // by `convex/campaigns.ts` and the `influencerCampaigns` table.
     const businessCampaigns = useQuery(
         api.campaigns.getBusinessCampaigns,
-        user?.id ? { actorId: user.id as any, businessId: user.id as any } : 'skip',
+        user?.id ? { businessId: user.id as any } : 'skip',
     ) ?? [];
     const inviteInfluencerMutation = useMutation(api.campaigns.inviteInfluencer);
     const respondToCampaignMutation = useMutation(api.campaigns.respondToCampaign);
     const endCampaignMutation = useMutation(api.campaigns.endCampaign);
     const pauseCampaignMutation = useMutation(api.campaigns.pauseCampaign);
+
+    // Whitelist Mutations and Queries
+    const whitelist = useQuery(api.influencers.getWhitelist) ?? [];
+    const addToWhitelistMutation = useMutation(api.influencers.addToWhitelist);
+    const removeFromWhitelistMutation = useMutation(api.influencers.removeFromWhitelist);
 
     // Lookup by email or referralCode — used by the Invite modal so the
     // business doesn't have to copy/paste a Convex id manually.
@@ -119,7 +124,7 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
     const lookupResult = useQuery(
         api.campaigns.lookupInfluencer,
         user?.id && inviteLookupTerm.trim().length > 0
-            ? { actorId: user.id as any, emailOrCode: inviteLookupTerm }
+            ? { emailOrCode: inviteLookupTerm }
             : 'skip',
     );
 
@@ -145,35 +150,58 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         [businessCampaigns],
     );
 
+    const convexListings = useQuery(api.listings.getMyListings, user?.id ? { sellerId: user.id } : "skip") || [];
+
     const handleInviteInfluencer = async () => {
         if (!user?.id) return;
-        const targetId = invitedInfluencerId ?? (lookupResult as any)?._id;
-        if (!targetId) {
-            show('Buscá primero al influencer por email o código.', 'warning');
-            return;
-        }
-        const ratePct = Number(inviteRatePct);
-        if (!Number.isFinite(ratePct) || ratePct <= 0 || ratePct > 50) {
-            show('Comisión inválida (1–50%).', 'warning');
+        if (!invitedInfluencerId) {
+            show("Por favor, selecciona un influencer válido primero", "error");
             return;
         }
         setSubmittingInvite(true);
         try {
             await inviteInfluencerMutation({
-                actorId: user.id as any,
-                businessId: user.id as any,
-                influencerId: targetId as any,
-                commissionRate: ratePct / 100,
+                influencerId: invitedInfluencerId,
+                commissionRate: parseFloat(inviteRatePct) / 100,
             });
+            show("Invitación enviada", "success");
             setInviteModalVisible(false);
             setInviteLookupTerm('');
             setInvitedInfluencerId(null);
-            setInviteRatePct('5');
-            show('Invitación enviada al influencer.', 'success');
         } catch (e: any) {
-            show(e?.message ?? 'No se pudo invitar.', 'error');
+            show(e.message, "error");
         } finally {
             setSubmittingInvite(false);
+        }
+    };
+
+    const handleAddToWhitelist = async () => {
+        if (!invitedInfluencerId) {
+            show("Por favor, selecciona un influencer válido primero", "error");
+            return;
+        }
+        setSubmittingInvite(true);
+        try {
+            await addToWhitelistMutation({
+                influencerId: invitedInfluencerId,
+            });
+            show("Influencer añadido a la Whitelist", "success");
+            setInviteModalVisible(false);
+            setInviteLookupTerm('');
+            setInvitedInfluencerId(null);
+        } catch (e: any) {
+            show(e.message, "error");
+        } finally {
+            setSubmittingInvite(false);
+        }
+    };
+
+    const handleRemoveFromWhitelist = async (influencerId: string) => {
+        try {
+            await removeFromWhitelistMutation({ influencerId });
+            show("Influencer removido de la Whitelist", "success");
+        } catch (e: any) {
+            show(e.message, "error");
         }
     };
 
@@ -184,7 +212,6 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         if (!user?.id) return;
         try {
             await respondToCampaignMutation({
-                actorId: user.id as any,
                 campaignId: campaignId as any,
                 decision,
             });
@@ -198,7 +225,6 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         if (!user?.id) return;
         try {
             await pauseCampaignMutation({
-                actorId: user.id as any,
                 campaignId: campaignId as any,
             });
             show('Campaña pausada.', 'success');
@@ -211,7 +237,6 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         if (!user?.id) return;
         try {
             await endCampaignMutation({
-                actorId: user.id as any,
                 campaignId: campaignId as any,
             });
             show('Campaña finalizada.', 'success');
@@ -230,7 +255,6 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         (async () => {
             try {
                 const status = await getAccountStatusAction({
-                    actorId: user?.id as any,
                     accountId: stripeConnectAccountId,
                 });
                 if (!cancelled && status) {
@@ -252,8 +276,6 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
         try {
             // Step 1: ensure account exists (idempotent — creates only if missing).
             const ensured = await ensureConnectAccountAction({
-                actorId: user.id as any,
-                userId: user.id as any,
                 displayName: businessInfo.name || user.name || 'Ramgos seller',
                 contactEmail: user.email,
             });
@@ -262,7 +284,6 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
 
             // Step 2: open Stripe-hosted onboarding URL.
             const link = await createOnboardingLinkAction({
-                actorId: user.id as any,
                 accountId,
             });
             const url = (link as any)?.url;
@@ -275,11 +296,12 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
     };
 
     useEffect(() => {
-        ensureWalletAccount(businessInfo.id, 'business', businessInfo.name);
-    }, [businessInfo.id, businessInfo.name, ensureWalletAccount]);
+        if (!user?.id) return;
+        ensureWalletAccount(user.id, 'business', businessInfo.name);
+    }, [user?.id, businessInfo.name, ensureWalletAccount]);
 
-    const wallet = getWalletByOwner(businessInfo.id) ?? getWalletByOwner('business_demo');
-    const kycStatus = getKycStatus(businessInfo.id);
+    const wallet = getWalletByOwner(user?.id ?? 'business_demo');
+    const kycStatus = getKycStatus(user?.id ?? 'business_demo');
     const verificationPending = route?.params?.verificationPending || kycStatus === 'pending';
     const isVerified = kycStatus === 'approved';
 
@@ -378,7 +400,7 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                 actions={
                     <View style={styles.headerActions}>
                         <TouchableOpacity
-                            onPress={() => navigation.navigate('BusinessQR')}
+                            onPress={() => navigation.navigate('BusinessScanner')}
                             style={styles.scanBtn}
                         >
                             <QrCode size={20} color="#fff" />
@@ -597,7 +619,7 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
 
                             {/* Top Coupons */}
                             <View style={styles.listCard}>
-                                <View style={[styles.cardHeader, { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' }]}>
+                                <View style={[styles.cardHeader, { padding: 16, marginBottom: 0, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <Trophy size={20} color="#F59E0B" />
                                         <Text style={styles.cardTitle}>Bonos Destacados</Text>
@@ -622,45 +644,53 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                     {/* --- COUPONS TAB --- */}
                     {activeTab === 'bonos' && (
                         <View style={styles.sectionGap}>
+                            
                             <TouchableOpacity
                                 style={styles.bigCreateBtn}
-                                onPress={() => navigation.navigate('BusinessCreate', { type: 'bonus' })}
+                                onPress={() => navigation.navigate('BusinessScanner')}
                             >
-                                <LinearGradient colors={['#2563EB', '#1D4ED8']} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
-                                <PlusIcon size={24} color="#fff" />
-                                <Text style={styles.bigCreateText}>Crear Nuevo Bono</Text>
+                                <LinearGradient colors={['#3B82F6', '#2563EB']} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+                                <QrCode size={24} color="#fff" />
+                                <Text style={styles.bigCreateText}>Escanear y Validar Bono</Text>
                             </TouchableOpacity>
 
-                            {coupons.length === 0 ? (
+                            <View style={styles.cardHeader}>
+                                <Text style={styles.cardTitle}>Tus publicaciones de Bonos</Text>
+                            </View>
+
+                            {convexListings.length === 0 ? (
                                 <View style={styles.emptyState}>
                                     <Tag size={48} color={isDark ? '#4B5563' : '#E5E7EB'} />
                                     <Text style={styles.emptyTitle}>Aún no tienes bonos</Text>
                                     <Text style={styles.emptyDesc}>Crea tu primer bono para atraer clientes.</Text>
                                 </View>
                             ) : (
-                                coupons.map((coupon) => {
-                                    const style = getCouponStatusStyles(coupon.status, isDark);
-                                    const percent = coupon.stock > 0 ? (coupon.redeemed / coupon.stock) * 100 : 0;
+                                convexListings.map((listing: any) => {
+                                    const isActive = listing.status === 'active';
+                                    const percent = listing.stock > 0 ? ((listing.orderCount || 0) / (listing.stock + (listing.orderCount || 0))) * 100 : 0;
+                                    const bgStyle = isActive ? (isDark ? 'rgba(22, 101, 52, 0.2)' : '#DCFCE7') : (isDark ? 'rgba(107, 114, 128, 0.2)' : '#F3F4F6');
+                                    const colorStyle = isActive ? (isDark ? '#4ADE80' : '#166534') : (isDark ? '#9CA3AF' : '#6B7280');
+                                    const label = isActive ? 'Activo' : 'Inactivo';
 
                                     return (
-                                        <View key={coupon.id} style={styles.couponCard}>
+                                        <View key={listing._id} style={styles.couponCard}>
                                             <View style={styles.couponHeader}>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={styles.couponTitle}>{coupon.name}</Text>
-                                                    <Text style={styles.couponCode}>{coupon.code}</Text>
+                                                    <Text style={styles.couponTitle}>{listing.title}</Text>
+                                                    <Text style={styles.couponCode}>{listing.type === 'bono' ? 'BONO' : listing.type.toUpperCase()}</Text>
                                                 </View>
-                                                <View style={[styles.statusTag, { backgroundColor: style.background }]}>
-                                                    <Text style={[styles.statusText, { color: style.color }]}>{style.label}</Text>
+                                                <View style={[styles.statusTag, { backgroundColor: bgStyle }]}>
+                                                    <Text style={[styles.statusText, { color: colorStyle }]}>{label}</Text>
                                                 </View>
                                             </View>
 
                                             <View style={styles.progressSection}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                                                    <Text style={styles.progressLabel}>Progreso de canjes</Text>
-                                                    <Text style={styles.progressValue}>{coupon.redeemed} / {coupon.stock}</Text>
+                                                    <Text style={styles.progressLabel}>Stock vendido</Text>
+                                                    <Text style={styles.progressValue}>{listing.orderCount || 0} / {listing.stock + (listing.orderCount || 0)}</Text>
                                                 </View>
                                                 <View style={styles.progressBarBg}>
-                                                    <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: style.color }]} />
+                                                    <View style={[styles.progressBarFill, { width: `${percent}%`, backgroundColor: colorStyle }]} />
                                                 </View>
                                             </View>
 
@@ -669,13 +699,15 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                                                     <View style={styles.metaItem}>
                                                         <Tag size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
                                                         <Text style={styles.metaText}>
-                                                            {coupon.discountType === 'percentage' ? `${coupon.value}% OFF` : formatCurrency(coupon.value)}
+                                                            {formatCurrency(listing.price)}
                                                         </Text>
                                                     </View>
-                                                    <View style={styles.metaItem}>
-                                                        <Users size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                                        <Text style={styles.metaText}>Max {coupon.maxPerUser}/usr</Text>
-                                                    </View>
+                                                    {listing.openPromotion && (
+                                                        <View style={styles.metaItem}>
+                                                            <Users size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                                            <Text style={styles.metaText}>Promo {((listing.openCommissionRate || 0)*100).toFixed(0)}%</Text>
+                                                        </View>
+                                                    )}
                                                 </View>
                                                 <TouchableOpacity onPress={() => {/* Edit Action */ }}>
                                                     <MoreHorizontal size={20} color={isDark ? '#9CA3AF' : '#9CA3AF'} />
@@ -803,57 +835,45 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                                 </View>
                             )}
 
-                            {/* Active / paused campaigns */}
+                            {/* Whitelist campaigns */}
                             <View style={{ gap: 12 }}>
                                 <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' }}>
-                                    Influencers activos
+                                    Tu Whitelist
                                 </Text>
-                                {activeBusinessCampaigns.length === 0 ? (
+                                {whitelist.length === 0 ? (
                                     <View style={styles.emptyState}>
                                         <Users size={48} color={isDark ? '#4B5563' : '#E5E7EB'} />
-                                        <Text style={styles.emptyTitle}>Sin influencers asignados</Text>
+                                        <Text style={styles.emptyTitle}>Sin influencers en Whitelist</Text>
                                         <Text style={styles.emptyDesc}>
-                                            Invitá un influencer para que promocione tus productos. También podés activar la promoción abierta en cada listing para que cualquier influencer cobre comisión.
+                                            Añade influencers a tu Whitelist para que puedan promover tus bonos cuando la opción de promoción abierta esté desactivada.
                                         </Text>
                                     </View>
                                 ) : (
-                                    activeBusinessCampaigns.map((c: any) => {
-                                        const isActive = c.status === 'active';
+                                    whitelist.map((w: any) => {
                                         return (
-                                            <View key={c._id} style={styles.couponCard}>
+                                            <View key={w.whitelistId} style={styles.couponCard}>
                                                 <View style={styles.couponHeader}>
                                                     <View style={{ flex: 1 }}>
-                                                        <Text style={styles.couponTitle}>{c.influencerName}</Text>
-                                                        <Text style={styles.couponCode}>
-                                                            {(c.commissionRate * 100).toFixed(1)}% por venta
-                                                            {c.influencerReferralCode ? ` • código ${c.influencerReferralCode}` : ''}
-                                                        </Text>
+                                                        <Text style={styles.couponTitle}>{w.name}</Text>
+                                                        <Text style={styles.couponCode}>{w.email}</Text>
                                                     </View>
                                                     <View
                                                         style={[
                                                             styles.statusTag,
-                                                            { backgroundColor: isActive ? (isDark ? 'rgba(22, 101, 52, 0.2)' : '#DCFCE7') : (isDark ? 'rgba(107, 114, 128, 0.2)' : '#F3F4F6') },
+                                                            { backgroundColor: isDark ? 'rgba(22, 101, 52, 0.2)' : '#DCFCE7' },
                                                         ]}
                                                     >
-                                                        <Text style={[styles.statusText, { color: isActive ? (isDark ? '#4ADE80' : '#166534') : (isDark ? '#9CA3AF' : '#6B7280') }]}>
-                                                            {isActive ? 'Activa' : 'Pausada'}
+                                                        <Text style={[styles.statusText, { color: isDark ? '#4ADE80' : '#166534' }]}>
+                                                            Autorizado
                                                         </Text>
                                                     </View>
                                                 </View>
                                                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                                                    {isActive && (
-                                                        <TouchableOpacity
-                                                            style={{ flex: 1, borderWidth: 1, borderColor: isDark ? '#9CA3AF' : '#D1D5DB', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
-                                                            onPress={() => handlePauseCampaign(c._id)}
-                                                        >
-                                                            <Text style={{ color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '700' }}>Pausar</Text>
-                                                        </TouchableOpacity>
-                                                    )}
                                                     <TouchableOpacity
                                                         style={{ flex: 1, borderWidth: 1, borderColor: '#ef4444', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
-                                                        onPress={() => handleEndBusinessCampaign(c._id)}
+                                                        onPress={() => handleRemoveFromWhitelist(w.influencerId)}
                                                     >
-                                                        <Text style={{ color: '#ef4444', fontWeight: '700' }}>Finalizar</Text>
+                                                        <Text style={{ color: '#ef4444', fontWeight: '700' }}>Remover de Whitelist</Text>
                                                     </TouchableOpacity>
                                                 </View>
                                             </View>
@@ -921,23 +941,22 @@ export default function BusinessDashboardScreen({ isTabMode, onMenuPress, route 
                             onChangeText={setInviteRatePct}
                         />
 
-                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
                             <TouchableOpacity
-                                style={[styles.modalCancelBtn, { flex: 1 }]}
+                                style={[styles.modalBtn, { backgroundColor: isDark ? '#374151' : '#F1F5F9' }]}
                                 onPress={() => setInviteModalVisible(false)}
-                                disabled={submittingInvite}
                             >
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '600' }}>Cancelar</Text>
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#64748b', fontWeight: '600' }}>Cancelar</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.modalConfirmBtn, { flex: 1 }]}
-                                onPress={handleInviteInfluencer}
-                                disabled={submittingInvite || !lookupResult}
+                                style={[styles.modalBtn, styles.modalBtnPrimary, submittingInvite && { opacity: 0.7 }]}
+                                onPress={handleAddToWhitelist}
+                                disabled={submittingInvite}
                             >
                                 {submittingInvite ? (
-                                    <ActivityIndicator color="#fff" />
+                                    <ActivityIndicator size="small" color="#fff" />
                                 ) : (
-                                    <Text style={{ color: '#fff', fontWeight: '700' }}>Enviar invitación</Text>
+                                    <Text style={{ color: '#fff', fontWeight: '600' }}>Añadir a Whitelist</Text>
                                 )}
                             </TouchableOpacity>
                         </View>

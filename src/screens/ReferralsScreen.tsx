@@ -9,6 +9,7 @@ import { ArrowLeft, Users, DollarSign, Award } from 'lucide-react-native';
 export default function ReferralsScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    
     const insets = useSafeAreaInsets();
     const { referralCode, stats, history, shareReferral, simulateReferral } = useReferral();
     const styles = getStyles(isDark, insets);

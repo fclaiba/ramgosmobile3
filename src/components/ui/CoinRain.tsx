@@ -10,6 +10,7 @@ import Animated, {
     cancelAnimation
 } from 'react-native-reanimated';
 import { Coins } from 'lucide-react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 const COIN_COUNT = 15;
@@ -47,6 +48,8 @@ const Coin = ({ delay, startX }: CoinProps) => {
 };
 
 export const CoinRain = () => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
     return null;
 };
 

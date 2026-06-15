@@ -1,98 +1,46 @@
 --------------------------------------------------
-📂 Archivos Escaneados: 119
+📂 Archivos Escaneados: 180
 --------------------------------------------------
 
---------------------------------------------------------------------------------
-🔴 [LEGACY] Archivos usando Native Alert (0)
---------------------------------------------------------------------------------
-(Ninguno - Migración Completa)
+🔴 [LEGACY] Archivos usando Native Alert (9):
+   - components\social\CreateStory.tsx
+   - components\social\Post.tsx
+   - screens\BasicProfileSetupScreen.tsx
+   - screens\marketplace\OrderDetailScreen.tsx
+   - screens\MyListingsScreen.tsx
+   - screens\PaymentMethodsScreen.tsx
+   - screens\RegisterScreen.tsx
+   - screens\SavedScreen.tsx
+   - utils\useActionGate.ts
+   👉 ACCIÓN: Migrar a useToast().show()
 
---------------------------------------------------------------------------------
-🟡 [REVIEW] Archivos usando Native <Modal> (0)
---------------------------------------------------------------------------------
-(Ninguno - Migración Completa - Todos usan Sheet)
+🟡 [REVIEW] Archivos usando Native <Modal> (17):
+   - components\AddReviewModal.tsx ⚠️ (Revisar diseño)
+   - components\auth\KycWebViewMockModal.tsx ⚠️ (Revisar diseño)
+   - components\LocationPickerModal.tsx ⚠️ (Revisar diseño)
+   - components\marketplace\LocationPickerModal.native.tsx ⚠️ (Revisar diseño)
+   - components\marketplace\LocationPickerModal.tsx ⚠️ (Revisar diseño)
+   - components\marketplace\LocationPickerModal.web.tsx ⚠️ (Revisar diseño)
+   - components\marketplace\MapView.web.tsx ✨ (Tiene diseño Premium)
+   - components\pet\MiMascotaView.tsx ✨ (Tiene diseño Premium)
+   - components\social\StoryViewer.tsx ✨ (Tiene diseño Premium)
+   - components\stripe\StripePaymentModal.tsx ⚠️ (Revisar diseño)
+   - components\stripe\StripePaymentModal.web.tsx ⚠️ (Revisar diseño)
+   - components\ui\sheet.tsx ⚠️ (Revisar diseño)
+   - screens\BusinessDashboardScreen.tsx ✨ (Tiene diseño Premium)
+   - screens\GamesScreen.tsx ✨ (Tiene diseño Premium)
+   - screens\InfluencerDashboardScreen.tsx ⚠️ (Revisar diseño)
+   - screens\marketing\CampaignManagerScreen.tsx ✨ (Tiene diseño Premium)
+   - screens\RegisterScreen.tsx ✨ (Tiene diseño Premium)
 
---------------------------------------------------------------------------------
-🔵 [RETAINED] Native Modal (Specialized/Immersive) (2)
---------------------------------------------------------------------------------
-src\components\social\StoryViewer.tsx (Immersive Full Screen)
-src\screens\GamesScreen.tsx (Game Canvas)
+🟢 [MODERN] Archivos usando Global Toast System (58):
+   - components\AddReviewModal.tsx
+   - components\CartSidebar.tsx
+   - components\DailyChallenges.tsx
+   - components\marketplace\EscrowSheet.tsx
+   - components\marketplace\MapView.native.tsx
+   ...y 53 más.
 
---------------------------------------------------------------------------------
-🟢 [MODERN] Archivos usando Global Toast / Sheet (Total: 65+)
---------------------------------------------------------------------------------
-=== 🍞 GLOBAL TOAST CONTEXT & USAGE ===
-[TOAST] src\contexts\AuthContext.tsx
-[TOAST] src\contexts\NotificationsContext.tsx
-[TOAST] src\contexts\ReferralContext.tsx
-[TOAST] src\contexts\ToastContext.tsx
-
-[TOAST-SCREENS]
-src\screens\AboutScreen.tsx
-src\screens\BasicProfileSetupScreen.tsx
-src\screens\BusinessCreateScreen.tsx
-src\screens\BusinessDashboardScreen.tsx
-src\screens\CartScreen.tsx
-src\screens\CreateListingScreen.tsx
-src\screens\GamesScreen.tsx
-src\screens\HelpCenterScreen.tsx
-src\screens\HistoryScreen.tsx
-src\screens\InfluencerDashboardScreen.tsx
-src\screens\KYCScreen.tsx
-src\screens\LoginScreen.tsx
-src\screens\MapExplorerScreen.tsx
-src\screens\PaymentScreen.tsx
-src\screens\ProfileScreen.tsx
-src\screens\RecoverPasswordScreen.tsx
-src\screens\RegisterScreen.tsx
-src\screens\SavedScreen.tsx
-src\screens\SettingsScreen.tsx
-src\screens\SupportScreen.tsx
-src\screens\VerificationScreen.tsx
-src\screens\WelcomeScreen.tsx
-src\screens\WithdrawalScreen.tsx
-
-[TOAST-BUSINESS]
-src\screens\business\BusinessKYCScreen.tsx
-src\screens\business\BusinessQRScannerScreen.tsx
-
-[TOAST-MARKETPLACE]
-src\screens\marketplace\AddEditProductScreen.tsx
-src\screens\marketplace\CartScreen.tsx
-src\screens\marketplace\CheckoutScreen.tsx
-src\screens\marketplace\DisputeChatScreen.tsx
-src\screens\marketplace\DisputeReasonScreen.tsx
-src\screens\marketplace\DisputeScreen.tsx
-src\screens\marketplace\OrderDetailScreen.tsx
-src\screens\marketplace\ProductDetailScreen.tsx
-
-[TOAST-COMPONENTS]
-src\components\DailyChallenges.tsx
-src\components\MiMascotaView.tsx
-src\components\PointsManager.tsx
-src\components\SidebarMenu.tsx
-src\components\referral\ReferralCard.tsx
-
-=== 📄 SHEET COMPONENTS (MODAL REPLACEMENT) ===
-[SHEET] src\components\AdvancedFilters.tsx
-[SHEET] src\components\CartSidebar.tsx
-[SHEET] src\components\ItemDetailView.tsx
-[SHEET] src\components\KYCRequiredModal.tsx
-[SHEET] src\components\SidebarMenu.tsx
-[SHEET] src\components\social\CreateInstagramPost.tsx
-[SHEET] src\components\social\CreatePost.tsx
-[SHEET] src\components\social\CreateStory.tsx
-[SHEET] src\components\social\DirectMessages.tsx
-[SHEET] src\components\social\InstagramPost.tsx
-[SHEET] src\components\social\PostCommentsModal.tsx
-[SHEET] src\components\social\SharePostModal.tsx
-[SHEET] src\screens\InfluencerDashboardScreen.tsx
-[SHEET] src\screens\business\BusinessProfileScreen.tsx
-
-=== ⚠️ CRITICAL ALERTS REPLACED WITH SHEET ===
-[SHEET-ALERT] src\screens\AdminDashboardScreen.tsx (KYC Confirm)
-[SHEET-ALERT] src\screens\ProfileScreen.tsx (Account Delete)
-[SHEET-ALERT] src\screens\SavedScreen.tsx (Clear All)
-[SHEET-ALERT] src\screens\SettingsScreen.tsx (Logout)
-[SHEET-ALERT] src\screens\marketplace\DisputeChatScreen.tsx (Arbitration)
-[SHEET-ALERT] src\screens\marketplace\OrderDetailScreen.tsx (Delivery Confirm)
+--------------------------------------------------
+🛠️ Tarea pendiente: Tienes 9 archivos que aún usan alertas nativas.
+--------------------------------------------------

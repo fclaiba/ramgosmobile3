@@ -30,6 +30,7 @@ import { Wallet, DollarSign, Calendar, Send, AlertCircle, CheckCircle2 } from 'l
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { useTheme } from '../contexts/ThemeContext';
 
 type Interval = 'manual' | 'daily' | 'weekly' | 'monthly';
 
@@ -41,6 +42,9 @@ const INTERVALS: { id: Interval; label: string; description: string }[] = [
 ];
 
 export default function WithdrawalScreen({ navigation, route }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { user } = useAuth();
     const { show } = useToast();
 
@@ -56,10 +60,9 @@ export default function WithdrawalScreen({ navigation, route }: any) {
     } | null>(null);
     const [refreshing, setRefreshing] = useState(true);
 
-    const _api = api as any;
-    const getConnectBalance = useAction(_api.connect?.getConnectBalance || api.users.syncUser);
-    const updatePayoutSchedule = useAction(_api.connect?.updatePayoutSchedule || api.users.syncUser);
-    const requestInstantPayout = useAction(_api.connect?.requestInstantPayout || api.users.syncUser);
+    const getConnectBalance = useAction(api.connect.getConnectBalance);
+    const updatePayoutSchedule = useAction(api.connect.updatePayoutSchedule);
+    const requestInstantPayout = useAction(api.connect.requestInstantPayout);
 
     const userId = user?.id ?? route.params?.ownerId;
     const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
@@ -72,10 +75,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         }
         (async () => {
             try {
-                const result: any = await getConnectBalance({
-                    actorId: userId as any,
-                    userId: userId as any,
-                });
+                const result: any = await getConnectBalance({ userId: userId as any });
                 if (!cancelled && result) {
                     setBalance({
                         accountId: result.accountId,
@@ -109,7 +109,6 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         setScheduleSaving(true);
         try {
             await updatePayoutSchedule({
-                actorId: userId as any,
                 userId: userId as any,
                 interval: next,
             });
@@ -141,7 +140,6 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         setLoading(true);
         try {
             const result: any = await requestInstantPayout({
-                actorId: userId as any,
                 userId: userId as any,
                 amountInCents: Math.round(usd * 100),
                 currency: balance?.currency ?? 'usd',
@@ -153,10 +151,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
             setAmount('');
             // Re-pull balance.
             try {
-                const fresh: any = await getConnectBalance({
-                    actorId: userId as any,
-                    userId: userId as any,
-                });
+                const fresh: any = await getConnectBalance({ userId: userId as any });
                 if (fresh) {
                     setBalance({
                         accountId: fresh.accountId,
@@ -292,7 +287,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F9FAFB' },
     scrollContent: { padding: 20, paddingBottom: 40 },
 
@@ -309,8 +304,8 @@ const styles = StyleSheet.create({
     balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     balanceLabel: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
     usdBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    usdText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-    balanceValue: { fontSize: 42, fontWeight: '800', color: '#fff', marginBottom: 8 },
+    usdText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: 'bold' },
+    balanceValue: { fontSize: 42, fontWeight: '800', color: isDark ? '#1F2937' : '#fff', marginBottom: 8 },
     balanceHint: { color: '#94a3b8', fontSize: 13 },
 
     warningCard: {
@@ -328,7 +323,7 @@ const styles = StyleSheet.create({
 
     formSection: { marginBottom: 24 },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 4 },
-    sectionHelp: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
+    sectionHelp: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', lineHeight: 18 },
 
     scheduleRow: {
         flexDirection: 'row',
@@ -336,20 +331,20 @@ const styles = StyleSheet.create({
         gap: 12,
         padding: 14,
         borderRadius: 12,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: isDark ? '#374151' : '#e5e7eb',
     },
     scheduleRowActive: { borderColor: '#1D4ED8', backgroundColor: '#EFF6FF' },
     scheduleLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
-    scheduleDesc: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+    scheduleDesc: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginTop: 2 },
 
     amountInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: isDark ? '#374151' : '#e5e7eb',
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -361,7 +356,7 @@ const styles = StyleSheet.create({
         color: '#111827',
         marginLeft: 8,
     },
-    helperText: { fontSize: 12, color: '#6B7280', marginTop: 6, marginLeft: 4 },
+    helperText: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginTop: 6, marginLeft: 4 },
 
     withdrawButton: {
         flexDirection: 'row',
@@ -371,9 +366,9 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderRadius: 16,
         marginTop: 14,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
+        shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
     },
-    disabledButton: { opacity: 0.6, backgroundColor: '#4B5563' },
-    withdrawButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    securityNote: { textAlign: 'center', fontSize: 11, color: '#9CA3AF', marginTop: 12 },
+    disabledButton: { opacity: 0.6, backgroundColor: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
+    withdrawButtonText: { color: isDark ? '#1F2937' : '#fff', fontSize: 16, fontWeight: 'bold' },
+    securityNote: { textAlign: 'center', fontSize: 11, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 12 },
 });

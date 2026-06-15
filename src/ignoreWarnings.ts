@@ -8,7 +8,10 @@ if (__DEV__) {
     const ignoredWarnings = [
         'SafeAreaView has been deprecated',
         'Support for defaultProps will be removed',
-        'shadow* style props are deprecated',
+        '"shadow*" style props are deprecated',
+        '[Reanimated] Reduced motion setting is enabled',
+        '[expo-notifications] Listening to push token changes is not yet fully supported on web',
+        'Animated: `useNativeDriver` is not supported'
     ];
 
     console.warn = (...args) => {

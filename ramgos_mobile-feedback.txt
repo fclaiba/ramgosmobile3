@@ -1,0 +1,39 @@
+Celular: Redmi 9
+Versión de Android:12
+
+Bugs:
+Graves:
+Al hacer click en "Mis compras" salto un error de, supongo, una función "finance: getPaymentsByUser", Que el Object is missing the required filed "userId". Posiblemente esto se arregle cuando se esté en producción pero estar atento por si se hace una presentación. Ademas con ese error aparece un btn "Borrar datos y reiniciar" pero no funciona.
+
+General:
+En la vista de "Tienda" una vez te pide la dirección se queda en bucle queriendo ubicarte (Nunca lo consigue), y al querer cambiar el método de búsqueda a modo lista o cards te termina devolviendo al modo mapa sin dejar explorar las opciones. (El error ocurre si accedes a la tienda directamente con el btn "Mapa" de atajo que está la vista home)
+No me deja cargar historias.
+En la vista "Mi Mascota" el btn "Baño" no tiene un feedback de mensaje como si lo tiene el btn "Ropa" que dice "Eclosiona primero".
+
+Minijuegos:
+En el juego de la memoria en un momento me equivoque de fichas (Elegí un  gato y un conejo), momento siguiente elegí los 2 gatos correctos, pero el primer gato que había elegido no enlazó correctamente con el par correspondiente haciendo que ambas fichas queden "huérfanas" y sin poder continuar el juego (No funcionó el btn "peek (-1life)")
+En el mismo juego de la memoria. cuando te quedas sin vidas no se termina.
+El juego de la ruleta funciona pero la ruleta aparece en blanco.
+El juego nunca termina por ende se pierden los puntos (Tragamonedas, ruleta, memoria gatuna)
+
+
+Problemas de diseño:
+General:
+Al momento de crear una historia el btn "Compartir en tu historia" se solapa con mi barra de navegación del celular.
+
+En la vista "Mi Mascota":
+Cuando quiero jugar o bañarlo dice "El huevo necesita calor, no juegos". No hay una opción visible para darle calor. Es confuso.
+Existe el btn "Jugar" que mientras que la mascota es un huevo no te deja usar, pero justo debajo está la sección "Arcade y Juegos", es un poco confuso.
+
+Vista "Puntos":
+Cuando resalta la caja "racha diaria" aparece un div cuadrado que no se ajusta correctamente a la forma del btn.
+En la card "Como funciona" hay un texto que dice "Toca para ver más detalles", la card solo se expande si haces click en el icono arrow arriba a la derecha. Se debería agregar la misma funcionalidad si se hace click en el texto.
+
+Vista "Perfil":
+Hay cuatro cards que quedan muy juntas. Sería mejor si se divide en 2 filas, aunque de esas 4 cards solo la card "Gana $$" lleva a otro lado, por lo que se podría se mover a parte y dejar 3 cards en esa fila.
+
+Minijuegos:
+En el juego "Duck Hunt" los emojis de los patos está al revés. los que deben mirar a la derecha lo hacen a la izquierda y viceversa
+Lo mismo sucede con Dino Run.
+En el juego del tragamonedas no maneja bien las animaciones de giro y la linea roja nunca queda sobre los emojis.
+-----

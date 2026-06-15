@@ -19,8 +19,10 @@ import { useToast } from '../../contexts/ToastContext';
 import { MapPin, ShoppingCart, Tag, Ticket, Crosshair, Minus, Plus, Search, Filter, ArrowRight, LayoutGrid, List, Heart, Map } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import { MapErrorBoundary, logMapEvent, logMapError } from '../MapErrorBoundary';
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE, MAP_DEFAULTS } from '../../constants/darkMapStyle';
 
 import Slider from '@react-native-community/slider';
+import { useUserLocation } from '../../hooks/useUserLocation';
 
 const { width } = Dimensions.get('window');
 
@@ -29,6 +31,7 @@ interface MarketplaceMapProps {
     onItemClick: (item: any) => void;
     radius: number;
     bottomInset?: number;
+    topInset?: number;
     searchLocation?: { lat: number; lng: number };
     onSearchLocationChange?: (loc: { lat: number; lng: number }) => void;
     isCustomSearch?: boolean;
@@ -70,6 +73,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
     const bottomOffset = typeof bottomInset === 'number' ? bottomInset : (insets.bottom + 65);
 
@@ -83,6 +87,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     const [activeItem, setActiveItem] = useState<any>(null);
     const [isTrackingUser, setIsTrackingUser] = useState(true);
     const [mapReady, setMapReady] = useState(false);
+    const { location: hookLocation, errorMsg: hookError, refetch: refetchLocation } = useUserLocation();
     const [locationError, setLocationError] = useState<string | null>(null);
     const [mapKey, setMapKey] = useState(0); // For forcing re-mount on retry
 
@@ -98,69 +103,34 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     // Initial Location with improved logging
     useEffect(() => {
         logMapEvent('INIT', { radius, itemCount: items.length });
+    }, [items.length, radius]);
 
-        (async () => {
-            try {
-                let { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    logMapEvent('PERMISSION_DENIED', { status });
-                    setLocationError('Permiso de ubicación denegado');
-                    show('Activa los permisos de ubicación para ver el mapa', 'warning');
-                    return;
-                }
-
-                let location = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                });
-
-                const coords = {
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
-                };
-
-                setUserLocation(coords);
-                setLocationError(null);
-                logMapEvent('LOCATION_ACQUIRED', {
-                    lat: coords.latitude.toFixed(4),
-                    lng: coords.longitude.toFixed(4)
-                });
-            } catch (error) {
-                const err = error as Error;
-                logMapError(err, null, { context: 'initial_location' });
-                setLocationError('Error al obtener ubicación');
+    useEffect(() => {
+        if (hookError) {
+            setLocationError(hookError);
+            if (hookError.includes('denegado')) {
+                show('Activa los permisos de ubicación para ver el mapa', 'warning');
+            } else {
                 show('No se pudo obtener tu ubicación', 'error');
             }
-        })();
-    }, [items.length, radius, show]);
+        } else if (hookLocation) {
+            const coords = {
+                latitude: hookLocation.coords.latitude,
+                longitude: hookLocation.coords.longitude,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+            };
 
-    // Focus Effects with Loop Prevention
-    useEffect(() => {
-        const checkAndAnimate = async () => {
-            if (searchLocation && mapRef.current) {
-                try {
-                    const camera = await mapRef.current.getCamera();
-                    const latDiff = Math.abs(camera.center.latitude - searchLocation.lat);
-                    const lngDiff = Math.abs(camera.center.longitude - searchLocation.lng);
+            setUserLocation(coords);
+            setLocationError(null);
+            logMapEvent('LOCATION_ACQUIRED', {
+                lat: coords.latitude.toFixed(4),
+                lng: coords.longitude.toFixed(4)
+            });
+        }
+    }, [hookLocation, hookError, show]);
 
-                    // Only animate if the difference is significant (> ~50m)
-                    // This prevents the loop where onRegionChange updates searchLocation, triggering a re-center
-                    if (latDiff > 0.0005 || lngDiff > 0.0005) {
-                        mapRef.current.animateToRegion({
-                            latitude: searchLocation.lat,
-                            longitude: searchLocation.lng,
-                            latitudeDelta: 0.05,
-                            longitudeDelta: 0.05,
-                        }, 1000);
-                    }
-                } catch (e) {
-                    console.log("Map camera error", e);
-                }
-            }
-        };
-        checkAndAnimate();
-    }, [searchLocation]);
+    // Removed the searchLocation useEffect loop. Map only animates on Marker press or initial load.
 
     const handleMarkerPress = (item: any) => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -293,6 +263,8 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                 key={item.id}
                                 coordinate={{ latitude: item.location.lat, longitude: item.location.lng }}
                                 onPress={() => handleMarkerPress(item)}
+                                title={item.name}
+                                description={item.type === 'service' ? 'Servicio' : item.type === 'business' ? 'Negocio' : 'Producto'}
                             >
                                 <View style={[styles.markerContainer, isSelected && styles.markerActive, { borderColor: color }]}>
                                     {isSelected ? (
@@ -302,6 +274,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                     )}
                                 </View>
                                 <View style={[styles.triangle, { borderTopColor: color }]} />
+                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: isDark ? '#fff' : '#000', backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)', paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', textAlign: 'center', marginTop: 2 }}>{item.name}</Text>
                             </Marker>
                         );
                     })}
@@ -460,7 +433,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
 export { MapViewComponent as MapView };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1 },
     map: { width: '100%', height: '100%' },
 
@@ -506,16 +479,16 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     retryButtonText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: '600',
         fontSize: 14,
     },
     markerContainer: {
         width: 36, height: 36, borderRadius: 18,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderWidth: 3,
         justifyContent: 'center', alignItems: 'center',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5
+        shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5
     },
     markerActive: { width: 48, height: 48, borderRadius: 24, borderWidth: 4, zIndex: 10 },
     markerImage: { width: 40, height: 40, borderRadius: 20 },
@@ -535,12 +508,12 @@ const styles = StyleSheet.create({
     searchInput: { flex: 1, paddingHorizontal: 16, height: 48, fontSize: 14 },
     filterBtn: { borderRadius: 16, overflow: 'hidden', width: 48, height: 48 },
     blurBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
-    activeFilterBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED', borderWidth: 1, borderColor: '#fff' },
+    activeFilterBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED', borderWidth: 1, borderColor: isDark ? '#1F2937' : '#fff' },
 
     secondRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     viewToggles: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 4, height: 40, alignItems: 'center' },
     viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
-    viewToggleBtnActive: { backgroundColor: '#f3f4f6' },
+    viewToggleBtnActive: { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
 
     catsRow: { gap: 8 },
     catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
@@ -550,7 +523,7 @@ const styles = StyleSheet.create({
 
     // Controls
     controlsContainer: { position: 'absolute', right: 16, top: '50%', marginTop: -66, gap: 12 },
-    controlBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
+    controlBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
 
     // Slider
     sliderContainer: { position: 'absolute', alignSelf: 'center', width: '60%', maxWidth: 300, zIndex: 5 },
@@ -565,7 +538,7 @@ const styles = StyleSheet.create({
     detailCard: {
         position: 'absolute', left: 16, right: 16,
         borderRadius: 20, padding: 16,
-        shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8
+        shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8
     },
     detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     detailImage: { width: 56, height: 56, borderRadius: 12 },
@@ -573,110 +546,9 @@ const styles = StyleSheet.create({
     detailTitle: { fontSize: 16, fontWeight: 'bold' },
     detailSub: { fontSize: 13 },
     priceTag: { backgroundColor: '#10B981', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
-    priceText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+    priceText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: 'bold' },
     actionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center' }
 });
 
-const DARK_MAP_STYLE = [
-    {
-        "featureType": "poi",
-        "stylers": [{ "visibility": "off" }]
-    },
-    {
-        "featureType": "transit",
-        "stylers": [{ "visibility": "off" }]
-    },
-    {
-        "featureType": "road",
-        "elementType": "labels.icon",
-        "stylers": [{ "visibility": "off" }]
-    },
-    {
-        "elementType": "geometry",
-        "stylers": [{ "color": "#242f3e" }]
-    },
-    {
-        "elementType": "labels.text.fill",
-        "stylers": [{ "color": "#746855" }]
-    },
-    {
-        "elementType": "labels.text.stroke",
-        "stylers": [{ "color": "#242f3e" }]
-    },
-    {
-        "featureType": "administrative.locality",
-        "elementType": "labels.text.fill",
-        "stylers": [{ "color": "#d59563" }]
-    },
-    {
-        "featureType": "poi.park",
-        "elementType": "geometry",
-        "stylers": [{ "color": "#263c3f" }]
-    },
-    {
-        "featureType": "poi.park",
-        "elementType": "labels.text.fill",
-        "stylers": [{ "color": "#6b9a76" }]
-    },
-    {
-        "featureType": "road",
-        "elementType": "geometry",
-        "stylers": [{ "color": "#38414e" }]
-    },
-    {
-        "featureType": "road",
-        "elementType": "geometry.stroke",
-        "stylers": [{ "color": "#212a37" }]
-    },
-    {
-        "featureType": "road",
-        "elementType": "labels.text.fill",
-        "stylers": [{ "color": "#9ca5b3" }]
-    },
-    {
-        "featureType": "road.highway",
-        "elementType": "geometry",
-        "stylers": [{ "color": "#746855" }]
-    },
-    {
-        "featureType": "road.highway",
-        "elementType": "geometry.stroke",
-        "stylers": [{ "color": "#1f2835" }]
-    },
-    {
-        "featureType": "road.highway",
-        "elementType": "labels.text.fill",
-        "stylers": [{ "color": "#f3d19c" }]
-    },
-    {
-        "featureType": "water",
-        "elementType": "geometry",
-        "stylers": [{ "color": "#17263c" }]
-    },
-    {
-        "featureType": "water",
-        "elementType": "labels.text.fill",
-        "stylers": [{ "color": "#515c6d" }]
-    },
-    {
-        "featureType": "water",
-        "elementType": "labels.text.stroke",
-        "stylers": [{ "color": "#17263c" }]
-    }
-];
+// Map styles are now centralized in src/constants/darkMapStyle.ts
 
-const LIGHT_MAP_STYLE = [
-    {
-        "featureType": "poi",
-        "stylers": [{ "visibility": "off" }]
-    },
-    {
-        "featureType": "transit",
-        "stylers": [{ "visibility": "off" }]
-    },
-    {
-        "featureType": "road",
-        "elementType": "labels.icon",
-        "stylers": [{ "visibility": "off" }]
-    }
-];

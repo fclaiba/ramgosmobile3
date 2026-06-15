@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 type ButtonVariant = 'default' | 'ghost' | 'outline';
 type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
@@ -13,7 +14,12 @@ interface ButtonProps {
     disabled?: boolean;
 }
 
-export const Button = ({ onPress, children, style, variant = 'default', size = 'default', disabled = false }: ButtonProps) => (
+export const Button = ({ onPress, children, style, variant = 'default', size = 'default', disabled = false }: ButtonProps) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    
+    return (
     <TouchableOpacity
         onPress={disabled ? undefined : onPress}
         style={[
@@ -49,9 +55,10 @@ export const Button = ({ onPress, children, style, variant = 'default', size = '
             return child;
         })}
     </TouchableOpacity>
-);
+    );
+};
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     button: {
         paddingVertical: 10,
         paddingHorizontal: 16,
@@ -86,7 +93,7 @@ const styles = StyleSheet.create({
         borderColor: '#111827',
     },
     text: {
-        color: 'white',
+        color: isDark ? '#1F2937' : 'white',
         fontWeight: '600',
         fontSize: 14,
     },

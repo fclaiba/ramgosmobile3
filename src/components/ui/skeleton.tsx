@@ -1,10 +1,14 @@
 import * as React from "react"
 import { Animated, StyleSheet, View } from "react-native"
+import { useTheme } from '../../contexts/ThemeContext';
 
 function Skeleton({
     className,
     ...props
 }: React.ComponentPropsWithoutRef<typeof View>) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const opacity = React.useRef(new Animated.Value(0.5)).current
 
     React.useEffect(() => {
@@ -36,9 +40,9 @@ function Skeleton({
     )
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     skeleton: {
-        backgroundColor: "#D1D5DB", // muted
+        backgroundColor: isDark ? "#374151" : "#D1D5DB", // muted
         borderRadius: 4,
     }
 })

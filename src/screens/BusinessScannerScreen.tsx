@@ -1,66 +1,58 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, Dimensions, Animated, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { X, Zap, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { X, CheckCircle, AlertTriangle, Search } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 export default function BusinessScannerScreen() {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const { user } = useAuth();
-    const [permission, requestPermission] = useCameraPermissions();
-    const [scanned, setScanned] = useState(false);
+
+    const [inputCode, setInputCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<'success' | 'error' | null>(null);
     const [resultMessage, setResultMessage] = useState<string>('');
-    const [torchOn, setTorchOn] = useState(false);
 
-    // Real bono redemption — server enforces:
-    //   - actor is the bono's seller (or admin)
-    //   - bono is in 'issued' state and not expired
-    //   - on success it auto-releases the order's escrow
+    // Scanner animation
+    const [scanAnim] = useState(new Animated.Value(0));
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(scanAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+                Animated.timing(scanAnim, { toValue: 0, duration: 2000, useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+
     const _api = api as any;
-    const redeemBonoMutation = useMutation(_api.bonos?.redeemBono || api.users.syncUser);
+    const redeemBonoMutation = useMutation(_api.bonos?.redeemBono as any);
 
-    // Function to handle successful scan. Accepts either:
-    //   - the raw bonoCode (e.g. "BNO-123-XYZ"), or
-    //   - a JSON envelope `{ "type":"bonus_redemption", "code":"BNO-..." }`
-    //     emitted by older client builds.
-    const handleBarCodeScanned = async ({ data }: any) => {
-        if (scanned || loading) return;
+    const handleValidate = async () => {
+        const trimmed = inputCode.trim().toUpperCase();
+        if (!trimmed) return;
 
-        setScanned(true);
         setLoading(true);
 
-        let bonoCode: string | null = null;
-
         try {
-            const trimmed = String(data ?? '').trim();
-            if (!trimmed) throw new Error('QR vacío');
-
-            try {
-                const parsed = JSON.parse(trimmed);
-                bonoCode = parsed?.code ?? parsed?.bonoCode ?? null;
-            } catch {
-                bonoCode = trimmed;
-            }
-
-            if (!bonoCode) throw new Error('Código no reconocido.');
-
             await redeemBonoMutation({
-                actorId: user?.id as any,
-                bonoCode,
+                bonoCode: trimmed,
+                actorId: user?.id,
             });
 
             setLoading(false);
             setResult('success');
-            setResultMessage('Canje confirmado. El pago al negocio se libera automáticamente.');
+            setResultMessage('Canje confirmado. El pago se libera automáticamente.');
         } catch (e: any) {
             setLoading(false);
             setResult('error');
@@ -69,139 +61,130 @@ export default function BusinessScannerScreen() {
     };
 
     const resetScanner = () => {
-        setScanned(false);
+        setInputCode('');
         setResult(null);
         setResultMessage('');
     };
 
-    if (!permission) {
-        // Camera permissions are still loading
-        return <View style={styles.container} />;
-    }
-
-    if (!permission.granted) {
-        return (
-            <View style={styles.container}>
-                <Text style={styles.message}>Necesitamos permiso para usar la cámara</Text>
-                <TouchableOpacity onPress={requestPermission} style={styles.btn}>
-                    <Text style={styles.btnText}>Conceder Permiso</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
     return (
-        <View style={styles.container}>
-            <CameraView
-                style={StyleSheet.absoluteFillObject}
-                facing="back"
-                enableTorch={torchOn}
-                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+            {/* Header */}
+            <View style={[styles.header, { paddingTop: Math.max(16, insets.top + 12) }]}>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+                    <X size={24} color={isDark ? "#fff" : "#111827"} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Validar Bono</Text>
+                <View style={{ width: 40 }} />
+            </View>
 
-            {/* Overlay UI */}
-            <View style={[styles.overlay, { paddingTop: Math.max(16, insets.top + 12), paddingBottom: Math.max(16, insets.bottom + 16) }]}>
-                <View style={styles.header}>
-                    <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-                        <X size={24} color="#fff" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Escanear Bono</Text>
-                    <TouchableOpacity style={styles.iconBtn} onPress={() => setTorchOn(!torchOn)}>
-                        <Zap size={24} color={torchOn ? "#F59E0B" : "#fff"} fill={torchOn ? "#F59E0B" : "none"} />
-                    </TouchableOpacity>
-                </View>
+            <View style={styles.content}>
+                {/* Simulated Scanner */}
+                {!result && !loading && (
+                    <View style={styles.simulatorContainer}>
+                        <View style={styles.scannerBox}>
+                            <Animated.View style={[styles.laser, {
+                                transform: [{ translateY: scanAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 200] }) }]
+                            }]} />
+                            <Text style={styles.simText}>Simulador de Escáner</Text>
+                        </View>
+                        <Text style={styles.instructionText}>
+                            Pide al cliente que te dicte su código único.
+                        </Text>
+                    </View>
+                )}
 
-                {/* Focus Box */}
-                {!scanned && !result && (
-                    <View style={styles.focusContainer}>
-                        <View style={styles.cornerTL} />
-                        <View style={styles.cornerTR} />
-                        <View style={styles.cornerBL} />
-                        <View style={styles.cornerBR} />
-                        <Text style={styles.instructionText}>Apunta al código QR del cliente</Text>
+                {/* Input Field */}
+                {!result && !loading && (
+                    <View style={styles.inputSection}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="EJ: BNO-1234-ABCD"
+                            placeholderTextColor={isDark ? '#475569' : '#94A3B8'}
+                            value={inputCode}
+                            onChangeText={setInputCode}
+                            autoCapitalize="characters"
+                        />
+                        <TouchableOpacity style={styles.btn} onPress={handleValidate}>
+                            <Search size={20} color="#fff" />
+                            <Text style={styles.btnText}>Validar Código</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 
                 {/* Loading State */}
                 {loading && (
-                    <View style={styles.centerModal}>
-                        <ActivityIndicator size="large" color="#fff" />
-                        <Text style={styles.loadingText}>Validando...</Text>
+                    <View style={styles.centerBox}>
+                        <ActivityIndicator size="large" color="#3B82F6" />
+                        <Text style={styles.loadingText}>Validando bono...</Text>
                     </View>
                 )}
 
-                {/* Result Modal */}
+                {/* Result Message */}
                 {result && (
-                    <View style={[styles.resultModal, result === 'error' && styles.errorModal]}>
+                    <View style={styles.centerBox}>
                         {result === 'success' ? (
                             <>
-                                <CheckCircle size={64} color="#fff" />
-                                <Text style={styles.resultTitle}>Bono canjeado</Text>
-                                <Text style={styles.resultSub}>{resultMessage || 'Canje confirmado.'}</Text>
-                                <TouchableOpacity style={styles.confirmBtn} onPress={resetScanner}>
-                                    <Text style={styles.confirmBtnText}>Escanear otro</Text>
-                                </TouchableOpacity>
+                                <CheckCircle size={80} color="#10B981" />
+                                <Text style={[styles.resultTitle, { color: '#10B981' }]}>Bono Válido</Text>
+                                <Text style={styles.resultSub}>{resultMessage}</Text>
                             </>
                         ) : (
                             <>
-                                <AlertTriangle size={64} color="#fff" />
-                                <Text style={styles.resultTitle}>No se pudo canjear</Text>
-                                <Text style={styles.resultSub}>{resultMessage || 'El código no es válido.'}</Text>
-                                <TouchableOpacity style={[styles.confirmBtn, styles.errorBtn]} onPress={resetScanner}>
-                                    <Text style={[styles.confirmBtnText, { color: '#EF4444' }]}>Intentar de nuevo</Text>
-                                </TouchableOpacity>
+                                <AlertTriangle size={80} color="#EF4444" />
+                                <Text style={[styles.resultTitle, { color: '#EF4444' }]}>Error de Validación</Text>
+                                <Text style={styles.resultSub}>{resultMessage}</Text>
                             </>
                         )}
+                        <TouchableOpacity style={styles.resetBtn} onPress={resetScanner}>
+                            <Text style={styles.resetBtnText}>Validar otro código</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
             </View>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-    message: { textAlign: 'center', paddingBottom: 10, color: '#fff' },
-    btn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 8 },
-    btnText: { color: '#fff', fontWeight: 'bold' },
-
-    overlay: { position: 'absolute', inset: 0, justifyContent: 'space-between', padding: 20 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    iconBtn: { padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
-
-    focusContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 100 },
-    cornerTL: { position: 'absolute', top: 0, left: 0, width: 40, height: 40, borderTopWidth: 4, borderLeftWidth: 4, borderColor: '#3B82F6' },
-    cornerTR: { position: 'absolute', top: 0, right: 0, width: 40, height: 40, borderTopWidth: 4, borderRightWidth: 4, borderColor: '#3B82F6' },
-    cornerBL: { position: 'absolute', bottom: 0, left: 0, width: 40, height: 40, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: '#3B82F6' },
-    cornerBR: { position: 'absolute', bottom: 0, right: 0, width: 40, height: 40, borderBottomWidth: 4, borderRightWidth: 4, borderColor: '#3B82F6' },
-    instructionText: { marginTop: 280, color: '#fff', fontSize: 16, fontWeight: '500', textAlign: 'center' },
-
-    centerModal: {
-        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        justifyContent: 'center', alignItems: 'center'
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#F8FAFC' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
+    headerTitle: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 20, fontWeight: 'bold' },
+    iconBtn: { padding: 8, backgroundColor: isDark ? '#1E293B' : '#E2E8F0', borderRadius: 20 },
+    
+    content: { flex: 1, padding: 24, justifyContent: 'center' },
+    
+    simulatorContainer: { alignItems: 'center', marginBottom: 40 },
+    scannerBox: {
+        width: 200, height: 200, 
+        borderWidth: 2, borderColor: '#3B82F6', borderRadius: 24, 
+        backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+        overflow: 'hidden', justifyContent: 'center', alignItems: 'center'
     },
-    loadingText: { color: '#fff', marginTop: 16, fontWeight: '600' },
+    laser: { width: '100%', height: 3, backgroundColor: '#EF4444', position: 'absolute', top: 0 },
+    simText: { color: isDark ? '#64748B' : '#94A3B8', fontWeight: 'bold' },
+    instructionText: { color: isDark ? '#94A3B8' : '#64748B', fontSize: 16, marginTop: 24, textAlign: 'center' },
 
-    resultModal: {
-        position: 'absolute',
-        top: '22%',
-        left: 0,
-        right: 0,
-        marginHorizontal: 16,
-        width: '100%',
-        maxWidth: 520,
-        alignSelf: 'center',
-        backgroundColor: '#10B981',
-        borderRadius: 24, padding: 32,
-        alignItems: 'center',
-        shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, elevation: 10
+    inputSection: { width: '100%' },
+    input: {
+        backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+        borderWidth: 2, borderColor: isDark ? '#334155' : '#E2E8F0',
+        borderRadius: 16, padding: 20, fontSize: 24, color: isDark ? '#F8FAFC' : '#0F172A',
+        textAlign: 'center', letterSpacing: 4, fontWeight: 'bold', marginBottom: 20,
     },
-    errorModal: { backgroundColor: '#EF4444' },
-    resultTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 16 },
-    resultSub: { color: 'rgba(255,255,255,0.9)', fontSize: 14, textAlign: 'center', marginVertical: 8 },
-    confirmBtn: { backgroundColor: '#fff', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 16, minWidth: 150, alignItems: 'center' },
-    errorBtn: { backgroundColor: '#fff' },
-    confirmBtnText: { color: '#10B981', fontWeight: 'bold', fontSize: 16 },
+    btn: {
+        backgroundColor: '#3B82F6', borderRadius: 16, padding: 20,
+        flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12
+    },
+    btnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+
+    centerBox: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+    loadingText: { color: isDark ? '#F8FAFC' : '#111827', marginTop: 16, fontSize: 18, fontWeight: '600' },
+    
+    resultTitle: { fontSize: 28, fontWeight: 'bold', marginTop: 24, marginBottom: 8, textAlign: 'center' },
+    resultSub: { fontSize: 16, color: isDark ? '#94A3B8' : '#475569', textAlign: 'center', marginBottom: 32 },
+    resetBtn: {
+        backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+        paddingVertical: 16, paddingHorizontal: 32, borderRadius: 16
+    },
+    resetBtnText: { color: isDark ? '#F8FAFC' : '#111827', fontSize: 16, fontWeight: 'bold' },
 });

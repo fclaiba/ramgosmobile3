@@ -7,6 +7,7 @@ import { Plus, Copy, TrendingUp, DollarSign, Users } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 
 /**
  * CampaignManagerScreen — influencer-side view to propose campaigns to
@@ -34,7 +35,7 @@ export default function CampaignManagerScreen() {
     const myId = user?.id;
     const campaigns = useQuery(
         api.campaigns.getMyCampaigns,
-        myId ? { actorId: myId as any, influencerId: myId as any } : 'skip',
+        myId ? { influencerId: myId as Id<"users"> } : 'skip',
     ) ?? [];
 
     const proposeCampaign = useMutation(api.campaigns.proposeCampaign);
@@ -58,9 +59,8 @@ export default function CampaignManagerScreen() {
         setSubmitting(true);
         try {
             await proposeCampaign({
-                actorId: myId as any,
-                influencerId: myId as any,
                 businessId: businessId as any,
+                influencerId: myId as Id<"users">,
                 commissionRate: ratePct / 100,
             });
             setIsModalOpen(false);

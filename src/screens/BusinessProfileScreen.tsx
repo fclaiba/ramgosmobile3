@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, Clock, MapPin, Phone, ExternalLink, Ticket, ArrowRight, Share2, Star } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../contexts/ThemeContext';
 
 // Mock Bonuses for the business
 const BUSINESS_BONUSES = [
@@ -12,6 +13,9 @@ const BUSINESS_BONUSES = [
 ];
 
 export default function BusinessProfileScreen() {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { business } = route.params || {};
@@ -143,7 +147,7 @@ export default function BusinessProfileScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F9FAFB' },
     headerImage: { height: 300, justifyContent: 'space-between' },
     headerTop: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 50, paddingHorizontal: 16 },
@@ -151,33 +155,33 @@ const styles = StyleSheet.create({
 
     headerContent: { padding: 20 },
     badge: { backgroundColor: '#7C3AED', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 8 },
-    badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-    title: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginBottom: 4 },
+    badgeText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: 'bold' },
+    title: { color: isDark ? '#1F2937' : '#fff', fontSize: 28, fontWeight: 'bold', marginBottom: 4 },
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    ratingText: { color: '#fff', fontWeight: '600' },
+    ratingText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '600' },
 
-    infoSection: { backgroundColor: '#fff', margin: 16, marginTop: -20, borderRadius: 16, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    infoSection: { backgroundColor: isDark ? '#1F2937' : '#fff', margin: 16, marginTop: -20, borderRadius: 16, padding: 16, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
     infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
     infoText: { fontSize: 14, fontWeight: '600', color: '#111827' },
-    subInfo: { fontSize: 12, color: '#6B7280' },
-    divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 8 },
+    subInfo: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
+    divider: { height: 1, backgroundColor: isDark ? '#1F2937' : '#F3F4F6', marginVertical: 8 },
 
-    actionBtnOutline: { borderWidth: 1, borderColor: '#374151', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-    actionBtnTextOutline: { fontSize: 12, fontWeight: '600', color: '#374151' },
+    actionBtnOutline: { borderWidth: 1, borderColor: isDark ? '#D1D5DB' : '#374151', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    actionBtnTextOutline: { fontSize: 12, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
 
     section: { paddingHorizontal: 16, marginBottom: 20 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: '#111827' },
 
-    bonusCard: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 10, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, elevation: 1 },
+    bonusCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12, padding: 12, marginBottom: 10, alignItems: 'center', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.03, elevation: 1 },
     ticketLeft: { width: 40, alignItems: 'center' },
     ticketContent: { flex: 1, paddingHorizontal: 8 },
     bonusTitle: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
-    bonusDesc: { fontSize: 12, color: '#4B5563', marginVertical: 2 },
+    bonusDesc: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', marginVertical: 2 },
     bonusMeta: { fontSize: 11, color: '#7C3AED', fontWeight: '500' },
     claimBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    claimBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+    claimBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: 'bold', fontSize: 12 },
 
     marketplaceCard: { marginHorizontal: 16, height: 80, borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, overflow: 'hidden' },
-    mpTitle: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    mpSub: { color: '#9CA3AF', fontSize: 12 },
+    mpTitle: { color: isDark ? '#1F2937' : '#fff', fontSize: 16, fontWeight: 'bold' },
+    mpSub: { color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 12 },
 });

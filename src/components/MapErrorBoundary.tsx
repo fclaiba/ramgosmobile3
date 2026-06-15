@@ -127,8 +127,20 @@ export function logMapError(error: Error, errorInfo?: React.ErrorInfo | null, co
     console.groupEnd();
   }
 
-  // TODO: Send to error tracking service (Sentry, Crashlytics, etc.)
-  // errorTracker.captureException(error, { extra: logEntry });
+  if (!__DEV__) {
+    try {
+      const Sentry = require('@sentry/react-native');
+      Sentry.captureException(error, {
+        extra: {
+          componentStack: logEntry.componentStack,
+          context: logEntry.context,
+          mapErrorType: logEntry.type
+        }
+      });
+    } catch (e) {
+      console.error('[MapErrorTracker] Fallback logger:', error.name, error.message, logEntry);
+    }
+  }
   
   return logEntry;
 }
@@ -144,10 +156,10 @@ export function logMapEvent(
     const timestamp = new Date().toISOString();
     const prefix = event === 'API_ERROR' || event === 'PERMISSION_DENIED' ? '⚠️' : '📍';
     console.log(`${prefix} [Map:${event}] ${timestamp}`, data || '');
+  } else {
+    // Placeholder for analytics (Amplitude, Mixpanel, etc.)
+    console.log(`[MapAnalytics] track: map_${event.toLowerCase()}`, data || '');
   }
-  
-  // TODO: Send to analytics (Amplitude, Mixpanel, etc.)
-  // analytics.track(`map_${event.toLowerCase()}`, data);
 }
 
 /**

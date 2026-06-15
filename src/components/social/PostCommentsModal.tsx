@@ -27,7 +27,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
 
     const commentsResult = useQuery(
         api.social.getCommentsForPost,
-        authUser ? { actorId: authUser.id as any, postId: postId as any, limit: 100 } : 'skip',
+        authUser ? { postId: postId as any, limit: 100 } : 'skip',
     );
     const deleteCommentMut = useMutation(api.social.deleteComment);
 
@@ -41,7 +41,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
 
     const handleDelete = (commentId: string) => {
         if (!authUser) return;
-        deleteCommentMut({ actorId: authUser.id as any, commentId: commentId as any }).catch(
+        deleteCommentMut({ commentId: commentId as any }).catch(
             (err) => console.warn('[comments] delete failed', err),
         );
     };

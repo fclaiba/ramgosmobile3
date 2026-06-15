@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { assertAdminOrDeveloper, requireActor } from "./authHelpers";
 
@@ -27,11 +27,9 @@ const sanitizeDevUser = (user: any) => ({
 });
 
 export const seedTestUsers = mutation({
-    args: {
-        actorId: v.optional(v.id("users"))
-    },
+    args: {},
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         if (actor.role !== "admin" && actor.role !== "developer" && !actor.isTest) {
             throw new Error("Se requiere rol de desarrollador o admin.");
         }
@@ -97,11 +95,9 @@ export const seedTestUsers = mutation({
 });
 
 export const getTestUsers = query({
-    args: {
-        actorId: v.optional(v.id("users"))
-    },
+    args: {},
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         if (actor.role !== "admin" && actor.role !== "developer" && !actor.isTest) {
             throw new Error("Se requiere rol de desarrollador o admin.");
         }
@@ -115,12 +111,11 @@ export const getTestUsers = query({
 
 export const impersonate = mutation({
     args: {
-        adminId: v.optional(v.id("users")), // legacy fallback
         targetUserId: v.id("users"), // The test user to enter
     },
     handler: async (ctx, args) => {
         // 1. Security Check
-        const actor = await requireActor(ctx, args.adminId);
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
         assertAdminOrDeveloper(actor);
 
         // 2. Target Check
@@ -142,4 +137,184 @@ export const impersonate = mutation({
         // Here we return the full user object so the frontend can swap context.
         return sanitizeDevUser(targetUser);
     },
+});
+
+export const resetAndSeedListings = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        // 1. Delete all current listings
+        const allListings = await ctx.db.query("listings").collect();
+        for (const listing of allListings) {
+            await ctx.db.delete(listing._id);
+        }
+
+        // 2. Find a test seller (e.g., Business)
+        const seller = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", "business@test.com"))
+            .first();
+
+        if (!seller) {
+            throw new Error("El usuario business@test.com no existe. Ejecuta seedTestUsers primero.");
+        }
+
+        const sellerId = seller._id;
+
+        // 3. Create products in Buenos Aires and New York
+        const baLocation = { lat: -34.6037, lng: -58.3816, name: "Buenos Aires", distanceKm: 0, address: "Obelisco, BA" };
+        const nyLocation = { lat: 40.7128, lng: -74.0060, name: "Nueva York", distanceKm: 0, address: "Times Square, NY" };
+
+        const testProducts: any[] = [
+            {
+                title: "Alfajores Artesanales (BA)",
+                description: "Caja de docena de alfajores de maicena artesanales en el centro de Buenos Aires.",
+                price: 15,
+                type: "product" as any,
+                category: "Gastronomía",
+                sellerId,
+                stock: 50,
+                location: baLocation,
+                condition: "new",
+                currency: "USD",
+                status: "active" as any,
+                views: 0,
+                favoriteCount: 0,
+                orderCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                tags: ["product"],
+                slug: "alfajores-artesanales-ba-" + Math.random().toString(36).slice(2,7)
+            },
+            {
+                title: "Clases de Tango (BA)",
+                description: "Servicio de clases particulares de tango en San Telmo.",
+                price: 25,
+                type: "service" as any,
+                category: "Educación",
+                sellerId,
+                stock: 10,
+                location: baLocation,
+                condition: "new",
+                currency: "USD",
+                status: "active" as any,
+                views: 0,
+                favoriteCount: 0,
+                orderCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                tags: ["service"],
+                slug: "clases-tango-ba-" + Math.random().toString(36).slice(2,7)
+            },
+            {
+                title: "Vintage Camera (NY)",
+                description: "Mint condition vintage camera in New York.",
+                price: 150,
+                type: "product" as any,
+                category: "Tecnología",
+                sellerId,
+                stock: 1,
+                location: nyLocation,
+                condition: "used",
+                currency: "USD",
+                status: "active" as any,
+                views: 0,
+                favoriteCount: 0,
+                orderCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                tags: ["product"],
+                slug: "vintage-camera-ny-" + Math.random().toString(36).slice(2,7)
+            },
+            {
+                title: "Central Park Tour (NY)",
+                description: "Guided walking tour through Central Park.",
+                price: 45,
+                type: "event" as any,
+                category: "Entretenimiento",
+                sellerId,
+                stock: 20,
+                location: nyLocation,
+                condition: "new",
+                currency: "USD",
+                status: "active" as any,
+                views: 0,
+                favoriteCount: 0,
+                orderCount: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                tags: ["event"],
+                slug: "central-park-tour-ny-" + Math.random().toString(36).slice(2,7)
+            }
+        ];
+
+        for (const p of testProducts) {
+            await ctx.db.insert("listings", p);
+        }
+
+        return { success: true, message: `Deleted ${allListings.length} listings and seeded ${testProducts.length} new ones.` };
+    }
+});
+
+export const seed5Bonos = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const business = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", "business@test.com"))
+            .first();
+
+        const consumer = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", "consumer@test.com"))
+            .first();
+
+        if (!business || !consumer) {
+            throw new Error("Missing test users. Run seedTestUsers first.");
+        }
+
+        let bonoListing = await ctx.db
+            .query("listings")
+            .withIndex("by_seller", (q) => q.eq("sellerId", business._id))
+            .filter((q) => q.eq(q.field("type"), "bono"))
+            .first();
+
+        if (!bonoListing) {
+            const listingId = await ctx.db.insert("listings", {
+                sellerId: business._id,
+                title: "Bono Premium 50% Off",
+                description: "Bono premium para pruebas",
+                price: 50,
+                currency: "USD",
+                category: "bonos",
+                tags: ["premium", "test"],
+                slug: "bono-premium-50-off",
+                stock: 100,
+                status: "active",
+                type: "bono",
+                condition: "new",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+            bonoListing = await ctx.db.get(listingId);
+        }
+
+        for (let i = 0; i < 5; i++) {
+            const ts = Date.now().toString(36);
+            const rand = Math.random().toString(36).slice(2, 6);
+            const code = `BNO5-${ts}-${rand}`.toUpperCase();
+
+            await ctx.db.insert("bonoRedemptions", {
+                bonoCode: code,
+                listingId: String(bonoListing!._id),
+                ownerUserId: consumer._id,
+                sellerId: business._id,
+                validUntil: (bonoListing as any).validUntil,
+                status: "issued",
+                createdAt: new Date().toISOString(),
+            });
+        }
+
+        return "5 bonos creados y asignados al consumidor.";
+    }
 });

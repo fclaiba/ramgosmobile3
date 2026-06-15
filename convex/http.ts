@@ -4,7 +4,6 @@ import { httpAction } from "./_generated/server";
 import Stripe from "stripe";
 
 const http = httpRouter();
-const allowStripeMock = process.env.ALLOW_STRIPE_MOCK === "true";
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const zendeskEnabled = process.env.ZENDESK_ENABLED === "true";
@@ -12,7 +11,7 @@ const zendeskSubdomain = process.env.ZENDESK_SUBDOMAIN;
 const zendeskEmail = process.env.ZENDESK_EMAIL;
 const zendeskApiToken = process.env.ZENDESK_API_TOKEN;
 
-const stripe = new Stripe(stripeSecretKey || "sk_test_mock_fallback", {
+const stripe = new Stripe(stripeSecretKey!, {
     apiVersion: "2024-04-10" as any,
 });
 
@@ -34,7 +33,7 @@ http.route({
     path: "/stripe-webhook",
     method: "POST",
     handler: httpAction(async (ctx, request) => {
-        if ((!stripeSecretKey || !stripeWebhookSecret) && !allowStripeMock) {
+        if (!stripeSecretKey || !stripeWebhookSecret) {
             return new Response("Stripe webhook no configurado para este entorno.", { status: 503 });
         }
 
@@ -232,6 +231,31 @@ http.route({
                                     `[Webhook] invoice.* sub fetch failed: ${e.message}`,
                                 );
                             }
+                        }
+                        break;
+                    }
+
+                    // ----- Stripe Identity (KYC/KYB) -----
+                    case "identity.verification_session.verified": {
+                        const session = event.data.object as any;
+                        const userId = session.metadata?.userId;
+                        if (userId) {
+                            await ctx.runMutation(internal.users.internalApproveKYC, {
+                                targetUserId: userId as any,
+                            });
+                            console.log(`[Webhook] KYC Approved for user: ${userId}`);
+                        }
+                        break;
+                    }
+                    case "identity.verification_session.requires_input":
+                    case "identity.verification_session.canceled": {
+                        const session = event.data.object as any;
+                        const userId = session.metadata?.userId;
+                        if (userId) {
+                            await ctx.runMutation(internal.users.internalRejectKYC, {
+                                targetUserId: userId as any,
+                            });
+                            console.log(`[Webhook] KYC Rejected/Requires Input for user: ${userId}`);
                         }
                         break;
                     }

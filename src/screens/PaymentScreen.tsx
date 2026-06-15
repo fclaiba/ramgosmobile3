@@ -9,7 +9,8 @@ import { useCart } from '../contexts/CartContext';
 import { usePoints } from '../contexts/PointsContext';
 import { useMarketplace, ShippingMethod } from '../contexts/MarketplaceContext';
 import { useFintech, PaymentRecord } from '../contexts/FintechContext';
-import { PaymentSplit } from '../services/fintech/paymentSplitter';
+
+import { useSecurePayment } from '../hooks/useSecurePayment';
 import { PaymentProviderKey } from '../services/fintech/paymentProviders';
 import { POINT_VALUE_USD } from '../contexts/RewardsContext';
 import { useReferral } from '../contexts/ReferralContext';
@@ -18,7 +19,6 @@ import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
 import { useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { StripePaymentModal } from '../components/stripe/StripePaymentModal';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function PaymentScreen({ route, navigation }: any) {
@@ -57,9 +57,7 @@ export default function PaymentScreen({ route, navigation }: any) {
     const { user } = useAuth();
 
     // Stripe
-    const stripeCreatePaymentIntentRef = (api as any).stripe?.createPaymentIntent;
-    const createPaymentIntentAction = useAction(stripeCreatePaymentIntentRef || api.users.syncUser);
-    const [stripeModalVisible, setStripeModalVisible] = useState(false);
+    const createPaymentIntentAction = useAction(api.stripe.createPaymentIntent);
     const [clientSecret, setClientSecret] = useState('');
 
     const [loading, setLoading] = useState(false);
@@ -69,6 +67,8 @@ export default function PaymentScreen({ route, navigation }: any) {
     const [selectedProvider, setSelectedProvider] = useState<PaymentProviderKey>('stripe');
     const [createdOrders, setCreatedOrders] = useState<string[]>([]);
 
+    const { processPayment } = useSecurePayment();
+
     const shippingLabel =
         shippingMethod === 'express'
             ? 'Express'
@@ -77,12 +77,7 @@ export default function PaymentScreen({ route, navigation }: any) {
                 : 'Estándar';
 
     // Form State
-    const [name, setName] = useState('');
-    const [cardNumber, setCardNumber] = useState('');
-    const [expiry, setExpiry] = useState('');
-    const [cvc, setCvc] = useState('');
-    const [saveCard, setSaveCard] = useState(false);
-    const [cardBrand, setCardBrand] = useState('VISA');
+    const [focusedField, setFocusedField] = useState<string>('');
 
     // Points Redemption State
     const [localAppliedPoints, setLocalAppliedPoints] = useState<number>(discountUsedPoints);
@@ -119,7 +114,6 @@ export default function PaymentScreen({ route, navigation }: any) {
             return;
         }
 
-        // Constitución: 1 punto = $0.01
         const discountValue = pointsToUse * POINT_VALUE_USD;
 
         if (discountValue > amount) {
@@ -160,7 +154,7 @@ export default function PaymentScreen({ route, navigation }: any) {
         setPointsInput('');
     };
 
-    const splitPreview = useMemo<PaymentSplit | null>(() => {
+    const splitPreview = useMemo(() => {
         if (!finalAmount || finalAmount <= 0) {
             return null;
         }
@@ -195,33 +189,23 @@ export default function PaymentScreen({ route, navigation }: any) {
         setCreatedOrders([]);
     }, [amount]);
 
+    const displayCardNumber = '•••• •••• •••• ••••';
+    const displayExpiry = 'MM/YY';
+
     const handlePayment = async () => {
         if (!gateCheckout()) {
             return;
         }
 
-        // If amount is 0 (fully paid with points), skip card validation
         const requiresCard = finalAmount > 0;
 
-        if (requiresCard && (!cardNumber || !expiry || !cvc || !name)) {
-            show('Por favor completa todos los detalles de la tarjeta.', 'warning');
-            return;
+        if (requiresCard) {
+            // Con PaymentSheet, los datos de la tarjeta se piden en el modal nativo.
+            // Ya no validamos isCardComplete o name aquí.
         }
 
         if (finalAmount < 0) {
             show('El monto a pagar no puede ser negativo.', 'error');
-            return;
-        }
-
-        const cleanedCardNumber = cardNumber.replace(/\D/g, '');
-        if (requiresCard && cleanedCardNumber.length < 12) {
-            show('Revisa que el número de tarjeta sea correcto.', 'warning');
-            return;
-        }
-
-        const [expMonthRaw, expYearRaw] = expiry.split('/');
-        if (requiresCard && (!expMonthRaw || !expYearRaw)) {
-            show('Ingresa una fecha de expiración en formato MM/YY.', 'warning');
             return;
         }
 
@@ -230,11 +214,12 @@ export default function PaymentScreen({ route, navigation }: any) {
 
         try {
             if (finalAmount > 0) {
-                if (!stripeCreatePaymentIntentRef) {
+                if (!createPaymentIntentAction) {
                     show('Stripe no está inicializado. Configura y redeploya credenciales antes de cobrar.', 'error');
                     setLoading(false);
                     return;
                 }
+
                 const amountInCents = Math.round(finalAmount * 100);
                 const intentResult = await createPaymentIntentAction({
                     amountInCents,
@@ -252,18 +237,35 @@ export default function PaymentScreen({ route, navigation }: any) {
                         discountAmount: localDiscountAmount,
                     },
                 });
+
                 if (intentResult && intentResult.clientSecret) {
-                    setClientSecret(intentResult.clientSecret);
-                    setStripeModalVisible(true);
+                    // Confirmar con el SDK en el frontend
+                    const confirmRes = await processPayment(intentResult.clientSecret);
+                    
+                    if (!confirmRes.success) {
+                        const msg = confirmRes.error || 'Error al confirmar el pago en la pasarela';
+                        setProcessingError(msg);
+                        show(msg, 'error');
+                        setLoading(false);
+                        return;
+                    }
+
+                    // Payment succeeded backend-side
+                    await finalizeOrderProcess();
+                    return;
+                } else if (intentResult && intentResult.status) {
+                    const msg = `El pago requiere validación adicional o falló: ${intentResult.status}`;
+                    setProcessingError(msg);
+                    show(msg, 'error');
                     setLoading(false);
                     return;
                 } else {
-                    show('Error al iniciar el pago seguro', 'error');
+                    show('Error al confirmar el pago en el servidor', 'error');
                     setLoading(false);
                     return;
                 }
             } else {
-                // Fully paid with points — no Stripe charge needed
+                // Fully paid with points
                 await finalizeOrderProcess();
             }
         } catch (error: any) {
@@ -289,19 +291,21 @@ export default function PaymentScreen({ route, navigation }: any) {
                 commissionRate,
                 influencerRate,
             });
-            const receipt: PaymentRecord = {
-                id: finalAmount > 0 ? `stripe-${Date.now()}` : `pts-${Date.now()}`,
-                status: 'succeeded',
+
+            const receipt = {
+                id: `pay_${Date.now()}`,
+                orderId: 'N/A',
                 amount: finalAmount,
                 currency,
+                status: 'succeeded',
                 provider: selectedProvider,
-                providerFee: finalAmount > 0 ? Math.round(finalAmount * 0.029 * 100) / 100 + 0.3 : 0,
+                providerFee: 0,
                 method: {
-                    brand: finalAmount > 0 ? cardBrand : 'points',
-                    last4: finalAmount > 0 ? cardNumber.replace(/\D/g, '').slice(-4).padStart(4, '•') : '0000',
-                    expMonth: expiry.split('/')[0] || '00',
-                    expYear: expiry.split('/')[1] || '00',
-                    ownerName: name.trim() || 'Puntos Ramgos',
+                    brand: finalAmount > 0 ? 'card' : 'points',
+                    last4: finalAmount > 0 ? '••••' : '0000',
+                    expMonth: '00',
+                    expYear: '00',
+                    ownerName: 'Puntos Ramgos',
                 },
                 split: splitData,
                 gateway: {
@@ -319,7 +323,7 @@ export default function PaymentScreen({ route, navigation }: any) {
                 metadata: { cartItems: cartSnapshot, shippingMethod, shippingCost },
                 description: params.description ?? `Compra en ${sellerName}`,
                 createdAt: new Date().toISOString(),
-            };
+            } as PaymentRecord;
 
             setPaymentReceipt(receipt);
             setSuccess(true);
@@ -371,24 +375,7 @@ export default function PaymentScreen({ route, navigation }: any) {
         }
     };
 
-    // Card Number Formatting
-    const handleCardNumberChange = (text: string) => {
-        const cleaned = text.replace(/\D/g, '');
-        const limited = cleaned.slice(0, 19);
-        const formatted = limited.replace(/(\d{4})(?=\d)/g, '$1 ');
-        setCardNumber(formatted.trim());
-        setCardBrand(detectCardBrand(limited));
-    };
 
-    // Expiry Formatting
-    const handleExpiryChange = (text: string) => {
-        const cleaned = text.replace(/\D/g, '');
-        if (cleaned.length >= 2) {
-            setExpiry(`${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}`);
-        } else {
-            setExpiry(cleaned);
-        }
-    };
 
     const receiptProviderName = useMemo(() => {
         if (!paymentReceipt) {
@@ -690,96 +677,19 @@ export default function PaymentScreen({ route, navigation }: any) {
                         </View>
                     )}
 
-                    {/* Credit Card Visual */}
-                    <View style={styles.cardVisualContainer}>
-                        <LinearGradient
-                            colors={['#1e1b4b', '#4338ca', '#6366f1']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={[styles.cardVisual, { width: width - 40 }]}
-                        >
-                            <View style={styles.cardHeader}>
-                                <Chip />
-                                <Text style={styles.cardBrand}>{cardBrand.toUpperCase()}</Text>
-                            </View>
-                            <Text style={styles.cardNumberVisual}>{cardNumber || '•••• •••• •••• ••••'}</Text>
-                            <View style={styles.cardFooter}>
-                                <View>
-                                    <Text style={styles.cardLabel}>TITULAR</Text>
-                                    <Text style={styles.cardValue}>{name.toUpperCase() || 'NOMBRE'}</Text>
-                                </View>
-                                <View>
-                                    <Text style={styles.cardLabel}>EXPIRA</Text>
-                                    <Text style={styles.cardValue}>{expiry || 'MM/YY'}</Text>
-                                </View>
-                            </View>
-                        </LinearGradient>
-                    </View>
-
+                    {/* Credit Card Visual Removed */}
                     {/* Form */}
                     <View style={styles.formContainer}>
-                        <Text style={styles.sectionTitle}>Detalles de la Tarjeta</Text>
+                        <Text style={styles.sectionTitle}>Detalles de Pago</Text>
 
                         <View style={styles.inputGroup}>
-                            <View style={styles.inputWrapper}>
-                                <User size={20} color="#6b7280" style={styles.inputIcon} />
-                                <TextInput
-                                    placeholder="Nombre del Titular"
-                                    style={styles.input}
-                                    value={name}
-                                    onChangeText={setName}
-                                    placeholderTextColor="#9ca3af"
-                                />
-                            </View>
-
-                            <View style={styles.inputWrapper}>
-                                <CreditCard size={20} color="#6b7280" style={styles.inputIcon} />
-                                <TextInput
-                                    placeholder="Número de Tarjeta"
-                                    style={styles.input}
-                                    value={cardNumber}
-                                    onChangeText={handleCardNumberChange}
-                                    keyboardType="numeric"
-                                    maxLength={19}
-                                    placeholderTextColor="#9ca3af"
-                                />
-                            </View>
-
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <View style={[styles.inputWrapper, { flex: 1 }]}>
-                                    <Calendar size={20} color="#6b7280" style={styles.inputIcon} />
-                                    <TextInput
-                                        placeholder="MM/YY"
-                                        style={styles.input}
-                                        value={expiry}
-                                        onChangeText={handleExpiryChange}
-                                        keyboardType="numeric"
-                                        maxLength={5}
-                                        placeholderTextColor="#9ca3af"
-                                    />
-                                </View>
-                                <View style={[styles.inputWrapper, { flex: 1 }]}>
-                                    <Lock size={20} color="#6b7280" style={styles.inputIcon} />
-                                    <TextInput
-                                        placeholder="CVC"
-                                        style={styles.input}
-                                        value={cvc}
-                                        onChangeText={setCvc}
-                                        keyboardType="numeric"
-                                        maxLength={3}
-                                        secureTextEntry
-                                        placeholderTextColor="#9ca3af"
-                                    />
-                                </View>
+                            <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#374151' : '#F3F4F6', borderColor: 'transparent' }]}>
+                                <Lock size={20} color="#059669" style={{ marginRight: 10 }} />
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#4B5563', flex: 1 }}>
+                                    Los datos de tu tarjeta se solicitarán de forma segura al confirmar el pago.
+                                </Text>
                             </View>
                         </View>
-
-                        <TouchableOpacity style={styles.saveCardRow} onPress={() => setSaveCard(!saveCard)}>
-                            <View style={[styles.checkbox, saveCard && styles.checkboxChecked]}>
-                                {saveCard && <CheckCircle size={14} color="#fff" />}
-                            </View>
-                            <Text style={styles.saveCardText}>Guardar tarjeta para futuras compras</Text>
-                        </TouchableOpacity>
                     </View>
 
                     {/* Security Badge */}
@@ -817,24 +727,7 @@ export default function PaymentScreen({ route, navigation }: any) {
                 </TouchableOpacity>
             </View>
 
-            {stripeModalVisible && (
-                <StripePaymentModal
-                    visible={stripeModalVisible}
-                    clientSecret={clientSecret}
-                    onPaymentSuccess={() => {
-                        setStripeModalVisible(false);
-                        finalizeOrderProcess();
-                    }}
-                    onPaymentError={(err) => {
-                        setStripeModalVisible(false);
-                        show(err, 'error');
-                    }}
-                    onCancel={() => {
-                        setStripeModalVisible(false);
-                        show('Pago cancelado', 'info');
-                    }}
-                />
-            )}
+
         </View>
     );
 }
@@ -972,6 +865,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e5e7eb', borderRadius: 12, height: 50, paddingHorizontal: 12 },
     inputIcon: { marginRight: 10 },
     input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', height: '100%' },
+    cardField: { width: '100%', height: 50, marginTop: 4 },
 
     saveCardRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
     checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#6b7280', alignItems: 'center', justifyContent: 'center', marginRight: 10 },

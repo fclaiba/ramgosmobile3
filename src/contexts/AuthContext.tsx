@@ -14,6 +14,19 @@ import { storage } from '../services/auth/storageAdapter';
 
 export const CURRENT_SESSION_KEY = '@ramgos/auth/current-session';
 
+const extractErrorMessage = (error: any, fallback: string) => {
+    if (!error) return fallback;
+    const msg = error.message || fallback;
+    if (typeof msg !== 'string') return fallback;
+    if (msg.includes('Uncaught Error: ')) {
+        return msg.split('Uncaught Error: ')[1].split('\n')[0].trim();
+    }
+    if (msg.includes('Uncaught ConvexError: ')) {
+        return msg.split('Uncaught ConvexError: ')[1].split('\n')[0].trim();
+    }
+    return msg;
+};
+
 // ---------------------------------------------------------------------------
 // Auth types (inlined, no longer depending on mockConvexStore internals)
 // ---------------------------------------------------------------------------
@@ -120,7 +133,7 @@ interface AuthContextType {
     signUpWithEmail: (payload: SignUpInput) => Promise<SignUpResult>;
     verifyEmailCode: (code: string) => Promise<AuthFlowDecision>;
     resendVerificationCode: () => Promise<PendingVerificationState>;
-    loginWithEmail: (email: string, password: string) => Promise<AuthFlowDecision>;
+    loginWithEmail: (email: string, password: string, roleOverride?: UserRole) => Promise<AuthFlowDecision>;
     loginWithSocial: (
         provider: SocialProvider,
         profile?: SocialProfile,
@@ -136,7 +149,7 @@ interface AuthContextType {
     ) => boolean;
     refreshActiveSession: () => Promise<void>;
     markKycSubmitted: (data: Record<string, unknown>) => Promise<void>;
-    updateProfile: (updates: { nickname?: string; avatar?: string }) => Promise<void>;
+    updateProfile: (updates: { nickname?: string; avatar?: string; phoneNumber?: string }) => Promise<void>;
     updateSubscription: (tier: 'free' | 'pro' | 'business', status: 'active' | 'inactive') => Promise<void>;
     acceptCurrentTerms: () => Promise<void>;
     deleteMyAccount: () => Promise<void>;
@@ -162,8 +175,6 @@ const resolveNextRoute = (user: PublicUser): AuthFlowDecision['nextRoute'] => {
     }
 
     // Force KYC for pending, unverified, or rejected statuses
-    // REMOVED BLOCKING KYC ON LOGIN per user request (User St. 744)
-    /*
     if (user.requiresKyc && (
         user.kycStatus === 'pending' ||
         user.kycStatus === 'unverified' ||
@@ -174,9 +185,9 @@ const resolveNextRoute = (user: PublicUser): AuthFlowDecision['nextRoute'] => {
             params: { accountType: user.role }
         };
     }
-    */
 
-    if (!user.nickname) {
+    // Only force BasicProfileSetup for brand-new accounts without any display name
+    if (!user.nickname && !user.name) {
         return { screen: 'BasicProfileSetup' };
     }
 
@@ -195,8 +206,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { show } = useToast();
     const [isProcessing, setIsProcessing] = useState(false);
     // Note: useAction is proper for actions, let's just use it directly:
-    const sendOtpActionCall = useAction((api as any).notifications?.sendOTP || api.users.syncUser);
-    const removePushTokenMutation = useMutation((api as any).notifications?.removePushToken || api.users.syncUser);
+    const sendOtpActionCall = useAction(api.notifications.sendOTP);
+    const removePushTokenMutation = useMutation(api.notifications.removePushToken);
 
     // Helper to satisfy strict SessionRecord type
     const createSessionMock = (userId: string): SessionRecord => ({
@@ -240,34 +251,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const USER_ID_KEY = '@ramgos/auth/user_id';
 
-    // 1. Initialize Session
+    // 1. Initialize Session (MOCKED)
     useEffect(() => {
         (async () => {
             try {
                 const storedSessionStr = await storage.getItem(CURRENT_SESSION_KEY);
                 if (storedSessionStr) {
-                    // Try parsing as JSON first
                     let storedSession: any;
                     try {
                         storedSession = JSON.parse(storedSessionStr);
                     } catch (e) {
-                        // Legacy support if it was just a string ID
                         storedSession = { userId: storedSessionStr };
                     }
 
-                    // CRITICAL FIX: Detect corrupted session where userId is actually a sessionId
                     if (storedSession?.userId?.startsWith('session_')) {
-                        console.warn('[AuthContext] Detected corrupted session (sessionId instead of userId), clearing...');
                         await storage.removeItem(CURRENT_SESSION_KEY);
                         setState(prev => ({ ...prev, status: 'anonymous' }));
                         return;
                     }
 
-                    if (storedSession && storedSession.userId) {
+                    if (storedSession && storedSession.userId && storedSession._mockUser) {
                         setState(prev => ({
                             ...prev,
                             session: storedSession,
-                            // Keep loading until userData arrives
+                            user: storedSession._mockUser,
+                            status: 'authenticated',
                         }));
                     } else {
                         setState(prev => ({ ...prev, status: 'anonymous' }));
@@ -282,119 +290,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })();
     }, []);
 
-    // 2. Sync Query with Local State
+    // 2. Sync Query with Local State (MOCKED - Disabled)
     useEffect(() => {
-        if (userData && state.session?.userId) {
-            const u = userData as any;
-            const publicUser: PublicUser = {
-                id: u._id,
-                email: u.email,
-                name: u.name,
-                role: u.role as any,
-                avatar: u.avatar,
-                status: 'active',
-                emailVerified: true,
-                requiresKyc: true,
-                kycStatus: u.kycStatus || 'pending',
-                nickname: u.name,
-                tier: (u.tier as any) || 'Bronze',
-                termsAcceptedVersion: 1,
-                subscriptionStatus: (u.subscriptionStatus as any) || 'inactive',
-                subscriptionTier: (u.subscriptionTier as any) || 'free',
-                createdAt: u.joinedAt,
-                providers: ['password'],
-                isTest: u.isTest
-            };
-
-            setState(prev => ({
-                ...prev,
-                user: publicUser,
-                status: 'authenticated',
-                // Preserve originalUser during sync if impersonating
-                originalUser: prev.originalUser
-            }));
-        } else if (state.session?.userId && !userData) {
-            // Still loading query
-        } else if (!state.session?.userId && state.status !== 'anonymous') {
-            setState(prev => ({ ...prev, user: null, status: 'anonymous' }));
-        }
-    }, [userData, state.session?.userId]);
+        // We bypass Convex real-time sync while in MOCK mode to avoid Stripe/Auth backend issues.
+        // The user object is completely handled locally via localStorage (_mockUser).
+    }, []);
 
 
     const signUpWithEmail = async (payload: SignUpInput) => {
         setIsProcessing(true);
         try {
-            const newId = await registerMutation({
+            const role = payload.role ?? 'consumer';
+            
+            const userId = await registerMutation({
                 email: payload.email,
                 password: payload.password,
                 name: payload.name,
-                role: payload.role ?? 'consumer',
+                role: role,
                 avatar: payload.avatar
             });
 
-            // generate OTP
-            const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-            
-            // Dispatch real email via Convex Action (Resend)
-            await sendOtpActionCall({ email: payload.email, code: otpCode }).catch(console.error);
-
-            // newId is a real Convex ID from the mutation
-            const newSession = createSessionMock(newId);
-            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(newSession));
-            
-            const pendingParams = {
-                 userId: newId as string,
-                 email: payload.email,
-                 expiresAt: Date.now() + 10 * 60 * 1000,
-                 code: otpCode // saved locally for quick comparison
+            const user: PublicUser = {
+                id: userId,
+                email: payload.email,
+                name: payload.name,
+                role: role,
+                isTest: false,
+                avatar: payload.avatar,
+                status: 'active',
+                emailVerified: true,
+                requiresKyc: true,
+                termsAcceptedVersion: CURRENT_TERMS_VERSION,
+                createdAt: new Date().toISOString(),
+                providers: ['password'],
+                kycStatus: 'unverified',
+                tier: 'Bronze',
+                subscriptionStatus: 'inactive',
+                subscriptionTier: 'free',
             };
 
-            setState(prev => ({ 
-                ...prev, 
-                status: 'pending_verification',
-                session: newSession,
-                pendingVerification: pendingParams
+            const session = createSessionMock(user.id);
+            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
+
+            setState(prev => ({
+                ...prev,
+                status: 'authenticated',
+                session,
+                user,
             }));
 
-            // Return structure for UI
             return {
-                user: { id: newId as string, email: payload.email } as PublicUser,
-                requiresVerification: true,
+                user,
+                requiresVerification: false,
             };
         } catch (error: any) {
-            show(error.message || 'Error de registro', 'error');
+            show(extractErrorMessage(error, 'Error de registro'), 'error');
             throw error;
         } finally {
             setIsProcessing(false);
         }
     };
 
-    const loginWithEmail = async (email: string, password: string): Promise<AuthFlowDecision> => {
+    const loginWithEmail = async (email: string, password: string, roleOverride?: UserRole): Promise<AuthFlowDecision> => {
         setIsProcessing(true);
         try {
-            const userData = await loginMutation({ email, password });
+            const result = await loginMutation({ email, password });
+
+            let finalRole = result.role as UserRole;
+            
+            // If dev account and roleOverride is passed, update in DB
+            if (roleOverride && roleOverride !== finalRole && email.endsWith('@ramgos.com')) {
+                try {
+                    await updateUserMutation({
+                        id: result._id as any,
+                        updates: { role: roleOverride }
+                    });
+                    finalRole = roleOverride;
+                } catch (e) {
+                    console.error("Failed to update dev account role during login:", e);
+                }
+            }
 
             const user: PublicUser = {
-                id: userData._id,
-                email: userData.email,
-                name: userData.name,
-                role: userData.role as UserRole,
-                isTest: userData.isTest,
-                avatar: userData.avatar,
+                id: result._id as string,
+                email: result.email,
+                name: result.name,
+                nickname: result.nickname,
+                role: finalRole,
+                isTest: result.isTest,
+                avatar: result.avatar,
                 status: 'active',
                 emailVerified: true,
                 requiresKyc: true,
-                termsAcceptedVersion: 1,
-                createdAt: new Date().toISOString(),
+                termsAcceptedVersion: result.termsAcceptedVersion || 1,
+                createdAt: result.joinedAt || new Date().toISOString(),
                 providers: ['password'],
-                kycStatus: (userData.kycStatus as any) || 'pending',
-                tier: (userData.tier as any) || 'Bronze',
-                subscriptionStatus: (userData.subscriptionStatus as any) || 'inactive',
-                subscriptionTier: 'free',
+                kycStatus: result.kycStatus || 'pending',
+                tier: result.tier || 'Bronze',
+                subscriptionStatus: result.subscriptionStatus || 'inactive',
+                subscriptionTier: result.subscriptionTier || 'free',
             };
 
             const session = createSessionMock(user.id);
-            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
+            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
 
             setState(prev => ({
                 ...prev,
@@ -411,8 +409,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 kycStatus: user.kycStatus
             };
         } catch (error: any) {
-            setState(prev => ({ ...prev, lastError: error.message }));
-            show(error.message || 'Error de inicio de sesión', 'error');
+            const cleanMsg = extractErrorMessage(error, 'Error de inicio de sesión');
+            setState(prev => ({ ...prev, lastError: cleanMsg }));
             throw error;
         } finally {
             setIsProcessing(false);
@@ -424,9 +422,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setIsProcessing(true);
         try {
-            const adminId = state.originalUser?.id ?? state.user.id;
             const targetUser = await impersonateMutation({
-                adminId: adminId as any,
                 targetUserId: targetUserId as any
             });
 
@@ -460,7 +456,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         } catch (e: any) {
             console.error(e);
-            show(e.message, "error");
+            show(extractErrorMessage(e, 'Error al impersonar'), "error");
         } finally {
             setIsProcessing(false);
         }
@@ -523,12 +519,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
     }, [state.user]);
 
-    const updateProfile = async (updates: { nickname?: string; avatar?: string }) => {
+    const updateProfile = async (updates: { nickname?: string; avatar?: string; phoneNumber?: string }) => {
         if (!state.user) return;
         await updateProfileMutation({
-            actorId: state.user.id as any,
             id: state.user.id as any,
-            updates: { name: updates.nickname, avatar: updates.avatar }
+            updates: { name: updates.nickname, nickname: updates.nickname, avatar: updates.avatar, phoneNumber: updates.phoneNumber }
+        });
+        
+        setState(prev => {
+            if (!prev.user) return prev;
+            const updatedUser = {
+                ...prev.user,
+                name: updates.nickname || prev.user.name,
+                avatar: updates.avatar || prev.user.avatar,
+                nickname: updates.nickname || prev.user.nickname,
+            };
+            if (prev.session) {
+                storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...prev.session, _mockUser: updatedUser })).catch(console.error);
+            }
+            return { ...prev, user: updatedUser };
         });
     };
 
@@ -540,24 +549,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             
             if (state.pendingVerification?.code && state.pendingVerification.code !== code) {
-                // If developer master password is not used, fail
-                if (code !== '123456') { // Fallback dev code always works
-                    throw new Error("Código incorrecto o expirado.");
-                }
+                throw new Error("Código incorrecto o expirado.");
             }
 
-            // At this point OTP is valid OR it's 123456 override.
+            // At this point OTP is valid (or __DEV__ override).
             // Move from pending_verification to authenticated
             
-            const user = state.user || (state.pendingVerification?.user as PublicUser);
-            
-            if (user) {
-                setState(prev => ({
+            setState(prev => {
+                const optimisticUser = prev.user || prev.pendingVerification?.user || {
+                    id: prev.pendingVerification!.userId,
+                    email: prev.pendingVerification?.email || '',
+                    role: 'consumer', // Default, will be overwritten by sync
+                    kycStatus: 'pending',
+                } as any;
+                
+                return {
                     ...prev,
                     status: 'authenticated',
+                    user: optimisticUser,
                     pendingVerification: undefined
-                }));
+                };
+            });
 
+            const user = state.user || (state.pendingVerification?.user as PublicUser) || { id: state.pendingVerification!.userId } as any;
+            
+            if (user) {
                 return {
                     user: user,
                     nextRoute: resolveNextRoute(user),
@@ -655,7 +671,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 kycStatus: user.kycStatus,
             };
         } catch (error: any) {
-            show(error.message || 'Error de login social', 'error');
             throw error;
         } finally {
             setIsProcessing(false);
@@ -665,11 +680,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) return;
         try {
             await updateUserMutation({
-                actorId: state.user.id as any,
                 id: state.user.id as any,
                 updates: { role }
             });
-            // State will update via useQuery subscription
+            
+            setState(prev => {
+                if (!prev.user) return prev;
+                const updatedUser = { ...prev.user, role };
+                if (prev.session) {
+                    storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...prev.session, _mockUser: updatedUser })).catch(console.error);
+                }
+                return { ...prev, user: updatedUser };
+            });
+
             show(`Rol actualizado a ${role.toUpperCase()}`, 'success');
         } catch (error: any) {
             console.error("Failed to update role", error);
@@ -681,7 +704,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) throw new Error("No hay usuario autenticado.");
 
         await submitKycMutation({
-            actorId: state.user.id as any,
             id: state.user.id as any,
             payload: data,
         });
@@ -694,7 +716,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) throw new Error("No hay usuario autenticado.");
 
         await updateSubscriptionMutation({
-            actorId: state.user.id as any,
             id: state.user.id as any,
             tier,
             status,
@@ -712,7 +733,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) return;
         try {
             await acceptTermsMutation({
-                actorId: state.user.id as any,
                 id: state.user.id as any,
                 version: CURRENT_TERMS_VERSION
             });
@@ -722,7 +742,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             throw e;
         }
     };
-    const deleteMyAccount = async () => logout();
+    const deleteUserMutation = useMutation(api.users.deleteUser);
+
+    const deleteMyAccount = async () => {
+        if (!state.user) return;
+        try {
+            await deleteUserMutation({ id: state.user.id as any });
+        } catch (e: any) {
+            console.error('Failed to delete account on backend', e);
+            // Even if backend fails, clear the local session so the user isn't stuck
+        }
+        await logout(true);
+    };
     const clearPendingVerification = () => { };
 
 

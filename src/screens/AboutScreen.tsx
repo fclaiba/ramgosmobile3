@@ -5,8 +5,12 @@ import { Card, CardContent } from '../components/ui/card';
 import { MobileHeader } from '../components/MobileHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useToast } from '../contexts/ToastContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function AboutScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { show } = useToast();
 
     const stats = [
@@ -108,33 +112,33 @@ export default function AboutScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFAFA' },
+const getStyles = (isDark: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
     content: { padding: 16 },
     heroCard: { borderRadius: 24, overflow: 'hidden', marginBottom: 24, borderWidth: 0 },
     heroGradient: { padding: 24, alignItems: 'center' },
     heroEmoji: { fontSize: 48, marginBottom: 16 },
-    heroTitle: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 8 },
+    heroTitle: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#1F2937' : '#fff', marginBottom: 8 },
     heroSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 16 },
     versionBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-    versionText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+    versionText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: '600' },
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
-    statCard: { width: '48%', borderWidth: 0, shadowColor: "#000", shadowOpacity: 0.05, elevation: 1 },
+    statCard: { width: '48%', borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.05, elevation: 1 },
     statContent: { padding: 16, alignItems: 'center' },
     statIconContainer: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    statValue: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-    statLabel: { fontSize: 12, color: '#666' },
+    statValue: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#333' },
+    statLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666' },
     section: { marginBottom: 24 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: '#111' },
     missionContent: { padding: 20, flexDirection: 'row', gap: 16 },
     missionIconContainer: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#f3e8ff', alignItems: 'center', justifyContent: 'center' },
     missionText: { flex: 1, fontSize: 14, color: '#444', lineHeight: 20 },
-    card: { borderWidth: 0, shadowColor: "#000", shadowOpacity: 0.05, elevation: 1 },
+    card: { borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.05, elevation: 1 },
     teamCard: { width: 120, marginRight: 12, borderWidth: 0 },
     teamContent: { padding: 12, alignItems: 'center' },
     teamImage: { width: 64, height: 64, borderRadius: 32, marginBottom: 8 },
-    teamName: { fontSize: 14, fontWeight: '600', color: '#333' },
-    teamRole: { fontSize: 12, color: '#666' },
-    copyright: { fontSize: 12, color: '#999' },
+    teamName: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#333' },
+    teamRole: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666' },
+    copyright: { fontSize: 12, color: isDark ? '#6B7280' : '#999' },
     legalLink: { fontSize: 12, color: '#007AFF', fontWeight: '500' }
 });

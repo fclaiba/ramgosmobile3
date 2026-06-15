@@ -7,6 +7,7 @@ import * as Location from 'expo-location';
 import { Button } from './ui/button';
 import { X, MapPin, Check } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useUserLocation } from '../hooks/useUserLocation';
 
 interface LocationData {
     lat: number;
@@ -29,6 +30,7 @@ const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
 export default function LocationPickerModal({ visible, onClose, onSelect, initialLocation }: LocationPickerModalProps) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const [region, setRegion] = useState<Region>({
         latitude: initialLocation?.lat || -34.6037,
         latitudeDelta: LATITUDE_DELTA,
@@ -39,30 +41,22 @@ export default function LocationPickerModal({ visible, onClose, onSelect, initia
     const [address, setAddress] = useState<string>('Selecciona una ubicación...');
     const [loading, setLoading] = useState(false);
 
+    const { location: hookLocation, refetch: refetchLocation } = useUserLocation();
+
     useEffect(() => {
         if (visible) {
             // Get current location if no initial
-            if (!initialLocation) {
-                (async () => {
-                    try {
-                        const { status } = await Location.requestForegroundPermissionsAsync();
-                        if (status === 'granted') {
-                            const loc = await Location.getCurrentPositionAsync({});
-                            const newRegion = {
-                                latitude: loc.coords.latitude,
-                                longitude: loc.coords.longitude,
-                                latitudeDelta: LATITUDE_DELTA,
-                                longitudeDelta: LONGITUDE_DELTA
-                            };
-                            setRegion(newRegion);
-                            setMarkerCoord(loc.coords);
-                            fetchAddress(loc.coords.latitude, loc.coords.longitude);
-                        }
-                    } catch (e) {
-                        console.log("Error getting location", e);
-                    }
-                })();
-            } else {
+            if (!initialLocation && hookLocation) {
+                const newRegion = {
+                    latitude: hookLocation.coords.latitude,
+                    longitude: hookLocation.coords.longitude,
+                    latitudeDelta: LATITUDE_DELTA,
+                    longitudeDelta: LONGITUDE_DELTA
+                };
+                setRegion(newRegion);
+                setMarkerCoord(hookLocation.coords);
+                fetchAddress(hookLocation.coords.latitude, hookLocation.coords.longitude);
+            } else if (initialLocation) {
                 setRegion({
                     latitude: initialLocation.lat,
                     latitudeDelta: LATITUDE_DELTA,
@@ -73,7 +67,7 @@ export default function LocationPickerModal({ visible, onClose, onSelect, initia
                 fetchAddress(initialLocation.lat, initialLocation.lng);
             }
         }
-    }, [visible]);
+    }, [visible, initialLocation, hookLocation]);
 
     const fetchAddress = async (lat: number, lng: number) => {
         try {
@@ -169,8 +163,8 @@ export default function LocationPickerModal({ visible, onClose, onSelect, initia
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+const getStyles = (isDark: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' },
     containerDark: { backgroundColor: '#111827' },
     header: {
         paddingTop: 50,
@@ -179,13 +173,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         zIndex: 10
     },
     headerDark: { backgroundColor: '#111827' },
     closeBtn: { padding: 8 },
     headerTitle: { fontSize: 18, fontWeight: 'bold' },
-    headerTitleDark: { color: '#fff' },
+    headerTitleDark: { color: isDark ? '#1F2937' : '#fff' },
 
     mapContainer: { flex: 1, position: 'relative' },
     centerMarkerContainer: {
@@ -199,19 +193,19 @@ const styles = StyleSheet.create({
     footer: {
         padding: 24,
         paddingBottom: 40,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         marginTop: -20,
-        shadowColor: "#000",
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,
         shadowRadius: 10,
         elevation: 10
     },
     footerDark: { backgroundColor: '#1F2937' },
-    addressLabel: { fontSize: 12, color: '#6B7280', textTransform: 'uppercase', marginBottom: 4 },
-    addressLabelDark: { color: '#9CA3AF' },
+    addressLabel: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', textTransform: 'uppercase', marginBottom: 4 },
+    addressLabelDark: { color: isDark ? '#6B7280' : '#9CA3AF' },
     addressText: { fontSize: 16, fontWeight: 'bold', color: '#111827', minHeight: 40 },
     addressTextDark: { color: '#F9FAFB' }
 });

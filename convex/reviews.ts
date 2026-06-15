@@ -7,7 +7,7 @@ import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 export const addReview = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         listingId: v.string(),
         userId: v.optional(v.string()),
         orderId: v.optional(v.string()),
@@ -25,19 +25,35 @@ export const addReview = mutation({
             throw new Error("Rating debe estar entre 1 y 5");
         }
 
-        // Check if order exists and belongs to user (if orderId provided)
-        let verified = false;
-        if (args.orderId) {
-            try {
-                const orderId = ctx.db.normalizeId("orders", args.orderId);
-                if (orderId) {
-                    const order = await ctx.db.get(orderId);
-                    verified = order?.userId === targetUserId;
-                }
-            } catch (e) {
-                // Order doesn't exist, not verified
-            }
+        const userOrders = await ctx.db
+            .query("orders")
+            .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+            .collect();
+
+        const eligibleOrders = userOrders.filter(order => 
+            order.status !== 'pending' && 
+            order.status !== 'cancelled' && 
+            order.items.some(item => item.listingId === args.listingId)
+        );
+
+        if (eligibleOrders.length === 0) {
+            throw new Error("Debes comprar este producto para poder reseñarlo");
         }
+
+        const existingReviews = await ctx.db
+            .query("reviews")
+            .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+            .filter((q) => q.eq(q.field("listingId"), args.listingId))
+            .collect();
+
+        if (existingReviews.length >= eligibleOrders.length) {
+            throw new Error("Ya has publicado una reseña por cada compra de este artículo");
+        }
+
+        const reviewedOrderIds = new Set(existingReviews.map(r => r.orderId).filter(Boolean));
+        const unreviewedOrder = eligibleOrders.find(o => !reviewedOrderIds.has(o._id));
+        const finalOrderId = args.orderId || (unreviewedOrder ? unreviewedOrder._id : eligibleOrders[0]._id);
+        const verified = true;
 
         // Get user info
         const userId = ctx.db.normalizeId("users", targetUserId);
@@ -55,7 +71,7 @@ export const addReview = mutation({
         // Insert review
         const reviewId = await ctx.db.insert("reviews", {
             listingId: args.listingId,
-            orderId: args.orderId,
+            orderId: finalOrderId,
             userId: targetUserId,
             userName,
             userAvatar,
@@ -119,9 +135,52 @@ export const getListingReviews = query({
     },
 });
 
+export const canReviewListing = query({
+    args: { listingId: v.string(), actorId: v.optional(v.any()) },
+    handler: async (ctx, args) => {
+        try {
+            const actor = await requireActor(ctx, args.actorId);
+            const targetUserId = actor.idString;
+
+            const userOrders = await ctx.db
+                .query("orders")
+                .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+                .collect();
+
+            const eligibleOrders = userOrders.filter(order => 
+                order.status !== 'pending' && 
+                order.status !== 'cancelled' && 
+                order.items.some(item => item.listingId === args.listingId)
+            );
+
+            if (eligibleOrders.length === 0) {
+                return { canReview: false, reason: "Debes comprar este producto para poder reseñarlo" };
+            }
+
+            const existingReviews = await ctx.db
+                .query("reviews")
+                .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+                .filter((q) => q.eq(q.field("listingId"), args.listingId))
+                .collect();
+
+            if (existingReviews.length >= eligibleOrders.length) {
+                return { canReview: false, reason: "Ya has publicado una reseña por cada compra de este artículo" };
+            }
+
+            const reviewedOrderIds = new Set(existingReviews.map(r => r.orderId).filter(Boolean));
+            const unreviewedOrder = eligibleOrders.find(o => !reviewedOrderIds.has(o._id));
+            const finalOrderId = unreviewedOrder ? unreviewedOrder._id : eligibleOrders[0]._id;
+
+            return { canReview: true, orderId: finalOrderId };
+        } catch (e) {
+            return { canReview: false, reason: "Inicia sesión para dejar una reseña" };
+        }
+    }
+});
+
 export const getUserReviews = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
@@ -150,7 +209,7 @@ export const markReviewHelpful = mutation({
 
 export const addSellerResponse = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         reviewId: v.id("reviews"),
         sellerId: v.optional(v.string()), // legacy fallback
         message: v.string(),
@@ -187,7 +246,7 @@ export const addSellerResponse = mutation({
 
 export const deleteReview = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         reviewId: v.id("reviews"),
         userId: v.optional(v.string()), // legacy fallback
     },

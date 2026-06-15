@@ -5,6 +5,7 @@ import { api } from '../../convex/_generated/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Star } from 'lucide-react-native';
+import { useToast } from '../contexts/ToastContext';
 
 interface ReviewsListProps {
     listingId: string;
@@ -13,16 +14,27 @@ interface ReviewsListProps {
 
 export const ReviewsList: React.FC<ReviewsListProps> = ({ listingId, onWriteReview }) => {
     const reviews = useQuery(api.reviews.getListingReviews, { listingId, limit: 5 });
+    const reviewEligibility = useQuery(api.reviews.canReviewListing, { listingId });
     const { theme, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { show } = useToast();
 
     if (reviews === undefined) return <Text style={{ color: '#9CA3AF', marginVertical: 8 }}>Cargando reseñas...</Text>;
 
     return (
         <View style={styles.container}>
             {onWriteReview && (
-                <TouchableOpacity onPress={onWriteReview} style={styles.writeReviewBtn}>
+                <TouchableOpacity 
+                    onPress={() => {
+                        if (reviewEligibility?.canReview) {
+                            onWriteReview();
+                        } else {
+                            show(reviewEligibility?.reason || "Inicia sesión para dejar una reseña", 'warning');
+                        }
+                    }} 
+                    style={[styles.writeReviewBtn, !reviewEligibility?.canReview && { opacity: 0.5 }]}
+                >
                     <Star size={16} color={isDark ? '#F9FAFB' : '#111827'} style={{ marginRight: 8 }} />
                     <Text style={styles.writeReviewText}>Escribir una reseña</Text>
                 </TouchableOpacity>
@@ -58,7 +70,7 @@ export const ReviewsList: React.FC<ReviewsListProps> = ({ listingId, onWriteRevi
                                 </View>
                             </View>
                         </View>
-                        <Text style={styles.title}>{review.title}</Text>
+                        {review.title ? <Text style={styles.title}>{review.title}</Text> : null}
                         <Text style={styles.comment}>{review.comment}</Text>
 
                         {review.sellerResponse && (

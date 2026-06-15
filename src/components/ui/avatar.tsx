@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export const Avatar = ({ children, style, className }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    
     return (
         <View style={[styles.avatar, style]}>
             {children}
@@ -10,13 +15,18 @@ export const Avatar = ({ children, style, className }: any) => {
 };
 
 export const AvatarImage = ({ src, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    
     return <Image source={{ uri: src }} style={[styles.image, style]} />;
 };
 
 export const AvatarFallback = ({ children }: any) => {
-    // Si hay una imagen cargada encima, esto no se ve, pero idealmente se maneja con estado
-    // Simplificado: mostramos fallback si no hay imagen (no implementado detección de error aquí para simpleza extrema si renderizo ambos)
-    // En RN, la imagen opaca tapará esto si la pongo absolute.
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    
     return (
         <View style={styles.fallback}>
             <Text style={styles.fallbackText}>{children}</Text>
@@ -24,13 +34,13 @@ export const AvatarFallback = ({ children }: any) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     avatar: {
         width: 40,
         height: 40,
         borderRadius: 20,
         overflow: 'hidden',
-        backgroundColor: '#ccc',
+        backgroundColor: isDark ? '#4B5563' : '#ccc',
         justifyContent: 'center',
         alignItems: 'center'
     },
@@ -45,10 +55,10 @@ const styles = StyleSheet.create({
         height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#e1e1e1'
+        backgroundColor: isDark ? '#374151' : '#e1e1e1'
     },
     fallbackText: {
         fontWeight: 'bold',
-        color: '#666'
+        color: isDark ? '#9CA3AF' : '#666'
     }
 });

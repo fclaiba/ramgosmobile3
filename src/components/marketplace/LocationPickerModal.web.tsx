@@ -21,6 +21,7 @@ interface LocationPickerModalProps {
 export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visible, onClose, onSelect, initialLocation }) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
 
     // Pigeon maps uses [lat, lng] center and zoom
@@ -138,13 +139,13 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1 },
-    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 4 },
+    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 4 },
     title: { fontSize: 18, fontWeight: 'bold' },
     closeBtn: { padding: 4 },
     map: { flex: 1, overflow: 'hidden' }, // overflow hidden for map web
-    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, elevation: 10 },
+    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, elevation: 10 },
     addressLabel: { fontSize: 14, marginBottom: 4 },
     addressText: { fontSize: 16, fontWeight: '500' },
 });

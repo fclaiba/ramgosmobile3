@@ -11,7 +11,7 @@ export const ImageWithFallback = ({ src, style, className, ...props }: any) => {
     return (
         <View style={[styles.container, style]}>
             <Image
-                source={{ uri: error ? 'https://via.placeholder.com/300' : src }}
+                source={{ uri: error ? 'https://placehold.co/300x300.png' : src }}
                 style={StyleSheet.absoluteFillObject}
                 resizeMode="cover"
                 onError={() => setError(true)}

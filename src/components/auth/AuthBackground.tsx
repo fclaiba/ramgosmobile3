@@ -9,6 +9,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     // Animation values
     const blob1Anim = useRef(new Animated.Value(0)).current;
@@ -116,7 +117,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
     },

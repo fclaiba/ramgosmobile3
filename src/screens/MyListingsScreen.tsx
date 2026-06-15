@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Dimensions, Platform } from 'react-native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Edit2, Trash2, Plus, PackageOpen, LayoutGrid, Search, ArrowLeft, MoreVertical } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../components/ui/sheet';
 
 const { width } = Dimensions.get('window');
 
@@ -16,6 +17,7 @@ export default function MyListingsScreen() {
     const { user } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const navigation = useNavigation<any>();
     const { show } = useToast();
 
@@ -23,31 +25,16 @@ export default function MyListingsScreen() {
     const userId = (user as any)?._id || (user as any)?.id;
     const listings = useQuery(
         api.listings.getMyListings,
-        userId ? { actorId: userId as any, sellerId: userId } : "skip"
+        userId ? {} : "skip"
     );
     const deleteListing = useMutation(api.listings.deleteListing);
 
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
+    const [confirmDelete, setConfirmDelete] = useState<{id: any, title: string} | null>(null);
+
     const handleDelete = (id: any, title: string) => {
-        Alert.alert(
-            "Eliminar Publicación",
-            `¿Estás seguro de que quieres eliminar "${title}"?\nEsta acción no se puede deshacer.`,
-            [
-                { text: "Cancelar", style: "cancel" },
-                {
-                    text: "Sí, Eliminar",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await deleteListing({ actorId: userId as any, sellerId: userId, id });
-                        } catch (e) {
-                            show("No se pudo eliminar la publicación.", "error");
-                        }
-                    }
-                }
-            ]
-        );
+        setConfirmDelete({ id, title });
     };
 
     const handleEdit = (item: any) => {
@@ -88,7 +75,7 @@ export default function MyListingsScreen() {
     const renderCard = ({ item }: { item: any }) => (
         <View style={[styles.card, isDark && styles.cardDark, { flexDirection: 'row' }]}>
             <Image
-                source={{ uri: item.image || 'https://via.placeholder.com/150' }}
+                source={{ uri: item.image || 'https://placehold.co/300x300.png' }}
                 style={styles.cardImageList}
                 resizeMode="cover"
             />
@@ -155,11 +142,46 @@ export default function MyListingsScreen() {
                 ListEmptyComponent={renderEmpty}
                 showsVerticalScrollIndicator={false}
             />
+
+            {/* Confirm Delete Sheet */}
+            <Sheet open={!!confirmDelete} onOpenChange={(open: boolean) => !open && setConfirmDelete(null)}>
+                <SheetContent side="bottom" style={{ height: 'auto', paddingBottom: 40 }}>
+                    <SheetHeader>
+                        <SheetTitle>Eliminar Publicación</SheetTitle>
+                        <SheetDescription>
+                            {confirmDelete ? `¿Estás seguro de que quieres eliminar "${confirmDelete.title}"?\nEsta acción no se puede deshacer.` : ''}
+                        </SheetDescription>
+                    </SheetHeader>
+                    <SheetFooter style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
+                        <TouchableOpacity 
+                            style={[styles.actionButton, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? '#374151' : '#E5E7EB' }]} 
+                            onPress={() => setConfirmDelete(null)}
+                        >
+                            <Text style={[styles.actionText, { color: isDark ? '#D1D5DB' : '#4B5563', fontSize: 16 }]}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[styles.actionButton, styles.deleteButton, { flex: 1, justifyContent: 'center' }]} 
+                            onPress={async () => {
+                                if (confirmDelete) {
+                                    try {
+                                        await deleteListing({ id: confirmDelete.id });
+                                    } catch (e) {
+                                        show("No se pudo eliminar la publicación.", "error");
+                                    }
+                                    setConfirmDelete(null);
+                                }
+                            }}
+                        >
+                            <Text style={[styles.actionText, { color: '#DC2626', fontSize: 16 }]}>Eliminar</Text>
+                        </TouchableOpacity>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F9FAFB' },
     containerDark: { backgroundColor: '#111827' },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -170,13 +192,13 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+        borderBottomColor: isDark ? '#1F2937' : '#F3F4F6',
     },
     headerDark: {
         backgroundColor: '#1F2937',
-        borderBottomColor: '#374151',
+        borderBottomColor: isDark ? '#D1D5DB' : '#374151',
     },
     headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
     iconBtn: { padding: 8 },
@@ -185,11 +207,11 @@ const styles = StyleSheet.create({
 
     // Card Styles
     card: {
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRadius: 16,
         marginBottom: 16,
         padding: 12,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 8,
@@ -200,7 +222,7 @@ const styles = StyleSheet.create({
     cardDark: {
         backgroundColor: '#1F2937',
         borderWidth: 1,
-        borderColor: '#374151',
+        borderColor: isDark ? '#D1D5DB' : '#374151',
     },
     cardImageList: {
         width: 100,
@@ -232,17 +254,17 @@ const styles = StyleSheet.create({
     },
     cardMeta: {
         fontSize: 12,
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
         marginTop: 2,
     },
 
     // Status Badge
     statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
     statusActive: { backgroundColor: '#DCFCE7' },
-    statusInactive: { backgroundColor: '#F3F4F6' },
+    statusInactive: { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
     statusText: { fontSize: 10, fontWeight: '700' },
     statusTextActive: { color: '#166534' },
-    statusTextInactive: { color: '#6B7280' },
+    statusTextInactive: { color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
 
     // Actions
     cardActions: {
@@ -259,7 +281,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#F9FAFB',
     },
     actionButtonDark: {
-        backgroundColor: '#374151',
+        backgroundColor: isDark ? '#D1D5DB' : '#374151',
     },
     editButton: { backgroundColor: '#EFF6FF' },
     deleteButton: { backgroundColor: '#FEF2F2' },
@@ -275,14 +297,14 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 16,
     },
-    iconCircleDark: { backgroundColor: '#374151' },
+    iconCircleDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
     emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
-    emptySub: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 32 },
+    emptySub: { fontSize: 14, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 32 },
     emptyBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -295,9 +317,9 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 6,
     },
-    emptyBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+    emptyBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: 'bold', fontSize: 16 },
 
     // Misc
-    loadingText: { marginTop: 16, color: '#6B7280' },
+    loadingText: { marginTop: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
     textDark: { color: '#F9FAFB' },
 });

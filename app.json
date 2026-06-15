@@ -43,7 +43,17 @@
         {
           "paymentProvider": "Play Store"
         }
-      ]
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.ramgos",
+          "enableGooglePay": true
+        }
+      ],
+      "@sentry/react-native",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

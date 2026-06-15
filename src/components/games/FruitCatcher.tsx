@@ -7,6 +7,8 @@ import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
 import { useGameLevel } from './useGameLevel';
 import { GAME_LEVEL_THRESHOLDS } from './gameDifficultyConfig';
+import { useTheme } from '../../contexts/ThemeContext';
+import { GameThemeTokens } from './gameContracts';
 
 const BASKET_WIDTH = 80;
 const FRUIT_SIZE = 40;
@@ -32,9 +34,13 @@ interface FruitCatcherProps {
     onEnd?: (summary: GameEndSummary) => void;
     gameId?: GameAdapterProps['gameId'];
     family?: GameAdapterProps['family'];
+    theme?: GameThemeTokens;
 }
 
 export const FruitCatcher = (props: FruitCatcherProps) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const {
         onGameEnd,
         onClose,
@@ -44,6 +50,7 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
         onEnd,
         gameId = 'fruit',
         family = 'arcade',
+        theme,
     } = props;
     const { width, height } = useWindowDimensions();
     const widthRef = useRef(width);
@@ -395,36 +402,12 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
     };
 
     return (
-        <View style={styles.container}>
-            {/* HUD */}
-            {uiMode !== 'wrapped' && (
-                <View style={styles.header}>
-                <View style={styles.lives}>
-                    {[...Array(3)].map((_, i) => (
-                        <Heart
-                            key={i}
-                            size={20}
-                            color={i < lives ? "#EF4444" : "#E5E7EB"}
-                            fill={i < lives ? "#EF4444" : "none"}
-                        />
-                    ))}
-                </View>
-                {highScore > 0 && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Trophy size={14} color="#F59E0B" />
-                        <Text style={{ color: '#F59E0B', fontWeight: 'bold', fontSize: 12 }}>HI: {highScore}</Text>
-                    </View>
-                )}
-                <View style={styles.scoreBox}>
-                    <Text style={styles.scoreTitle}>PUNTOS</Text>
-                    <Text style={styles.scoreText}>{score}</Text>
-                </View>
-                </View>
-            )}
+        <View style={[styles.container, uiMode === 'wrapped' && theme && { backgroundColor: theme.background }]}>
+
 
             {/* Game Area */}
             <View
-                style={styles.gameArea}
+                style={[styles.gameArea, uiMode === 'wrapped' && { backgroundColor: 'transparent' }]}
                 onLayout={(event: LayoutChangeEvent) => {
                     const { height: layoutHeight, y } = event.nativeEvent.layout;
                     gameAreaHeightRef.current = layoutHeight;
@@ -432,10 +415,9 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
                 }}
                 {...panResponder.panHandlers}
             >
-                <LinearGradient
-                    colors={['#EC4899', '#FECDD3']}
-                    style={StyleSheet.absoluteFill}
-                />
+                {theme?.surfaceGradient && (
+                    <LinearGradient colors={theme.surfaceGradient} style={StyleSheet.absoluteFill} />
+                )}
 
                 {/* Falling Items */}
                 {items.map(item => (
@@ -463,48 +445,16 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
                     <Text style={{ fontSize: 50 }}>🧺</Text>
                 </Animated.View>
 
-                {/* IDLE Overlay */}
-                {uiMode !== 'wrapped' && gameState === 'IDLE' && (
-                    <View style={styles.overlay}>
-                        <TouchableOpacity style={styles.playBtn} onPress={startGame}>
-                            <Play size={32} color="#fff" fill="#fff" />
-                            <Text style={styles.playText}>JUGAR</Text>
-                        </TouchableOpacity>
-                        <View style={styles.instructions}>
-                            <Text style={styles.instructionText}>Arrastra la canasta para atrapar frutas</Text>
-                        </View>
-                    </View>
-                )}
 
-                {/* GAME OVER Overlay */}
-                {uiMode !== 'wrapped' && gameState === 'GAMEOVER' && (
-                    <View style={styles.centerContainer}>
-                        <Text style={styles.gameOverText}>GAME OVER</Text>
-                        <Text style={styles.finalScore}>Puntos: {score}</Text>
-                        <View style={{ gap: 10 }}>
-                            <TouchableOpacity style={[styles.startBtn, { backgroundColor: '#EAB308' }]} onPress={() => {
-                                if (onGameEnd) onGameEnd(score);
-                                if (onClose) onClose();
-                            }}>
-                                <Coins size={24} color="#fff" />
-                                <Text style={styles.btnText}>GUARDAR {Math.floor(score / 5)} MONEDAS</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.startBtn} onPress={startGame}>
-                                <RotateCcw size={24} color="#fff" />
-                                <Text style={styles.btnText}>JUGAR DE NUEVO</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
             </View>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
     },
     header: {
         flexDirection: 'row',
@@ -584,7 +534,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
     },
     playText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 16,
     },
@@ -601,12 +551,12 @@ const styles = StyleSheet.create({
     gameOverText: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         marginBottom: 8,
     },
     finalScore: {
         fontSize: 18,
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         marginBottom: 20
     },
     startBtn: {
@@ -619,7 +569,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     btnText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 14,
     },

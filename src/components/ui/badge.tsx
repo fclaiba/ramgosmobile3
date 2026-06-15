@@ -26,6 +26,7 @@ export const Badge = ({
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     // Minimal "className" support for legacy usages.
     let bg = isDark ? 'rgba(55, 65, 81, 0.9)' : '#E5E7EB';
@@ -91,7 +92,7 @@ export const Badge = ({
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     badge: {
         paddingHorizontal: 10,
         paddingVertical: 5,

@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    
     const insets = useSafeAreaInsets();
     const styles = getStyles(isDark, insets);
 

@@ -129,7 +129,6 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
             // Convex Mutation
             await openDisputeMutation({
                 orderId: orderId as any,
-                userId: user.id, // Buyer
                 reason: selectedReason.code,
             });
 

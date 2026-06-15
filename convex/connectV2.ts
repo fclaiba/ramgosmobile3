@@ -185,7 +185,7 @@ export const storePlatformProduct = internalMutation({
 
 export const getPlatformProducts = query({
     args: {},
-    handler: async (ctx) => {
+    handler: async (ctx, args) => {
         return await ctx.db.query("platformProducts").order("desc").collect();
     },
 });

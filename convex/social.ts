@@ -98,7 +98,7 @@ const ensureSocialUser = async (
 
 export const upsertSocialProfile = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         username: v.optional(v.string()),
         displayName: v.optional(v.string()),
         bio: v.optional(v.string()),
@@ -137,12 +137,18 @@ export const upsertSocialProfile = mutation({
 
 export const lookupUserSocial = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
         username: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        // Gracefully return null if no valid session — this is a read-only
+        // query and should never crash the app's error boundary.
+        try {
+            await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return null;
+        }
 
         let profile: any = null;
         if (args.userId) {
@@ -162,7 +168,7 @@ export const lookupUserSocial = query({
 
 export const searchUsers = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         term: v.string(),
         limit: v.optional(v.number()),
     },
@@ -180,13 +186,70 @@ export const searchUsers = query({
     },
 });
 
+export const getSuggestedUsers = query({
+    args: {
+        actorId: v.optional(v.any()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        let actor;
+        try {
+            actor = await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
+        const cap = Math.min(args.limit ?? 10, 20);
+        
+        const follows = await ctx.db
+            .query('socialFollows')
+            .withIndex('by_follower', (q) => q.eq('followerUserId', actor.idString))
+            .collect();
+        const followingIds = new Set(follows.map((f: any) => f.followeeUserId));
+        followingIds.add(actor.idString);
+
+        // Fetch up to 100 users, filter out already following/self, sort by followers
+        const users = await ctx.db.query('socialUsers').take(100);
+        const suggested = users
+            .filter((u: any) => !followingIds.has(u.userId))
+            .sort((a: any, b: any) => (b.followerCount ?? 0) - (a.followerCount ?? 0))
+            .slice(0, cap);
+            
+        return suggested;
+    },
+});
+
+export const getUsersByIds = query({
+    args: {
+        actorId: v.optional(v.any()),
+        userIds: v.array(v.string()),
+    },
+    handler: async (ctx, args) => {
+        try {
+            await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
+        if (args.userIds.length === 0) return [];
+
+        const profiles = await Promise.all(
+            args.userIds.map((id) =>
+                ctx.db
+                    .query('socialUsers')
+                    .withIndex('by_user', (q: any) => q.eq('userId', id))
+                    .first(),
+            ),
+        );
+        return profiles.filter(Boolean);
+    },
+});
+
 // ---------------------------------------------------------------------------
 // Posts
 // ---------------------------------------------------------------------------
 
 export const createPost = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         type: v.union(
             v.literal('text'),
             v.literal('image'),
@@ -261,7 +324,7 @@ export const createPost = mutation({
 
 export const deletePost = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
@@ -277,7 +340,7 @@ export const deletePost = mutation({
 
 export const votePoll = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
         optionId: v.string(),
     },
@@ -309,13 +372,17 @@ export const votePoll = mutation({
 
 export const getFeed = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
         authorUserId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        try {
+            await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return { items: [], nextCursor: null };
+        }
         const cap = Math.min(args.limit ?? 20, 50);
 
         let queryBuilder: any;
@@ -363,7 +430,7 @@ export const getFeed = query({
 
 export const getPostById = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
@@ -380,7 +447,7 @@ export const getPostById = query({
 
 export const getPostsByUser = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         userId: v.string(),
         limit: v.optional(v.number()),
     },
@@ -402,7 +469,7 @@ export const getPostsByUser = query({
 
 export const addComment = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
         content: v.string(),
     },
@@ -440,7 +507,7 @@ export const addComment = mutation({
 
 export const deleteComment = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         commentId: v.id('socialComments'),
     },
     handler: async (ctx, args) => {
@@ -462,13 +529,17 @@ export const deleteComment = mutation({
 
 export const getCommentsForPost = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        try {
+            await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return { items: [], nextCursor: null };
+        }
         const cap = Math.min(args.limit ?? 50, 100);
         const result = await ctx.db
             .query('socialComments')
@@ -502,7 +573,7 @@ export const getCommentsForPost = query({
 
 export const toggleLike = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         targetType: v.union(
             v.literal('post'),
             v.literal('comment'),
@@ -609,7 +680,7 @@ const adjustLikeCount = async (
 
 export const follow = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         targetUserId: v.string(),
     },
     handler: async (ctx, args) => {
@@ -664,7 +735,7 @@ export const follow = mutation({
 
 export const unfollow = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         targetUserId: v.string(),
     },
     handler: async (ctx, args) => {
@@ -700,9 +771,13 @@ export const unfollow = mutation({
 });
 
 export const getFollowers = query({
-    args: { actorId: v.optional(v.id('users')), userId: v.string() },
+    args: { actorId: v.optional(v.any()), userId: v.string() },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        try {
+            await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
         return await ctx.db
             .query('socialFollows')
             .withIndex('by_followee', (q) => q.eq('followeeUserId', args.userId))
@@ -711,9 +786,13 @@ export const getFollowers = query({
 });
 
 export const getFollowing = query({
-    args: { actorId: v.optional(v.id('users')), userId: v.string() },
+    args: { actorId: v.optional(v.any()), userId: v.string() },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        try {
+            await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
         return await ctx.db
             .query('socialFollows')
             .withIndex('by_follower', (q) => q.eq('followerUserId', args.userId))
@@ -723,7 +802,7 @@ export const getFollowing = query({
 
 export const isFollowing = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         followerUserId: v.string(),
         followeeUserId: v.string(),
     },
@@ -745,7 +824,7 @@ export const isFollowing = query({
 
 export const createStory = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         type: v.union(v.literal('image'), v.literal('video')),
         url: v.string(),
         durationSec: v.optional(v.number()),
@@ -768,7 +847,7 @@ export const createStory = mutation({
 
 export const viewStory = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         storyId: v.id('socialStories'),
     },
     handler: async (ctx, args) => {
@@ -794,9 +873,14 @@ export const viewStory = mutation({
 });
 
 export const getStoriesForFollowing = query({
-    args: { actorId: v.optional(v.id('users')) },
+    args: { actorId: v.optional(v.any()) },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        let actor;
+        try {
+            actor = await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
 
         const follows = await ctx.db
             .query('socialFollows')
@@ -829,7 +913,7 @@ export const getStoriesForFollowing = query({
 
 export const getStoryViewers = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         storyId: v.id('socialStories'),
     },
     handler: async (ctx, args) => {
@@ -849,7 +933,7 @@ export const getStoryViewers = query({
 // Cron-driven soft-delete of expired stories.
 export const internalExpireStories = internalMutation({
     args: {},
-    handler: async (ctx) => {
+    handler: async (ctx, args) => {
         const now = NOW();
         const expired = await ctx.db
             .query('socialStories')
@@ -871,7 +955,7 @@ export const internalExpireStories = internalMutation({
 
 export const createChat = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         participantId: v.string(),
     },
     handler: async (ctx, args) => {
@@ -901,7 +985,7 @@ export const createChat = mutation({
 
 export const sendDirectMessage = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
         body: v.string(),
         attachments: v.optional(v.array(v.object({
@@ -963,7 +1047,7 @@ export const sendDirectMessage = mutation({
 
 export const markChatAsRead = mutation({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
     },
     handler: async (ctx, args) => {
@@ -991,9 +1075,14 @@ export const markChatAsRead = mutation({
 });
 
 export const getMyChats = query({
-    args: { actorId: v.optional(v.id('users')) },
+    args: { actorId: v.optional(v.any()) },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        let actor;
+        try {
+            actor = await assertSocialActor(ctx, args.actorId);
+        } catch {
+            return [];
+        }
         const all = await ctx.db
             .query('socialChats')
             .withIndex('by_lastMessage')
@@ -1026,7 +1115,7 @@ export const getMyChats = query({
 
 export const getChatMessages = query({
     args: {
-        actorId: v.optional(v.id('users')),
+        actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
@@ -1070,3 +1159,157 @@ export const internalGetMutualFollowers = internalQuery({
         return followsByB.map((f: any) => f.followeeUserId).filter((id: string) => aFollows.has(id));
     },
 });
+
+// ---------------------------------------------------------------------------
+// Saved Posts, Retweets, Highlights
+// ---------------------------------------------------------------------------
+
+export const toggleSavePost = mutation({
+    args: {
+        actorId: v.optional(v.any()),
+        postId: v.id('socialPosts'),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.actorId);
+        const existing = await ctx.db
+            .query('socialSavedPosts')
+            .withIndex('by_user_post', (q) =>
+                q.eq('userId', actor.idString).eq('postId', String(args.postId))
+            )
+            .first();
+
+        if (existing) {
+            await ctx.db.delete(existing._id);
+            return { saved: false };
+        }
+
+        await ctx.db.insert('socialSavedPosts', {
+            userId: actor.idString,
+            postId: String(args.postId),
+            createdAt: NOW(),
+        });
+        return { saved: true };
+    },
+});
+
+export const getSavedPosts = query({
+    args: { actorId: v.optional(v.any()), cursor: v.optional(v.string()), limit: v.optional(v.number()) },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.actorId);
+        const cap = Math.min(args.limit ?? 20, 50);
+        const result = await ctx.db
+            .query('socialSavedPosts')
+            .withIndex('by_user', (q) => q.eq('userId', actor.idString))
+            .order('desc')
+            .paginate({ cursor: args.cursor ?? null, numItems: cap });
+            
+        // Hydrate posts
+        const postIds = result.page.map((r: any) => r.postId);
+        const posts = await Promise.all(postIds.map((id: any) => ctx.db.get(id)));
+        const visiblePosts = posts.filter((p: any) => p && !p.deletedAt);
+        
+        // Hydrate authors
+        const authorIds = Array.from(new Set(visiblePosts.map((p: any) => p.authorUserId)));
+        const authorProfiles = await Promise.all(
+            authorIds.map((id: any) => ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', id)).first())
+        );
+        const authorMap = new Map();
+        authorProfiles.forEach((p, i) => { if (p) authorMap.set(authorIds[i], p); });
+
+        return {
+            items: visiblePosts.map((post: any) => ({
+                ...post,
+                author: authorMap.get(post.authorUserId) ?? null,
+            })),
+            nextCursor: result.isDone ? null : result.continueCursor,
+        };
+    },
+});
+
+export const toggleRetweet = mutation({
+    args: {
+        actorId: v.optional(v.any()),
+        postId: v.id('socialPosts'),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.actorId);
+        const post = await ctx.db.get(args.postId);
+        if (!post || post.deletedAt) throw new Error('Post no encontrado.');
+
+        const existing = await ctx.db
+            .query('socialRetweets')
+            .withIndex('by_user_post', (q) =>
+                q.eq('userId', actor.idString).eq('postId', String(args.postId))
+            )
+            .first();
+
+        if (existing) {
+            await ctx.db.delete(existing._id);
+            await ctx.db.patch(args.postId, { retweetCount: Math.max(0, post.retweetCount - 1) });
+            return { retweeted: false };
+        }
+
+        await ctx.db.insert('socialRetweets', {
+            userId: actor.idString,
+            postId: String(args.postId),
+            createdAt: NOW(),
+        });
+        await ctx.db.patch(args.postId, { retweetCount: post.retweetCount + 1 });
+        return { retweeted: true };
+    },
+});
+
+export const getRetweetsByUser = query({
+    args: { actorId: v.optional(v.any()), userId: v.string(), cursor: v.optional(v.string()), limit: v.optional(v.number()) },
+    handler: async (ctx, args) => {
+        await assertSocialActor(ctx, args.actorId);
+        const cap = Math.min(args.limit ?? 20, 50);
+        const result = await ctx.db
+            .query('socialRetweets')
+            .withIndex('by_user_post', (q) => q.eq('userId', args.userId))
+            .paginate({ cursor: args.cursor ?? null, numItems: cap });
+            
+        // Hydrate posts
+        const postIds = result.page.map((r: any) => r.postId);
+        const posts = await Promise.all(postIds.map((id: any) => ctx.db.get(id)));
+        const visiblePosts = posts.filter((p: any) => p && !p.deletedAt);
+        
+        return {
+            items: visiblePosts,
+            nextCursor: result.isDone ? null : result.continueCursor,
+        };
+    },
+});
+
+export const addHighlight = mutation({
+    args: {
+        actorId: v.optional(v.any()),
+        title: v.string(),
+        coverImage: v.string(),
+        storyIds: v.array(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.actorId);
+        return await ctx.db.insert('socialHighlights', {
+            userId: actor.idString,
+            title: args.title,
+            coverImage: args.coverImage,
+            storyIds: args.storyIds,
+            createdAt: NOW(),
+        });
+    },
+});
+
+export const getHighlights = query({
+    args: { actorId: v.optional(v.any()), userId: v.string() },
+    handler: async (ctx, args) => {
+        await assertSocialActor(ctx, args.actorId);
+        return await ctx.db
+            .query('socialHighlights')
+            .withIndex('by_user', (q) => q.eq('userId', args.userId))
+            .collect();
+    },
+});
+
+export const followUser = follow;
+export const sendMessage = sendDirectMessage;

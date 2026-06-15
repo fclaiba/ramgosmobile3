@@ -1,7 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../contexts/ThemeContext';
 
 const MapView = (props: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return (
         <View style={[props.style, styles.container]}>
             <Text style={styles.text}>Mapas no disponibles en Web</Text>
@@ -17,9 +21,9 @@ export const PROVIDER_GOOGLE = 'google';
 export const PROVIDER_DEFAULT = 'default';
 export default MapView;
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: '#f3f4f6',
+        backgroundColor: isDark ? '#1F2937' : '#f3f4f6',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,

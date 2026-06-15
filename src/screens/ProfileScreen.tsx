@@ -105,10 +105,9 @@ export default function ProfileScreen({ navigation }: any) {
     };
 
     const quickActions = [
-        { icon: ShoppingBag, label: 'Mis Compras', value: stats.purchases, color: '#06b6d4' },
-        { icon: Users, label: 'Invitar Amigos', value: 'Gana $$', color: '#10B981', action: () => navigation.navigate('Referrals') },
-        { icon: Ticket, label: 'Bonos', value: stats.bonuses, color: '#a855f7' },
-        { icon: PartyPopper, label: 'Eventos', value: stats.events, color: '#ec4899' },
+        { icon: ShoppingBag, label: 'Mis Compras', value: stats.purchases, color: '#06b6d4', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'products' }) },
+        { icon: Ticket, label: 'Mis Bonos', value: stats.bonuses, color: '#a855f7', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'bonos' }) },
+        { icon: PartyPopper, label: 'Eventos', value: stats.events, color: '#ec4899', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'events' }) },
     ];
 
     const settingsOptions = [
@@ -253,7 +252,7 @@ export default function ProfileScreen({ navigation }: any) {
                     <Text style={styles.sectionHeader}>Actividad</Text>
                     <View style={styles.quickActionsRow}>
                         {quickActions.map((action, i) => (
-                            <TouchableOpacity key={i} style={styles.actionCard} onPress={action.action}>
+                            <TouchableOpacity key={i} style={styles.actionCard} onPress={(action as any).action}>
                                 <View style={[styles.actionIconBox, { backgroundColor: action.color }]}>
                                     <action.icon size={20} color="#fff" />
                                 </View>
@@ -262,6 +261,19 @@ export default function ProfileScreen({ navigation }: any) {
                             </TouchableOpacity>
                         ))}
                     </View>
+
+                    <TouchableOpacity style={styles.inviteCard} onPress={() => navigation.navigate('Referrals')}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                            <View style={[styles.actionIconBox, { backgroundColor: '#10B981', marginBottom: 0 }]}>
+                                <Users size={20} color="#fff" />
+                            </View>
+                            <View>
+                                <Text style={styles.inviteValue}>Gana $$</Text>
+                                <Text style={styles.inviteLabel}>Invitar Amigos</Text>
+                            </View>
+                        </View>
+                        <ChevronRight size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
 
                     {/* PERSONAL INFO FORM */}
                     <Text style={styles.sectionHeader}>Información Personal</Text>
@@ -526,7 +538,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     actionCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
     actionIconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     actionValue: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 2 },
-    actionLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
+    actionLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500', textAlign: 'center' },
+    inviteCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1, marginBottom: 24 },
+    inviteValue: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 2 },
+    inviteLabel: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
 
     // Forms & Settings
     card: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, overflow: 'hidden', marginBottom: 24, padding: 4, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },

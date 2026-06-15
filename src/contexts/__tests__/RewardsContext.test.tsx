@@ -26,6 +26,12 @@ jest.mock('../ToastContext', () => ({
     ToastProvider: ({ children }: any) => children,
 }));
 
+// Mock Auth context
+jest.mock('../AuthContext', () => ({
+    useAuth: () => ({ user: { id: 'test_user', kycStatus: 'approved' } }),
+    AuthProvider: ({ children }: any) => <>{children}</>
+}));
+
 // Helper component to access hook
 const TestComponent = ({ callback }: { callback: (rewards: any) => void }) => {
     const rewards = useRewards();
@@ -70,20 +76,20 @@ describe('RewardsContext', () => {
 
         await waitFor(() => expect(rewards).toBeDefined());
 
-        let result;
+        let result: any;
         await act(async () => {
             result = rewards.feedVirtualPet();
         });
 
-        expect(result.status).toBe('awarded');
-        expect(result.pointsAwarded).toBe(5);
+        expect(result?.status).toBe('awarded');
+        expect(result?.pointsAwarded).toBe(5);
         expect(rewards.dailyState.petFed).toBe(true);
 
         // Try feeding again should fail
         await act(async () => {
             result = rewards.feedVirtualPet();
         });
-        expect(result.status).toBe('already_claimed');
+        expect(result?.status).toBe('already_claimed');
     });
 
     it('limits arcade rewards to 3 per day', async () => {
@@ -107,12 +113,12 @@ describe('RewardsContext', () => {
         }
 
         // 4th time should fail
-        let lastResult;
+        let lastResult: any;
         await act(async () => {
             lastResult = rewards.registerArcadeReward('game_1', 100);
         });
 
-        expect(lastResult.status).toBe('limit_reached');
+        expect(lastResult?.status).toBe('limit_reached');
         expect(rewards.getArcadeStatus().remaining).toBe(0);
     });
 

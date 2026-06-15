@@ -94,7 +94,7 @@ export const internalIssueBonosForPayment = internalMutation({
                 sellerId: payment.sellerId,
                 paymentId: String(args.paymentId),
                 orderId: payment.orderId ?? undefined,
-                validUntil: (listing as any).validUntil,
+                validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
                 status: "issued",
                 createdAt: new Date().toISOString(),
             });
@@ -107,11 +107,59 @@ export const internalIssueBonosForPayment = internalMutation({
 });
 
 // ---------------------------------------------------------------------------
+// internalIssueBonosForOrder — called from order creation when a buyer
+// pays for a cart containing bonos.
+// ---------------------------------------------------------------------------
+export const internalIssueBonosForOrder = internalMutation({
+    args: {
+        orderId: v.id("orders"),
+    },
+    handler: async (ctx, args) => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return;
+
+        for (const item of order.items) {
+            const listingNormId = ctx.db.normalizeId("listings", item.listingId);
+            if (!listingNormId) continue;
+            
+            const listing = await ctx.db.get(listingNormId);
+            if (!listing || (listing as any).type !== "bono") continue;
+
+            // Idempotency check per item inside the order
+            const existing = await ctx.db
+                .query("bonoRedemptions")
+                .withIndex("by_listing", (q) => q.eq("listingId", item.listingId))
+                .filter((q) => q.eq(q.field("orderId"), String(args.orderId)))
+                .collect();
+            
+            if (existing.length > 0) {
+                console.log(`[Bonos] Already issued bonos for order ${args.orderId} listing ${item.listingId}`);
+                continue;
+            }
+
+            for (let i = 0; i < item.quantity; i++) {
+                const code = generateBonoCode();
+                await ctx.db.insert("bonoRedemptions", {
+                    bonoCode: code,
+                    listingId: item.listingId,
+                    ownerUserId: order.userId,
+                    sellerId: order.sellerId,
+                    orderId: String(args.orderId),
+                    validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+                    status: "issued",
+                    createdAt: new Date().toISOString(),
+                });
+            }
+        }
+    },
+});
+
+// ---------------------------------------------------------------------------
 // redeemBono — called from the business POS scanner.
 // ---------------------------------------------------------------------------
 export const redeemBono = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()), // legacy fallback
         bonoCode: v.string(),
     },
@@ -194,7 +242,7 @@ export const redeemBono = mutation({
 // ---------------------------------------------------------------------------
 export const getMyBonos = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
@@ -203,11 +251,23 @@ export const getMyBonos = query({
         if (userId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");
         }
-        return await ctx.db
+        const bonos = await ctx.db
             .query("bonoRedemptions")
             .withIndex("by_owner", (q) => q.eq("ownerUserId", userId))
             .order("desc")
             .collect();
+            
+        return await Promise.all(
+            bonos.map(async (bono) => {
+                const listingNormId = ctx.db.normalizeId("listings", bono.listingId);
+                const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
+                
+                const sellerNormId = ctx.db.normalizeId("users", bono.sellerId);
+                const seller = sellerNormId ? await ctx.db.get(sellerNormId) : null;
+                
+                return { ...bono, listing, seller };
+            })
+        );
     },
 });
 
@@ -215,7 +275,7 @@ export const getMyBonos = query({
 // emitted vouchers — useful for the "Mis Bonos" tab in BusinessDashboard).
 export const getBonosBySeller = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
@@ -224,11 +284,23 @@ export const getBonosBySeller = query({
         if (sellerId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");
         }
-        return await ctx.db
+        const bonos = await ctx.db
             .query("bonoRedemptions")
             .withIndex("by_seller", (q) => q.eq("sellerId", sellerId))
             .order("desc")
             .collect();
+
+        return await Promise.all(
+            bonos.map(async (bono) => {
+                const listingNormId = ctx.db.normalizeId("listings", bono.listingId);
+                const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
+                
+                const buyerNormId = ctx.db.normalizeId("users", bono.ownerUserId);
+                const buyer = buyerNormId ? await ctx.db.get(buyerNormId) : null;
+                
+                return { ...bono, listing, buyer };
+            })
+        );
     },
 });
 
@@ -242,9 +314,100 @@ export const lookupBono = query({
             .withIndex("by_code", (q) => q.eq("bonoCode", args.bonoCode))
             .first();
         if (!bono) return null;
+        
         // Hydrate listing for display.
         const listingNormId = ctx.db.normalizeId("listings", bono.listingId);
         const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
-        return { ...bono, listing };
+        
+        // Hydrate user for display
+        const ownerNormId = ctx.db.normalizeId("users", bono.ownerUserId);
+        const owner = ownerNormId ? await ctx.db.get(ownerNormId) : null;
+        
+        return { 
+            ...bono, 
+            listing,
+            ownerName: owner ? (owner.name || owner.nickname || 'Cliente') : 'Cliente'
+        };
     },
+});
+
+// ---------------------------------------------------------------------------
+// Dev/Testing: seedMockBonos
+// ---------------------------------------------------------------------------
+export const seedMockBonos = mutation({
+    args: {},
+    handler: async (ctx) => {
+        // Find a business user
+        const businessUsers = await ctx.db
+            .query("users")
+            .filter((q) => q.eq(q.field("role"), "business"))
+            .collect();
+        
+        if (businessUsers.length === 0) {
+            throw new Error("No hay usuarios negocio en la DB");
+        }
+
+        // Pick the first business user as the mock seller
+        const mockSeller = businessUsers[0];
+
+        // Ensure this business has a bono listing
+        let bonoListing = await ctx.db
+            .query("listings")
+            .withIndex("by_seller", (q) => q.eq("sellerId", mockSeller._id))
+            .filter((q) => q.eq(q.field("type"), "bono"))
+            .first();
+
+        if (!bonoListing) {
+            const listingId = await ctx.db.insert("listings", {
+                sellerId: mockSeller._id,
+                title: "Bono de Descuento 50% (Mock)",
+                description: "Bono para pruebas",
+                price: 10,
+                currency: "USD",
+                category: "bonos",
+                tags: ["mock", "test"],
+                slug: "bono-descuento-50-mock",
+                stock: 9999,
+                status: "active",
+                type: "bono",
+                condition: "new",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+            bonoListing = await ctx.db.get(listingId);
+        }
+
+        // Give a bono to ALL users
+        const allUsers = await ctx.db.query("users").collect();
+        let seededCount = 0;
+
+        for (const user of allUsers) {
+            // Check if user already has a bono for this listing
+            const existing = await ctx.db
+                .query("bonoRedemptions")
+                .withIndex("by_owner", (q) => q.eq("ownerUserId", user._id))
+                .filter((q) => q.eq(q.field("listingId"), String(bonoListing!._id)))
+                .first();
+            
+            if (!existing) {
+                const ts = Date.now().toString(36);
+                const rand = Math.random().toString(36).slice(2, 6);
+                const code = `MOCK-${ts}-${rand}`.toUpperCase();
+                
+                await ctx.db.insert("bonoRedemptions", {
+                    bonoCode: code,
+                    listingId: String(bonoListing!._id),
+                    ownerUserId: user._id,
+                    sellerId: mockSeller._id,
+                    validUntil: (bonoListing as any).validUntil,
+                    status: "issued",
+                    createdAt: new Date().toISOString(),
+                });
+                seededCount++;
+            }
+        }
+
+        return `Seeded ${seededCount} bonos to mock users for seller ${mockSeller.name}`;
+    }
 });

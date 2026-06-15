@@ -1,42 +1,31 @@
-# Play Console Release Checklist
+# Google Play Console Release Checklist
 
-## Precondiciones tecnicas
-- [x] Backend/producto en `GO` (`QA_PROD_100_CIERRE.md`)
-- [x] AAB de release generado (`android/app/build/outputs/bundle/release/app-release.aab`)
-- [ ] Keystore productivo validado (`android/keystore.properties`) en entorno con secretos
-- [ ] SHA1 de keystore release confirmado
-- [ ] API key de Google Maps restringida por `package + SHA1`
-- [ ] `app.json` sin API key hardcodeada real (usar placeholder y cargar key final antes de release)
+Lista de verificación para subir la aplicación Ramgos a producción en Android.
 
-## Google Maps hardening (antes de subir a producción)
-- [ ] Obtener fingerprint del keystore release:
-  - [ ] `keytool -list -v -keystore android/keystores/ramgos-release.jks -alias ramgos-release`
-- [ ] En Google Cloud Console:
-  - [ ] API habilitada: `Maps SDK for Android`
-  - [ ] Restricción de aplicación: `Android apps`
-  - [ ] Package: `com.fclaiba.ramgosmobile`
-  - [ ] SHA1: fingerprint del keystore release
-- [ ] Reemplazar `__SET_GOOGLE_MAPS_ANDROID_API_KEY__` en `app.json` por la key Android restringida.
-- [ ] Generar AAB nuevo y validar mapa en build release (track internal/closed).
+## 1. Configuración de la App (Pre-Lanzamiento)
+- [ ] Versión de código incrementada (`app.json` -> `versionCode`).
+- [ ] Versión visual incrementada (`app.json` -> `version`).
+- [ ] `eas.json` configurado correctamente para production.
 
-## Configuracion de app en Play Console
-- [ ] App details completos (descripcion corta/larga, categoria, contacto)
-- [ ] Privacy Policy URL publicada
-- [ ] Data Safety completado
-- [ ] Content Rating completado
-- [ ] Target audience completado
-- [ ] Screenshots/feature graphic subidos
+## 2. Seguridad y Credenciales
+- [ ] Mocks deshabilitados: NO debe haber simuladores en el código de producción.
+- [ ] Credencial de Google Cloud para Google Play Developer API (Service Account JSON) agregada en Convex.
+- [ ] `GOOGLE_PLAY_PACKAGE_NAME` configurado en Convex Prod.
+- [ ] Webhook para notificaciones en tiempo real configurado en GCP Pub/Sub y vinculado a Play Console.
 
-## Testing y quality gates
-- [ ] Release en track `internal` o `closed` creada
-- [ ] Testers asignados
-- [ ] Smoke Android ejecutado (login/listado/compra/perfil)
-- [ ] Crash-free basico validado
-- [ ] Hallazgos release-only corregidos
-- [ ] Verificación de mapa en release (sin pantalla gris, sin `ApiException` de Maps)
+## 3. Play Console Settings
+- [ ] Cuestionario de clasificación de contenido (Content Rating) respondido.
+- [ ] Política de Privacidad actualizada y URL agregada en App Content.
+- [ ] Seguridad de los datos (Data Safety) formulario completo (informando qué recopilamos).
+- [ ] Configuración de publicidad (Declarar si la app usa anuncios o no).
 
-## Promocion a produccion
-- [ ] Release notes final
-- [ ] Rollout strategy definida (porcentaje inicial)
-- [ ] Monitoreo primeras 72h definido (crashes/ANR/reviews)
-- [ ] Go/No-Go firmado con evidencia (`STORE_READY_EVIDENCE_TEMPLATE.md`)
+## 4. Productos IAP (Suscripciones)
+- [ ] Productos de suscripción creados en "Monetize > Products > Subscriptions" (`pro_monthly`, `pro_yearly`, etc.).
+- [ ] Precios base definidos.
+- [ ] Productos activos.
+
+## 5. Artifact y Testing
+- [ ] Archivo `.aab` subido a Internal Testing primero.
+- [ ] Descarga y prueba en dispositivo real vinculado al track de pruebas.
+- [ ] Pago de IAP verificado con la tarjeta de test de Google.
+- [ ] Promoción a Producción.

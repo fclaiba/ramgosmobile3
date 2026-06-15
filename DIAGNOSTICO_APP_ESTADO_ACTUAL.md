@@ -1,14 +1,14 @@
 # Diagnostico Integral - ramgos-mobile v1.0.0
 
-Fecha: `2026-05-19T17:47:40-03:00`  
+Fecha: `2026-06-08T03:01:52-03:00`  
 Generado por: `scripts/app_integral_audit.py`  
 Modo: `run_checks=False online_checks=False`
 
 ## 1) Resumen ejecutivo
 
 - **Estado global: `GO`**
-- Score global ponderado: **89.7/100**
-- Checks ejecutados: 81 (PASS: 74, WARN: 5, CRITICAL/FAIL: 0, HIGH/FAIL: 0)
+- Score global ponderado: **90.7/100**
+- Checks ejecutados: 81 (PASS: 75, WARN: 4, CRITICAL/FAIL: 0, HIGH/FAIL: 0)
 
 Interpretacion:
 - `GO`: sin bloqueantes, listo para release con riesgos menores.
@@ -21,7 +21,7 @@ Interpretacion:
 |---|---:|---:|---:|
 | Arquitectura y dominio | 100.0 | 28 | 28 |
 | Pagos / Escrow / Comisiones | 100.0 | 21 | 21 |
-| Seguridad y credenciales | 87.5 | 6 | 8 |
+| Seguridad y credenciales | 93.8 | 7 | 8 |
 | Build / Release readiness | 95.5 | 10 | 11 |
 | Testing y calidad | 80.0 | 4 | 5 |
 | Integraciones externas | 75.0 | 5 | 8 |
@@ -40,9 +40,6 @@ _Sin hallazgos critical._
   - Remediacion: Restringir la API key por package + SHA1 en Google Cloud Console.
 
 ### MEDIUM
-- [WARN] **mocks.flags_explicitas** (seguridad) - Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK)
-  - Evidencia: `stripe=False kyc=True`
-  - Remediacion: Asegurar que mocks solo se activen con ALLOW_*_MOCK=true.
 - [WARN] **release.android.apk_artifact** (release) - No se encontro APK release reciente
   - Evidencia: `android/app/build/outputs/apk/release/app-release.apk no existe`
   - Remediacion: Ejecutar build-release.ps1 para generar APK/AAB.
@@ -61,8 +58,6 @@ _Sin hallazgos critical._
 - (ninguno)
 
 ### Quick wins (MEDIUM/WARN)
-- `mocks.flags_explicitas` - Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK)
-    - Accion: Asegurar que mocks solo se activen con ALLOW_*_MOCK=true.
 - `release.android.apk_artifact` - No se encontro APK release reciente
     - Accion: Ejecutar build-release.ps1 para generar APK/AAB.
 
@@ -99,7 +94,7 @@ _Sin hallazgos critical._
 | `cmd.typecheck` | calidad | HIGH | SKIP | `npm run typecheck` no fue ejecutado (use --run-checks) |
 | `economy.idempotencia` | finanzas | HIGH | PASS | Economy (points/wallet/rewards) usa eventKey/claimKey |
 | `fintech.sin_charge_local` | finanzas | HIGH | PASS | FintechContext no simula cargos locales (provider.charge / setTimeout) |
-| `kyc.stripe_identity` | finanzas | HIGH | PASS | KYC integrado con Stripe Identity con flag explicito de mock |
+| `kyc.stripe_identity` | finanzas | HIGH | PASS | KYC integrado con Stripe Identity sin mocks |
 | `orders.estados_escrow` | finanzas | HIGH | PASS | Estados de orden compatibles con flujo escrow |
 | `orders.idempotencia` | finanzas | HIGH | PASS | Orders soporta idempotencyKey con indice |
 | `schema.index.paymentEvents.by_stripe_event` | finanzas | HIGH | PASS | Indice transaccional en paymentEvents: by_stripe_event |
@@ -150,7 +145,7 @@ _Sin hallazgos critical._
 | `release.ios.encryption_declaration` | release | MEDIUM | PASS | iOS declara ITSAppUsesNonExemptEncryption=false (export compliance) |
 | `release.version_metadata` | release | MEDIUM | PASS | app.json define version y android.versionCode |
 | `env.example.documenta_variables` | seguridad | MEDIUM | PASS | .env.example documenta todas las variables criticas |
-| `mocks.flags_explicitas` | seguridad | MEDIUM | WARN | Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK) |
+| `mocks.removidos` | seguridad | MEDIUM | PASS | Mocks de pagos/KYC eliminados para produccion |
 | `testing.constitution` | calidad | LOW | PASS | Suite 'constitution' de tests presente |
 | `testing.health_check_script` | calidad | LOW | PASS | Script de health-check Node presente |
 | `testing.jest_config` | calidad | LOW | PASS | Configuracion Jest presente |

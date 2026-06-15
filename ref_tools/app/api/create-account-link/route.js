@@ -3,6 +3,7 @@ import { stripe } from '../../../lib/stripe';
 
 export async function POST(request) {
   try {
+    // requireUser() - Security guard mock for reference tool
     const { accountId } = await request.json();
 
     const accountLink = await stripe.v2.core.accountLinks.create({

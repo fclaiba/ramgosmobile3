@@ -2,8 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { useStripeConnect } from '../../contexts/StripeConnectContext';
 import { MobileHeader } from '../../components/MobileHeader';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function StripeConnectScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { 
         accountId, 
         accountStatus, 
@@ -144,33 +148,33 @@ export default function StripeConnectScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F3F4F6' },
+const getStyles = (isDark: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
     scrollContent: { padding: 16, gap: 16, paddingBottom: 40 },
-    card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+    card: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12, padding: 16, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
     disabledCard: { opacity: 0.6 },
     cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 12 },
-    hint: { fontSize: 13, color: '#6B7280', marginBottom: 12 },
+    hint: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginBottom: 12 },
     form: { gap: 12 },
-    input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 12, fontSize: 16, color: '#111827' },
+    input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb', borderRadius: 8, padding: 12, fontSize: 16, color: '#111827' },
     button: { backgroundColor: '#7C3AED', padding: 14, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     disabledButton: { backgroundColor: '#C4B5FD' },
-    buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-    secondaryButton: { backgroundColor: '#E5E7EB' },
-    secondaryButtonText: { color: '#4B5563', fontWeight: 'bold', fontSize: 16 },
-    statusBox: { backgroundColor: '#F9FAFB', padding: 12, borderRadius: 8, gap: 4, borderWidth: 1, borderColor: '#E5E7EB' },
-    statusText: { fontSize: 14, color: '#374151' },
+    buttonText: { color: isDark ? '#1F2937' : '#fff', fontWeight: 'bold', fontSize: 16 },
+    secondaryButton: { backgroundColor: isDark ? '#374151' : '#e5e7eb' },
+    secondaryButtonText: { color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', fontWeight: 'bold', fontSize: 16 },
+    statusBox: { backgroundColor: '#F9FAFB', padding: 12, borderRadius: 8, gap: 4, borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb' },
+    statusText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151' },
     bold: { fontWeight: 'bold' },
     success: { color: '#059669', fontWeight: 'bold' },
     error: { color: '#DC2626', fontWeight: 'bold' },
     buttonRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
     flex1: { flex: 1 },
-    productItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+    productItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#1F2937' : '#F3F4F6' },
     productInfo: { flex: 1, paddingRight: 12 },
     productName: { fontSize: 16, fontWeight: 'bold', color: '#1F2937' },
-    productDesc: { fontSize: 14, color: '#6B7280', marginTop: 2 },
+    productDesc: { fontSize: 14, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginTop: 2 },
     productPrice: { fontSize: 15, fontWeight: '600', color: '#059669', marginTop: 4 },
-    productSeller: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
+    productSeller: { fontSize: 11, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 4 },
     buyButton: { backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-    emptyText: { textAlign: 'center', color: '#9CA3AF', fontStyle: 'italic', marginVertical: 20 },
+    emptyText: { textAlign: 'center', color: isDark ? '#6B7280' : '#9CA3AF', fontStyle: 'italic', marginVertical: 20 },
 });

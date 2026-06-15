@@ -25,10 +25,10 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
-    Alert,
+    Platform,
 } from 'react-native';
 import { CreditCard, Plus, Star, Trash2 } from 'lucide-react-native';
-import { useStripe } from '@stripe/stripe-react-native';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../components/ui/sheet';
 import { useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { MobileHeader } from '../components/MobileHeader';
@@ -59,21 +59,11 @@ export default function PaymentMethodsScreen({ navigation }: any) {
     const styles = getStyles(isDark);
     const { user } = useAuth();
     const { show } = useToast();
-    const stripe = useStripe();
 
-    const _api = api as any;
-    const listPaymentMethods = useAction(
-        _api.stripe?.listPaymentMethods || api.users.syncUser,
-    );
-    const createSetupIntent = useAction(
-        _api.stripe?.createSetupIntent || api.users.syncUser,
-    );
-    const detachPaymentMethod = useAction(
-        _api.stripe?.detachPaymentMethod || api.users.syncUser,
-    );
-    const setDefaultPaymentMethod = useAction(
-        _api.stripe?.setDefaultPaymentMethod || api.users.syncUser,
-    );
+    const listPaymentMethods = useAction(api.stripe.listPaymentMethods);
+    const createSetupIntent = useAction(api.stripe.createSetupIntent);
+    const detachPaymentMethod = useAction(api.stripe.detachPaymentMethod);
+    const setDefaultPaymentMethod = useAction(api.stripe.setDefaultPaymentMethod);
 
     const [methods, setMethods] = useState<PaymentMethod[]>([]);
     const [loading, setLoading] = useState(true);
@@ -84,11 +74,8 @@ export default function PaymentMethodsScreen({ navigation }: any) {
         if (!user) return;
         setLoading(true);
         try {
-            const res = (await listPaymentMethods({
-                actorId: user.id as any,
-                userId: user.id as any,
-            })) as { items: PaymentMethod[] };
-            setMethods(res?.items ?? []);
+            const res = await listPaymentMethods({ userId: user.id }) as any;
+            setMethods(res?.items ?? res ?? []);
         } catch (e: any) {
             show(e?.message ?? 'Error cargando tarjetas.', 'error');
         } finally {
@@ -101,58 +88,7 @@ export default function PaymentMethodsScreen({ navigation }: any) {
     }, [loadMethods]);
 
     const handleAddCard = async () => {
-        if (!user) return;
-        setAdding(true);
-        try {
-            const { clientSecret, isMock } = (await createSetupIntent({
-                actorId: user.id as any,
-                userId: user.id as any,
-            })) as { clientSecret: string | null; isMock: boolean };
-
-            if (!clientSecret) {
-                show('No se pudo iniciar el alta de tarjeta.', 'error');
-                return;
-            }
-            if (isMock) {
-                show('Modo dev: tarjeta simulada agregada.', 'info');
-                await loadMethods();
-                return;
-            }
-
-            const { error: initError } = await stripe.initPaymentSheet({
-                merchantDisplayName: 'Ramgos',
-                setupIntentClientSecret: clientSecret,
-                appearance: {
-                    colors: {
-                        primary: '#7C3AED',
-                        background: isDark ? '#111827' : '#ffffff',
-                        componentBackground: isDark ? '#1F2937' : '#f9fafb',
-                        componentBorder: isDark ? '#374151' : '#e5e7eb',
-                        primaryText: isDark ? '#f9fafb' : '#111827',
-                        secondaryText: isDark ? '#9ca3af' : '#6b7280',
-                    },
-                    shapes: { borderRadius: 12, borderWidth: 1 },
-                },
-            });
-            if (initError) {
-                show(initError.message ?? 'Error preparando tarjeta.', 'error');
-                return;
-            }
-
-            const { error } = await stripe.presentPaymentSheet();
-            if (error) {
-                if (error.code !== 'Canceled') {
-                    show(error.message ?? 'Error agregando tarjeta.', 'error');
-                }
-                return;
-            }
-            show('Tarjeta agregada correctamente.', 'success');
-            await loadMethods();
-        } catch (e: any) {
-            show(e?.message ?? 'Error agregando tarjeta.', 'error');
-        } finally {
-            setAdding(false);
-        }
+        show('Para agregar una nueva tarjeta, hacelo al finalizar una compra activando la opción "Guardar tarjeta".', 'info');
     };
 
     const handleSetDefault = async (pmId: string) => {
@@ -160,8 +96,6 @@ export default function PaymentMethodsScreen({ navigation }: any) {
         setBusyMethod(pmId);
         try {
             await setDefaultPaymentMethod({
-                actorId: user.id as any,
-                userId: user.id as any,
                 paymentMethodId: pmId,
             });
             show('Tarjeta predeterminada actualizada.', 'success');
@@ -173,35 +107,30 @@ export default function PaymentMethodsScreen({ navigation }: any) {
         }
     };
 
+    const [detachSheetOpen, setDetachSheetOpen] = useState(false);
+    const [methodToDetach, setMethodToDetach] = useState<string | null>(null);
+
     const handleDetach = (pmId: string) => {
-        Alert.alert(
-            'Eliminar tarjeta',
-            '¿Querés eliminar esta tarjeta? Si la usabas para suscripciones, vas a tener que actualizar el método de pago.',
-            [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                    text: 'Eliminar',
-                    style: 'destructive',
-                    onPress: async () => {
-                        if (!user) return;
-                        setBusyMethod(pmId);
-                        try {
-                            await detachPaymentMethod({
-                                actorId: user.id as any,
-                                userId: user.id as any,
-                                paymentMethodId: pmId,
-                            });
-                            show('Tarjeta eliminada.', 'success');
-                            await loadMethods();
-                        } catch (e: any) {
-                            show(e?.message ?? 'Error eliminando.', 'error');
-                        } finally {
-                            setBusyMethod(null);
-                        }
-                    },
-                },
-            ],
-        );
+        setMethodToDetach(pmId);
+        setDetachSheetOpen(true);
+    };
+
+    const confirmDetach = async () => {
+        if (!user || !methodToDetach) return;
+        setDetachSheetOpen(false);
+        setBusyMethod(methodToDetach);
+        try {
+            await detachPaymentMethod({
+                paymentMethodId: methodToDetach,
+            });
+            show('Tarjeta eliminada.', 'success');
+            await loadMethods();
+        } catch (e: any) {
+            show(e?.message ?? 'Error eliminando.', 'error');
+        } finally {
+            setBusyMethod(null);
+            setMethodToDetach(null);
+        }
     };
 
     return (
@@ -295,6 +224,31 @@ export default function PaymentMethodsScreen({ navigation }: any) {
                     )}
                 </TouchableOpacity>
             </ScrollView>
+
+            <Sheet open={detachSheetOpen} onOpenChange={setDetachSheetOpen}>
+                <SheetContent>
+                    <SheetHeader>
+                        <SheetTitle>Eliminar tarjeta</SheetTitle>
+                        <SheetDescription>
+                            ¿Querés eliminar esta tarjeta? Si la usabas para suscripciones, vas a tener que actualizar el método de pago.
+                        </SheetDescription>
+                    </SheetHeader>
+                    <SheetFooter>
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { flex: 1, justifyContent: 'center' }]}
+                            onPress={() => setDetachSheetOpen(false)}
+                        >
+                            <Text style={styles.actionText}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.actionBtn, styles.dangerBtn, { flex: 1, justifyContent: 'center' }]}
+                            onPress={confirmDetach}
+                        >
+                            <Text style={[styles.actionText, { color: '#EF4444' }]}>Eliminar</Text>
+                        </TouchableOpacity>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
         </View>
     );
 }

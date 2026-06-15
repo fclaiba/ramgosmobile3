@@ -14,7 +14,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { useAuth } from '../contexts/AuthContext';
 import { useEscrow } from '../contexts/EscrowContext';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 
@@ -41,99 +41,25 @@ interface HistoryItem {
 
 type PurchaseKindFilter = 'all' | 'products' | 'services' | 'bonos' | 'events';
 
-const initialHistoryItems: HistoryItem[] = [
-    {
-        id: '1',
-        type: 'purchase',
-        kind: 'products',
-        title: 'Tacos de Birria Premium x3',
-        business: 'Taquería El Sabor',
-        image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=400&h=300&fit=crop',
-        price: 38.97,
-        location: 'Miami, FL',
-        date: '2025-10-18T14:30:00',
-        status: 'completed',
-        orderId: 'ORD-001234',
-        category: 'Gastronomía',
-        paymentMethod: 'Visa •••• 4242',
-        quantity: 3,
-        source: 'legacy',
-    },
-    {
-        id: '2',
-        type: 'bonus',
-        kind: 'bonos',
-        title: '30% OFF en tu primera compra',
-        business: 'Fashion Latina',
-        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop',
-        discount: 30,
-        location: 'Orlando, FL',
-        date: '2025-10-17T10:15:00',
-        status: 'completed',
-        orderId: 'BON-005678',
-        category: 'Moda',
-        paymentMethod: 'Bono de descuento',
-        source: 'legacy',
-    },
-    {
-        id: '3',
-        type: 'event',
-        kind: 'events',
-        title: 'Festival Gastronómico Latino',
-        business: 'Latin Food Fest',
-        image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400&h=300&fit=crop',
-        price: 25.00,
-        location: 'Miami Beach, FL',
-        date: '2025-10-16T18:00:00',
-        status: 'completed',
-        orderId: 'EVT-009012',
-        category: 'Eventos',
-        paymentMethod: 'Mastercard •••• 8888',
-        source: 'legacy',
-    },
-    {
-        id: '4',
-        type: 'purchase',
-        kind: 'services',
-        title: 'Masaje Relajante 60min',
-        business: 'Spa Tranquilidad',
-        image: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop',
-        price: 89.99,
-        location: 'Fort Lauderdale, FL',
-        date: '2025-10-15T16:00:00',
-        status: 'pending',
-        orderId: 'ORD-003456',
-        category: 'Bienestar',
-        paymentMethod: 'Visa •••• 4242',
-        source: 'legacy',
-    },
-];
+const initialHistoryItems: HistoryItem[] = [];
 
-export default function HistoryScreen({ navigation }: any) {
+export default function HistoryScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
 
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'purchases' | 'sales'>('purchases');
-    const [purchaseKindFilter, setPurchaseKindFilter] = useState<PurchaseKindFilter>('all');
+    const [activeTab, setActiveTab] = useState<'purchases' | 'sales'>(route?.params?.tab || 'purchases');
+    const [purchaseKindFilter, setPurchaseKindFilter] = useState<PurchaseKindFilter>(route?.params?.filter || 'all');
     const [searchQuery, setSearchQuery] = useState('');
     const { orders, products } = useMarketplace();
     const { openEscrow } = useEscrow();
+    const { payments: contextPayments } = useFintech();
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
+    const myBonos = useQuery(api.bonos.getMyBonos as any, { userId: user?.id }) || [];
+    const mySellerBonos = useQuery(api.bonos.getBonosBySeller as any, { sellerId: user?.id }) || [];
     const [filtersOpen, setFiltersOpen] = useState(false);
-
-    // Payments from Convex (persistent, server source-of-truth)
-    const _api = api as any;
-    const convexPayments = useQuery(
-        _api.finance?.getPaymentsByUser,
-        user?.id ? { actorId: user.id as any, userId: user.id } : 'skip',
-    ) ?? [];
-
-    // #region agent log
-    // Removed debug logging
-    // #endregion
 
     const [datePreset, setDatePreset] = useState<'all' | 'today' | '7d' | '30d' | '90d' | '1y' | 'custom'>('all');
     const [dateFrom, setDateFrom] = useState(''); // YYYY-MM-DD
@@ -311,44 +237,100 @@ export default function HistoryScreen({ navigation }: any) {
 
     const fintechHistoryItems = useMemo<HistoryItem[]>(() => {
         const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
-        return (convexPayments as any[]).map((payment: any) => {
+        return contextPayments.map((payment) => {
             const status: HistoryItem['status'] =
                 payment.status === 'succeeded'
                     ? 'completed'
-                    : payment.status === 'pending' || payment.status === 'processing'
+                    : payment.status === 'processing'
                         ? 'pending'
                         : 'cancelled';
 
             return {
-                id: `fintech-${payment._id}`,
+                id: `fintech-${payment.id}`,
                 type: 'purchase' as const,
                 kind: 'products' as const,
-                title: (payment.description as string) ?? 'Compra Ramgos',
-                business: payment.sellerId ?? 'Ramgos',
+                title: payment.description ?? 'Compra Ramgos',
+                business: payment.split?.sellerId ?? 'Ramgos',
                 image: (payment.metadata?.image as string) ?? fallbackImage,
                 price: payment.amount,
                 location: (payment.metadata?.location as string) ?? 'Online',
                 date: payment.createdAt,
                 status,
-                orderId: payment.orderId ?? payment._id,
+                orderId: (payment.metadata?.orderId as string) ?? payment.id,
                 category: (payment.metadata?.category as string) ?? 'Fintech',
-                paymentMethod: payment.paymentMethodBrand
-                    ? `${payment.paymentMethodBrand} •••• ${payment.paymentMethodLast4 ?? '****'}`
+                paymentMethod: payment.method?.brand
+                    ? `${payment.method.brand} •••• ${payment.method.last4 ?? '****'}`
                     : 'Stripe',
                 quantity: payment.metadata?.quantity ? Number(payment.metadata.quantity) : undefined,
                 source: 'fintech_payment' as const,
             };
         });
-    }, [convexPayments]);
+    }, [contextPayments]);
+
+    const bonoHistoryItems = useMemo<HistoryItem[]>(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
+        return myBonos.map((bono: any) => {
+            const isRedeemed = bono.status === 'redeemed';
+            const isExpired = bono.status === 'expired';
+            const status: HistoryItem['status'] = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
+            const businessName = bono.seller?.name || bono.seller?.nickname || 'Negocio Asociado';
+            
+            return {
+                id: `bono-${bono._id}`,
+                type: 'bonus' as const,
+                kind: 'bonos' as const,
+                title: bono.listing?.title || 'Bono Digital',
+                business: businessName,
+                image: bono.listing?.image ?? fallbackImage,
+                price: bono.listing?.price ?? 0,
+                location: 'Bono Digital',
+                date: bono.createdAt,
+                status,
+                orderId: bono.bonoCode, // Abusing orderId to pass bonoCode
+                category: bono.listing?.category ?? 'Bonos',
+                paymentMethod: 'Digital Voucher',
+                quantity: 1,
+                source: 'marketplace_order' as const,
+            };
+        });
+    }, [myBonos]);
+
+    const bonoSellerHistoryItems = useMemo<HistoryItem[]>(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
+        return mySellerBonos.map((bono: any) => {
+            const isRedeemed = bono.status === 'redeemed';
+            const isExpired = bono.status === 'expired';
+            const status: HistoryItem['status'] = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
+            const buyerName = bono.buyer?.name || bono.buyer?.nickname || 'Cliente';
+            
+            return {
+                id: `bono-sale-${bono._id}`,
+                type: 'bonus' as const,
+                kind: 'bonos' as const,
+                title: bono.listing?.title || 'Bono Digital',
+                business: `Canjea: ${buyerName} • Cod: ${bono.bonoCode}`,
+                image: bono.listing?.image ?? fallbackImage,
+                price: bono.listing?.price ?? 0,
+                location: 'Digital',
+                date: bono.createdAt,
+                status,
+                orderId: bono.bonoCode,
+                category: bono.listing?.category ?? 'Bonos',
+                paymentMethod: 'Voucher Emitido',
+                quantity: 1,
+                source: 'marketplace_order' as const,
+            };
+        });
+    }, [mySellerBonos]);
 
     const historyItems = useMemo(() => {
-        const combinedPurchases = [...purchaseOrderHistoryItems, ...fintechHistoryItems, ...baseHistoryItems];
-        const combinedSales = [...salesOrderHistoryItems];
+        const combinedPurchases = [...purchaseOrderHistoryItems, ...fintechHistoryItems, ...baseHistoryItems, ...bonoHistoryItems];
+        const combinedSales = [...salesOrderHistoryItems, ...bonoSellerHistoryItems];
         const combined = activeTab === 'sales' ? combinedSales : combinedPurchases;
         return combined.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
-    }, [activeTab, purchaseOrderHistoryItems, salesOrderHistoryItems, fintechHistoryItems, baseHistoryItems]);
+    }, [activeTab, purchaseOrderHistoryItems, salesOrderHistoryItems, fintechHistoryItems, baseHistoryItems, bonoHistoryItems, bonoSellerHistoryItems]);
 
     const filteredItems = historyItems.filter(item => {
         const q = searchQuery.trim().toLowerCase();
@@ -425,7 +407,7 @@ export default function HistoryScreen({ navigation }: any) {
         }
 
         // Confirm receipt via Convex (releases escrow server-side)
-        confirmReceiptMutation({ orderId: item.orderId as any, userId: user?.id ?? '' })
+        confirmReceiptMutation({ orderId: item.orderId as any })
             .then(() => {
                 show('Entrega confirmada. El pago se liberará al vendedor', 'success');
             })
@@ -553,55 +535,85 @@ export default function HistoryScreen({ navigation }: any) {
                         const canOpenEscrow =
                             item.source === 'marketplace_order' &&
                             (item.kind === 'products' || item.kind === 'services');
-                        return (
-                            <Card key={item.id} style={[styles.itemCard, { backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
-                                <CardContent style={styles.itemContent}>
-                                    <View style={styles.itemRow}>
-                                        <View style={styles.imageContainer}>
-                                            <ImageWithFallback src={item.image} style={styles.itemImage} />
-                                            <View style={styles.iconOverlay}>
-                                                <IconComponent size={12} color="#fff" />
-                                            </View>
-                                        </View>
-                                        <View style={styles.itemDetails}>
-                                            <View style={styles.itemHeader}>
-                                                <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                                                <View style={{
-                                                    backgroundColor: getStatusColor(item.status),
-                                                    paddingHorizontal: 6,
-                                                    paddingVertical: 2,
-                                                    borderRadius: 4
-                                                }}>
-                                                    <Text style={{
-                                                        color: getStatusTextColor(item.status),
-                                                        fontSize: 10,
-                                                        fontWeight: '700'
-                                                    }}>
-                                                        {item.status === 'completed' ? 'EXITOSO' : item.status === 'pending' ? 'PENDIENTE' : 'CANCELADO'}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                            <Text style={styles.itemBusiness}>{item.business}</Text>
-                                            <Text style={styles.itemMeta}>{formatDate(item.date)} • {item.paymentMethod}</Text>
-                                            <Text style={styles.itemPrice}>
-                                                {item.type === 'bonus' ? `${item.discount}% OFF` : `$${item.price?.toFixed(2)}`}
-                                            </Text>
+                            
+                        const isBono = item.kind === 'bonos' && item.type === 'bonus';
 
-                                            {canOpenEscrow && (
-                                                <TouchableOpacity
-                                                    style={styles.detailsButton}
-                                                    onPress={() => {
-                                                        openEscrow(item.orderId, activeTab === 'sales' ? 'seller' : 'buyer');
-                                                    }}
-                                                >
-                                                    <Text style={styles.detailsButtonText}>Ver escrow</Text>
-                                                    <ChevronDown size={14} color={isDark ? '#9CA3AF' : '#666'} />
-                                                </TouchableOpacity>
-                                            )}
+                        const handleItemPress = () => {
+                            if (isBono && activeTab === 'purchases' && item.status === 'pending') {
+                                // 'pending' for bonos means 'issued' / ready to use
+                                navigation.navigate('BonusQR', { 
+                                    bonusId: item.orderId, // We mapped bonoCode to orderId
+                                    businessName: item.business
+                                });
+                            }
+                        };
+
+                        const cardContent = (
+                            <CardContent style={styles.itemContent}>
+                                <View style={styles.itemRow}>
+                                    <View style={styles.imageContainer}>
+                                        <ImageWithFallback src={item.image} style={styles.itemImage} />
+                                        <View style={styles.iconOverlay}>
+                                            <IconComponent size={12} color="#fff" />
                                         </View>
                                     </View>
-                                </CardContent>
-                            </Card>
+                                    <View style={styles.itemDetails}>
+                                        <View style={styles.itemHeader}>
+                                            <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                                            <View style={{
+                                                backgroundColor: getStatusColor(item.status),
+                                                paddingHorizontal: 6,
+                                                paddingVertical: 2,
+                                                borderRadius: 4
+                                            }}>
+                                                <Text style={{
+                                                    color: getStatusTextColor(item.status),
+                                                    fontSize: 10,
+                                                    fontWeight: '700'
+                                                }}>
+                                                    {item.status === 'completed' ? (isBono ? 'CANJEADO' : 'EXITOSO') : item.status === 'pending' ? (isBono ? 'DISPONIBLE' : 'PENDIENTE') : 'CANCELADO'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <Text style={styles.itemBusiness}>{item.business}</Text>
+                                        <Text style={styles.itemMeta}>{formatDate(item.date)} • {item.paymentMethod}</Text>
+                                        <Text style={styles.itemPrice}>
+                                            {isBono && item.price === 0 ? 'GRATIS' : `$${item.price?.toFixed(2)}`}
+                                        </Text>
+
+                                        {canOpenEscrow && (
+                                            <TouchableOpacity
+                                                style={styles.detailsButton}
+                                                onPress={(e) => {
+                                                    e.stopPropagation();
+                                                    openEscrow(item.orderId, activeTab === 'sales' ? 'seller' : 'buyer');
+                                                }}
+                                            >
+                                                <Text style={styles.detailsButtonText}>Ver escrow</Text>
+                                                <ChevronDown size={14} color={isDark ? '#9CA3AF' : '#666'} />
+                                            </TouchableOpacity>
+                                        )}
+                                        
+                                        {isBono && activeTab === 'purchases' && item.status === 'pending' && (
+                                            <View style={styles.useBonoButton}>
+                                                <Text style={styles.useBonoText}>Tocar para escanear QR</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+                            </CardContent>
+                        );
+
+                        return (
+                            <TouchableOpacity 
+                                key={item.id} 
+                                activeOpacity={isBono ? 0.7 : 1}
+                                onPress={handleItemPress}
+                            >
+                                <Card style={[styles.itemCard, { backgroundColor: isDark ? '#1F2937' : '#fff', borderColor: isBono ? '#3B82F650' : isDark ? '#374151' : 'transparent', borderWidth: isBono ? 1 : (isDark ? 1 : 0) }]}>
+                                    {cardContent}
+                                </Card>
+                            </TouchableOpacity>
                         );
                     })}
                 </View>
@@ -777,4 +789,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     detailLabel: { fontSize: 12, fontWeight: '600' },
     detailValue: { fontSize: 12, fontWeight: '800' },
+    useBonoButton: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#E5E7EB', alignItems: 'center' },
+    useBonoText: { color: '#3B82F6', fontWeight: 'bold', fontSize: 12 }
 });

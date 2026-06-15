@@ -30,6 +30,7 @@ const { width } = Dimensions.get('window');
 export default function SubscriptionPlansScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { user } = useAuth();
     const { show } = useToast();
     const [busyTier, setBusyTier] = useState<null | 'pro' | 'business'>(null);
@@ -40,15 +41,14 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
     //   - pro (consumer)
     //       on iOS/Android with native IAP available → Apple IAP / Google Play Billing.
     //       on web/Expo Go                          → Stripe Checkout fallback.
-    const _api = api as any;
     const createSubscriptionCheckoutAction = useAction(
-        _api.subscriptions?.createSubscriptionCheckout || api.users.syncUser,
+        api.subscriptions.createSubscriptionCheckout
     );
     const validateAppleReceiptAction = useAction(
-        _api.iapActions?.validateAppleReceipt || api.users.syncUser,
+        api.iapActions.validateAppleReceipt
     );
     const validateGoogleReceiptAction = useAction(
-        _api.iapActions?.validateGoogleReceipt || api.users.syncUser,
+        api.iapActions.validateGoogleReceipt
     );
 
     useEffect(() => {
@@ -64,19 +64,17 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
         if (!user) throw new Error('Usuario no autenticado.');
         if (Platform.OS === 'ios') {
             return await validateAppleReceiptAction({
-                actorId: user.id as any,
-                userId: user.id as any,
                 receiptData: purchase.transactionReceipt,
                 jwsRepresentation: purchase.jwsRepresentationIos,
                 productId: purchase.sku,
+                userId: user.id as any,
             });
         }
         if (Platform.OS === 'android') {
             return await validateGoogleReceiptAction({
-                actorId: user.id as any,
-                userId: user.id as any,
                 productId: purchase.sku,
                 purchaseToken: purchase.purchaseToken ?? purchase.transactionId,
+                userId: user.id as any,
             });
         }
         throw new Error('Plataforma no soportada para IAP.');
@@ -118,9 +116,8 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                 );
             }
             const result = await createSubscriptionCheckoutAction({
-                actorId: user.id as any,
-                userId: user.id as any,
                 tier,
+                userId: user.id as any,
             });
             const url = (result as any)?.url;
             if (url && typeof url === 'string') {
@@ -392,7 +389,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -461,13 +458,13 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 12,
         zIndex: 10,
-        shadowColor: "#000",
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
     },
     recommendedText: {
-        color: 'white',
+        color: isDark ? '#1F2937' : 'white',
         fontSize: 10,
         fontWeight: 'bold',
         letterSpacing: 1
@@ -489,7 +486,7 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.3)'
     },
     cardTitle: {
-        color: 'white',
+        color: isDark ? '#1F2937' : 'white',
         fontSize: 22,
         fontWeight: 'bold',
         marginBottom: 4,
@@ -499,13 +496,13 @@ const styles = StyleSheet.create({
         fontSize: 13,
     },
     currentBadge: {
-        backgroundColor: 'white',
+        backgroundColor: isDark ? '#1F2937' : 'white',
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 12,
     },
     currentBadgeText: {
-        color: '#000',
+        color: isDark ? '#F9FAFB' : '#000',
         fontSize: 10,
         fontWeight: '800',
     },
@@ -570,21 +567,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        shadowColor: "#000",
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
         elevation: 4
     },
     subscribeButtonText: {
-        color: 'white',
+        color: isDark ? '#1F2937' : 'white',
         fontSize: 18,
         fontWeight: 'bold',
         letterSpacing: 0.5
     },
     cancelText: {
         textAlign: 'center',
-        color: '#9CA3AF',
+        color: isDark ? '#6B7280' : '#9CA3AF',
         fontSize: 12,
         marginTop: 16
     },

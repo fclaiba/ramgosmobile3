@@ -453,7 +453,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     const { user } = useAuth(); // Moved up to use userId in query
     const myOrders = useQuery(
         api.orders.getMyOrders,
-        user ? { actorId: user.id as any, userId: user.id } : "skip"
+        user ? {} : "skip"
     ) ?? [];
 
     const { show } = useToast();
@@ -465,7 +465,20 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             ...p,
             id: p._id,
             metrics: p.metrics ?? { views: 0, favorites: 0, orders: 0 },
-            seller: p.sellerId ? { id: p.sellerId, name: 'Unknown', type: 'individual', rating: 0 } : { id: 'unknown', name: 'Unknown', type: 'individual', rating: 0 },
+            seller: p.sellerId ? { 
+                id: p.sellerId, 
+                name: p.seller?.name || 'Unknown', 
+                username: p.seller?.username || (p.seller?.name ? `@${p.seller.name.toLowerCase().replace(/\s+/g, '')}` : '@vendedor'),
+                avatar: p.seller?.avatar,
+                type: p.seller?.type || 'individual', 
+                rating: p.seller?.sellerRating || 0 
+            } : { 
+                id: 'unknown', 
+                name: 'Unknown', 
+                username: '@vendedor',
+                type: 'individual', 
+                rating: 0 
+            },
             shippingProfile: p.shippingProfile ?? { weightKg: 1, allowPickup: false, shipsFrom: { city: 'Unknown', country: 'AR', postalCode: '0000' }, handlingTimeHours: 24 },
             // Adapter: Map backend 'image'/'gallery' to frontend 'images' array
             images: p.images ?? [
@@ -540,7 +553,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             const newId = await createListingMutation({
-                actorId: user.id as any,
                 title: input.title,
                 description: input.description,
                 price: input.price,
@@ -599,7 +611,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
 
             // Simple mapping for now
             await updateListingMutation({
-                actorId: user?.id as any,
                 id: productId as any,
                 sellerId: user?.id,
                 updates: {
@@ -619,7 +630,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     const deleteProduct = async (productId: string) => {
         try {
             await deleteListingMutation({
-                actorId: user?.id as any,
                 id: productId as any,
                 sellerId: user?.id,
             });
@@ -707,7 +717,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
                 const sellerShipping = shippingPerSeller.get(sellerId) ?? 0;
 
                 const createdOrderId = await createOrderMutation({
-                    actorId: user.id as any,
                     userId: user.id,
                     sellerId: sellerId,
                     idempotencyKey: orderRequestKey,
@@ -800,8 +809,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
         try {
             await confirmReceiptMutation({
                 orderId: orderId as any,
-                actorId: user.id as any,
-                userId: user.id,
             });
             return { success: true };
         } catch (error: any) {
@@ -830,8 +837,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             }
             addDisputeMessageMutation({
                 orderId,
-                actorId: user.id as any,
-                senderId: user.id,
                 sender: message.sender,
                 body: message.body,
             }).catch((error: any) => {
@@ -845,8 +850,6 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             }
             escalateDisputeMutation({
                 orderId: orderId as any,
-                actorId: user.id as any,
-                userId: user.id,
                 role,
             }).catch((error: any) => {
                 show(error?.message || 'No se pudo escalar el caso.', 'error');

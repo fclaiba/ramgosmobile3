@@ -236,6 +236,7 @@ export function MiMascotaView({ navigation }: any) {
 
     // --- Actions ---
     const feedPet = () => {
+        if (petStage === 'EGG') return show('¡El huevo no tiene boca! 🥚', 'info');
         const result = feedVirtualPet();
         if (result.status !== 'awarded') {
             show(result.message, 'info');
@@ -250,7 +251,7 @@ export function MiMascotaView({ navigation }: any) {
     };
 
     const playWithPet = () => {
-        if (petStage === 'EGG') return show('El huevo necesita calor, no juegos.', 'info');
+        if (petStage === 'EGG') return show('¡Le diste calorcito al huevo! 🥚❤️', 'success');
         if (stats.energy < 15) return show('Está muy cansado 😴', 'error');
 
         setIsAnimating(true);
@@ -266,14 +267,17 @@ export function MiMascotaView({ navigation }: any) {
     };
 
     const cleanPet = () => {
-        if (petStage === 'EGG') return;
-        if (gameCoins < 3) return show('Necesitas 3 monedas para el baño', 'error');
-        if (spendGameCoins(3)) {
+        if (petStage === 'EGG') return show('¡Eclosiona primero! 🥚', 'info');
+        if (gameCoins < 3) return show('Necesitas 3 monedas para el baño 🪙', 'error');
+        const spent = spendGameCoins(3);
+        if (spent) {
             setIsAnimating(true);
             animateCat('shake');
             setStats(prev => ({ ...prev, happiness: Math.min(100, prev.happiness + 15) }));
-            show('¡Reluciente! ✨');
+            show('¡Ba\u00f1o completado! +15 Felicidad ✨', 'success');
             setTimeout(() => setIsAnimating(false), 1000);
+        } else {
+            show('No se pudo realizar el ba\u00f1o', 'error');
         }
     };
 
@@ -562,7 +566,7 @@ export function MiMascotaView({ navigation }: any) {
                         <View style={[styles.actionIcon, { backgroundColor: '#F0F9FF' }]}>
                             <Gamepad2 size={24} color="#0EA5E9" />
                         </View>
-                        <Text style={styles.actionLabel}>Jugar</Text>
+                        <Text style={styles.actionLabel}>{petStage === 'EGG' ? 'Dar Calor' : 'Jugar'}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionBtn} onPress={cleanPet}>

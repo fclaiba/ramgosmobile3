@@ -20,7 +20,7 @@ interface SidebarMenuProps {
 
 export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
     const navigation = useNavigation<any>();
-    const { user, status, pendingVerification, logout, updateRole, loginWithEmail, signUpWithEmail, isProcessing } = useAuth();
+    const { user, status, pendingVerification, logout, loginWithEmail, signUpWithEmail, verifyEmailCode, isProcessing, updateRole } = useAuth();
     const { unreadCount } = useNotifications();
     const { theme, toggleTheme, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -95,61 +95,48 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                 return;
             }
 
-            // Define Test Profiles for Visual Feedback
-            const TEST_PROFILES = {
-                business: { name: 'Usuario Negocio', email: 'business@ramgos.com' },
-                influencer: { name: 'Usuario Influencer', email: 'influencer@ramgos.com' },
-                admin: { name: 'Usuario Admin', email: 'admin@ramgos.com' },
-                consumer: { name: 'Usuario Consumidor', email: 'consumer@ramgos.com' },
-                guest: { name: 'Invitado', email: '' } // Guest handled separately but good to have constraint
+            const credentials = {
+                business: { email: 'business@ramgos.com', pass: 'password123', name: 'Usuario Negocio' },
+                influencer: { email: 'influencer@ramgos.com', pass: 'password123', name: 'Usuario Influencer' },
+                admin: { email: 'admin@ramgos.com', pass: 'password123', name: 'Usuario Admin' },
+                consumer: { email: 'consumer@ramgos.com', pass: 'password123', name: 'Usuario Consumidor' },
             };
 
-            if (!user) {
-                // Auto-Login for Guest Users (Dev Mode)
-                const credentials = {
-                    business: { email: 'business@ramgos.com', pass: 'password123', name: 'Usuario Negocio' },
-                    influencer: { email: 'influencer@ramgos.com', pass: 'password123', name: 'Usuario Influencer' },
-                    admin: { email: 'admin@ramgos.com', pass: 'password123', name: 'Usuario Admin' },
-                    consumer: { email: 'consumer@ramgos.com', pass: 'password123', name: 'Usuario Consumidor' },
-                };
-
-                const creds = credentials[role as keyof typeof credentials];
-                if (creds) {
-                    try {
-                        await loginWithEmail(creds.email, creds.pass);
-                    } catch (e: any) {
-                        if (e.message.includes('no encontrado') || e.message.includes('not found')) {
-                            console.log(`[DevMode] Login failed, attempting auto-registration for ${role}...`);
-                            try {
-                                await signUpWithEmail({
-                                    email: creds.email,
-                                    password: creds.pass,
-                                    name: creds.name,
-                                    role: role as UserRole
-                                });
-                            } catch (regError) {
-                                console.error("Auto-registration failed", regError);
-                                show('No se pudo crear el usuario de prueba', 'error');
-                                throw e;
-                            }
-                        } else {
+            const creds = credentials[role as keyof typeof credentials];
+            if (creds) {
+                let loggedInUser = null;
+                try {
+                    // Always try to login as the test account, passing role as override
+                    const result = await loginWithEmail(creds.email, creds.pass, role as UserRole);
+                    loggedInUser = result.user;
+                } catch (e: any) {
+                    if (e.message.includes('no encontrado') || e.message.includes('not found') || e.message.includes('credenciales')) {
+                        console.log(`[DevMode] Login failed, attempting auto-registration for ${role}...`);
+                        try {
+                            const result = await signUpWithEmail({
+                                email: creds.email,
+                                password: creds.pass,
+                                name: creds.name,
+                                role: role as UserRole
+                            });
+                            loggedInUser = result.user;
+                        } catch (regError) {
+                            console.error("Auto-registration failed", regError);
+                            show('No se pudo crear el usuario de prueba', 'error');
                             throw e;
                         }
+                    } else {
+                        throw e;
                     }
-                }
-            } else {
-                // Authenticated User: Switch Role AND Apply Visual Masquerade
-                await updateRole(role as UserRole);
-
-                // Set the visual override
-                if (role in TEST_PROFILES) {
-                    setSimulatedProfile(TEST_PROFILES[role as keyof typeof TEST_PROFILES]);
                 }
             }
 
             triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
             show(`Modo Dev Activado: ${role.toUpperCase()}`, 'success');
             onClose();
+            setTimeout(() => {
+                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+            }, 100);
 
         } catch (error: any) {
             console.error(error);
@@ -241,10 +228,19 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                         <Text style={styles.userEmail} numberOfLines={1}>
                                             {displayEmail}
                                         </Text>
-                                        <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}>
-                                            <Text style={styles.roleText}>
-                                                {isPending ? 'PENDING_VERIFICATION' : effectiveUser?.role?.toUpperCase() || 'MODO INVITADO'}
-                                            </Text>
+                                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                                            <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}>
+                                                <Text style={styles.roleText}>
+                                                    {isPending ? 'PENDING_VERIFICATION' : effectiveUser?.role?.toUpperCase() || 'MODO INVITADO'}
+                                                </Text>
+                                            </View>
+                                            {effectiveUser && (
+                                                <View style={[styles.roleBadge, { backgroundColor: effectiveUser.kycStatus === 'approved' ? (isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5') : (effectiveUser.kycStatus === 'pending' ? (isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7') : (isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2')) }]}>
+                                                    <Text style={[styles.roleText, { color: effectiveUser.kycStatus === 'approved' ? (isDark ? '#34D399' : '#065F46') : (effectiveUser.kycStatus === 'pending' ? (isDark ? '#FBBF24' : '#92400E') : (isDark ? '#F87171' : '#991B1B')) }]}>
+                                                        {effectiveUser.kycStatus === 'approved' ? '✅ VERIFICADO' : (effectiveUser.kycStatus === 'pending' ? '⏳ KYC PENDIENTE' : '❌ NO VERIFICADO')}
+                                                    </Text>
+                                                </View>
+                                            )}
                                         </View>
                                     </>
                                 )}
@@ -336,13 +332,13 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                         {user?.role === 'business' && (
                             <View style={styles.section}>
                                 <Text style={[styles.sectionHeader, { color: '#10B981' }]}>Negocio</Text>
-                                <MenuItem icon={Store} label="Panel de Negocio" action={() => { onClose(); navigation.navigate('Profile'); }} color="#10B981" />
+                                <MenuItem icon={Store} label="Panel de Negocio" action={() => { onClose(); navigation.navigate('Home', { initialTab: 'dashboard' }); }} color="#10B981" />
                             </View>
                         )}
                         {user?.role === 'influencer' && (
                             <View style={styles.section}>
                                 <Text style={[styles.sectionHeader, { color: '#A855F7' }]}>Influencer</Text>
-                                <MenuItem icon={Zap} label="Panel Influencer" action={() => { onClose(); navigation.navigate('Profile'); }} color="#A855F7" />
+                                <MenuItem icon={Zap} label="Panel Influencer" action={() => { onClose(); navigation.navigate('Home', { initialTab: 'dashboard' }); }} color="#A855F7" />
                             </View>
                         )}
                         {user?.role === 'admin' && (

@@ -54,7 +54,7 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
     const styles = useMemo(() => getStyles(isDark, insets), [isDark, insets]);
 
     // REAL DATA
-    const users = useQuery(api.users.listUsers, user ? { adminId: user.id as Id<"users"> } : "skip") || [];
+    const users = useQuery(api.users.listUsers, user ? { actorId: user.id as Id<"users"> } : "skip") || [];
     const approveKYC = useMutation(api.users.approveKYC);
     const rejectKYC = useMutation(api.users.rejectKYC);
 
@@ -125,10 +125,10 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
 
         try {
             if (confirmation.type === 'approve') {
-                await approveKYC({ adminId: user.id as Id<"users">, targetUserId: confirmation.id as Id<"users"> });
+                await approveKYC({ actorId: user.id as Id<"users">, targetUserId: confirmation.id as Id<"users"> });
                 show(`${confirmation.name} aprobado correctamente.`, 'success');
             } else {
-                await rejectKYC({ adminId: user.id as Id<"users">, targetUserId: confirmation.id as Id<"users"> });
+                await rejectKYC({ actorId: user.id as Id<"users">, targetUserId: confirmation.id as Id<"users"> });
                 show(`${confirmation.name} rechazado correctamente.`, 'info');
             }
         } catch (e: any) {

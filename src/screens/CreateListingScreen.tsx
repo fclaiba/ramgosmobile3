@@ -52,6 +52,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
         title: initialData?.title || '',
         price: initialData?.price?.toString() || '',
         stock: initialData?.stock?.toString() || '',
+        discountValue: initialData?.discountValue?.toString() || '',
         description: initialData?.description || '',
         type: initialData?.type || null,
         category: initialData?.category || '',
@@ -124,7 +125,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 throw new Error('Debes iniciar sesión para subir imágenes.');
             }
             // 1. Get Upload URL
-            const postUrl = await generateUploadUrl({ actorId: user.id as any, userId: user.id as any });
+            const postUrl = await generateUploadUrl({ actorId: user.id as any });
 
             // 2. Fetch the file blob
             const response = await fetch(uri);
@@ -246,6 +247,16 @@ export default function CreateListingScreen({ navigation, route }: any) {
 
             const listingType = selectedType;
             const finalCategory = form.category;
+            
+            let discountValueFloat: number | undefined = undefined;
+            if (listingType === 'bono') {
+                discountValueFloat = parseFloat((form.discountValue || '').replace(',', '.')) || 0;
+                if (discountValueFloat <= priceValue) {
+                    setIsPublishing(false);
+                    show('El monto a consumir debe ser mayor al precio de venta.', 'error');
+                    return;
+                }
+            }
 
             const extraLines: string[] = [];
             if (listingType === 'event') {
@@ -295,6 +306,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         location: locationData,
                         openPromotion: isBusiness ? wantsOpenPromotion : undefined,
                         openCommissionRate: isBusiness ? openCommissionRateValue : undefined,
+                        discountValue: listingType === 'bono' ? discountValueFloat : undefined,
+                        discountType: listingType === 'bono' ? 'fixed' : undefined,
                     }
                 });
                 show('Publicación actualizada exitosamente!', 'success');
@@ -321,6 +334,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     location: locationData,
                     openPromotion: wantsOpenPromotion || undefined,
                     openCommissionRate: openCommissionRateValue,
+                    discountValue: listingType === 'bono' ? discountValueFloat : undefined,
+                    discountType: listingType === 'bono' ? 'fixed' : undefined,
                 });
                 show('¡Publicado con éxito!', 'success');
                 navigation.navigate('Marketplace');
@@ -358,7 +373,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
 
         return (
             <View>
-                <Text style={styles.sectionTitle}>¿Qué deseas publicar?</Text>
+                <Text style={styles.sectionTitle}>¿Qué deseas publicar hoy?</Text>
                 <View style={styles.grid}>
                     {filteredOptions.map((type: any) => (
                         <TouchableOpacity
@@ -437,7 +452,9 @@ export default function CreateListingScreen({ navigation, route }: any) {
                             <Text style={[styles.label, { marginBottom: 0 }]}>Promoción abierta para influencers</Text>
                         </View>
                         <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
-                            Cualquier influencer podrá promocionar este publicación con su código personal y cobrar la comisión definida abajo.
+                            {form.openPromotion 
+                                ? "Cualquier influencer registrado podrá promocionar esta publicación." 
+                                : "Solo los influencers en tu Whitelist podrán promocionar esta publicación."}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -536,26 +553,46 @@ export default function CreateListingScreen({ navigation, route }: any) {
 
                 <View style={styles.formRow}>
                     <View style={styles.formColumn}>
-                        <FormInput
-                            label="Valor ($)"
-                            placeholder="0.00"
-                            keyboardType="decimal-pad"
-                            value={form.price}
-                            onChange={handlePriceChange}
-                            styles={styles}
-                        />
+                        <View style={{ gap: 8 }}>
+                            <Text style={styles.label}>Monto a Consumir ($)</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Ej. 200"
+                                placeholderTextColor="#9CA3AF"
+                                keyboardType="decimal-pad"
+                                value={form.discountValue}
+                                onChangeText={(t: string) => {
+                                    const sanitized = t.replace(/[^0-9.]/g, '');
+                                    const numVal = parseFloat(sanitized) || 0;
+                                    setForm({ 
+                                        ...form, 
+                                        discountValue: sanitized, 
+                                        price: numVal > 0 ? (numVal / 2).toString() : '' 
+                                    });
+                                }}
+                            />
+                        </View>
                     </View>
                     <View style={styles.formColumn}>
-                        <FormInput
-                            label="Cantidad"
-                            placeholder="1"
-                            keyboardType="numeric"
-                            value={form.stock}
-                            onChange={(t: string) => setForm({ ...form, stock: t })}
-                            styles={styles}
-                        />
+                        <View style={{ gap: 8 }}>
+                            <Text style={styles.label}>Precio de Venta (50%)</Text>
+                            <View style={[styles.input, { backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center' }]}>
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#6B7280' }}>
+                                    ${form.price || '0.00'}
+                                </Text>
+                            </View>
+                        </View>
                     </View>
                 </View>
+
+                <FormInput
+                    label="Cantidad de Bonos Disponibles"
+                    placeholder="Ej. 50"
+                    keyboardType="numeric"
+                    value={form.stock}
+                    onChange={(t: string) => setForm({ ...form, stock: t })}
+                    styles={styles}
+                />
 
                 {renderLocationPicker()}
 

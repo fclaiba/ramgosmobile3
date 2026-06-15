@@ -5,8 +5,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { usePoints } from '../../contexts/PointsContext';
 import { Card } from '../ui/card';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export function DailyChallenges() {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { challenges, challengeProgress, claimDailyReward, claimChallenge } = usePoints();
 
     // Determine if daily reward is already claimed
@@ -127,7 +131,7 @@ export function DailyChallenges() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         gap: 16,
     },
@@ -163,7 +167,7 @@ const styles = StyleSheet.create({
     },
     streakSubtitle: {
         fontSize: 14,
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
     },
     streakRight: {
         alignItems: 'center',
@@ -173,7 +177,7 @@ const styles = StyleSheet.create({
     },
     keepItUp: {
         fontSize: 10,
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
     },
     claimButton: {
         flexDirection: 'row',
@@ -187,15 +191,15 @@ const styles = StyleSheet.create({
     claimedButton: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: isDark ? '#374151' : '#e5e7eb',
     },
     claimText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 14,
     },
     claimedText: {
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
         fontWeight: 'bold',
         fontSize: 14,
     },
@@ -205,7 +209,7 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         marginBottom: 8,
     },
     challengeItem: {
@@ -234,7 +238,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     challengeTitle: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: '600',
         marginBottom: 4,
     },
@@ -280,6 +284,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
     },
     claimableBtnText: {
-        color: '#fff',
+        color: isDark ? '#1F2937' : '#fff',
     },
 });

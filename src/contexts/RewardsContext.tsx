@@ -90,6 +90,10 @@ interface RewardsContextType {
     petConfig: PetConfigState;
     unlockAccessory: (type: 'hat' | 'skin', id: string, cost: number) => boolean;
     equipAccessory: (type: 'hat' | 'skin', id: string) => void;
+    // Secure Games (Phase 1)
+    playGame: (gameId: string) => Promise<any>;
+    playCasinoSlots: (betPerLine: number, activeLines: number) => Promise<any>;
+    playCasinoRoulette: (bets: Array<{ type: 'number' | 'color' | 'parity' | 'dozen' | 'column'; value: string; amount: number }>) => Promise<any>;
 }
 
 // Helper to get current quarter key (e.g., "2026-Q1")
@@ -176,18 +180,16 @@ const RewardsContext = createContext<RewardsContextType | undefined>(undefined);
 export const RewardsProvider = ({ children }: { children: React.ReactNode }) => {
     const { user } = useAuth();
     const { addPoints } = usePoints();
-    const { show } = useToast();  // Added missing hook
+    const { show } = useToast();
     const economyState = useQuery(
         api.economy.getState,
-        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+        user ? { userId: user.id } : 'skip',
     );
     const saveRewardsState = useMutation(api.economy.saveRewardsState);
     const claimRewardMutation = useMutation(api.economy.claimReward);
     const hydratedRef = useRef(false);
 
     const [dailyState, setDailyState] = useState<DailyEngagementState>(() => createDailyState(getTodayKey()));
-
-    // Note: Streak rewards are handled in PointsContext (Constitución: +10/+20/+30 progresivo).
 
     const ensureDailyForToday = useCallback((state: DailyEngagementState): DailyEngagementState => {
         const today = getTodayKey();
@@ -222,7 +224,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         const points = FEED_PET_REWARD;
         if (user?.id) {
             claimRewardMutation({
-                actorId: user.id as any,
                 userId: user.id,
                 claimKey: `pet_feed_${getTodayKey()}`,
                 type: 'virtual_pet',
@@ -246,8 +247,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
     }, [dailyState, addPoints, ensureDailyForToday, user?.id, claimRewardMutation]);
 
     const computeArcadeReward = (score: number) => {
-        // Constitución: Arcade awards 1–20 points (max 3/day).
-        // Demo mapping: clamp(score) to avoid inventing additional business numbers.
         const raw = Math.floor(score);
         return Math.min(ARCADE_POINTS_RANGE.max, Math.max(ARCADE_POINTS_RANGE.min, raw || ARCADE_POINTS_RANGE.min));
     };
@@ -269,7 +268,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         const points = computeArcadeReward(score);
         if (user?.id) {
             claimRewardMutation({
-                actorId: user.id as any,
                 userId: user.id,
                 claimKey: `arcade_${getTodayKey()}_${gameId}_${attemptsUsed + 1}`,
                 type: 'arcade',
@@ -362,7 +360,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
 
         if (user?.id) {
             claimRewardMutation({
-                actorId: user.id as any,
                 userId: user.id,
                 claimKey: `wheel_${getTodayKey()}`,
                 type: 'lucky_wheel',
@@ -471,7 +468,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             if (newValue >= prev.purchasesTarget) {
                 if (user?.id) {
                     claimRewardMutation({
-                        actorId: user.id as any,
                         userId: user.id,
                         claimKey: `quarterly_${currentQuarter}`,
                         type: 'quarterly_mission',
@@ -540,7 +536,6 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
     useEffect(() => {
         if (!user || !hydratedRef.current) return;
         saveRewardsState({
-            actorId: user.id as any,
             userId: user.id,
             rewardsState: {
                 dailyState,
@@ -577,6 +572,43 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         }));
     }, []);
 
+    const playGameMutation = useMutation(api.economy.playGame);
+    const playCasinoSlotsMutation = useMutation(api.casino.playCasinoSlots);
+    const playCasinoRouletteMutation = useMutation(api.casino.playCasinoRoulette);
+
+    const playGame = useCallback(async (gameId: string) => {
+        if (!user?.id) throw new Error('Debes iniciar sesión para jugar');
+        try {
+            const result = await playGameMutation({ gameId, userId: user.id });
+            return result;
+        } catch (error: any) {
+            show(error.message || 'Error al jugar', 'error');
+            throw error;
+        }
+    }, [user?.id, playGameMutation, show]);
+
+    const playCasinoSlots = useCallback(async (betPerLine: number, activeLines: number) => {
+        if (!user?.id) throw new Error('Debes iniciar sesión para jugar');
+        try {
+            const result = await playCasinoSlotsMutation({ userId: user.id, betPerLine, activeLines });
+            return result;
+        } catch (error: any) {
+            show(error.message || 'Error al jugar tragamonedas', 'error');
+            throw error;
+        }
+    }, [user?.id, playCasinoSlotsMutation, show]);
+
+    const playCasinoRoulette = useCallback(async (bets: Array<{ type: 'number' | 'color' | 'parity' | 'dozen' | 'column'; value: string; amount: number }>) => {
+        if (!user?.id) throw new Error('Debes iniciar sesión para jugar');
+        try {
+            const result = await playCasinoRouletteMutation({ userId: user.id, bets });
+            return result;
+        } catch (error: any) {
+            show(error.message || 'Error al jugar ruleta', 'error');
+            throw error;
+        }
+    }, [user?.id, playCasinoRouletteMutation, show]);
+
     const value: RewardsContextType = useMemo(() => ({
         dailyState,
         feedVirtualPet,
@@ -592,7 +624,10 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         // Pet Config
         petConfig,
         unlockAccessory,
-        equipAccessory
+        equipAccessory,
+        playGame,
+        playCasinoSlots,
+        playCasinoRoulette
     }), [
         dailyState,
         feedVirtualPet,
@@ -606,7 +641,10 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         registerQuarterlyPurchase,
         petConfig,
         unlockAccessory,
-        equipAccessory
+        equipAccessory,
+        playGame,
+        playCasinoSlots,
+        playCasinoRoulette
     ]);
 
     return (

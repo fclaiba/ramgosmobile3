@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
-import { X, Image as ImageIcon } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
+import { X, Image as ImageIcon, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
@@ -10,6 +10,7 @@ import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent } from '../ui/sheet';
 import { useToast } from '../../contexts/ToastContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const { createStory } = useSocial();
@@ -17,6 +18,7 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const { show } = useToast();
     const [imageUrl, setImageUrl] = useState('');
     const [uploading, setUploading] = useState(false);
+    const insets = useSafeAreaInsets();
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
@@ -24,25 +26,54 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const handlePickImage = async () => {
+    const handlePickImage = () => {
         if (!authUser) { show('Debes iniciar sesión', 'error'); return; }
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
+        
+        // On web, Alert.alert is not supported — go straight to gallery
+        if (Platform.OS === 'web') {
+            launchGallery();
+            return;
+        }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.8,
-        });
+        Alert.alert(
+            "Subir imagen",
+            "Elige una opción",
+            [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Cámara", onPress: launchCamera },
+                { text: "Galería", onPress: launchGallery }
+            ]
+        );
+    };
+
+    const processImage = async (result: ImagePicker.ImagePickerResult) => {
         if (result.canceled || !result.assets[0]) return;
-
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({ actorId: authUser.id as any, userId: authUser.id as any });
+            const uploadUrl = await generateUploadUrl({});
             const asset = result.assets[0];
+            
+            // Standard fetch works for getting blobs in recent Expo versions
+            let blob: Blob;
+            try {
+                const fetchResponse = await fetch(asset.uri);
+                blob = await fetchResponse.blob();
+            } catch (err) {
+                // Fallback for older versions of React Native on Android
+                blob = await new Promise<Blob>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.onload = function() { resolve(xhr.response); };
+                    xhr.onerror = function(e) { reject(new TypeError('Network request failed')); };
+                    xhr.responseType = 'blob';
+                    xhr.open('GET', asset.uri, true);
+                    xhr.send(null);
+                });
+            }
+
             const response = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
-                body: { uri: asset.uri } as any,
+                body: blob,
             });
             const { storageId } = await response.json();
             setImageUrl(`convex-storage:${storageId}`);
@@ -51,6 +82,26 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
         } finally {
             setUploading(false);
         }
+    };
+
+    const launchCamera = async () => {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) { show('Permiso de cámara requerido', 'error'); return; }
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+        });
+        processImage(result);
+    };
+
+    const launchGallery = async () => {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+        });
+        processImage(result);
     };
 
     const handleCreate = () => {
@@ -62,44 +113,42 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     return (
         <Sheet open={true} onOpenChange={(val: boolean) => !val && onClose()}>
             <SheetContent side="bottom" style={styles.sheetContent}>
-                <SafeAreaView style={{ flex: 1 }}>
-                    <View style={styles.container}>
-                        <View style={styles.header}>
-                            <TouchableOpacity onPress={onClose}>
-                                <X size={28} color="#fff" />
-                            </TouchableOpacity>
-                            <Text style={styles.title}>Crear Historia</Text>
-                            <View style={{ width: 28 }} />
-                        </View>
-
-                        <View style={styles.content}>
-                            {imageUrl ? (
-                                <ImageWithFallback src={imageUrl} style={styles.previewImage} />
-                            ) : (
-                                <TouchableOpacity style={styles.placeholder} onPress={handlePickImage} disabled={uploading}>
-                                    {uploading ? (
-                                        <ActivityIndicator size="large" color="#fff" />
-                                    ) : (
-                                        <>
-                                            <ImageIcon size={64} color="#666" />
-                                            <Text style={styles.placeholderText}>Tocá para elegir una foto</Text>
-                                        </>
-                                    )}
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        <View style={styles.footer}>
-                            <TouchableOpacity
-                                style={[styles.createBtn, !imageUrl && styles.disabledBtn]}
-                                onPress={handleCreate}
-                                disabled={!imageUrl}
-                            >
-                                <Text style={styles.createBtnText}>Compartir en tu historia</Text>
-                            </TouchableOpacity>
-                        </View>
+                <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={onClose}>
+                            <X size={28} color="#fff" />
+                        </TouchableOpacity>
+                        <Text style={styles.title}>Crear Historia</Text>
+                        <View style={{ width: 28 }} />
                     </View>
-                </SafeAreaView>
+
+                    <View style={styles.content}>
+                        {imageUrl ? (
+                            <ImageWithFallback src={imageUrl} style={styles.previewImage} />
+                        ) : (
+                            <TouchableOpacity style={styles.placeholder} onPress={handlePickImage} disabled={uploading}>
+                                {uploading ? (
+                                    <ActivityIndicator size="large" color="#fff" />
+                                ) : (
+                                    <>
+                                        <ImageIcon size={64} color="#666" />
+                                        <Text style={styles.placeholderText}>Tocá para elegir o tomar una foto</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <View style={styles.footer}>
+                        <TouchableOpacity
+                            style={[styles.createBtn, !imageUrl && styles.disabledBtn]}
+                            onPress={handleCreate}
+                            disabled={!imageUrl}
+                        >
+                            <Text style={styles.createBtnText}>Compartir en tu historia</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </SheetContent>
         </Sheet>
     );

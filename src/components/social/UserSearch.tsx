@@ -31,7 +31,7 @@ export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
     const searchRows = useQuery(
         api.social.searchUsers,
         authUser && debouncedQuery
-            ? { actorId: authUser.id as any, term: debouncedQuery, limit: 25 }
+            ? { term: debouncedQuery, limit: 25 }
             : 'skip',
     );
 

@@ -27,10 +27,11 @@ import { internal } from "./_generated/api";
 import Stripe from "stripe";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const allowStripeMock = process.env.ALLOW_STRIPE_MOCK === "true";
-const isMockMode = !stripeKey;
+if (!stripeKey) {
+    throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
+}
 
-const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
+const stripe = new Stripe(stripeKey, {
     apiVersion: "2024-04-10" as any,
 });
 
@@ -169,11 +170,6 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
         maxEntries: v.optional(v.number()),
     },
     handler: async (ctx, args): Promise<{ scanned: number; flagged: number }> => {
-        if (isMockMode) {
-            console.log("[Reconciliation] Mock mode — skipping cron run.");
-            return { scanned: 0, flagged: 0 };
-        }
-
         const max = Math.min(args.maxEntries ?? 200, 1000);
 
         const cursor: { id: string; lastBt: string | null } | null =

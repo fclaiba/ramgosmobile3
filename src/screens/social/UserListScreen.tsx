@@ -26,11 +26,11 @@ export default function UserListScreen() {
 
     const followersRows = useQuery(
         api.social.getFollowers,
-        authUser && type === 'followers' ? { actorId: authUser.id as any, userId } : 'skip',
+        authUser && type === 'followers' ? { userId } : 'skip',
     );
     const followingRows = useQuery(
         api.social.getFollowing,
-        authUser && type === 'following' ? { actorId: authUser.id as any, userId } : 'skip',
+        authUser && type === 'following' ? { userId } : 'skip',
     );
 
     const otherIds = useMemo(() => {
@@ -39,28 +39,26 @@ export default function UserListScreen() {
         return [];
     }, [type, followersRows, followingRows]);
 
-    // Hydrate via socialUsers — one query per ID is fine for v1 list sizes.
-    const profilesArr = useQuery(
-        api.social.searchUsers,
-        authUser ? { actorId: authUser.id as any, term: '', limit: 1 } : 'skip',
+    const fetchedUsers = useQuery(
+        api.social.getUsersByIds,
+        authUser && otherIds.length > 0 ? { userIds: otherIds } : 'skip'
     );
-    void profilesArr; // Placeholder so the query slot is reserved for future bulk lookup.
 
-    const users = useMemo(
-        () => otherIds.map((id: string) => ({
-            id,
-            name: getUserById(id)?.name ?? 'Usuario',
-            displayName: getUserById(id)?.displayName ?? 'Usuario',
-            username: getUserById(id)?.username ?? 'usuario',
-            avatar: getUserById(id)?.avatar ?? '',
-            bio: getUserById(id)?.bio ?? '',
-            followers: getUserById(id)?.followers ?? 0,
-            following: getUserById(id)?.following ?? 0,
-            isInfluencer: false,
-            verified: false,
-        })),
-        [otherIds, getUserById],
-    );
+    const users = useMemo(() => {
+        if (!fetchedUsers) return [];
+        return fetchedUsers.map((u: any) => ({
+            id: u.userId,
+            name: u.displayName ?? 'Usuario',
+            displayName: u.displayName ?? 'Usuario',
+            username: u.username ?? 'usuario',
+            avatar: u.avatar ?? '',
+            bio: u.bio ?? '',
+            followers: u.followerCount ?? 0,
+            following: u.followingCount ?? 0,
+            isInfluencer: u.isInfluencer ?? false,
+            verified: u.verified ?? false,
+        }));
+    }, [fetchedUsers]);
 
     return (
         <View style={styles.container}>

@@ -28,6 +28,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { usePoints } from '../../contexts/PointsContext';
+import { useActionGate } from '../../utils/useActionGate';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,6 +38,7 @@ export default function CartScreen({ navigation }: any) {
     const { isAuthenticated } = useAuth();
     const { colorScheme } = useTheme();
     const { points } = usePoints();
+    const { gateCheckout } = useActionGate();
     const availablePoints = points;
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -47,8 +49,7 @@ export default function CartScreen({ navigation }: any) {
     const finalTotal = totalPrice + estimatedShipping;
 
     const handleCheckout = () => {
-        if (!isAuthenticated) {
-            navigation.navigate('Login');
+        if (!gateCheckout()) {
             return;
         }
         if (items.length === 0) return;

@@ -13,6 +13,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
 
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,7 +47,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     // tienda" and "contratos" sections of the legacy UI.
     const campaignRows = useQuery(
         api.campaigns.getMyCampaigns,
-        user?.id ? { actorId: user.id as any, influencerId: user.id as any } : 'skip',
+        user?.id ? { influencerId: user.id as Id<"users"> } : 'skip',
     ) ?? [];
     const proposeCampaignMutation = useMutation(api.campaigns.proposeCampaign);
     const respondToCampaignMutation = useMutation(api.campaigns.respondToCampaign);
@@ -68,13 +69,13 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     // .balancePending indefinitely (we cannot transfer with no destination).
     const _api = api as any;
     const ensureConnectAccountAction = useAction(
-        _api.connect?.ensureConnectAccount || api.users.syncUser,
+        _api.connect?.ensureConnectAccount as any,
     );
     const createOnboardingLinkAction = useAction(
-        _api.connect?.createOnboardingLink || api.users.syncUser,
+        _api.connect?.createOnboardingLink as any,
     );
     const getAccountStatusAction = useAction(
-        _api.connect?.getAccountStatus || api.users.syncUser,
+        _api.connect?.getAccountStatus as any,
     );
     const [connectLoading, setConnectLoading] = useState(false);
     const [connectStatus, setConnectStatus] = useState<{
@@ -93,7 +94,6 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         (async () => {
             try {
                 const status = await getAccountStatusAction({
-                    actorId: user?.id as any,
                     accountId: stripeConnectAccountId,
                 });
                 if (!cancelled && status) {
@@ -119,8 +119,6 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         setConnectLoading(true);
         try {
             const ensured = await ensureConnectAccountAction({
-                actorId: user.id as any,
-                userId: user.id as any,
                 displayName: influencerName || user.name || 'Ramgos influencer',
                 contactEmail: user.email,
             });
@@ -128,7 +126,6 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
             if (!accountId) throw new Error('No se obtuvo accountId de Stripe.');
 
             const link = await createOnboardingLinkAction({
-                actorId: user.id as any,
                 accountId,
             });
             const url = (link as any)?.url;
@@ -252,9 +249,8 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         setSubmittingProposal(true);
         try {
             await proposeCampaignMutation({
-                actorId: user.id as any,
-                influencerId: user.id as any,
                 businessId: businessId as any,
+                influencerId: user.id as Id<"users">,
                 commissionRate: ratePct / 100,
             });
             setProposeModalVisible(false);
@@ -272,7 +268,6 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         if (!user?.id) return;
         try {
             await respondToCampaignMutation({
-                actorId: user.id as any,
                 campaignId: campaignId as any,
                 decision,
             });
@@ -286,7 +281,6 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         if (!user?.id) return;
         try {
             await endCampaignMutation({
-                actorId: user.id as any,
                 campaignId: campaignId as any,
             });
             show('Campaña finalizada.', 'success');
@@ -410,17 +404,10 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         <Button
                             style={{ flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' }}
-                            onPress={() => navigation.navigate('CreateListing', { allowedTypes: ['product'] })}
+                            onPress={() => navigation.navigate('CreateListing')}
                         >
                             <ShoppingCart size={18} color={isDark ? '#D1D5DB' : '#111827'} style={{ marginRight: 8 }} />
-                            <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '600' }}>Nuevo Producto</Text>
-                        </Button>
-                        <Button
-                            style={{ flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' }}
-                            onPress={() => navigation.navigate('CreateListing', { allowedTypes: ['service'] })}
-                        >
-                            <Wrench size={18} color={isDark ? '#D1D5DB' : '#111827'} style={{ marginRight: 8 }} />
-                            <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '600' }}>Nuevo Servicio</Text>
+                            <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '600' }}>Crear Publicación Comercial</Text>
                         </Button>
                     </View>
                 </View>

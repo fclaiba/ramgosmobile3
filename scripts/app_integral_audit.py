@@ -407,16 +407,15 @@ class Auditor:
         # Stripe Identity / KYC
         identity_real = (
             "identity.verificationSessions.create" in self.identity_ts
-            and "ALLOW_KYC_MOCK" in self.identity_ts
         )
         self.add(
             check_id="kyc.stripe_identity",
             category=cat,
             severity="HIGH",
             status="PASS" if identity_real else "FAIL",
-            description="KYC integrado con Stripe Identity con flag explicito de mock",
-            evidence=("Stripe Identity + ALLOW_KYC_MOCK detectados" if identity_real else "implementacion incompleta"),
-            remediation="Usar stripe.identity.verificationSessions.create y respetar ALLOW_KYC_MOCK.",
+            description="KYC integrado con Stripe Identity sin mocks",
+            evidence=("Stripe Identity activo" if identity_real else "implementacion incompleta"),
+            remediation="Usar stripe.identity.verificationSessions.create directamente sin mocks.",
         )
 
         # Escrow / orders
@@ -519,13 +518,13 @@ class Auditor:
         stripe_mock_flag = "ALLOW_STRIPE_MOCK" in self.stripe_ts
         kyc_mock_flag = "ALLOW_KYC_MOCK" in self.identity_ts
         self.add(
-            check_id="mocks.flags_explicitas",
+            check_id="mocks.removidos",
             category=cat,
             severity="MEDIUM",
-            status="PASS" if stripe_mock_flag and kyc_mock_flag else "WARN",
-            description="Mocks de pagos/KYC controlados por flags explicitas (ALLOW_*_MOCK)",
-            evidence=f"stripe={stripe_mock_flag} kyc={kyc_mock_flag}",
-            remediation="Asegurar que mocks solo se activen con ALLOW_*_MOCK=true.",
+            status="PASS" if not stripe_mock_flag and not kyc_mock_flag else "WARN",
+            description="Mocks de pagos/KYC eliminados para produccion",
+            evidence=f"stripe_mock={stripe_mock_flag} kyc_mock={kyc_mock_flag}",
+            remediation="Asegurarse de no utilizar ALLOW_STRIPE_MOCK ni ALLOW_KYC_MOCK en produccion.",
         )
 
         # Maps API key restringida (heuristica: presente en app.json)

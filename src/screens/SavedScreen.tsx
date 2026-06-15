@@ -26,7 +26,7 @@ export default function SavedScreen({ navigation }: any) {
 
     const handleUnsave = (id: string | number) => {
         removeFromFavorites(id);
-        // Alert.alert('Eliminado', 'Elemento eliminado de guardados');
+        show('Elemento eliminado de guardados', 'success');
     };
 
     const handleShare = async (item: FavoriteItem) => {

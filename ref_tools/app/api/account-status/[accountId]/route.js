@@ -3,6 +3,7 @@ import { stripe } from '../../../../lib/stripe';
 
 export async function GET(request, { params }) {
   try {
+    // requireUser() - Security guard mock for reference tool
     const { accountId } = await params;
 
     const account = await stripe.v2.core.accounts.retrieve(

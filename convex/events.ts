@@ -39,7 +39,7 @@ const generateQrCode = (): string => {
 // ---------------------------------------------------------------------------
 export const holdEventCapacity = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         listingId: v.id("listings"),
         quantity: v.number(),
     },
@@ -79,7 +79,7 @@ export const holdEventCapacity = mutation({
 // ---------------------------------------------------------------------------
 export const releaseEventCapacity = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         listingId: v.id("listings"),
         quantity: v.number(),
     },
@@ -170,7 +170,7 @@ export const internalIssueEventReservationsForPayment = internalMutation({
 // ---------------------------------------------------------------------------
 export const checkInReservation = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         qrCode: v.string(),
     },
     handler: async (ctx, args) => {
@@ -207,7 +207,7 @@ export const checkInReservation = mutation({
 // Buyer-facing list of their event reservations.
 export const getMyReservations = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
@@ -227,7 +227,7 @@ export const getMyReservations = query({
 // Seller-facing reservations for an event.
 export const getReservationsByListing = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         listingId: v.string(),
     },
     handler: async (ctx, args) => {
@@ -258,7 +258,7 @@ export const getReservationsByListing = query({
 // ---------------------------------------------------------------------------
 export const internalAutoReleaseEvents = internalMutation({
     args: {},
-    handler: async (ctx) => {
+    handler: async (ctx, args) => {
         const cutoff = Date.now() - 24 * 60 * 60 * 1000;
         const reservations = await ctx.db
             .query("eventReservations")
@@ -315,7 +315,7 @@ export const internalAutoReleaseEvents = internalMutation({
 // ---------------------------------------------------------------------------
 export const internalAutoReleaseServices = internalMutation({
     args: {},
-    handler: async (ctx) => {
+    handler: async (ctx, args) => {
         const cutoffMs = 7 * 24 * 60 * 60 * 1000;
         const cutoffISO = new Date(Date.now() - cutoffMs).toISOString();
 

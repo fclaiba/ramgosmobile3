@@ -8,18 +8,24 @@ import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authH
 // We can later add pagination, but for now we fetch active ones.
 export const getFeed = query({
     args: {},
-    handler: async (ctx) => {
-        // Fetch all active listings
+    handler: async (ctx, args) => {
         const listings = await ctx.db
             .query("listings")
             .withIndex("by_status", (q) => q.eq("status", "active"))
             .order("desc") // Newest first usually
             .collect();
 
-        // Filter out OOS only if you want them hidden.
-        // However, usually we want to show them as "Sold Out" or filter them on client.
-        // For this MVP, let's return all active.
-        return await Promise.all(listings.map(l => resolveListingUrls(ctx, l)));
+        // KYC Filter: Only show products from approved sellers
+        const validListings = [];
+        for (const l of listings) {
+            const sellerId = ctx.db.normalizeId("users", l.sellerId);
+            const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
+            if (seller && seller.kycStatus === 'approved') {
+                validListings.push(l);
+            }
+        }
+
+        return await Promise.all(validListings.map(l => resolveListingUrls(ctx, l)));
     },
 });
 
@@ -71,7 +77,7 @@ export const getListing = query({
 
 export const getMyListings = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
@@ -93,7 +99,7 @@ export const getMyListings = query({
 // Create a new listing
 export const createListing = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         title: v.string(),
         description: v.string(),
         price: v.number(),
@@ -192,7 +198,7 @@ export const createListing = mutation({
 // This is critical for real-time inventory management.
 export const purchaseItem = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         listingId: v.id("listings"),
         quantity: v.number(),
         buyerId: v.optional(v.string()),
@@ -220,15 +226,35 @@ export const purchaseItem = mutation({
             // but usually we just keep it active but OOS.
         });
 
-        // TODO: Record Order in 'orders' table (if we add it to schema)
+        // Record Order in 'orders' table
+        const orderId = await ctx.db.insert("orders", {
+            userId: buyerId,
+            sellerId: listing.sellerId,
+            items: [{
+                listingId: args.listingId,
+                title: listing.title,
+                quantity: args.quantity,
+                price: listing.price,
+            }],
+            total: listing.price * args.quantity,
+            currency: "USD",
+            status: "pending",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
 
-        return { success: true, newStock };
+        // Update listing order count
+        await ctx.db.patch(args.listingId, {
+            orderCount: (listing.orderCount || 0) + 1,
+        });
+
+        return { success: true, newStock, orderId };
     },
 });
 
 export const updateListing = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         id: v.id("listings"),
         sellerId: v.optional(v.string()),
         updates: v.object({
@@ -315,7 +341,7 @@ export const internalGetListingForAttribution = internalQuery({
 
 export const deleteListing = mutation({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         id: v.id("listings"),
         sellerId: v.optional(v.string()),
     },
@@ -412,6 +438,17 @@ export const searchListings = query({
             .query("listings")
             .withIndex("by_status", (q) => q.eq("status", "active"))
             .collect();
+
+        // KYC Filter: Only show products from approved sellers
+        const validListings = [];
+        for (const l of listings) {
+            const sellerId = ctx.db.normalizeId("users", l.sellerId);
+            const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
+            if (seller && seller.kycStatus === 'approved') {
+                validListings.push(l);
+            }
+        }
+        listings = validListings;
 
         // Filter by category
         if (args.category) {

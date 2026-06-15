@@ -24,7 +24,7 @@
  *   GOOGLE_PUBSUB_SERVICE_ACCOUNT   — Email of the SA pushing Pub/Sub messages
  *                                     (default: pubsub@system.gserviceaccount.com).
  *
- * Until those are set, validators short-circuit on `ALLOW_IAP_MOCK=true`.
+ * Validation requires active configuration.
  */
 
 "use node";
@@ -39,7 +39,6 @@ const appleSharedSecret = process.env.APPLE_SHARED_SECRET ?? "";
 const appleBundleId = process.env.APPLE_BUNDLE_ID ?? "";
 const googleServiceAccount = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON ?? "";
 const googlePackageName = process.env.GOOGLE_PLAY_PACKAGE_NAME ?? "";
-const allowIapMock = process.env.ALLOW_IAP_MOCK === "true";
 
 const APPLE_PROD_URL = "https://buy.itunes.apple.com/verifyReceipt";
 const APPLE_SANDBOX_URL = "https://sandbox.itunes.apple.com/verifyReceipt";
@@ -115,7 +114,7 @@ const verifyAppleJws = async (jws: string): Promise<any> => {
 // ---------------------------------------------------------------------------
 export const validateAppleReceipt = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         receiptData: v.optional(v.string()),
         jwsRepresentation: v.optional(v.string()),
@@ -125,27 +124,10 @@ export const validateAppleReceipt = action({
         ctx,
         args,
     ): Promise<{ success: boolean; status: string; isMock: boolean }> => {
-        if (!isAppleConfigured && !allowIapMock) {
+        if (!isAppleConfigured) {
             throw new Error(
-                "IAP Apple no configurado. Define APPLE_SHARED_SECRET en Convex o habilita ALLOW_IAP_MOCK=true para desarrollo.",
+                "IAP Apple no configurado. Define APPLE_SHARED_SECRET en Convex.",
             );
-        }
-
-        if (!isAppleConfigured && allowIapMock) {
-            const fakeTxn = `apple_mock_${args.userId}_${Date.now()}`;
-            await ctx.runMutation(internal.iap.internalUpsertIapReceipt, {
-                userId: String(args.userId),
-                platform: "ios",
-                productId: args.productId ?? "pro_monthly",
-                transactionId: fakeTxn,
-                originalTransactionId: fakeTxn,
-                expiresAt: new Date(
-                    Date.now() + 30 * 24 * 60 * 60 * 1000,
-                ).toISOString(),
-                status: "active",
-                raw: { mock: true },
-            });
-            return { success: true, status: "active", isMock: true };
         }
 
         // ---------- Path A: StoreKit2 JWS ----------
@@ -266,7 +248,7 @@ const fetchGoogleSubscription = async (
 
 export const validateGoogleReceipt = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         productId: v.string(),
         purchaseToken: v.string(),
@@ -276,27 +258,10 @@ export const validateGoogleReceipt = action({
         ctx,
         args,
     ): Promise<{ success: boolean; status: string; isMock: boolean }> => {
-        if (!isGoogleConfigured && !allowIapMock) {
+        if (!isGoogleConfigured) {
             throw new Error(
-                "IAP Google no configurado. Define GOOGLE_PLAY_SERVICE_ACCOUNT_JSON en Convex o habilita ALLOW_IAP_MOCK=true para desarrollo.",
+                "IAP Google no configurado. Define GOOGLE_PLAY_SERVICE_ACCOUNT_JSON en Convex.",
             );
-        }
-
-        if (!isGoogleConfigured && allowIapMock) {
-            const fakeTxn = `google_mock_${args.userId}_${Date.now()}`;
-            await ctx.runMutation(internal.iap.internalUpsertIapReceipt, {
-                userId: String(args.userId),
-                platform: "android",
-                productId: args.productId,
-                transactionId: fakeTxn,
-                purchaseToken: args.purchaseToken,
-                expiresAt: new Date(
-                    Date.now() + 30 * 24 * 60 * 60 * 1000,
-                ).toISOString(),
-                status: "active",
-                raw: { mock: true },
-            });
-            return { success: true, status: "active", isMock: true };
         }
 
         const packageName = args.packageName ?? googlePackageName;

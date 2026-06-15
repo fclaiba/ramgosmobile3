@@ -107,7 +107,7 @@ export const UnifiedListingForm = ({ type, initialData, onSubmit, onCancel, isLo
                             {type === 'product' && 'Nuevo Producto'}
                             {type === 'service' && 'Nuevo Servicio'}
                             {type === 'event' && 'Nuevo Evento'}
-                            {type === 'coupon' && 'Nuevo Bono'}
+                            {type === 'bono' && 'Nuevo Bono'}
                         </Text>
                         <Text style={styles.headerSubtitle}>Completa la información para publicar</Text>
                     </View>
@@ -117,42 +117,51 @@ export const UnifiedListingForm = ({ type, initialData, onSubmit, onCancel, isLo
 
                     {/* Dynamic Fields Grid */}
                     <View style={styles.grid}>
-                        {/* Price & Stock - Not for Coupon (uses value/stock) but similar */}
-                        {(type !== 'coupon') && (
-                            <View style={styles.row}>
-                                <View style={styles.col}>{renderInput('Precio', formData.price, 'price', '0.00', 'numeric')}</View>
-                                {(type === 'product' || type === 'event') && (
-                                    <View style={styles.col}>{renderInput(type === 'event' ? 'Aforo' : 'Stock', type === 'event' ? formData.capacity : formData.stock, type === 'event' ? 'capacity' : 'stock', '0', 'numeric')}</View>
-                                )}
-                            </View>
-                        )}
-
-                        {/* Coupon Specifics */}
-                        {type === 'coupon' && (
-                            <>
-                                <View style={styles.row}>
-                                    <View style={styles.col}>{renderInput('Valor Descuento', formData.value, 'value', '0', 'numeric')}</View>
-                                    <View style={styles.col}>{renderInput('Stock Total', formData.stock, 'stock', '100', 'numeric')}</View>
-                                </View>
-                                <View style={styles.row}>
-                                    <View style={styles.col}>{renderInput('Max por usuario', formData.maxPerUser, 'maxPerUser', '1', 'numeric')}</View>
-                                    <View style={styles.col}>
-                                        <Text style={styles.label}>Tipo</Text>
-                                        <View style={styles.toggleRow}>
-                                            <TouchableOpacity
-                                                style={[styles.toggleBtn, formData.discountType === 'percentage' && styles.toggleBtnActive]}
-                                                onPress={() => handleChange('discountType', 'percentage')}
-                                            >
-                                                <Text style={[styles.toggleText, formData.discountType === 'percentage' && styles.toggleTextActive]}>%</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[styles.toggleBtn, formData.discountType === 'fixed' && styles.toggleBtnActive]}
-                                                onPress={() => handleChange('discountType', 'fixed')}
-                                            >
-                                                <Text style={[styles.toggleText, formData.discountType === 'fixed' && styles.toggleTextActive]}>$</Text>
-                                            </TouchableOpacity>
+                        {/* Price & Stock */}
+                        <View style={styles.row}>
+                            {type === 'bono' ? (
+                                <View style={styles.col}>
+                                    {/* For Bono, price is automatically 50% of value */}
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.label}>Precio a Cobrar (50%)</Text>
+                                        <View style={[styles.input, { backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center' }]}>
+                                            <Text style={{ color: isDark ? '#D1D5DB' : '#6B7280' }}>
+                                                ${formData.price || '0.00'}
+                                            </Text>
                                         </View>
                                     </View>
+                                </View>
+                            ) : (
+                                <View style={styles.col}>{renderInput('Precio ($)', formData.price, 'price', '0.00', 'numeric')}</View>
+                            )}
+                            {(type === 'product' || type === 'event' || type === 'bono') && (
+                                <View style={styles.col}>{renderInput(type === 'event' ? 'Aforo' : 'Stock', type === 'event' ? formData.capacity : formData.stock, type === 'event' ? 'capacity' : 'stock', '0', 'numeric')}</View>
+                            )}
+                        </View>
+
+                        {/* Bono Specifics */}
+                        {type === 'bono' && (
+                            <>
+                                <View style={styles.row}>
+                                    <View style={styles.col}>
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.label}>Monto a Consumir ($)</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={formData.value}
+                                                onChangeText={(t) => {
+                                                    const sanitized = t.replace(/[^0-9.]/g, '');
+                                                    const num = parseFloat(sanitized) || 0;
+                                                    handleChange('value', sanitized);
+                                                    handleChange('price', num > 0 ? (num / 2).toString() : '');
+                                                }}
+                                                placeholder="Ej. 200"
+                                                placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+                                    <View style={styles.col}>{renderInput('Max por usuario', formData.maxPerUser, 'maxPerUser', '1', 'numeric')}</View>
                                 </View>
                                 <View style={styles.row}>
                                     <View style={styles.col}>{renderInput('Fecha Inicio', formData.startDate, 'startDate', 'DD/MM/YYYY')}</View>
@@ -173,7 +182,7 @@ export const UnifiedListingForm = ({ type, initialData, onSubmit, onCancel, isLo
                         )}
 
                         {/* Branch Selection for Coupon/Events if enabled */}
-                        {branches.length > 0 && (type === 'coupon' || type === 'event' || type === 'product' || type === 'service') && (
+                        {branches.length > 0 && (type === 'bono' || type === 'event' || type === 'product' || type === 'service') && (
                             <View style={styles.inputContainer}>
                                 <Text style={styles.label}>Sucursales Disponibles</Text>
                                 <View style={styles.branchRow}>

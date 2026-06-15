@@ -35,6 +35,7 @@ export function PointsManager() {
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    
     const styles = getStyles(isDark, insets); // Pass insets to styles
 
     // --- ANIMATIONS ---
@@ -348,7 +349,9 @@ export function PointsManager() {
                 )}
 
                 {!expanded && (
-                    <Text style={styles.howItWorksTapToExpand}>Toca para ver más detalles</Text>
+                    <TouchableOpacity onPress={() => { triggerImpact(); setExpanded(true); }} activeOpacity={0.7}>
+                        <Text style={styles.howItWorksTapToExpand}>Toca para ver más detalles</Text>
+                    </TouchableOpacity>
                 )}
             </View>
         );

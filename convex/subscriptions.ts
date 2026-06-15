@@ -38,9 +38,10 @@ import Stripe from "stripe";
 import { withStripeBreadcrumb } from "./observability";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const allowStripeMock = process.env.ALLOW_STRIPE_MOCK === "true";
-const isMockMode = !stripeKey;
-const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
+if (!stripeKey) {
+    throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
+}
+const stripe = new Stripe(stripeKey, {
     apiVersion: "2024-04-10" as any,
 });
 
@@ -51,11 +52,9 @@ const PRICE_BUSINESS = process.env.STRIPE_PRICE_BUSINESS_MONTHLY ?? "";
 const PRICE_PRO = process.env.STRIPE_PRICE_PRO_MONTHLY ?? "";
 
 const assertStripeConfigured = () => {
-    if (!isMockMode) return;
-    if (allowStripeMock) return;
-    throw new Error(
-        "Stripe no configurado. Define STRIPE_SECRET_KEY en Convex o habilita ALLOW_STRIPE_MOCK=true.",
-    );
+    if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
+    }
 };
 
 const resolvePriceForTier = (tier: "pro" | "business"): string => {
@@ -151,7 +150,7 @@ export const internalUpsertSubscription = internalMutation({
 // ---------------------------------------------------------------------------
 export const createSubscriptionCheckout = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
         tier: v.union(v.literal("pro"), v.literal("business")),
         successUrl: v.optional(v.string()),
@@ -162,14 +161,6 @@ export const createSubscriptionCheckout = action({
         args,
     ): Promise<{ url: string | null; sessionId: string | null; isMock: boolean }> => {
         assertStripeConfigured();
-
-        if (isMockMode) {
-            return {
-                url: `https://checkout.stripe.com/mock-subscription?tier=${args.tier}`,
-                sessionId: `cs_mock_${Date.now()}`,
-                isMock: true,
-            };
-        }
 
         const priceId = resolvePriceForTier(args.tier);
         if (!priceId) {
@@ -256,7 +247,7 @@ export const createSubscriptionCheckout = action({
 // ---------------------------------------------------------------------------
 export const cancelSubscription = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.id("users"),
     },
     handler: async (ctx, args): Promise<{ success: boolean }> => {
@@ -267,23 +258,6 @@ export const cancelSubscription = action({
             { userId: String(args.userId) },
         );
         if (!sub) throw new Error("No hay suscripción activa.");
-
-        if (isMockMode) {
-            await ctx.runMutation(
-                internal.subscriptions.internalUpsertSubscription,
-                {
-                    userId: String(args.userId),
-                    stripeCustomerId: sub.stripeCustomerId,
-                    stripeSubscriptionId: sub.stripeSubscriptionId,
-                    stripePriceId: sub.stripePriceId,
-                    tier: sub.tier,
-                    status: "canceled",
-                    currentPeriodEnd: sub.currentPeriodEnd,
-                    cancelAtPeriodEnd: true,
-                },
-            );
-            return { success: true };
-        }
 
         await withStripeBreadcrumb(
             {
@@ -422,7 +396,7 @@ export const internalGetUserByStripeCustomer = internalQuery({
 // ---------------------------------------------------------------------------
 export const getMySubscription = query({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {

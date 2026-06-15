@@ -66,7 +66,7 @@ export default function AddEditProductScreen({ navigation }: any) {
                 return;
             }
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsEditing: true,
                 aspect: [1, 1],
                 quality: 0.8,
@@ -78,7 +78,6 @@ export default function AddEditProductScreen({ navigation }: any) {
             const mime = result.assets[0].mimeType ?? 'image/jpeg';
             const uploadUrl = await generateUploadUrl({
                 actorId: user?.id as any,
-                userId: user?.id as any,
             });
             const blob = await (await fetch(uri)).blob();
             const uploadRes = await fetch(uploadUrl, {

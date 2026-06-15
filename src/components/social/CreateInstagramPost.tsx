@@ -34,7 +34,7 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
         if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             quality: 0.8,
             allowsEditing: true,
             aspect: [1, 1],
@@ -43,12 +43,27 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
 
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({ actorId: authUser.id as any, userId: authUser.id as any });
+            const uploadUrl = await generateUploadUrl({});
             const asset = result.assets[0];
+            let blob: Blob;
+            try {
+                const fetchResponse = await fetch(asset.uri);
+                blob = await fetchResponse.blob();
+            } catch (err) {
+                blob = await new Promise<Blob>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.onload = function() { resolve(xhr.response); };
+                    xhr.onerror = function(e) { reject(new TypeError('Network request failed')); };
+                    xhr.responseType = 'blob';
+                    xhr.open('GET', asset.uri, true);
+                    xhr.send(null);
+                });
+            }
+
             const response = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
-                body: { uri: asset.uri } as any,
+                body: blob,
             });
             const { storageId } = await response.json();
             setImageUrl(`convex-storage:${storageId}`);

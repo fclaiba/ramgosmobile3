@@ -47,7 +47,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const [hasHydrated, setHasHydrated] = useState(false);
     const backendCart = useQuery(
         api.cart.getMyCart,
-        user ? { actorId: user.id as any, userId: user.id } : 'skip',
+        user ? { userId: user.id as string } : 'skip',
     ) ?? [];
     const addToCartMutation = useMutation(api.cart.addToCart);
     const removeFromCartMutation = useMutation(api.cart.removeFromCart);
@@ -149,15 +149,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
                     if (item.type === 'subscription') {
                         const subscriptionRows = backendCart.filter((row: any) => row.snapshot?.type === 'subscription');
                         await Promise.all(subscriptionRows.map((row: any) => removeFromCartMutation({
-                            actorId: user.id as any,
-                            userId: user.id,
                             cartItemId: row._id,
+                            userId: user.id as string,
                         })));
                     }
 
                     await addToCartMutation({
-                        actorId: user.id as any,
-                        userId: user.id,
                         listingId,
                         quantity: item.type === 'subscription' ? 1 : quantityToAdd,
                         mutationKey: `cart_add_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -176,6 +173,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                             distanceKm: item.distanceKm,
                             referralCode: item.referralCode,
                         },
+                        userId: user.id as string,
                     });
                 } catch (error) {
                     console.error('Failed to add backend cart item', error);
@@ -218,9 +216,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const row = findBackendRow(id);
             if (!row) return;
             removeFromCartMutation({
-                actorId: user.id as any,
-                userId: user.id,
                 cartItemId: row._id,
+                userId: user.id as string,
             }).catch((error) => {
                 console.error('Failed to remove backend cart item', error);
             });
@@ -234,10 +231,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
             const row = findBackendRow(id);
             if (!row) return;
             updateCartQuantityMutation({
-                actorId: user.id as any,
-                userId: user.id,
                 cartItemId: row._id,
                 quantity,
+                userId: user.id as string,
             }).catch((error) => {
                 console.error('Failed to update backend cart quantity', error);
             });
@@ -260,10 +256,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const clearCart = () => {
         if (user) {
-            clearCartMutation({
-                actorId: user.id as any,
-                userId: user.id,
-            }).catch((error) => {
+            clearCartMutation({ userId: user.id as string }).catch((error) => {
                 console.error('Failed to clear backend cart', error);
             });
             return;

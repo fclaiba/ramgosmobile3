@@ -29,12 +29,25 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PointsFeedback } from './src/components/ui/PointsFeedback';
 import { StripeWrapper } from './src/components/StripeWrapper';
 
+import { Platform } from 'react-native';
+
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY;
 if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
     throw new Error('Missing EXPO_PUBLIC_STRIPE_KEY. Configure Stripe publishable key for production builds.');
 }
 const stripePublishableKey = STRIPE_PUBLISHABLE_KEY ?? 'pk_test_mock_fallback';
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+
+// Suppress known react-native-web aria-hidden warning caused by Modals
+if (Platform.OS === 'web') {
+    const originalConsoleError = console.error;
+    console.error = (...args: any[]) => {
+        if (typeof args[0] === 'string' && args[0].includes('Blocked aria-hidden on an element')) {
+            return;
+        }
+        originalConsoleError(...args);
+    };
+}
 
 if (sentryDsn && !(globalThis as any).__RAMGOS_SENTRY_INITIALIZED__) {
     Sentry.init({
@@ -98,7 +111,6 @@ import WalletScreen from './src/screens/finance/WalletScreen';
 import CampaignManagerScreen from './src/screens/marketing/CampaignManagerScreen';
 import OrderDetailScreen from './src/screens/marketplace/OrderDetailScreen';
 import CheckoutScreen from './src/screens/marketplace/CheckoutScreen';
-import OrderHistoryScreen from './src/screens/marketplace/OrderHistoryScreen';
 import DisputeReasonScreen from './src/screens/marketplace/DisputeReasonScreen';
 import DisputeChatScreen from './src/screens/marketplace/DisputeChatScreen';
 import SellerWalletScreen from './src/screens/marketplace/SellerWalletScreen';
@@ -111,6 +123,10 @@ import PublicBusinessProfileScreen from './src/screens/BusinessProfileScreen';
 import BusinessKYCScreen from './src/screens/business/BusinessKYCScreen';
 import BusinessQRScannerScreen from './src/screens/business/BusinessQRScannerScreen';
 import UserListScreen from './src/screens/social/UserListScreen';
+import GamesScreen from './src/screens/GamesScreen';
+import MapExplorerScreen from './src/screens/MapExplorerScreen';
+import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
+import AnalyticsDashboardScreen from './src/screens/AnalyticsDashboardScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -179,7 +195,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
                     <Stack.Screen name="Cart" component={CartScreen} />
                     <Stack.Screen name="Checkout" component={CheckoutScreen} />
-                    <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
                     <Stack.Screen name="DisputeReason" component={DisputeReasonScreen} />
                     <Stack.Screen name="DisputeChat" component={DisputeChatScreen} />
                     <Stack.Screen name="SellerWallet" component={SellerWalletScreen} />
@@ -211,14 +226,18 @@ const AppNavigator = () => {
                     <Stack.Screen name="Dispute" component={DisputeScreen} />
                     <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
                     <Stack.Screen name="MyListings" component={MyListingsScreen} />
+                    <Stack.Screen name="AddEditProduct" component={AddEditProductScreen} />
                     <Stack.Screen name="StripeConnect" component={StripeConnectScreen} />
-
                     {/* Maps & QR Module */}
                     {/* MapExplorer integrated into Marketplace */}
                     <Stack.Screen name="BusinessDetail" component={PublicBusinessProfileScreen} />
                     <Stack.Screen name="BonusQR" component={BonusQRScreen} />
                     <Stack.Screen name="BusinessScanner" component={BusinessScannerScreen} />
                     <Stack.Screen name="UserList" component={UserListScreen} />
+                    <Stack.Screen name="Games" component={GamesScreen} />
+                    <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
+                    <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
+                    <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
                 </Stack.Navigator>
                 <CartSidebar />
                 <EscrowSheet />
@@ -299,3 +318,4 @@ const styles = StyleSheet.create({
         flex: 1,
     },
 });
+// Rebuild trigger to clear stale SellerCatalogScreen reference

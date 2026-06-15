@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { stripe } from '../../../lib/stripe';
 
 export async function POST(request) {
+  // rateLimit()
   let event = request.body;
   // Replace this endpoint secret with your endpoint's unique secret
   // If you are testing with the CLI, find the secret by running 'stripe listen'

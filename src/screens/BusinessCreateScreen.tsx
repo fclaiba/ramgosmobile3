@@ -7,25 +7,28 @@ import {
     useWindowDimensions,
     ScrollView,
 } from 'react-native';
-import { Package, Ticket, Calendar, Briefcase } from 'lucide-react-native';
+import { Package, Ticket, Calendar, Briefcase, Tag } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MobileHeader } from '../components/MobileHeader';
 import { useBusiness } from '../contexts/BusinessContext';
-import { useMarketplace } from '../contexts/MarketplaceContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UnifiedListingForm, ListingType } from '../components/forms/UnifiedListingForm';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 export default function BusinessCreateScreen({ navigation, route }: any) {
     const [selectedType, setSelectedType] = useState<ListingType | null>(route?.params?.type || null);
-    const {
-        addCatalogItem, updateCatalogItem,
-        createCoupon, updateCoupon,
-        addEvent, updateEvent,
-        branches
-    } = useBusiness();
+
+    useEffect(() => {
+        if (route?.params?.type) {
+            setSelectedType(route.params.type as ListingType);
+        }
+    }, [route?.params?.type]);
+
+    const { branches } = useBusiness();
     const { show } = useToast();
     const { width } = useWindowDimensions();
     const { colorScheme } = useTheme();
@@ -46,7 +49,8 @@ export default function BusinessCreateScreen({ navigation, route }: any) {
         return new Date().toISOString();
     };
 
-    const { createProduct: createMarketplaceProduct } = useMarketplace(); // Import ability to push to public feed
+    const createListingConvex = useMutation(api.listings.createListing);
+    const updateListingConvex = useMutation(api.listings.updateListing);
 
     const handleUnifiedSubmit = async (data: any) => {
         if (!selectedType) return;
@@ -54,118 +58,50 @@ export default function BusinessCreateScreen({ navigation, route }: any) {
         await new Promise((resolve) => {
             requireKycFor('business', async () => {
                 try {
-                    let mpPayload: any = null;
-
-                    // 1. Internal Business Context Update
-                    switch (selectedType) {
-                        case 'product':
-                        case 'service':
-                            const productPayload = {
-                                name: data.name,
-                                description: data.description,
-                                price: Number(data.price) || 0,
-                                stock: Number(data.stock) || 0,
-                                category: data.category || (selectedType === 'service' ? 'Servicios' : 'General'),
-                                condition: data.condition,
-                                featured: data.featured,
-                                image: data.images?.[0] || undefined,
-                                status: 'published' as const
-                            };
-                            if (isEditMode) updateCatalogItem(initialData.id, productPayload);
-                            else addCatalogItem(productPayload);
-                            break;
-
-                        case 'coupon':
-                            const couponPayload = {
-                                name: data.name,
-                                description: data.description,
-                                discountType: data.discountType,
-                                value: Number(data.value) || 0,
-                                stock: Number(data.stock) || 0,
-                                maxPerUser: Number(data.maxPerUser) || 1,
-                                startDate: toISO(data.startDate),
-                                endDate: toISO(data.endDate),
-                                branchIds: data.branchIds,
-                                image: data.images?.[0] || undefined,
-                                status: 'active' as const
-                            };
-                            if (isEditMode) updateCoupon(initialData.id, couponPayload);
-                            else createCoupon(couponPayload);
-                            break;
-
-                        case 'event':
-                            const eventPayload = {
-                                name: data.name,
-                                description: data.description,
-                                date: toISO(data.date),
-                                time: data.time,
-                                location: data.location,
-                                price: Number(data.price) || 0,
-                                capacity: Number(data.capacity) || 0,
-                                image: data.images?.[0] || undefined,
-                                status: 'active' as const
-                            };
-                            if (isEditMode) updateEvent(initialData.id, eventPayload);
-                            else addEvent(eventPayload);
-                            break;
-                    }
-
-                    // 2. Sync to Public Marketplace (Mock Logic)
-                    // We map the business item format to the Marketplace ProductInput format
-                    const shippingProfile = {
-                        weightKg: 1,
-                        dimensionsCm: { length: 10, width: 10, height: 10 },
-                        shipsFromPostalCode: 'C1000',
-                        allowPickup: true,
-                    };
-                    const location = {
-                        lat: -34.603722,
-                        lng: -58.381592,
-                        name: 'Sucursal Central', // Should strictly come from branch
-                        address: 'Av. Libertador 123',
-                        distanceKm: 2,
-                    };
-
-                    const commonMpData = {
+                    // 1. Sync directly to Convex Marketplace database
+                    const commonData = {
                         title: data.name,
                         description: data.description || 'Sin descripción',
-                        price: Number(data.price) || 0, // Coupon price? typically 0 or purchase price.
+                        price: Number(data.price) || 0,
                         stock: Number(data.stock) || (selectedType === 'event' ? Number(data.capacity) : 1),
-                        condition: 'new' as const, // Business items usually new
-                        listingType: (selectedType === 'coupon' ? 'bono' : selectedType) as 'product' | 'service' | 'event' | 'bono',
-                        category: data.category || (selectedType === 'service' ? 'Servicios' : selectedType === 'event' ? 'Eventos' : 'Varios'),
-                        images: (data.images || []).map((url: string, i: number) => ({ url, isPrimary: i === 0 })),
-                        shippingProfile,
-                        location,
-                        // Extra fields
+                        condition: 'new' as const,
+                        type: selectedType as 'product' | 'service' | 'event' | 'bono',
+                        category: data.category || (selectedType === 'service' ? 'Servicios' : selectedType === 'event' ? 'Eventos' : 'General'),
+                        image: data.images?.[0] || undefined,
+                        gallery: data.images || [],
+                        location: {
+                            lat: -34.603722,
+                            lng: -58.381592,
+                            name: 'Sucursal', 
+                            address: 'Av. Libertador 123',
+                            distanceKm: 2,
+                        },
                         eventDate: selectedType === 'event' ? toISO(data.date) : undefined,
                         eventTime: data.time,
-                        validUntil: selectedType === 'coupon' ? toISO(data.endDate) : undefined,
+                        validUntil: selectedType === 'bono' ? toISO(data.endDate) : undefined,
+                        discountValue: selectedType === 'bono' ? Number(data.value) || 0 : undefined,
+                        discountType: selectedType === 'bono' ? 'fixed' : undefined,
                     };
 
-                    // For coupons, the price might be the cost to buy the coupon, or 0 if it's a claimable benefit.
-                    // Assuming price field in form is the cost.
-
-                    const mpResult = await createMarketplaceProduct(commonMpData);
-
-                    if (mpResult.success) {
-                        show('Publicado en Marketplace y Gestión', 'success');
-                        if (navigation.canGoBack()) {
-                            navigation.goBack();
-                        } else {
-                            navigation.navigate('BusinessDashboard');
-                        }
+                    if (isEditMode && initialData?.id) {
+                        await updateListingConvex({
+                            id: initialData.id,
+                            updates: commonData
+                        });
+                        show('Publicación actualizada correctamente', 'success');
                     } else {
-                        show('Guardado en gestión, error en Marketplace', 'warning');
-                        if (navigation.canGoBack()) {
-                            navigation.goBack();
-                        } else {
-                            navigation.navigate('BusinessDashboard');
-                        }
+                        await createListingConvex(commonData);
+                        show('Publicado en Marketplace exitosamente', 'success');
                     }
 
-                } catch (e) {
-                    show('Error al publicar', 'error');
+                    if (navigation.canGoBack()) {
+                        navigation.goBack();
+                    } else {
+                        navigation.navigate('BusinessDashboard');
+                    }
+
+                } catch (e: any) {
+                    show(e.message || 'Error al publicar', 'error');
                 }
                 resolve(true);
             });
@@ -175,8 +111,8 @@ export default function BusinessCreateScreen({ navigation, route }: any) {
     const CREATION_TYPES = [
         { id: 'product', label: 'Producto', icon: Package, desc: 'Vende artículos físicos', color: ['#3B82F6', '#2563EB'] },
         { id: 'service', label: 'Servicio', icon: Briefcase, desc: 'Ofrece tus servicios', color: ['#8B5CF6', '#7C3AED'] },
-        { id: 'coupon', label: 'Bono / Cupón', icon: Ticket, desc: 'Descuentos y promos', color: ['#10B981', '#059669'] },
         { id: 'event', label: 'Evento', icon: Calendar, desc: 'Vende entradas', color: ['#F59E0B', '#D97706'] },
+        { id: 'bono', label: 'Bono', icon: Tag, desc: 'Ofrece cupones', color: ['#10B981', '#059669'] },
     ] as const;
 
     if (selectedType) {

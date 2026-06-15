@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Alert } from 'react-native';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, ShoppingBag } from 'lucide-react-native';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -12,7 +12,7 @@ import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: string) => void }) => {
-    const { isPostSaved, savePost, unsavePost } = useSocial();
+    const { isPostSaved, savePost, unsavePost, currentUser, deletePost } = useSocial();
     const { addItem } = useCart();
     const { addToWishlist } = useMarketplace();
     const [liked, setLiked] = useState(post.likedByUser || false);
@@ -35,6 +35,33 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
         setLikes((prev: number) => liked ? prev - 1 : prev + 1);
     };
 
+    const handleDelete = () => {
+        Alert.alert(
+            "Eliminar publicación",
+            "¿Estás seguro de que quieres eliminar esta publicación?",
+            [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                    text: "Eliminar", 
+                    style: "destructive",
+                    onPress: () => deletePost(post.id)
+                }
+            ]
+        );
+    };
+
+    const handleMoreOptions = () => {
+        const options: any[] = [{ text: "Cancelar", style: "cancel" }];
+        
+        if (currentUser.id === post.userId) {
+            options.push({ text: "Eliminar", style: "destructive", onPress: handleDelete });
+        }
+        
+        if (options.length > 1) {
+            Alert.alert("Opciones", "¿Qué deseas hacer?", options);
+        }
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -48,7 +75,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                         <Text style={styles.timestamp}>{post.timestamp}</Text>
                     </View>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.moreBtn}>
+                <TouchableOpacity style={styles.moreBtn} onPress={handleMoreOptions}>
                     <MoreHorizontal size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
                 </TouchableOpacity>
             </View>

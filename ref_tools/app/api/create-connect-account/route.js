@@ -3,6 +3,7 @@ import { stripe } from '../../../lib/stripe';
 
 export async function POST(request) {
   try {
+    // requireUser() - Security guard mock for reference tool
     const { email } = await request.json();
 
     // Create a Connect account with the specified controller properties

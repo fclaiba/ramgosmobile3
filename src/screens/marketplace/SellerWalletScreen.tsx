@@ -8,8 +8,12 @@ import { useEscrow } from '../../contexts/EscrowContext';
 import { DollarSign, Lock, AlertCircle, ArrowUpRight, ArrowDownLeft, ArrowUpRightFromSquare, Eye } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useActionGate } from '../../utils/useActionGate';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function SellerWalletScreen({ navigation }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const { orders } = useMarketplace();
     const { user } = useAuth();
     const { getWalletByOwner } = useFintech();
@@ -182,7 +186,7 @@ export default function SellerWalletScreen({ navigation }: any) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F9FAFB' },
 
     balanceContainer: { flexDirection: 'row', gap: 12, marginBottom: 24 },
@@ -194,41 +198,41 @@ const styles = StyleSheet.create({
     iconBgAvailable: { backgroundColor: '#D1FAE5', padding: 8, borderRadius: 12, marginBottom: 12 },
     iconBgHeld: { backgroundColor: '#FEF3C7', padding: 8, borderRadius: 12, marginBottom: 12 },
 
-    balanceLabel: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
+    balanceLabel: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', fontWeight: '500' },
     balanceValue: { fontSize: 24, fontWeight: 'bold', color: '#111827', marginVertical: 4 },
 
-    withdrawBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 4 },
+    withdrawBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 4 },
     withdrawText: { fontSize: 12, fontWeight: 'bold', color: '#059669' },
 
     heldHint: { fontSize: 11, color: '#B45309' },
 
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 12 },
 
-    card: { backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+    card: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 12, marginBottom: 12, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    orderId: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
+    orderId: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', fontWeight: '600' },
     amount: { fontSize: 16, fontWeight: 'bold' },
-    itemTitle: { fontSize: 14, color: '#374151', marginBottom: 12 },
+    itemTitle: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 },
 
-    dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F3F4F6', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    dateText: { fontSize: 11, color: '#6B7280' },
+    dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? '#1F2937' : '#F3F4F6', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    dateText: { fontSize: 11, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
 
     warnBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     warnText: { fontSize: 10, color: '#EF4444', fontWeight: 'bold' },
 
-    tabs: { flexDirection: 'row', marginBottom: 16, backgroundColor: '#E5E7EB', borderRadius: 8, padding: 4 },
+    tabs: { flexDirection: 'row', marginBottom: 16, backgroundColor: isDark ? '#374151' : '#e5e7eb', borderRadius: 8, padding: 4 },
     tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
-    tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-    tabText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
+    tabActive: { backgroundColor: isDark ? '#1F2937' : '#fff', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+    tabText: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', fontWeight: '500' },
     tabTextActive: { color: '#111827', fontWeight: '600' },
-    emptyText: { textAlign: 'center', color: '#9CA3AF', marginTop: 20 },
+    emptyText: { textAlign: 'center', color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 20 },
 
-    transactionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 12, gap: 12 },
+    transactionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 12, marginBottom: 12, gap: 12 },
     transactionIcon: { padding: 10, borderRadius: 10 },
     iconCredit: { backgroundColor: '#ECFDF5' },
     iconDebit: { backgroundColor: '#FEF2F2' },
-    transactionDesc: { fontSize: 14, color: '#374151', fontWeight: '500' },
-    transactionDate: { fontSize: 12, color: '#9CA3AF' },
+    transactionDesc: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', fontWeight: '500' },
+    transactionDate: { fontSize: 12, color: isDark ? '#6B7280' : '#9CA3AF' },
     transactionAmount: { fontSize: 15, fontWeight: 'bold' },
 
     viewEscrowBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#F5F3FF', borderRadius: 8, alignSelf: 'flex-start' },

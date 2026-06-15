@@ -16,6 +16,7 @@ export const ReferralCard: React.FC<ReferralCardProps> = ({ code, onShare }) => 
     const { colorScheme } = useTheme();
     const { show } = useToast();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     const handleCopy = async () => {
         await Clipboard.setStringAsync(code);
@@ -58,7 +59,7 @@ export const ReferralCard: React.FC<ReferralCardProps> = ({ code, onShare }) => 
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         borderRadius: 24,
         overflow: 'hidden',
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
     },
     containerDark: {
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
     },
     gradient: {
         padding: 24,
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#FFF',
+        color: isDark ? '#1F2937' : '#fff',
     },
     description: {
         color: 'rgba(255,255,255,0.9)',
@@ -107,7 +108,7 @@ const styles = StyleSheet.create({
     code: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#FFF',
+        color: isDark ? '#1F2937' : '#fff',
         letterSpacing: 2,
         paddingHorizontal: 24,
         paddingVertical: 12,
@@ -125,14 +126,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 32,
         borderRadius: 100,
         alignItems: 'center',
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 4,
         elevation: 4,
     },
     shareButtonText: {
-        color: '#FFF',
+        color: isDark ? '#1F2937' : '#fff',
         fontWeight: 'bold',
         fontSize: 16,
     }

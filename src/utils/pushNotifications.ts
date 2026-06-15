@@ -15,7 +15,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
             });
         }
 
-        if (Device.isDevice) {
+        if (Platform.OS !== 'web' && Device.isDevice) {
             const { status: existingStatus } = await Notifications.getPermissionsAsync();
             let finalStatus = existingStatus;
             

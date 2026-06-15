@@ -21,7 +21,7 @@ const navItems: { id: NavSection; icon: any; label: string }[] = [
     { id: 'social', icon: Users, label: 'Social' },
 ];
 
-const NavItem = ({ item, isActive, onPress, isDark }: { item: any, isActive: boolean, onPress: () => void, isDark: boolean }) => {
+const NavItem = ({ item, isActive, onPress, isDark, styles }: { item: any, isActive: boolean, onPress: () => void, isDark: boolean, styles: any }) => {
     // Icon animation only (color/scale)
     const activeColor = '#007AFF';
     const inactiveColor = isDark ? '#9CA3AF' : '#999999';
@@ -64,6 +64,7 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
     const { colorScheme } = useTheme();
     const insets = useSafeAreaInsets();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     const showDashboard = isAuthenticated && user && ['influencer', 'business', 'admin'].includes(user.role);
 
@@ -93,6 +94,7 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
                         isActive={activeSection === item.id}
                         onPress={() => onSectionChange(item.id as NavSection)}
                         isDark={isDark}
+                        styles={styles}
                     />
                 ))}
             </View>
@@ -100,7 +102,7 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         position: 'absolute',
         bottom: 0,
@@ -108,7 +110,7 @@ const styles = StyleSheet.create({
         right: 0,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,
         shadowRadius: 10,

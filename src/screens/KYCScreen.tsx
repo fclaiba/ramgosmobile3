@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, TextInput, ScrollView, Platform, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { Camera, Upload, CheckCircle2, ShieldCheck, ArrowRight, User, Building2, MapPin, Link as LinkIcon, FileText } from 'lucide-react-native';
@@ -10,7 +10,6 @@ import { useToast } from '../contexts/ToastContext';
 import { useFintech } from '../contexts/FintechContext';
 import { useAction, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { KycWebViewMockModal } from '../components/auth/KycWebViewMockModal';
 
 type Step = 'intro' | 'success';
 
@@ -39,11 +38,6 @@ export default function KYCScreen({ navigation, route }: any) {
 
     const { user, markKycSubmitted } = useAuth();
     const { submitKyc, refreshKyc } = useFintech();
-    const initiateKyc = useAction((api as any).identity?.initiateKYCSession || api.users.syncUser);
-    
-    // WebView State
-    const [webViewVisible, setWebViewVisible] = useState(false);
-    const [kycUrl, setKycUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Animation
@@ -63,28 +57,21 @@ export default function KYCScreen({ navigation, route }: any) {
             return;
         }
 
-        setIsSubmitting(true);
-        try {
-            const result = await initiateKyc({ accountType });
-            if (result && result.url) {
-                setKycUrl(result.url);
-                setWebViewVisible(true);
-            }
-        } catch (e) {
-            show('Error contactando al proveedor de identidad', 'error');
-        } finally {
-            setIsSubmitting(false);
+        if (!idFront || !idBack) {
+            show('Falta adjuntar documentos de identidad', 'error');
+            return;
         }
+
+        await handleKycSuccess();
     };
 
     const handleKycSuccess = async () => {
-        setWebViewVisible(false);
         setIsSubmitting(true);
         try {
             await markKycSubmitted({
                 accountType,
-                documentFront: idFront || 'mock_doc',
-                documentBack: idBack || 'mock_doc',
+                documentFront: idFront as string,
+                documentBack: idBack as string,
                 selfieValidated: faceScanned,
                 // Business Data
                 ein: accountType === 'business' ? ein : undefined,
@@ -104,8 +91,8 @@ export default function KYCScreen({ navigation, route }: any) {
                 ownerType: accountType as any,
                 ownerName: user?.name || user?.email || 'Unknown User',
                 data: {
-                    documentFront: idFront || 'mock_doc',
-                    documentBack: idBack || 'mock_doc',
+                    documentFront: idFront as string,
+                    documentBack: idBack as string,
                     selfieValidated: faceScanned,
                     ein: accountType === 'business' ? ein : undefined,
                     incorporationDoc: accountType === 'business' ? incorporationDoc : undefined,
@@ -185,7 +172,7 @@ export default function KYCScreen({ navigation, route }: any) {
                 disabled={isSubmitting}
                 onPress={handleStartVerification}
             >
-                <Text style={styles.btnText}>Continuar con Identidad Segura</Text>
+                <Text style={styles.btnText}>Enviar para Verificación</Text>
                 <ArrowRight size={20} color="#fff" />
             </TouchableOpacity>
         </View>
@@ -217,13 +204,7 @@ export default function KYCScreen({ navigation, route }: any) {
                     {step === 'success' && renderSuccess()}
                 </Animated.View>
                 
-                <KycWebViewMockModal
-                    userId={user?.id || ''}
-                    visible={webViewVisible}
-                    url={kycUrl}
-                    onClose={() => setWebViewVisible(false)}
-                    onSuccess={handleKycSuccess}
-                />
+
             </SafeAreaView>
         </AuthBackground>
     );

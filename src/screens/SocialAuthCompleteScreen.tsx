@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle2, Sparkles } from 'lucide-react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, withRepeat, withSequence } from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SocialAuthCompleteScreenProps {
     route: {
@@ -14,6 +15,9 @@ interface SocialAuthCompleteScreenProps {
 }
 
 export const SocialAuthCompleteScreen = ({ route }: SocialAuthCompleteScreenProps) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const provider = route?.params?.provider || 'google';
     const navigation = useNavigation<any>();
     const [isLoading, setIsLoading] = useState(true);
@@ -103,16 +107,16 @@ export const SocialAuthCompleteScreen = ({ route }: SocialAuthCompleteScreenProp
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-    card: { width: '100%', maxWidth: 340, backgroundColor: '#fff', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
+    card: { width: '100%', maxWidth: 340, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
     loadingContainer: { alignItems: 'center' },
     spinner: { marginBottom: 20 },
     successContainer: { alignItems: 'center', width: '100%' },
     iconWrapper: { marginBottom: 20, padding: 16, backgroundColor: '#DCFCE7', borderRadius: 50 },
     title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: '#6B7280', marginBottom: 24, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginBottom: 24, textAlign: 'center' },
     button: { width: '100%', borderRadius: 16, overflow: 'hidden' },
     gradientButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
-    buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    buttonText: { color: isDark ? '#1F2937' : '#fff', fontSize: 16, fontWeight: '600' },
 });

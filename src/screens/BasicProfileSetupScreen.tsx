@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image, Alert } from 'react-native';
 import { Camera, User, Phone, AtSign, ArrowRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -30,10 +31,10 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
         setIsSubmitting(true);
         try {
             // Update profile in context/mock store
-            await updateProfile({ nickname });
+            await updateProfile({ nickname, phoneNumber: phone, avatar: avatarUrl });
 
-            // Navigate to KYC Flow for ALL users after profile setup
-            navigation.navigate('KYC', { accountType: role });
+            // Go straight to Home — KYC is validated by admin in the Admin Panel
+            navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
         } catch (error) {
             console.error('Profile update error:', error);
             show('No pudimos guardar tu perfil. Inténtalo de nuevo.', 'error');
@@ -42,11 +43,67 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
         }
     };
 
-    const handleAvatarPress = () => {
-        // Simulating gallery selection
-        const newAvatar = `https://api.dicebear.com/7.x/avataaars/png?seed=${Math.random()}`;
-        setAvatarUrl(newAvatar);
-        show('Foto de perfil actualizada (Simulada)', 'success');
+    const handleAvatarPress = async () => {
+        if (Platform.OS === 'web') {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.5,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setAvatarUrl(result.assets[0].uri);
+            }
+            return;
+        }
+
+        Alert.alert(
+            "Foto de perfil",
+            "Elige una opción",
+            [
+                {
+                    text: "Tomar foto",
+                    onPress: async () => {
+                        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                        if (status !== 'granted') {
+                            show('Se necesita permiso para acceder a la cámara.', 'warning');
+                            return;
+                        }
+                        const result = await ImagePicker.launchCameraAsync({
+                            allowsEditing: true,
+                            aspect: [1, 1],
+                            quality: 0.5,
+                        });
+                        if (!result.canceled && result.assets && result.assets.length > 0) {
+                            setAvatarUrl(result.assets[0].uri);
+                        }
+                    }
+                },
+                {
+                    text: "Elegir de galería",
+                    onPress: async () => {
+                        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                        if (status !== 'granted') {
+                            show('Se necesita permiso para acceder a la galería.', 'warning');
+                            return;
+                        }
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ['images'],
+                            allowsEditing: true,
+                            aspect: [1, 1],
+                            quality: 0.5,
+                        });
+                        if (!result.canceled && result.assets && result.assets.length > 0) {
+                            setAvatarUrl(result.assets[0].uri);
+                        }
+                    }
+                },
+                {
+                    text: "Cancelar",
+                    style: "cancel"
+                }
+            ]
+        );
     };
 
     return (

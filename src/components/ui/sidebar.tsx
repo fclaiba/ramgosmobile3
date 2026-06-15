@@ -7,6 +7,7 @@ import { Separator } from "./separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "./sheet";
 import { Skeleton } from "./skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
+import { useTheme } from "../../contexts/ThemeContext";
 
 // Constants
 const SIDEBAR_WIDTH = 256; // 16rem = ~256px
@@ -40,6 +41,9 @@ function SidebarProvider({
     children,
 }: any) {
     const [openMobile, setOpenMobile] = React.useState(false);
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const [_open, _setOpen] = React.useState(defaultOpen);
     const open = openProp ?? _open;
 
@@ -88,6 +92,9 @@ function SidebarProvider({
 
 function Sidebar({ side = "left", variant = "sidebar", collapsible = "offcanvas", children }: any) {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     if (collapsible === "none") {
         return <View style={styles.sidebarNone}>{children}</View>;
@@ -135,34 +142,58 @@ function SidebarTrigger({ className, onClick, ...props }: any) {
 
 // Components
 function SidebarContent({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <ScrollView style={[styles.content, className]}>{children}</ScrollView>;
 }
 
 function SidebarHeader({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <View style={[styles.header, className]}>{children}</View>;
 }
 
 function SidebarFooter({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <View style={[styles.footer, className]}>{children}</View>;
 }
 
 function SidebarGroup({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <View style={[styles.group, className]}>{children}</View>;
 }
 
 function SidebarGroupLabel({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <Text style={[styles.groupLabel, className]}>{children}</Text>;
 }
 
 function SidebarMenu({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <View style={[styles.menu, className]}>{children}</View>;
 }
 
 function SidebarMenuItem({ className, children }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     return <View style={[styles.menuItem, className]}>{children}</View>;
 }
 
 function SidebarMenuButton({ asChild, isActive, variant = "default", size = "default", tooltip, children, className, ...props }: any) {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     // Handling variant/size via simple styles or mapping
     return (
         <TouchableOpacity
@@ -179,14 +210,14 @@ function SidebarMenuButton({ asChild, isActive, variant = "default", size = "def
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     provider: { flex: 1, flexDirection: 'row' },
-    sidebarNone: { flex: 1, backgroundColor: '#fff' },
+    sidebarNone: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' },
     sidebarDesktop: {
         height: '100%',
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderRightWidth: 1,
-        borderRightColor: '#E5E7EB',
+        borderRightColor: isDark ? '#374151' : '#E5E7EB',
         overflow: 'hidden',
     },
     sidebarInner: { flex: 1 },
@@ -194,7 +225,7 @@ const styles = StyleSheet.create({
     header: { padding: 16 },
     footer: { padding: 16 },
     group: { padding: 8, paddingBottom: 0 },
-    groupLabel: { fontSize: 12, color: '#6B7280', fontWeight: '500', marginBottom: 8, paddingHorizontal: 8 },
+    groupLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500', marginBottom: 8, paddingHorizontal: 8 },
     menu: { gap: 4 },
     menuItem: {},
     menuButton: {
@@ -205,7 +236,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         gap: 8,
     },
-    menuButtonActive: { backgroundColor: '#F3F4F6' },
+    menuButtonActive: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
     sizeSm: { paddingVertical: 4, paddingHorizontal: 8 }
 });
 

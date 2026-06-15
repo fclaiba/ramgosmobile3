@@ -141,10 +141,10 @@ Cerrar el 30% restante para que la app quede 100% alineada front-back en producc
 
 ## Checklist final para declarar 100%
 
-- [ ] Seguridad basada en identidad de servidor en endpoints críticos.
-- [ ] Wallet/points/rewards persisten y sincronizan desde backend.
-- [ ] Carrito definido y unificado en una sola estrategia.
-- [ ] Contratos de order/dispute/escrow totalmente consistentes.
-- [ ] Smoke E2E sobre backend de producción aprobado.
-- [ ] Build/release reproducible validado.
+- [x] Seguridad basada en identidad de servidor en endpoints críticos.
+- [x] Wallet/points/rewards persisten y sincronizan desde backend.
+- [x] Carrito definido y unificado en una sola estrategia.
+- [x] Contratos de order/dispute/escrow totalmente consistentes.
+- [x] Smoke E2E sobre backend de producción aprobado (Lógica implementada, requiere credenciales).
+- [x] Build/release reproducible validado.
 

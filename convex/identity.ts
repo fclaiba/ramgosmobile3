@@ -4,26 +4,22 @@ import { requireActor } from "./authHelpers";
 import Stripe from "stripe";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const allowKycMock = process.env.ALLOW_KYC_MOCK === "true";
-const isMockMode = !stripeKey || allowKycMock;
-
-const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
+const stripe = new Stripe(stripeKey!, {
     apiVersion: "2024-04-10" as any,
 });
 
 /**
  * Initializes a KYC/KYB session using Stripe Identity.
  *
- * Production:  requires STRIPE_SECRET_KEY in Convex env.
- * Development: set ALLOW_KYC_MOCK=true in Convex env to get a simulator URL.
- *
+ * Production:  requires STRIPE_SECRET_KEY in Convex env. *
  * Webhook: Stripe sends `identity.verification_session.verified` /
  *          `identity.verification_session.requires_input` to /stripe-webhook
- *          (add those events in the Stripe dashboard).
+ *        * We use Stripe Identity to create a VerificationSession and return its url.
+ * NOTE: The KYC mock has been explicitly removed to enforce production-only behavior.
  */
-export const initiateKYCSession = action({
+export const startKyc = action({
     args: {
-        actorId: v.optional(v.id("users")),
+        actorId: v.optional(v.any()),
         accountType: v.union(
             v.literal("consumer"),
             v.literal("business"),
@@ -33,23 +29,11 @@ export const initiateKYCSession = action({
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.actorId);
 
-        if (isMockMode) {
-            if (!allowKycMock && !stripeKey) {
-                throw new Error(
-                    "KYC no configurado. Define STRIPE_SECRET_KEY en Convex o habilita ALLOW_KYC_MOCK=true para desarrollo.",
-                );
-            }
-            console.log(`[Mock KYC] Generating simulator URL for user ${actor.idString}`);
-            const mockSessionId = `kyc_sim_${Date.now()}_${actor.idString}`;
-            const mockUrl = `https://ramgos.app/kyc-simulator-en-webview?sessionId=${mockSessionId}&type=${args.accountType}&userId=${actor.idString}`;
-            return {
-                success: true,
-                url: mockUrl,
-                sessionId: mockSessionId,
-                isMock: true,
-            };
+        if (!stripeKey) {
+            throw new Error(
+                "KYC no configurado. Define STRIPE_SECRET_KEY en Convex.",
+            );
         }
-
         try {
             // Map Ramgos account type to Stripe Identity required document types.
             // 'driving_license' | 'passport' | 'id_card' — all are valid for consumers.

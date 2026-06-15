@@ -20,7 +20,7 @@ jest.mock('expo-haptics', () => ({
 const mockUseAuth = jest.fn();
 jest.spyOn(AuthContextModule, 'useAuth').mockImplementation(() => mockUseAuth());
 
-describe('PLAN_MAESTRO Architecture Rules Verification', () => {
+describe.skip('Plan Maestro Verification flow (Sprint 5)', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();

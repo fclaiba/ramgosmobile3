@@ -234,7 +234,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
     // Live dispute messages from Convex
     const liveMessages = useQuery(
         api.disputes.getDisputeMessages,
-        order?.id && user?.id ? { orderId: order.id as any, actorId: user.id as any, requesterId: user.id } : 'skip',
+        order?.id && user?.id ? { orderId: order.id as any } : 'skip',
     ) ?? [];
 
     // Reset state when opening/closing
@@ -295,8 +295,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         if (!order || !user) return;
         try {
             await confirmReceiptMutation({
-                orderId: order.id as any,
-                userId: user.id
+                orderId: order.id as any
             });
             show('Recepción confirmada. Fondos liberados.', 'success');
         } catch (e: any) {
@@ -319,15 +318,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         try {
             await openDisputeMutation({
                 orderId: order.id as any,
-                userId: user.id,
                 reason: selectedReason.code,
-                // description is not yet in openDispute args in convex/orders.ts, but standard practice is to add it.
-                // For strict MVP prompt compliance, we used existing args. 
-                // However, I should check if I added description to openDispute in orders.ts.
-                // Checking orders.ts... openDispute args: orderId, userId, reason. No description.
-                // I will ignore description for the mutation call to avoid type error, or update backend?
-                // Step 553 view of orders.ts shows: reason: v.string(). No description.
-                // I'll stick to provided args to be safe.
             });
 
             show('Disputa iniciada', 'success');
@@ -346,8 +337,6 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         try {
             await addDisputeMessageMutation({
                 orderId: order.id as any,
-                actorId: user.id as any,
-                senderId: user.id,
                 sender: role === 'buyer' ? 'buyer' : 'seller',
                 body,
             });

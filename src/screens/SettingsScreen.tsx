@@ -224,13 +224,13 @@ export default function SettingsScreen({ navigation }: any) {
                         <SettingRow
                             icon={FileText}
                             label="Términos de Servicio"
-                            onPress={() => show('Términos de servicio detallados próximamente', 'info')}
+                            onPress={() => navigation.navigate('Terms')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Shield}
                             label="Política de Privacidad"
-                            onPress={() => show('Política de privacidad detallada próximamente', 'info')}
+                            onPress={() => navigation.navigate('Privacy')}
                         />
                     </CardContent>
                 </Card>

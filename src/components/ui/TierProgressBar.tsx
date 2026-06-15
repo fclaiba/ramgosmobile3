@@ -7,6 +7,7 @@ export const TierProgressBar = () => {
     const { currentTier, nextTier, lifetimePoints } = usePoints();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
 
     if (!nextTier) return null; // Already max tier
 
@@ -29,17 +30,17 @@ export const TierProgressBar = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         paddingHorizontal: 20,
         paddingVertical: 12,
-        backgroundColor: '#fff',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+        borderBottomColor: isDark ? '#374151' : '#e5e7eb',
     },
     containerDark: {
         backgroundColor: '#111827',
-        borderBottomColor: '#374151',
+        borderBottomColor: isDark ? '#D1D5DB' : '#374151',
     },
     header: {
         flexDirection: 'row',
@@ -54,17 +55,17 @@ const styles = StyleSheet.create({
     },
     pointsLabel: {
         fontSize: 12,
-        color: '#6B7280',
+        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
     },
     textDark: {
         color: '#FCD34D',
     },
     textSubDark: {
-        color: '#9CA3AF',
+        color: isDark ? '#6B7280' : '#9CA3AF',
     },
     track: {
         height: 6,
-        backgroundColor: '#E5E7EB',
+        backgroundColor: isDark ? '#374151' : '#e5e7eb',
         borderRadius: 3,
         overflow: 'hidden',
     },

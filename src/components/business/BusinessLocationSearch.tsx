@@ -18,6 +18,7 @@ interface Props {
 export const BusinessLocationSearch = ({ onSelect }: Props) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState<typeof MOCK_PLACES>([]);
@@ -80,7 +81,7 @@ export const BusinessLocationSearch = ({ onSelect }: Props) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         zIndex: 10,
         marginBottom: 16
@@ -107,7 +108,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         maxHeight: 200,
         elevation: 5,
-        shadowColor: "#000",
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 12,
@@ -134,6 +135,6 @@ const styles = StyleSheet.create({
     },
     itemAddress: {
         fontSize: 12,
-        color: '#9CA3AF'
+        color: isDark ? '#6B7280' : '#9CA3AF'
     }
 });

@@ -30,6 +30,7 @@ import { X, Crosshair } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../ui/button';
+import { useUserLocation } from '../../hooks/useUserLocation';
 
 interface LocationPickerModalProps {
     visible: boolean;
@@ -53,6 +54,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 }) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
     const mapRef = useRef<MapView>(null);
 
@@ -70,34 +72,21 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
             : {}),
     });
 
+    const { location: hookLocation, refetch: refetchLocation } = useUserLocation();
+
     useEffect(() => {
-        if (!visible) return;
-        if (initialLocation) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted' || cancelled) return;
-                const loc = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.Balanced,
-                });
-                if (cancelled) return;
-                const next = {
-                    latitude: loc.coords.latitude,
-                    longitude: loc.coords.longitude,
-                    latitudeDelta: 0.02,
-                    longitudeDelta: 0.02,
-                };
-                setRegion(next);
-                mapRef.current?.animateToRegion(next, 500);
-            } catch (err) {
-                console.log('[LocationPicker] permission/get failed:', err);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [visible, initialLocation]);
+        if (!visible || initialLocation) return;
+        if (hookLocation) {
+            const next = {
+                latitude: hookLocation.coords.latitude,
+                longitude: hookLocation.coords.longitude,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+            };
+            setRegion(next);
+            mapRef.current?.animateToRegion(next, 500);
+        }
+    }, [visible, initialLocation, hookLocation]);
 
     const reverseGeocode = async (lat: number, lng: number) => {
         setLoadingAddress(true);
@@ -133,20 +122,17 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     };
 
     const recenterOnUser = async () => {
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') return;
-            const loc = await Location.getCurrentPositionAsync({});
+        if (hookLocation) {
             const next = {
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
+                latitude: hookLocation.coords.latitude,
+                longitude: hookLocation.coords.longitude,
                 latitudeDelta: 0.01,
                 longitudeDelta: 0.01,
             };
             setRegion(next);
             mapRef.current?.animateToRegion(next, 400);
-        } catch (err) {
-            console.log('[LocationPicker] recenter failed:', err);
+        } else {
+            refetchLocation();
         }
     };
 
@@ -253,7 +239,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1 },
     header: {
         padding: 16,
@@ -261,7 +247,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         zIndex: 10,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         elevation: 4,
@@ -279,7 +265,7 @@ const styles = StyleSheet.create({
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 4,
@@ -289,7 +275,7 @@ const styles = StyleSheet.create({
         padding: 16,
         borderTopLeftRadius: 16,
         borderTopRightRadius: 16,
-        shadowColor: '#000',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.1,
         elevation: 10,

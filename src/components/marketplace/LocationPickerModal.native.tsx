@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, ActivityIndicator, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { X, Check } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../ui/button';
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE, MAP_DEFAULTS } from '../../constants/darkMapStyle';
 
 interface LocationPickerModalProps {
     visible: boolean;
@@ -17,6 +18,7 @@ interface LocationPickerModalProps {
 export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visible, onClose, onSelect, initialLocation }) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
     const [region, setRegion] = useState({
         latitude: initialLocation?.lat || -34.603722, // Default CABA
@@ -94,7 +96,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
                     onRegionChangeComplete={setRegion}
                     onPress={handleMapPress}
                     showsUserLocation
-                    provider={PROVIDER_GOOGLE}
+                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+                    customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
+                    {...MAP_DEFAULTS.CLEAN_MAP_PROPS}
                 >
                     {selectedCoord && <Marker coordinate={selectedCoord} />}
                 </MapView>
@@ -124,13 +128,13 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1 },
-    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 4 },
+    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 4 },
     title: { fontSize: 18, fontWeight: 'bold' },
     closeBtn: { padding: 4 },
     map: { flex: 1 },
-    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, elevation: 10 },
+    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, elevation: 10 },
     addressLabel: { fontSize: 14, marginBottom: 4 },
     addressText: { fontSize: 16, fontWeight: '500' },
 });

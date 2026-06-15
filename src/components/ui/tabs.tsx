@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export const Tabs = ({ value, onValueChange, children, style }: any) => {
     // Cloning children to pass props not fully supported elegantly without context, 
@@ -14,6 +15,9 @@ export const Tabs = ({ value, onValueChange, children, style }: any) => {
 };
 
 export const TabsList = ({ children, value, onValueChange, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const childrenWithProps = React.Children.map(children, child => {
         if (React.isValidElement(child)) {
             return React.cloneElement(child, { selectedValue: value, onValueChange } as any);
@@ -24,6 +28,9 @@ export const TabsList = ({ children, value, onValueChange, style }: any) => {
 };
 
 export const TabsTrigger = ({ value, selectedValue, onValueChange, children, style }: any) => {
+    const { colorScheme } = useTheme();
+    const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
     const isSelected = value === selectedValue;
     return (
         <TouchableOpacity
@@ -41,10 +48,10 @@ export const TabsContent = ({ value, selectedValue, children }: any) => {
     return <View>{children}</View>;
 };
 
-const styles = StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     list: {
         flexDirection: 'row',
-        backgroundColor: '#f0f0f0',
+        backgroundColor: isDark ? '#374151' : '#f0f0f0',
         padding: 4,
         borderRadius: 12,
         marginBottom: 16
@@ -57,19 +64,19 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     triggerActive: {
-        backgroundColor: '#fff',
-        shadowColor: '#000',
+        backgroundColor: isDark ? '#1F2937' : '#fff',
+        shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOpacity: 0.1,
         shadowRadius: 2,
         elevation: 1,
     },
     text: {
         fontSize: 13,
-        color: '#666',
+        color: isDark ? '#9CA3AF' : '#666',
         fontWeight: '500'
     },
     textActive: {
-        color: '#000',
+        color: isDark ? '#F9FAFB' : '#000',
         fontWeight: '600'
     }
 });

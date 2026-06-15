@@ -53,6 +53,7 @@ export class CrashHandler extends Component<Props, State> {
 
     render() {
         if (this.state.hasError) {
+
             return (
                 <View style={styles.container}>
                     <View style={styles.card}>

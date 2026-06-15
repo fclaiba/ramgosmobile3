@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, useWindowDimensions, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthBackground } from '../../components/auth/AuthBackground';
 import { Store, FileText, CheckCircle2, ArrowRight, Upload, ShieldCheck, MapPin } from 'lucide-react-native';
@@ -11,7 +11,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { BusinessLocationSearch } from '../../components/business/BusinessLocationSearch';
 import { useAction, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { KycWebViewMockModal } from '../../components/auth/KycWebViewMockModal';
+
 
 export default function BusinessKYCScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -33,10 +33,6 @@ export default function BusinessKYCScreen({ navigation }: any) {
     const { businessInfo } = useBusiness();
     const { user, markKycSubmitted } = useAuth();
     
-    // Identity Provider Integration
-    const initiateKyc = useAction((api as any).identity?.initiateKYCSession || api.users.syncUser);
-    const [webViewVisible, setWebViewVisible] = useState(false);
-    const [kycUrl, setKycUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleNext = () => {
@@ -75,22 +71,10 @@ export default function BusinessKYCScreen({ navigation }: any) {
             return;
         }
 
-        setIsSubmitting(true);
-        try {
-            const result = await initiateKyc({ accountType: 'business' });
-            if (result && result.url) {
-                setKycUrl(result.url);
-                setWebViewVisible(true);
-            }
-        } catch (e) {
-            show('Error al conectar con el proveedor de identidad comercial.', 'error');
-        } finally {
-            setIsSubmitting(false);
-        }
+        await handleKycSuccess();
     };
 
     const handleKycSuccess = async () => {
-        setWebViewVisible(false);
         setIsSubmitting(true);
         try {
             await markKycSubmitted({
@@ -244,7 +228,7 @@ export default function BusinessKYCScreen({ navigation }: any) {
                                     ) : null}
 
                                     <Text style={styles.summaryLabel}>Verificación KYB:</Text>
-                                    <Text style={styles.summaryVal}>Serás redirigido al proveedor de identidad segura.</Text>
+                                    <Text style={styles.summaryVal}>Tus documentos serán validados por un administrador.</Text>
                                 </View>
 
                                 <TouchableOpacity 
@@ -252,7 +236,7 @@ export default function BusinessKYCScreen({ navigation }: any) {
                                     onPress={handleSubmit}
                                     disabled={isSubmitting}
                                 >
-                                    <Text style={styles.btnText}>Iniciar Verificación Segura</Text>
+                                    <Text style={styles.btnText}>Enviar para Verificación</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -260,13 +244,7 @@ export default function BusinessKYCScreen({ navigation }: any) {
                     </View>
                 </ScrollView>
                 
-                <KycWebViewMockModal
-                    userId={user?.id || ''}
-                    visible={webViewVisible}
-                    url={kycUrl}
-                    onClose={() => setWebViewVisible(false)}
-                    onSuccess={handleKycSuccess}
-                />
+
             </SafeAreaView>
         </AuthBackground>
     );

@@ -11,7 +11,7 @@
  * - Mutations call into `convex/social.ts` and rely on the optimistic
  *   patches Convex does for `useMutation` callers — no client-side
  *   shadow state is needed.
- * - All "mock users", `INITIAL_POSTS`, `MOCK_CHATS`, etc. were removed:
+ * - All mock users, initial posts mocks, mock chats, etc. were removed:
  *   feed starts empty and is populated by real `createPost` calls.
  */
 
@@ -178,6 +178,7 @@ interface SocialContextType {
     communityGroups: CommunityGroup[];
     savedPosts: string[];
     createPost: (content: string, type: 'text' | 'image' | 'poll' | 'commercial', data?: any) => void;
+    deletePost: (postId: string) => void;
     createInstagramPost: (image: string, caption: string) => void;
     createStory: (image: string) => void;
     createHighlight: (title: string, storyIds: string[]) => void;
@@ -313,12 +314,6 @@ const adaptChat = (row: any, currentUserId: string): Chat => ({
 // Provider
 // ---------------------------------------------------------------------------
 
-const EMPTY_TRENDING: TrendingTopic[] = [];
-const EMPTY_GROUPS: CommunityGroup[] = [];
-const EMPTY_HIGHLIGHTS: HighlightedStory[] = [];
-const EMPTY_INSTAGRAM: InstagramPost[] = [];
-const EMPTY_SAVED: string[] = [];
-
 export function SocialProvider({ children }: { children: ReactNode }) {
     const { user: authUser } = useAuth();
     const actorId = authUser?.id as any;
@@ -338,6 +333,18 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         api.social.getFollowing,
         authUser ? { actorId, userId: authUser.id as any } : 'skip',
     );
+    const suggestedUsersRows = useQuery(
+        api.social.getSuggestedUsers,
+        authUser ? { actorId, limit: 10 } : 'skip',
+    );
+    const savedPostsResult = useQuery(
+        api.social.getSavedPosts,
+        authUser ? { actorId, limit: 100 } : 'skip',
+    );
+    const highlightsResult = useQuery(
+        api.social.getHighlights,
+        authUser ? { actorId, userId: authUser.id as any } : 'skip',
+    );
 
     // Mutations.
     const createPostMut = useMutation(api.social.createPost);
@@ -347,11 +354,15 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     const followMut = useMutation(api.social.follow);
     const unfollowMut = useMutation(api.social.unfollow);
     const addCommentMut = useMutation(api.social.addComment);
+    const deleteCommentMut = useMutation(api.social.deleteComment);
     const createStoryMut = useMutation(api.social.createStory);
     const viewStoryMut = useMutation(api.social.viewStory);
     const createChatMut = useMutation(api.social.createChat);
     const sendDirectMessageMut = useMutation(api.social.sendDirectMessage);
     const upsertProfileMut = useMutation(api.social.upsertSocialProfile);
+    const toggleSavePostMut = useMutation(api.social.toggleSavePost);
+    const toggleRetweetMut = useMutation(api.social.toggleRetweet);
+    const addHighlightMut = useMutation(api.social.addHighlight);
 
     // ---- Derived state for the legacy API surface ---------------------
 
@@ -383,7 +394,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         [feedResult],
     );
 
-    const instagramPosts: InstagramPost[] = EMPTY_INSTAGRAM;
+    const instagramPosts: InstagramPost[] = [];
 
     const stories: Story[] = useMemo(
         () => (storiesGroups ?? []).map(adaptStoriesGroup),
@@ -398,6 +409,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     const followingIds: string[] = useMemo(
         () => (followingRows ?? []).map((r: any) => r.followeeUserId),
         [followingRows],
+    );
+
+    const suggestedUsers: SuggestedUser[] = useMemo(
+        () => (suggestedUsersRows ?? []).map((r: any) => ({
+            ...adaptSocialUserToUser(r, r.userId),
+            followers: r.followerCount ?? 0,
+        })),
+        [suggestedUsersRows],
     );
 
     // Cache of users we've encountered (for `getUserById`).
@@ -447,6 +466,13 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         }).catch((err) => console.warn('[social] createPost failed', err));
     };
 
+    const deletePost = (postId: string) => {
+        if (!authUser) return;
+        deletePostMut({ actorId, postId: postId as any }).catch((err) =>
+            console.warn('[social] deletePost failed', err),
+        );
+    };
+
     // Instagram-style posts collapse to type='image'.
     const createInstagramPost = (image: string, caption: string) => {
         createPost(caption, 'image', { images: [image] });
@@ -459,9 +485,11 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         );
     };
 
-    // Highlights are NOT persisted in v1 — UI placeholder.
-    const createHighlight = (_title: string, _storyIds: string[]) => {
-        console.warn('[social] highlights not persisted in v1');
+    const createHighlight = (title: string, storyIds: string[]) => {
+        if (!authUser) return;
+        addHighlightMut({ actorId, title, coverImage: '', storyIds }).catch((err) =>
+            console.warn('[social] createHighlight failed', err),
+        );
     };
 
     const likePost = (postId: string) => {
@@ -471,10 +499,11 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         );
     };
 
-    // Retweet is currently not persisted (no backing table). Kept as no-op
-    // so the UI doesn't throw — TODO add `socialReposts` if product wants it.
-    const retweetPost = (_postId: string) => {
-        console.warn('[social] retweet not persisted in v1');
+    const retweetPost = (postId: string) => {
+        if (!authUser) return;
+        toggleRetweetMut({ actorId, postId: postId as any }).catch((err) =>
+            console.warn('[social] retweetPost failed', err),
+        );
     };
 
     const voteOnPoll = (postId: string, optionId: string) => {
@@ -506,9 +535,33 @@ export function SocialProvider({ children }: { children: ReactNode }) {
 
     const getPostsByUser = (userId: string) => posts.filter((p) => p.userId === userId);
 
-    const getInstagramPostsByUser = (_userId: string): InstagramPost[] => EMPTY_INSTAGRAM;
+    const getInstagramPostsByUser = (userId: string): InstagramPost[] => {
+        return posts
+            .filter((p) => p.userId === userId && p.type === 'image' && p.images && p.images.length > 0)
+            .map((p) => ({
+                id: p.id,
+                userId: p.userId,
+                image: p.images![0],
+                caption: p.content,
+                likes: p.likes,
+                comments: p.comments,
+                timestamp: p.timestamp,
+                likedByUser: p.likedByUser,
+            }));
+    };
 
-    const getHighlightsByUser = (_userId: string): HighlightedStory[] => EMPTY_HIGHLIGHTS;
+    const getHighlightsByUser = (userId: string): HighlightedStory[] => {
+        if (userId === currentUser.id && highlightsResult) {
+            return highlightsResult.map((h: any) => ({
+                id: h._id,
+                userId: h.userId,
+                title: h.title,
+                coverImage: h.coverImage,
+                stories: [],
+            }));
+        }
+        return [];
+    };
 
     const addComment = (postId: string, content: string, _isInstagram?: boolean) => {
         if (!authUser) return;
@@ -517,9 +570,11 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         );
     };
 
-    const deleteComment = (_postId: string, _commentId: string, _isInstagram?: boolean) => {
-        // Delete is wired through the comments modal which calls api.social.deleteComment directly.
-        console.warn('[social] deleteComment via context is deprecated — use api.social.deleteComment.');
+    const deleteComment = (postId: string, commentId: string, _isInstagram?: boolean) => {
+        if (!authUser) return;
+        deleteCommentMut({ actorId, commentId: commentId as any }).catch((err) =>
+            console.warn('[social] deleteComment failed', err),
+        );
     };
 
     const likeComment = (_postId: string, commentId: string, _isInstagram?: boolean) => {
@@ -604,17 +659,32 @@ export function SocialProvider({ children }: { children: ReactNode }) {
             .filter((p) => p.userId === userId && p.type === 'commercial' && p.commercialProduct)
             .map((p) => p.commercialProduct as CommercialProduct);
 
-    // savedPosts not yet persisted — kept as in-memory until v1.1.
-    const [savedPostsState, setSavedPostsState] = React.useState<string[]>(EMPTY_SAVED);
-    const savePost = (postId: string) => setSavedPostsState((prev) => [...prev, postId]);
-    const unsavePost = (postId: string) => setSavedPostsState((prev) => prev.filter((id) => id !== postId));
-    const isPostSaved = (postId: string) => savedPostsState.includes(postId);
+    const savedPosts = useMemo(
+        () => (savedPostsResult?.items ?? []).map((p: any) => p._id),
+        [savedPostsResult]
+    );
+
+    const savePost = (postId: string) => {
+        if (!authUser) return;
+        toggleSavePostMut({ actorId, postId: postId as any }).catch((err) =>
+            console.warn('[social] savePost failed', err),
+        );
+    };
+    
+    const unsavePost = (postId: string) => {
+        if (!authUser) return;
+        toggleSavePostMut({ actorId, postId: postId as any }).catch((err) =>
+            console.warn('[social] unsavePost failed', err),
+        );
+    };
+    
+    const isPostSaved = (postId: string) => savedPosts.includes(postId);
 
     const joinGroup = (_groupId: string) => {
-        console.warn('[social] groups not persisted in v1');
+        // Groups functionality not implemented in v1
     };
     const leaveGroup = (_groupId: string) => {
-        console.warn('[social] groups not persisted in v1');
+        // Groups functionality not implemented in v1
     };
 
     const getPostsByTopic = (topic: string) =>
@@ -653,14 +723,15 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         posts,
         instagramPosts,
         stories,
-        highlightedStories: EMPTY_HIGHLIGHTS,
+        highlightedStories: [],
         users: Array.from(userCache.values()),
         following: followingIds,
-        trendingTopics: EMPTY_TRENDING,
-        suggestedUsers: [],
-        communityGroups: EMPTY_GROUPS,
-        savedPosts: savedPostsState,
+        trendingTopics: [],
+        suggestedUsers,
+        communityGroups: [],
+        savedPosts: savedPosts,
         createPost,
+        deletePost,
         createInstagramPost,
         createStory,
         createHighlight,
@@ -697,10 +768,6 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         getFollowers,
         getFollowing,
     };
-
-    // Side-effect: useless reference to deletePostMut to keep linter happy
-    // until UI surfaces a delete button.
-    void deletePostMut;
 
     return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;
 }

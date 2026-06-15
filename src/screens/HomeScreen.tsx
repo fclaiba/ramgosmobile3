@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions } from 'react-native';
 import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -153,6 +153,8 @@ export default function HomeScreen({ navigation, route }: any) {
             navigation.navigate(screen, params);
         }
     };
+
+    const marketplaceInitialParams = { ...marketplaceParams, isTabMode: true };
 
     // Render helper for quick actions to clean up JSX
     const renderQuickActions = () => (
@@ -454,7 +456,7 @@ export default function HomeScreen({ navigation, route }: any) {
                     </>
                 )}
 
-                {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={{ ...marketplaceParams, isTabMode: true }} />}
+                {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={marketplaceInitialParams} />}
                 {activeTab === 'social' && <SocialScreen />}
                 {activeTab === 'dashboard' && (
                     user?.role === 'business' ? <BusinessDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :

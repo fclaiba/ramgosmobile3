@@ -64,24 +64,30 @@ export default function CartSidebar() {
 
     const handleCheckout = () => {
         closeCart();
-        navigation.navigate('Payment', {
-            amount: totalPrice, // Sending GROSS amount so PaymentScreen can subtract discounts correctly
-            discountUsedPoints: selectedDiscount,
-            discountAmount: appliedDiscount,
-            referralCode: referralCode || undefined,
-            referralDiscount: appliedReferralDiscount,
-            shippingMethod: 'pickup',
-            shippingCost: 0,
-            shippingDestination: {
-                fullName: 'Consumidor Ramgos',
-                addressLine1: 'Retiro a coordinar',
-                city: 'Buenos Aires',
-                postalCode: 'C1000',
-                country: 'Argentina',
-            },
-            cartItems: items,
-            cartSnapshot: items,
-        });
+        
+        // Use a slight delay to allow the modal/sheet closing animation to finish 
+        // before pushing the new screen. This prevents the sidebar from visually
+        // remaining stuck open over the Payment screen transition.
+        setTimeout(() => {
+            navigation.navigate('Payment', {
+                amount: totalPrice, // Sending GROSS amount so PaymentScreen can subtract discounts correctly
+                discountUsedPoints: selectedDiscount,
+                discountAmount: appliedDiscount,
+                referralCode: referralCode || undefined,
+                referralDiscount: appliedReferralDiscount,
+                shippingMethod: 'pickup',
+                shippingCost: 0,
+                shippingDestination: {
+                    fullName: 'Consumidor Ramgos',
+                    addressLine1: 'Retiro a coordinar',
+                    city: 'Buenos Aires',
+                    postalCode: 'C1000',
+                    country: 'Argentina',
+                },
+                cartItems: items,
+                cartSnapshot: items,
+            });
+        }, Platform.OS === 'ios' ? 300 : 150);
     };
 
     const handleOpenChange = (open: boolean) => {

@@ -1,0 +1,75 @@
+﻿­ƒöì Iniciando escaneo de Modals y Alertas en SRC...
+
+--------------------------------------------------
+­ƒôé Archivos Escaneados: 119
+--------------------------------------------------
+
+­ƒö┤ [LEGACY] Archivos usando Native Alert (36):
+   - components\DailyChallenges.tsx
+   - components\PointsManager.tsx
+   - components\SidebarMenu.tsx
+   - contexts\AuthContext.tsx
+   - contexts\NotificationsContext.tsx
+   - contexts\ReferralContext.tsx
+   - screens\AboutScreen.tsx
+   - screens\AdminDashboardScreen.tsx
+   - screens\BasicProfileSetupScreen.tsx
+   - screens\business\BusinessKYCScreen.tsx
+   - screens\business\BusinessQRScannerScreen.tsx
+   - screens\BusinessCreateScreen.tsx
+   - screens\BusinessDashboardScreen.tsx
+   - screens\CreateListingScreen.tsx
+   - screens\GamesScreen.tsx
+   - screens\HelpCenterScreen.tsx
+   - screens\HistoryScreen.tsx
+   - screens\InfluencerDashboardScreen.tsx
+   - screens\KYCScreen.tsx
+   - screens\LoginScreen.tsx
+   - screens\MapExplorerScreen.tsx
+   - screens\marketplace\AddEditProductScreen.tsx
+   - screens\marketplace\CheckoutScreen.tsx
+   - screens\marketplace\DisputeChatScreen.tsx
+   - screens\marketplace\DisputeReasonScreen.tsx
+   - screens\marketplace\DisputeScreen.tsx
+   - screens\marketplace\OrderDetailScreen.tsx
+   - screens\PaymentScreen.tsx
+   - screens\ProfileScreen.tsx
+   - screens\RegisterScreen.tsx
+   - screens\SavedScreen.tsx
+   - screens\SettingsScreen.tsx
+   - screens\SupportScreen.tsx
+   - screens\VerificationScreen.tsx
+   - screens\WelcomeScreen.tsx
+   - screens\WithdrawalScreen.tsx
+   ­ƒæë ACCI├ôN: Migrar a useToast().show()
+
+­ƒƒí [REVIEW] Archivos usando Native <Modal> (17):
+   - components\AdvancedFilters.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\CartSidebar.tsx Ô£¿ (Tiene dise├▒o Premium)
+   - components\ItemDetailView.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\KYCRequiredModal.tsx Ô£¿ (Tiene dise├▒o Premium)
+   - components\SidebarMenu.tsx Ô£¿ (Tiene dise├▒o Premium)
+   - components\social\CreateInstagramPost.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\CreatePost.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\CreateStory.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\DirectMessages.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\InstagramPost.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\PostCommentsModal.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\SharePostModal.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - components\social\StoryViewer.tsx Ô£¿ (Tiene dise├▒o Premium)
+   - components\ui\sheet.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - screens\business\BusinessProfileScreen.tsx ÔÜá´©Å (Revisar dise├▒o)
+   - screens\GamesScreen.tsx Ô£¿ (Tiene dise├▒o Premium)
+   - screens\InfluencerDashboardScreen.tsx ÔÜá´©Å (Revisar dise├▒o)
+
+­ƒƒó [MODERN] Archivos usando Global Toast System (9):
+   - components\pet\MiMascotaView.tsx
+   - components\referral\ReferralCard.tsx
+   - screens\CartScreen.tsx
+   - screens\LoginScreen.tsx
+   - screens\marketplace\ProductDetailScreen.tsx
+   ...y 4 m├ís.
+
+--------------------------------------------------
+­ƒøá´©Å Tarea pendiente: Tienes 36 archivos que a├║n usan alertas nativas.
+--------------------------------------------------

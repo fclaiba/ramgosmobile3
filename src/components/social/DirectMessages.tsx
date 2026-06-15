@@ -27,16 +27,16 @@ export const DirectMessages = ({ onClose }: DirectMessagesProps) => {
     // Reactive queries.
     const chatsRows = useQuery(
         api.social.getMyChats,
-        authUser ? { actorId: authUser.id as any } : 'skip',
+        authUser ? {} : 'skip',
     );
     const userSearchResult = useQuery(
         api.social.searchUsers,
-        authUser && searchText ? { actorId: authUser.id as any, term: searchText, limit: 20 } : 'skip',
+        authUser && searchText ? { term: searchText, limit: 20 } : 'skip',
     );
     const messagesResult = useQuery(
         api.social.getChatMessages,
         authUser && selectedChat
-            ? { actorId: authUser.id as any, chatId: selectedChat as any, limit: 100 }
+            ? { chatId: selectedChat as any, limit: 100 }
             : 'skip',
     );
     const markAsReadMut = useMutation(api.social.markChatAsRead);
@@ -44,7 +44,7 @@ export const DirectMessages = ({ onClose }: DirectMessagesProps) => {
     // Mark chat as read whenever it's opened.
     useEffect(() => {
         if (selectedChat && authUser) {
-            markAsReadMut({ actorId: authUser.id as any, chatId: selectedChat as any }).catch(() => {});
+            markAsReadMut({ chatId: selectedChat as any }).catch(() => {});
         }
     }, [selectedChat, authUser, markAsReadMut]);
 

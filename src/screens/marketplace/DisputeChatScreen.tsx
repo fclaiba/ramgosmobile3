@@ -59,7 +59,7 @@ export default function DisputeChatScreen({ route, navigation }: any) {
     const dispute = order?.dispute;
     const liveMessages = useQuery(
         api.disputes.getDisputeMessages,
-        orderId && user?.id ? { orderId, actorId: user.id as any, requesterId: user.id } : "skip"
+        orderId && user?.id ? { orderId } : "skip"
     ) ?? [];
     const hasActiveDispute =
         !!dispute ||

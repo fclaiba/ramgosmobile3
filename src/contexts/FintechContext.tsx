@@ -264,17 +264,18 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
     const _api = api as any;
 
     // --- Convex queries ---
+    const validUserId = userId && typeof userId === 'string' && userId.length > 0 ? userId : null;
     const convexWallet = useQuery(
         _api.finance.getWalletAccount,
-        userId ? { actorId: userId as any, userId } : 'skip',
+        validUserId ? { userId: validUserId } : "skip",
     );
     const convexPayments = useQuery(
         _api.finance.getPaymentsByUser,
-        userId ? { actorId: userId as any, userId } : 'skip',
+        validUserId ? { userId: validUserId } : "skip",
     );
     const convexWithdrawals = useQuery(
         _api.finance.getWithdrawalsByUser,
-        userId ? { actorId: userId as any, userId } : 'skip',
+        validUserId ? { userId: validUserId } : "skip",
     );
 
     // --- Convex mutations ---
@@ -330,12 +331,12 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
                         ? 'ramgos'
                         : 'consumer';
         ensureWalletMutation({
-            actorId: user.id as any,
+            actorId: user.id,
             userId: user.id,
             ownerType,
             ownerName: user.name ?? user.email ?? user.id,
         }).catch(() => {});
-    }, [user?.id, user?.role, user?.name]);
+    }, [user?.id, user?.role, user?.name, ensureWalletMutation]);
 
     const ensureWalletAccount = useCallback(
         async (ownerId: string, ownerType: WalletOwnerType, ownerName: string) => {
@@ -345,7 +346,7 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
                 userId: ownerId,
                 ownerType,
                 ownerName,
-            }).catch(() => {});
+            }).catch((e) => { console.warn("Failed to ensure wallet", e) });
         },
         [userId, ensureWalletMutation],
     );
@@ -361,8 +362,6 @@ export const FintechProvider = ({ children }: { children: ReactNode }) => {
             if (!userId) throw new Error('Debes iniciar sesión para solicitar un retiro.');
 
             const withdrawalId = await createWithdrawalMutation({
-                actorId: userId as any,
-                userId: input.accountId,
                 amount: input.amount,
                 destinationType: input.destination.type,
                 destinationLabel: input.destination.label,
