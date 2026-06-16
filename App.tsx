@@ -32,6 +32,9 @@ import { StripeWrapper } from './src/components/StripeWrapper';
 import { Platform } from 'react-native';
 
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY;
+if (STRIPE_PUBLISHABLE_KEY && STRIPE_PUBLISHABLE_KEY.startsWith('sk_')) {
+    throw new Error('CRITICAL SECURITY ERROR: You have configured a Secret Key (sk_) as EXPO_PUBLIC_STRIPE_KEY. This will expose your secret to the public internet. Use a Publishable Key (pk_) instead.');
+}
 if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
     throw new Error('Missing EXPO_PUBLIC_STRIPE_KEY. Configure Stripe publishable key for production builds.');
 }

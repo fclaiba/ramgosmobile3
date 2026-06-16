@@ -37,6 +37,7 @@ import type * as orders from "../orders.js";
 import type * as reconciliation from "../reconciliation.js";
 import type * as reviews from "../reviews.js";
 import type * as seed from "../seed.js";
+import type * as seedListings from "../seedListings.js";
 import type * as social from "../social.js";
 import type * as social__helpers from "../social/_helpers.js";
 import type * as stripe from "../stripe.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   reconciliation: typeof reconciliation;
   reviews: typeof reviews;
   seed: typeof seed;
+  seedListings: typeof seedListings;
   social: typeof social;
   "social/_helpers": typeof social__helpers;
   stripe: typeof stripe;

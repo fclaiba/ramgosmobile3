@@ -270,12 +270,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         return;
                     }
 
-                    if (storedSession && storedSession.userId && storedSession._mockUser) {
+                    if (storedSession && storedSession.userId) {
                         setState(prev => ({
                             ...prev,
                             session: storedSession,
-                            user: storedSession._mockUser,
-                            status: 'authenticated',
+                            user: storedSession._mockUser || null,
+                            status: storedSession._mockUser ? 'authenticated' : 'loading',
                         }));
                     } else {
                         setState(prev => ({ ...prev, status: 'anonymous' }));
@@ -290,11 +290,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })();
     }, []);
 
-    // 2. Sync Query with Local State (MOCKED - Disabled)
+    // 2. Sync Query with Local State
     useEffect(() => {
-        // We bypass Convex real-time sync while in MOCK mode to avoid Stripe/Auth backend issues.
-        // The user object is completely handled locally via localStorage (_mockUser).
-    }, []);
+        if (userData && state.session?.userId === userData._id) {
+            const serverUser: PublicUser = {
+                id: userData._id as string,
+                email: userData.email,
+                name: userData.name,
+                nickname: userData.nickname,
+                role: userData.role as UserRole,
+                isTest: userData.isTest,
+                avatar: userData.avatar,
+                status: 'active',
+                emailVerified: true,
+                requiresKyc: true,
+                termsAcceptedVersion: userData.termsAcceptedVersion || 1,
+                createdAt: userData.joinedAt || new Date().toISOString(),
+                providers: ['password'],
+                kycStatus: userData.kycStatus as any || 'pending',
+                tier: userData.tier as any || 'Bronze',
+                subscriptionStatus: userData.subscriptionStatus as any || 'inactive',
+                subscriptionTier: userData.subscriptionTier as any || 'free',
+            };
+            
+            const prevStr = state.user ? JSON.stringify(state.user) : null;
+            const newStr = JSON.stringify(serverUser);
+            
+            if (prevStr !== newStr) {
+                setState(prev => ({
+                    ...prev,
+                    user: serverUser,
+                    status: 'authenticated'
+                }));
+            }
+        }
+    }, [userData, state.session?.userId, state.user]);
 
 
     const signUpWithEmail = async (payload: SignUpInput) => {
