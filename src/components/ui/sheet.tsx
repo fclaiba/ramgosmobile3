@@ -89,7 +89,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: 'transparent',
     },
     backdrop: {
-        ...StyleSheet.absoluteFillObject,
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: "rgba(0,0,0,0.5)",
     },
     content: {
@@ -126,13 +127,24 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderColor: isDark ? "#374151" : "#E5E7EB",
     },
     bottom: {
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: "85%", // Default height, can be overridden
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        borderTopWidth: 1,
+        ...Platform.select({
+            web: {
+                margin: 'auto', // Centers it horizontally and vertically if it has max dimensions
+                maxHeight: '90%',
+                maxWidth: 600,
+                alignSelf: 'center',
+                borderRadius: 24,
+            },
+            default: {
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: "85%", // Default height, can be overridden
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+            }
+        }),
+        borderWidth: 1,
         borderColor: isDark ? "#374151" : "#E5E7EB",
     },
     header: {

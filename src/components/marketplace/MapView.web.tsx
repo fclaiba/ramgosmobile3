@@ -79,10 +79,6 @@ const ItemMarker = React.memo(({ type, isSelected, onClick }: {
                 style={[
                     s.markerTouch,
                     { width: size, height: size },
-                    Platform.select({
-                        web: { transform: `translate(-${size / 2}px, -${size / 2}px)` } as any,
-                        default: { transform: [{ translateX: -size / 2 }, { translateY: -size / 2 }] },
-                    }),
                 ]}
             >
                 <LinearGradient
@@ -233,16 +229,27 @@ export const MapView = ({
     }, [alertsConfig.enabled, radius, items]);
 
     // ── Derived ──────────────────────────────────────────────────────────────
-    const searchCenter = useMemo<[number, number]>(() => {
+    const initialCenter = useMemo<[number, number]>(() => {
         if (isCustomSearch && searchLocation) return [searchLocation.lat, searchLocation.lng];
         return [-34.603722, -58.381592];
     }, [isCustomSearch, searchLocation]);
 
+    // Local state for smooth dragging
+    const [localCenter, setLocalCenter] = useState<[number, number]>(initialCenter);
+    const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Sync external prop changes (e.g. initial location acquire, or external locate button)
+    useEffect(() => {
+        if (searchLocation) {
+            setLocalCenter([searchLocation.lat, searchLocation.lng]);
+        }
+    }, [searchLocation]);
+
     const radiusPx = useMemo(() => {
-        const mpp = metersPerPixel(searchCenter[0], zoom);
+        const mpp = metersPerPixel(localCenter[0], zoom);
         const px = (radius * 1000) / (mpp || 1);
         return Math.max(10, Math.min(2000, px));
-    }, [radius, searchCenter, zoom]);
+    }, [radius, localCenter, zoom]);
 
     // ── List animation ───────────────────────────────────────────────────────
     const toggleList = useCallback((show: boolean) => {
@@ -289,13 +296,12 @@ export const MapView = ({
                 <Map
                     height={windowDims.height - bottomInset - CONTROL_BAR_HEIGHT}
                     width={windowDims.width}
-                    center={searchCenter}
+                    center={localCenter}
                     zoom={zoom}
+                    touchEvents={true}
+                    mouseEvents={true}
                     onClick={({ latLng }: any) => {
-                        const [lat, lng] = latLng || [];
-                        if (typeof lat !== 'number' || typeof lng !== 'number') return;
                         setSelectedItem(null);
-                        onSearchLocationChange?.({ lat, lng });
                     }}
                     onBoundsChanged={({ center, zoom: newZoom }: any) => {
                         setZoom(newZoom);
@@ -305,12 +311,17 @@ export const MapView = ({
                         }
                         const [lat, lng] = center || [];
                         if (typeof lat !== 'number' || typeof lng !== 'number') return;
-                        if (Math.abs(lat - searchCenter[0]) < 1e-4 && Math.abs(lng - searchCenter[1]) < 1e-4) return;
-                        onSearchLocationChange?.({ lat, lng });
+                        
+                        setLocalCenter([lat, lng]);
+                        
+                        if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+                        debounceTimeoutRef.current = setTimeout(() => {
+                            onSearchLocationChange?.({ lat, lng });
+                        }, 800);
                     }}
                 >
                     {/* Radius circle */}
-                    <Overlay anchor={searchCenter} offset={[0, 0]}>
+                    <Overlay anchor={localCenter} offset={[0, 0]}>
                         <View
                             pointerEvents="none"
                             style={{
@@ -323,7 +334,7 @@ export const MapView = ({
                     </Overlay>
 
                     {/* Center dot */}
-                    <Overlay anchor={searchCenter} offset={[0, 0]}>
+                    <Overlay anchor={localCenter} offset={[0, 0]}>
                         <View pointerEvents="none" style={s.centerDotOuter}>
                             <View style={[s.centerDotInner, alertsConfig.enabled && { backgroundColor: '#10B981', shadowColor: '#10B981' }]} />
                         </View>
@@ -407,7 +418,17 @@ export const MapView = ({
                     <TouchableOpacity style={[s.zoomBtn, isDark && s.zoomBtnDark]} onPress={() => setZoom(z => Math.max(z - 1, 3))}>
                         <Minus size={18} color={isDark ? '#E5E7EB' : '#374151'} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={[s.zoomBtn, s.zoomBtnLocate]} onPress={() => onSearchLocationChange?.({ lat: searchCenter[0], lng: searchCenter[1] })}>
+                    <TouchableOpacity style={[s.zoomBtn, s.zoomBtnLocate]} onPress={() => {
+                        // Let external context know, which will sync back down
+                        if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition((pos) => {
+                                const lat = pos.coords.latitude;
+                                const lng = pos.coords.longitude;
+                                onSearchLocationChange?.({ lat, lng });
+                                setLocalCenter([lat, lng]);
+                            });
+                        }
+                    }}>
                         <Locate size={18} color="#fff" />
                     </TouchableOpacity>
                 </View>

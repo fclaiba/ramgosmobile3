@@ -65,6 +65,7 @@ if (sentryDsn && !(globalThis as any).__RAMGOS_SENTRY_INITIALIZED__) {
 
 // Screens
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import VerificationScreen from './src/screens/VerificationScreen';
@@ -175,6 +176,7 @@ const AppNavigator = () => {
                         animation: 'slide_from_right',
                     }}
                 >
+                    <Stack.Screen name="Onboarding" component={OnboardingScreen} />
                     <Stack.Screen name="SubscriptionPlans" component={SubscriptionPlansScreen} />
                     <Stack.Screen name="Notifications" component={NotificationsScreen} />
                     <Stack.Screen name="Welcome" component={WelcomeScreen} />

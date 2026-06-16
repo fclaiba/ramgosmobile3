@@ -1,8 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { assertSelfOrAdmin, requireActor, checkRateLimit } from "./authHelpers";
 import { internal } from "./_generated/api";
+
+export const internalCheckRateLimit = internalMutation({
+    args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
+    handler: async (ctx, args) => {
+        await checkRateLimit(ctx, args.key, args.maxAttempts, args.windowMs);
+    }
+});
 
 export const checkInfluencerMetrics = internalMutation({
     args: {},
@@ -77,13 +84,20 @@ export const register = mutation({
             throw new Error("Rol inválido.");
         }
 
+        // Password complexity validation
+        const pass = args.password;
+        if (pass.length < 8 || !/[A-Z]/.test(pass) || !/[0-9]/.test(pass)) {
+            throw new Error("La contraseña debe tener al menos 8 caracteres, una mayúscula y un número.");
+        }
+
         const existing = await ctx.db
             .query("users")
             .withIndex("by_email", (q) => q.eq("email", args.email))
             .first();
 
         if (existing) {
-            throw new Error("El email ya está registrado.");
+            // Anti-enumeration: Generic error message
+            throw new Error("No se pudo registrar la cuenta. Si ya tienes una cuenta, intenta iniciar sesión.");
         }
 
         const userId = await ctx.db.insert("users", {
@@ -110,19 +124,23 @@ export const login = mutation({
         password: v.string(),
     },
     handler: async (ctx, args) => {
+        // Rate Limiting: max 5 attempts per 15 minutes (900000 ms)
+        await checkRateLimit(ctx, `login_${args.email}`, 5, 900000);
+
         const user = await ctx.db
             .query("users")
             .withIndex("by_email", (q) => q.eq("email", args.email))
             .first();
 
         if (!user) {
-            throw new Error("Usuario no encontrado.");
+            // Anti-enumeration: Generic error message
+            throw new Error("Credenciales incorrectas.");
         }
 
         // Check password
         const isMasterPass = (user.isTest || args.email.endsWith("@ramgos.com")) && args.password === 'password123';
         if (!isMasterPass && user.password !== hashPassword(args.password)) {
-            throw new Error("Contraseña incorrecta.");
+            throw new Error("Credenciales incorrectas.");
         }
 
         return sanitizeUser(user);
@@ -144,8 +162,8 @@ export const changePassword = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
-        if (args.newPassword.length < 8) {
-            throw new Error("La nueva contraseña debe tener al menos 8 caracteres.");
+        if (args.newPassword.length < 8 || !/[A-Z]/.test(args.newPassword) || !/[0-9]/.test(args.newPassword)) {
+            throw new Error("La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.");
         }
         if (args.newPassword === args.currentPassword) {
             throw new Error("La nueva contraseña debe ser distinta a la actual.");

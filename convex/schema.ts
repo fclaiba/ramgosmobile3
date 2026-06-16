@@ -972,4 +972,12 @@ export default defineSchema({
     })
         .index("by_connected_account", ["connectedAccountId"])
         .index("by_product", ["stripeProductId"]),
+
+    // PHASE 1: Security - Rate Limits
+    rateLimits: defineTable({
+        key: v.string(), // e.g., 'login_email@test.com' or 'otp_email@test.com'
+        attempts: v.number(),
+        windowStart: v.number(), // timestamp
+        blockedUntil: v.optional(v.number()), // timestamp
+    }).index("by_key", ["key"]),
 });

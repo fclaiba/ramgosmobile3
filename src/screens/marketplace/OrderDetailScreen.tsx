@@ -11,7 +11,10 @@ import { useEscrow } from '../../contexts/EscrowContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { POINT_VALUE_USD } from '../../contexts/RewardsContext';
 import { useToast } from '../../contexts/ToastContext';
-
+import { DirectMessages } from '../../components/social/DirectMessages';
+import { AddReviewModal } from '../../components/AddReviewModal';
+import { useSocial } from '../../contexts/SocialContext';
+import { MessageCircle, Star } from 'lucide-react-native';
 export default function OrderDetailScreen() {
     const route = useRoute<any>();
     const navigation = useNavigation();
@@ -25,6 +28,12 @@ export default function OrderDetailScreen() {
     const { currentTier } = usePoints();
     const { user } = useAuth();
     const { show } = useToast();
+    const { createChat } = useSocial();
+
+    const [dmOpen, setDmOpen] = useState(false);
+    const [reviewOpen, setReviewOpen] = useState(false);
+
+    const targetUserId = role === 'buyer' ? order?.sellerId : order?.userId;
 
     const canConfirm = useMemo(() => {
         if (role !== 'buyer') return false;
@@ -94,6 +103,21 @@ export default function OrderDetailScreen() {
             ]
         );
     };
+
+    const handleContactOtherParty = async () => {
+        if (!targetUserId) return;
+        try {
+            await createChat(targetUserId);
+            setDmOpen(true);
+        } catch (e) {
+            show('No se pudo abrir el chat', 'error');
+        }
+    };
+
+    const canReview = useMemo(() => {
+        if (role !== 'buyer') return false;
+        return order?.status === 'delivered' || order?.status === 'completed' || order?.escrow?.state === 'released';
+    }, [order?.status, order?.escrow?.state, role]);
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}>
@@ -231,13 +255,39 @@ export default function OrderDetailScreen() {
 
             {/* Action - Only if not delivered yet? For demo, always show */}
             <View style={styles.actionContainer}>
-                <Text style={styles.helpText}>
-                    Al recibir tu producto, confirma la entrega para liberar el dinero al vendedor.
-                </Text>
-                <Button onPress={handleConfirm} disabled={!canConfirm} style={{ backgroundColor: '#10B981', width: '100%' }}>
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirmar que recibí el pedido</Text>
+                {canConfirm && (
+                    <>
+                        <Text style={styles.helpText}>
+                            Al recibir tu producto, confirma la entrega para liberar el dinero al vendedor.
+                        </Text>
+                        <Button onPress={handleConfirm} style={{ backgroundColor: '#10B981', width: '100%' }}>
+                            <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirmar que recibí el pedido</Text>
+                        </Button>
+                    </>
+                )}
+                
+                {canReview && (
+                    <Button onPress={() => setReviewOpen(true)} variant="outline" style={{ width: '100%', borderColor: '#F59E0B', gap: 8 }}>
+                        <Star size={18} color="#F59E0B" fill="#F59E0B" />
+                        <Text style={{ color: '#F59E0B', fontWeight: 'bold' }}>Calificar producto</Text>
+                    </Button>
+                )}
+
+                <Button onPress={handleContactOtherParty} variant="outline" style={{ width: '100%', gap: 8 }}>
+                    <MessageCircle size={18} color={isDark ? '#F9FAFB' : '#111827'} />
+                    <Text style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 'bold' }}>
+                        Contactar al {role === 'buyer' ? 'Vendedor' : 'Comprador'}
+                    </Text>
                 </Button>
             </View>
+
+            {dmOpen && <DirectMessages onClose={() => setDmOpen(false)} />}
+            
+            <AddReviewModal
+                visible={reviewOpen}
+                onClose={() => setReviewOpen(false)}
+                listingId={order.items?.[0]?.id || order.items?.[0]?.listingId || ''}
+            />
 
         </ScrollView>
     );

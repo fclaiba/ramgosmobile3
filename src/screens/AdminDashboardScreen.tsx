@@ -24,6 +24,9 @@ import { useFintech } from '../contexts/FintechContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useResponsive } from '../hooks/useResponsive';
+import { ResponsiveLayout } from '../components/ResponsiveLayout';
+import { DesktopSidebar } from '../components/DesktopSidebar';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
@@ -49,6 +52,7 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
     const insets = useSafeAreaInsets();
     const { user } = useAuth(); // We need current user for auth check (already handled in mutation but goof for UI)
     const { show } = useToast();
+    const { isDesktop } = useResponsive();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = useMemo(() => getStyles(isDark, insets), [isDark, insets]);
@@ -211,7 +215,21 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
     }, [width, insets.bottom, isTabMode]);
 
     return (
-        <View style={styles.container}>
+        <ResponsiveLayout 
+            style={styles.container}
+            sidebar={
+                !isTabMode ? (
+                    <DesktopSidebar 
+                        activeSection="dashboard" 
+                        onSectionChange={(section) => {
+                            if (section === 'home') navigation.navigate('Home');
+                            else if (section === 'marketplace') navigation.navigate('Marketplace');
+                            else if (section === 'social') navigation.navigate('Social');
+                        }} 
+                    />
+                ) : undefined
+            }
+        >
             <MobileHeader
                 title="Panel de Admin"
                 subtitle="Supervisión General"
@@ -503,7 +521,7 @@ export default function AdminDashboardScreen({ isTabMode, onMenuPress }: any) {
                     </View>
                 </SheetContent>
             </Sheet>
-        </View>
+        </ResponsiveLayout>
     );
 }
 

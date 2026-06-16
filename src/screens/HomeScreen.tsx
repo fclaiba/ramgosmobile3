@@ -14,6 +14,10 @@ import { SidebarMenu } from '../components/SidebarMenu';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { PointsManager } from '../components/PointsManager';
 
+import { useResponsive } from '../hooks/useResponsive';
+import { ResponsiveLayout } from '../components/ResponsiveLayout';
+import { DesktopSidebar } from '../components/DesktopSidebar';
+
 import MarketplaceScreen from './MarketplaceScreen';
 import SocialScreen from './SocialScreen';
 import BusinessDashboardScreen from './BusinessDashboardScreen';
@@ -48,7 +52,7 @@ const heroSlides = [
 ];
 
 const featuredOffers = [
-    { id: 1, title: 'Super Descuentos', subtitle: 'Hasta 50% OFF', image: 'https://images.unsplash.com/photo-1700843699012-0dadd2089fe4?w=1080', badge: '50% OFF', badgeColor: '#EF4444', gradient: ['rgba(37,99,235,0.9)', 'rgba(147,51,234,0.9)'], icon: Percent, filter: 'products' },
+    { id: 1, title: 'Super Descuentos', subtitle: 'Hasta 50% OFF', image: 'https://images.unsplash.com/photo-1700843699012-0dadd2089fe4?w=1080', badge: '50% OFF', badgeColor: '#EF4444', gradient: ['rgba(37,99,235,0.9)', 'rgba(147,51,234,0.9)'], icon: Percent, filter: 'products', advancedFilters: { minDiscount: 50 } },
     { id: 2, title: 'Eventos Latinos', subtitle: 'Música en vivo', image: 'https://images.unsplash.com/photo-1618414098138-c33f9e82b405?w=1080', badge: 'Nuevo', badgeColor: '#22C55E', gradient: ['rgba(219,39,119,0.9)', 'rgba(234,88,12,0.9)'], icon: Calendar, filter: 'events' },
     { id: 3, title: 'Bonos Exclusivos', subtitle: 'Negocios locales', image: 'https://images.unsplash.com/photo-1671749999622-4087a86868cc?w=1080', badge: 'Popular', badgeColor: '#8B5CF6', gradient: ['rgba(124,58,237,0.9)', 'rgba(147,51,234,0.9)'], icon: Tag, filter: 'bonos' },
 ];
@@ -97,6 +101,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const insets = useSafeAreaInsets();
+    const { isDesktop } = useResponsive();
     const styles = getStyles(isDark);
 
     // UI State
@@ -104,6 +109,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const [view, setView] = useState<'home' | 'consumos' | 'puntos'>('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [marketplaceParams, setMarketplaceParams] = useState<any>(null);
+    const [gridWidth, setGridWidth] = useState(windowWidth - 32);
 
     // Initial Tab from Params
     useEffect(() => {
@@ -184,7 +190,15 @@ export default function HomeScreen({ navigation, route }: any) {
 
     // --- MAIN RENDER ---
     return (
-        <View style={styles.container}>
+        <ResponsiveLayout 
+            style={styles.container}
+            sidebar={
+                <DesktopSidebar 
+                    activeSection={activeTab} 
+                    onSectionChange={handleTabChange} 
+                />
+            }
+        >
             <LinearGradient
                 colors={isDark ? ['#111827', '#000'] : ['#F9FAFB', '#F3F4F6']}
                 style={StyleSheet.absoluteFill}
@@ -290,7 +304,10 @@ export default function HomeScreen({ navigation, route }: any) {
                                                 <TouchableOpacity
                                                     key={offer.id}
                                                     style={styles.featuredRef}
-                                                    onPress={() => handleNavigate('Marketplace', { filter: offer.filter })}
+                                                    onPress={() => handleNavigate('Marketplace', { 
+                                                        filter: offer.filter,
+                                                        ...(offer.advancedFilters ? { advancedFilters: offer.advancedFilters } : {})
+                                                    })}
                                                 >
                                                     <ImageWithFallback src={offer.image} style={styles.featuredImg} />
                                                     <LinearGradient colors={offer.gradient as [string, string, ...string[]]} style={StyleSheet.absoluteFill} />
@@ -314,11 +331,11 @@ export default function HomeScreen({ navigation, route }: any) {
                                         <Text style={styles.sectionTitle}>Categorías</Text>
                                     </View>
 
-                                    <View style={styles.grid2}>
+                                    <View style={styles.grid2} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
                                         {categoryCards.map((card) => (
                                             <TouchableOpacity
                                                 key={card.id}
-                                                style={[styles.catCard, { width: (windowWidth - 48) / 2 }]}
+                                                style={[styles.catCard, { width: (gridWidth - 12) / 2 }]}
                                                 onPress={() => {
                                                     if (card.action === 'social') {
                                                         handleNavigate('Social');
@@ -457,7 +474,7 @@ export default function HomeScreen({ navigation, route }: any) {
                 )}
 
                 {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={marketplaceInitialParams} />}
-                {activeTab === 'social' && <SocialScreen />}
+                {activeTab === 'social' && <SocialScreen isTabMode={true} />}
                 {activeTab === 'dashboard' && (
                     user?.role === 'business' ? <BusinessDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :
                         user?.role === 'influencer' ? <InfluencerDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :
@@ -466,9 +483,9 @@ export default function HomeScreen({ navigation, route }: any) {
                 )}
             </View>
 
-            <MobileNav activeSection={activeTab} onSectionChange={handleTabChange} />
+            {!isDesktop && <MobileNav activeSection={activeTab} onSectionChange={handleTabChange} />}
             <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        </View>
+        </ResponsiveLayout>
     );
 }
 

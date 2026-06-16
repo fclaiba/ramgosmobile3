@@ -130,6 +130,12 @@ export default function RegisterScreen({ navigation, route }: any) {
         return { width: '100%', color: '#10B981', label: 'Fuerte' };
     };
 
+    const passwordRequirements = [
+        { label: '8+ caracteres', met: formData.password.length >= 8 },
+        { label: 'Una mayúscula', met: /[A-Z]/.test(formData.password) },
+        { label: 'Un número', met: /[0-9]/.test(formData.password) },
+    ];
+
     const handleOpenTerms = () => {
         setLegalViews(prev => ({ ...prev, terms: true }));
         navigation.navigate('Terms', { origin: 'signup', returnKey: route?.key });
@@ -164,6 +170,11 @@ export default function RegisterScreen({ navigation, route }: any) {
         }
         if (formData.password !== formData.confirmPassword) {
             show('Las contraseñas no coinciden', 'error');
+            return;
+        }
+        
+        if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password)) {
+            show('La contraseña debe tener al menos 8 caracteres, una mayúscula y un número', 'error');
             return;
         }
 
@@ -211,23 +222,15 @@ export default function RegisterScreen({ navigation, route }: any) {
             const errorMessage = error.message || '';
 
             if (errorMessage.includes('El email ya está registrado')) {
-                if (Platform.OS === 'web') {
-                    // Web specific handling using window.confirm
-                    // @ts-ignore
-                    if (window.confirm("Este correo ya está registrado. ¿Quieres iniciar sesión?")) {
-                        navigation.navigate('Login');
-                    }
-                } else {
-                    // Native Alert
-                    Alert.alert(
-                        "Correo ya registrado",
-                        "Este correo ya existe en nuestra base de datos. ¿Deseas iniciar sesión?",
-                        [
-                            { text: "Cancelar", style: "cancel" },
-                            { text: "Ir al Login", onPress: () => navigation.navigate('Login') }
-                        ]
-                    );
-                }
+                // Prevención de enumeración de usuarios (White Hat Security Fix)
+                // Se muestra un mensaje de éxito genérico y se envía a la pantalla de verificación
+                // para que el atacante no pueda distinguir si el correo existe o no.
+                show("Proceso iniciado. Si el correo no estaba registrado, recibirás un código de verificación.", "success");
+                navigation.navigate('Verification', {
+                    email: formData.email.trim(),
+                    accountType,
+                    isSignup: true
+                });
             } else {
                 show(errorMessage || 'Error al registrarse', 'error');
             }
@@ -484,15 +487,17 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     {showPassword ? <EyeOff size={20} color="#9CA3AF" /> : <Eye size={20} color="#9CA3AF" />}
                                                 </TouchableOpacity>
                                             </View>
-                                            {/* Strength Meter */}
+                                            {/* Dynamic Requirements */}
                                             {formData.password.length > 0 && (
-                                                <View style={{ marginTop: 4 }}>
-                                                    <View style={{ height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, overflow: 'hidden' }}>
-                                                        <View style={{ height: '100%', width: strength.width as any, backgroundColor: strength.color }} />
-                                                    </View>
-                                                    <Text style={{ fontSize: 10, color: strength.color, marginLeft: 'auto', marginTop: 2 }}>
-                                                        {strength.label}
-                                                    </Text>
+                                                <View style={{ marginTop: 8, gap: 4 }}>
+                                                    {passwordRequirements.map((req, i) => (
+                                                        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            <CheckCircle2 size={12} color={req.met ? '#10B981' : (isDark ? '#4B5563' : '#D1D5DB')} />
+                                                            <Text style={{ fontSize: 11, color: req.met ? (isDark ? '#D1D5DB' : '#374151') : (isDark ? '#4B5563' : '#9CA3AF') }}>
+                                                                {req.label}
+                                                            </Text>
+                                                        </View>
+                                                    ))}
                                                 </View>
                                             )}
                                         </View>

@@ -359,7 +359,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let finalRole = result.role as UserRole;
             
             // If dev account and roleOverride is passed, update in DB
-            if (roleOverride && roleOverride !== finalRole && email.endsWith('@ramgos.com')) {
+            if (roleOverride && roleOverride !== finalRole && (email.endsWith('@ramgos.com') || email.endsWith('@test.com'))) {
                 try {
                     await updateUserMutation({
                         id: result._id as any,

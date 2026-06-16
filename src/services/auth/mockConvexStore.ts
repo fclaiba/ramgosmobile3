@@ -654,7 +654,7 @@ const loginWithEmail = async (email: string, password: string): Promise<AuthResu
 
     // DEV FIX: Auto-restore missing test users (e.g. if persistence was cleared or empty)
     const normalizedEmail = email.trim().toLowerCase();
-    const DEV_ACCOUNTS = ['test@ramgos.com', 'business@ramgos.com', 'influencer@ramgos.com', 'admin@ramgos.com'];
+    const DEV_ACCOUNTS = ['test@ramgos.com', 'business@ramgos.com', 'influencer@ramgos.com', 'admin@ramgos.com', 'consumer@test.com', 'business@test.com', 'influencer@test.com', 'admin@test.com'];
     if (!user && DEV_ACCOUNTS.includes(normalizedEmail)) {
         const defaultUser = Object.values(DEFAULT_STORE.users).find(u => u.email.toLowerCase() === normalizedEmail);
         if (defaultUser) {

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Modal, TextInput, useWindowDimensions, Linking, ActivityIndicator } from 'react-native';
 import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck, X, Wrench, CreditCard, CheckCircle2, ExternalLink } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
+import { WalletStats } from "../components/dashboard/WalletStats";
+import { ActiveCampaigns } from "../components/dashboard/ActiveCampaigns";
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -17,6 +19,9 @@ import { Id } from '../../convex/_generated/dataModel';
 
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsive } from '../hooks/useResponsive';
+import { ResponsiveLayout } from '../components/ResponsiveLayout';
+import { DesktopSidebar } from '../components/DesktopSidebar';
 
 export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
     const navigation = useNavigation<any>();
@@ -26,6 +31,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const { show } = useToast();
     const { width: windowWidth, height: windowHeight } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const { isDesktop } = useResponsive();
 
     const [modalVisible, setModalVisible] = useState(false);
     const [transferEmail, setTransferEmail] = useState('');
@@ -148,11 +154,13 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const level = getLevelInfo(referrals);
     const progress = ((referrals - level.min) / (level.max - level.min)) * 100;
 
+    const convexMetrics = useQuery((api as any).dashboard?.getInfluencerMetrics, user?.id ? { influencerId: user.id } : "skip");
+
     const metrics = {
-        clicks: { total: 23140, growth: 18 },
-        sales: { total: 312, growth: 12, volume: 12450 },
-        commissions: { total: 3250.00, growth: 8, available: 1850.75, pending: 420.00 },
-        conversion: { rate: 4.2, trend: 1.1 },
+        clicks: { total: convexMetrics?.clicks || 0, growth: 0 },
+        sales: { total: convexMetrics?.sales || 0, growth: 0, volume: 0 },
+        commissions: { total: convexMetrics?.totalEarnings || 0, growth: 0, available: convexMetrics?.totalEarnings || 0, pending: 0 },
+        conversion: { rate: convexMetrics?.conversionRate || 0, trend: 0 },
         referrals,
     };
 
@@ -370,7 +378,21 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     }, [monthlyGoals]);
 
     return (
-        <View style={styles.container}>
+        <ResponsiveLayout 
+            style={styles.container}
+            sidebar={
+                !isTabMode ? (
+                    <DesktopSidebar 
+                        activeSection="dashboard" 
+                        onSectionChange={(section) => {
+                            if (section === 'home') navigation.navigate('Home');
+                            else if (section === 'marketplace') navigation.navigate('Marketplace');
+                            else if (section === 'social') navigation.navigate('Social');
+                        }} 
+                    />
+                ) : undefined
+            }
+        >
             <MobileHeader
                 title="Panel Influencer"
                 backButton={!isTabMode}
@@ -598,103 +620,18 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     })()}
                 </View>
 
-                {/* STATS OVERVIEW */}
-                <View
-                    style={[
-                        styles.statsRow,
-                        {
-                            width: '100%',
-                            maxWidth: metricsLayout.containerWidth,
-                            alignSelf: 'center',
-                            flexDirection: metricsLayout.stackTwoColSections ? 'column' : 'row',
-                            gap: metricsLayout.gap,
-                        },
-                    ]}
-                >
-                    <Card style={[styles.statCard, { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(5, 150, 105, 0.2)' : '#ecfdf5' }]}>
-                                <DollarSign size={20} color={isDark ? '#34D399' : '#059669'} />
-                            </View>
-                            <Badge variant="secondary" style={{ backgroundColor: isDark ? 'rgba(5, 150, 105, 0.2)' : '#ecfdf5' }}>
-                                <Text style={{ color: isDark ? '#34D399' : '#059669', fontSize: 10 }}>Disponible</Text>
-                            </Badge>
-                        </View>
-                        <Text style={styles.statValue}>{formatCurrency(commissionStats.available)}</Text>
-                        <TouchableOpacity onPress={handleWithdrawPress} style={{ marginTop: 8 }}>
-                            <Text style={{ color: isDark ? '#34D399' : '#059669', fontSize: 12, fontWeight: 'bold' }}>
-                                {kycStatus === 'approved' ? 'Solicitar Retiro →' : 'Completar KYC →'}
-                            </Text>
-                        </TouchableOpacity>
-                    </Card>
-                    <Card style={[styles.statCard, { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(234, 88, 12, 0.2)' : '#fff7ed' }]}>
-                                <TrendingUp size={20} color={isDark ? '#FB923C' : '#ea580c'} />
-                            </View>
-                            <Badge variant="secondary" style={{ backgroundColor: isDark ? 'rgba(234, 88, 12, 0.2)' : '#fff7ed' }}>
-                                <Text style={{ color: isDark ? '#FB923C' : '#ea580c', fontSize: 10 }}>Pendiente</Text>
-                            </Badge>
-                        </View>
-                        <Text style={styles.statValue}>{formatCurrency(commissionStats.pending)}</Text>
-                        <Text style={{ fontSize: 10, color: isDark ? '#9CA3AF' : '#666', marginTop: 4 }}>
-                            Próx. pago: {latestCommission ? new Date(latestCommission.createdAt).toLocaleDateString('es-ES') : '30 Oct'}
-                        </Text>
-                    </Card>
-                </View>
-
-                {wallet && (
-                    <Card style={[styles.walletCard, { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }]}>
-                        <View style={styles.walletHeader}>
-                            <View style={styles.walletIcon}>
-                                <Wallet size={18} color={isDark ? "#F9FAFB" : "#0f172a"} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.walletTitle}>Billetera de comisiones</Text>
-                                <Text style={styles.walletSubtitle}>
-                                    Disponible {formatCurrency(commissionStats.available)}
-                                </Text>
-                            </View>
-                            <Badge variant="outline" style={styles.walletBadge}>
-                                <ShieldCheck
-                                    size={12}
-                                    color={kycStatus === 'approved' ? '#047857' : '#9CA3AF'}
-                                    style={{ marginRight: 4 }}
-                                />
-                                <Text style={styles.walletBadgeText}>{kycStatusLabel}</Text>
-                            </Badge>
-                        </View>
-                        <View style={styles.walletRow}>
-                            <Text style={styles.walletLabel}>Pendiente</Text>
-                            <Text style={styles.walletValue}>{formatCurrency(commissionStats.pending)}</Text>
-                        </View>
-                        <View style={styles.walletRow}>
-                            <Text style={styles.walletLabel}>Reservado</Text>
-                            <Text style={styles.walletValue}>{formatCurrency(reservedBalance)}</Text>
-                        </View>
-                        {latestCommission && (
-                            <View style={styles.walletSplit}>
-                                <Text style={styles.walletSplitTitle}>Última comisión generada</Text>
-                                <View style={styles.walletSplitRow}>
-                                    <Text style={styles.walletSplitLabel}>Pago</Text>
-                                    <Text style={styles.walletSplitValue}>
-                                        {formatCurrency(latestCommission.amount)}
-                                    </Text>
-                                </View>
-                                <View style={styles.walletSplitRow}>
-                                    <Text style={styles.walletSplitLabel}>Tu parte</Text>
-                                    <Text style={styles.walletSplitValue}>
-                                        {formatCurrency(latestCommission.split.influencerAmount)}
-                                    </Text>
-                                </View>
-                                <View style={styles.walletSplitRow}>
-                                    <Text style={styles.walletSplitLabel}>Proveedor</Text>
-                                    <Text style={styles.walletSplitValue}>{latestCommission.provider.toUpperCase()}</Text>
-                                </View>
-                            </View>
-                        )}
-                    </Card>
-                )}
+                <WalletStats
+                    styles={styles}
+                    metricsLayout={metricsLayout}
+                    isDark={isDark}
+                    commissionStats={commissionStats}
+                    handleWithdrawPress={handleWithdrawPress}
+                    kycStatus={kycStatus}
+                    kycStatusLabel={kycStatusLabel}
+                    latestCommission={latestCommission}
+                    wallet={wallet}
+                    reservedBalance={reservedBalance}
+                />
 
                 {/* GOALS & ACHIEVEMENTS */}
                 <Card style={[styles.goalsCard, { width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }]}>
@@ -764,166 +701,18 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     </View>
                 </Card>
 
-                {/* TABS simplified */}
-                <View style={{ marginTop: 20, width: '100%', maxWidth: metricsLayout.containerWidth, alignSelf: 'center' }}>
-                    <View
-                        style={[
-                            {
-                                flexDirection: metricsLayout.headerStack ? 'column' : 'row',
-                                alignItems: metricsLayout.headerStack ? 'flex-start' : 'center',
-                                justifyContent: 'space-between',
-                                gap: 10,
-                            },
-                        ]}
-                    >
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Códigos por tienda</Text>
-                            <Text style={[styles.sectionSubtitle, { marginTop: 6 }]}>
-                                Genera códigos por comercio para que tus seguidores los ingresen en checkout.
-                            </Text>
-                        </View>
-                        <Button
-                            size="sm"
-                            onPress={() => setProposeModalVisible(true)}
-                            style={[
-                                { backgroundColor: '#4f46e5' },
-                                metricsLayout.headerStack && { alignSelf: 'stretch' },
-                            ]}
-                        >
-                            <Link size={16} color="#fff" style={{ marginRight: 8 }} />
-                            <Text style={{ color: '#fff', fontWeight: '700' }}>Proponer campaña</Text>
-                        </Button>
-                    </View>
-
-                    {/* Pending invitations from businesses */}
-                    {pendingInvitations.length > 0 && (
-                        <View style={{ marginTop: 12 }}>
-                            <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
-                                Invitaciones pendientes
-                            </Text>
-                            {pendingInvitations.map((c: any) => (
-                                <Card
-                                    key={c._id}
-                                    style={{
-                                        marginBottom: 12,
-                                        padding: 12,
-                                        backgroundColor: isDark ? '#1F2937' : '#fff',
-                                        borderWidth: 1,
-                                        borderColor: isDark ? '#F59E0B' : '#FCD34D',
-                                    }}
-                                >
-                                    <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
-                                        {c.businessName}
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                                        <Badge variant="secondary">{(c.commissionRate * 100).toFixed(1)}% por venta</Badge>
-                                        <Badge variant="outline">Te invitaron</Badge>
-                                    </View>
-                                    {c.notes && (
-                                        <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
-                                            "{c.notes}"
-                                        </Text>
-                                    )}
-                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                                        <Button
-                                            size="sm"
-                                            onPress={() => handleRespond(c._id, 'accept')}
-                                            style={{ flex: 1, backgroundColor: '#16a34a' }}
-                                        >
-                                            <Text style={{ color: '#fff', fontWeight: '700' }}>Aceptar</Text>
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onPress={() => handleRespond(c._id, 'reject')}
-                                            style={{ flex: 1 }}
-                                        >
-                                            <Text style={{ color: '#ef4444', fontWeight: '700' }}>Rechazar</Text>
-                                        </Button>
-                                    </View>
-                                </Card>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* My proposals waiting on the business to respond */}
-                    {myProposals.length > 0 && (
-                        <View style={{ marginTop: 12 }}>
-                            <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
-                                Esperando respuesta
-                            </Text>
-                            {myProposals.map((c: any) => (
-                                <Card key={c._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
-                                    <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
-                                        {c.businessName}
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                                        <Badge variant="secondary">{(c.commissionRate * 100).toFixed(1)}% propuesto</Badge>
-                                        <Badge variant="outline">Pendiente</Badge>
-                                    </View>
-                                    <TouchableOpacity onPress={() => handleEndCampaign(c._id)} style={{ marginTop: 8 }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Cancelar propuesta</Text>
-                                    </TouchableOpacity>
-                                </Card>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* Active / paused campaigns */}
-                    {activeCampaigns.length === 0 ? (
-                        <Card
-                            style={{
-                                marginTop: 12,
-                                padding: 14,
-                                borderRadius: 14,
-                                borderWidth: 1,
-                                borderColor: isDark ? '#374151' : '#E5E7EB',
-                                backgroundColor: isDark ? '#111827' : '#fff',
-                            }}
-                        >
-                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                                <View
-                                    style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 10,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        backgroundColor: isDark ? 'rgba(79, 70, 229, 0.25)' : '#eef2ff',
-                                        borderWidth: 1,
-                                        borderColor: isDark ? 'rgba(129, 140, 248, 0.25)' : '#c7d2fe',
-                                    }}
-                                >
-                                    <Link size={18} color={isDark ? '#A5B4FC' : '#4f46e5'} />
-                                </View>
-                                <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>
-                                        Aún no tenés campañas activas
-                                    </Text>
-                                    <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
-                                        Proponé una a un negocio o esperá a que te inviten. Con tu código personal {referralCode} acreditarás cada venta atribuida.
-                                    </Text>
-                                </View>
-                            </View>
-                        </Card>
-                    ) : (
-                        activeCampaigns.map((camp: any) => (
-                            <Card key={camp._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
-                                <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
-                                    {camp.businessName}
-                                </Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                                    <Badge variant="secondary">{referralCode || 'Tu código'}</Badge>
-                                    <Badge variant="secondary">{(camp.commissionRate * 100).toFixed(1)}% por venta</Badge>
-                                    <Badge variant="outline">{camp.status === 'active' ? 'Activa' : 'Pausada'}</Badge>
-                                </View>
-                                <TouchableOpacity onPress={() => handleEndCampaign(camp._id)} style={{ marginTop: 8 }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#ef4444' }}>Finalizar campaña</Text>
-                                </TouchableOpacity>
-                            </Card>
-                        ))
-                    )}
-                </View>
+                <ActiveCampaigns
+                    styles={styles}
+                    metricsLayout={metricsLayout}
+                    isDark={isDark}
+                    setProposeModalVisible={setProposeModalVisible}
+                    pendingInvitations={pendingInvitations}
+                    myProposals={myProposals}
+                    activeCampaigns={activeCampaigns}
+                    referralCode={referralCode}
+                    handleRespond={handleRespond}
+                    handleEndCampaign={handleEndCampaign}
+                />
 
                 {/* TIPS */}
                 <Card
@@ -1097,7 +886,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     </View>
                 </View>
             </Modal>
-        </View>
+        </ResponsiveLayout>
     );
 }
 

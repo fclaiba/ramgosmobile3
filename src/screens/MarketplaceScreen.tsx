@@ -24,6 +24,10 @@ import { RadiusFilterCard } from '../components/marketplace/RadiusFilterCard';
 import { MapView as MarketplaceMap } from '../components/marketplace/MapView';
 import { ItemDetailView } from '../components/ItemDetailView';
 
+import { useResponsive } from '../hooks/useResponsive';
+import { ResponsiveLayout } from '../components/ResponsiveLayout';
+import { DesktopSidebar } from '../components/DesktopSidebar';
+import { useUserLocation } from '../hooks/useUserLocation';
 type ViewMode = 'grid' | 'list' | 'map';
 type ItemType = 'products' | 'bonos' | 'events' | 'services' | 'businesses';
 
@@ -86,6 +90,9 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
+    const { numColumns, isDesktop } = useResponsive();
+    const { location: userLocation } = useUserLocation();
+
     const canPublish = !!user && (user.role === 'business' || user.role === 'consumer' || user.role === 'influencer');
 
     // Determine params from either navigation route or direct prop (for tab mode)
@@ -122,7 +129,6 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
 
     const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
     // React to param changes
-    // React to param changes
     useEffect(() => {
         if (activeParams?.filter) {
             setFilter(
@@ -148,7 +154,11 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             // Ensure map centers on it
             setCurrentMapCenter(activeParams.focusLocation);
         }
-    }, [activeParams?.filter, activeParams?.viewMode, activeParams?.focusLocation]);
+
+        if (activeParams?.advancedFilters) {
+            setAdvancedFilters(prev => ({ ...prev, ...activeParams.advancedFilters }));
+        }
+    }, [activeParams?.filter, activeParams?.viewMode, activeParams?.focusLocation, activeParams?.advancedFilters]);
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -158,10 +168,20 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
         minDiscount: null,
         categories: [],
         sortBy: 'relevancia',
-        // Manual center by default (independent of GPS)
-        searchLocation: { lat: -34.603722, lng: -58.381592 },
+        searchLocation: { lat: -34.603722, lng: -58.381592 }, // Default fallback
     });
     const [currentMapCenter, setCurrentMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+
+    useEffect(() => {
+        if (userLocation && !activeParams?.focusLocation) {
+            const newLoc = { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude };
+            setAdvancedFilters(prev => ({ ...prev, searchLocation: newLoc }));
+            setCurrentMapCenter(newLoc);
+        } else if (user?.location && !userLocation && !activeParams?.focusLocation) {
+            setAdvancedFilters(prev => ({ ...prev, searchLocation: user.location }));
+            setCurrentMapCenter(user.location);
+        }
+    }, [userLocation, user?.location]);
 
     // (keep param handling only via activeParams to avoid ReferenceError / duplication)
 
@@ -346,6 +366,8 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
         return products.find((product) => product.id === productId) ?? null;
     }, [products, selectedItem]);
 
+    const cardWidth = Math.floor((width - 32 - (16 * (numColumns - 1))) / numColumns);
+
     const renderGridItem = ({ item, index }: any) => {
         const Icon = getItemIcon(item.type);
         const saved = isFavorite(item.id);
@@ -354,7 +376,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             <Animated.View 
                 entering={FadeInUp.delay(Math.min(index, 10) * 50).springify().damping(15)} 
                 layout={Layout.springify()} 
-                style={[styles.gridCardWrapper, { width: (width - 48) / 2 }]}
+                style={[styles.gridCardWrapper, { width: cardWidth }]}
             >
             <TouchableOpacity
                 style={styles.gridCard}
@@ -563,7 +585,21 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     );
 
     return (
-        <View style={styles.container}>
+        <ResponsiveLayout 
+            style={styles.container}
+            sidebar={
+                !activeParams?.isTabMode ? (
+                    <DesktopSidebar 
+                        activeSection="marketplace" 
+                        onSectionChange={(section) => {
+                            if (section === 'home') navigation.navigate('Home');
+                            else if (section === 'social') navigation.navigate('Social');
+                            else if (section === 'dashboard') navigation.navigate('Home', { initialTab: 'dashboard' });
+                        }} 
+                    />
+                ) : undefined
+            }
+        >
             <LinearGradient
                 colors={isDark ? ['#111827', '#000000'] : ['#F9FAFB', '#F3F4F6']}
                 style={StyleSheet.absoluteFill}
@@ -596,10 +632,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         }}
                         onRadiusChange={setRadius}
                         bottomInset={NAV_CONTENT_HEIGHT + insets.bottom}
-                        topInset={195 + insets.top}
-                        // Props passed to satisfy interface, though map handles overlay now?
-                        // Actually I reverted overlay in MapView, so these might be unused there, but needed to match props if strict
-                        // Checking MapView interface... I didn't revert the interface, just the implementation content.
+                        topInset={viewMode === 'map' ? (130 + insets.top) : (195 + insets.top)}
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
                         filter={filter}
@@ -623,14 +656,14 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         pointerEvents="none"
                     />
                 )}
-                <MobileHeader
-                    title="Marketplace"
-                    subtitle="Productos, Bonos y Eventos"
-                    onMenuPress={() => setIsSidebarOpen(true)}
-                    // Float over the map
-                    style={viewMode === 'map' ? { backgroundColor: 'transparent' } : undefined}
-                    actions={headerActions}
-                />
+                {viewMode !== 'map' && (
+                    <MobileHeader
+                        title="Marketplace"
+                        subtitle="Productos, Bonos y Eventos"
+                        onMenuPress={() => setIsSidebarOpen(true)}
+                        actions={headerActions}
+                    />
+                )}
 
                 {/* Header Controls (always visible) */}
                 <View style={[styles.headerControls, viewMode === 'map' && styles.mapHeaderControls]}>
@@ -731,11 +764,11 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                 {viewMode !== 'map' && (
                     <Animated.FlatList
                         data={filteredItems}
-                        key={viewMode}
-                        numColumns={viewMode === 'grid' ? 2 : 1}
+                        key={`${viewMode}-${numColumns}`}
+                        numColumns={viewMode === 'grid' ? numColumns : 1}
                         keyExtractor={(item) => item.id.toString()}
                         contentContainerStyle={{ padding: 16, paddingBottom: NAV_CONTENT_HEIGHT + insets.bottom + 20 }}
-                        columnWrapperStyle={viewMode === 'grid' ? { justifyContent: 'space-between' } : undefined}
+                        columnWrapperStyle={viewMode === 'grid' ? { justifyContent: 'flex-start', gap: 16 } : undefined}
                         renderItem={viewMode === 'grid' ? renderGridItem : renderListItem}
                         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
                         showsVerticalScrollIndicator={false}
@@ -771,7 +804,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             />
 
             {/* Navbar for Standalone Mode */}
-            {!activeParams?.isTabMode && (
+            {!activeParams?.isTabMode && !isDesktop && (
                 <MobileNav
                     activeSection="marketplace"
                     onSectionChange={(section) => {
@@ -783,7 +816,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             )}
 
             <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        </View >
+        </ResponsiveLayout>
     );
 }
 
@@ -869,7 +902,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     // Grid Card
     gridCardWrapper: { marginBottom: 4 },
     gridCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-    gridImgContainer: { height: 144, backgroundColor: isDark ? '#374151' : '#F3F4F6', position: 'relative' },
+    gridImgContainer: { aspectRatio: 1, backgroundColor: isDark ? '#374151' : '#F3F4F6', position: 'relative' },
     cardImg: { width: '100%', height: '100%' },
     discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
     discountText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },

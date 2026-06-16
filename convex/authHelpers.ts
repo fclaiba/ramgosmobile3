@@ -94,3 +94,47 @@ export const assertSelfOrAdmin = (actor: AuthActor, targetUserId: string) => {
     throw new Error("No autorizado.");
   }
 };
+
+export const checkRateLimit = async (ctx: any, key: string, maxAttempts: number, windowMs: number) => {
+    const now = Date.now();
+    const existing = await ctx.db
+        .query("rateLimits")
+        .withIndex("by_key", (q: any) => q.eq("key", key))
+        .first();
+
+    if (existing) {
+        if (existing.blockedUntil && now < existing.blockedUntil) {
+            throw new Error(`Demasiados intentos. Inténtalo de nuevo más tarde.`);
+        }
+        
+        if (now - existing.windowStart > windowMs) {
+            // Reset window
+            await ctx.db.patch(existing._id, {
+                attempts: 1,
+                windowStart: now,
+                blockedUntil: undefined,
+            });
+        } else {
+            // Increment
+            const attempts = existing.attempts + 1;
+            if (attempts > maxAttempts) {
+                const blockedUntil = now + windowMs; // Block for the window duration
+                await ctx.db.patch(existing._id, {
+                    attempts,
+                    blockedUntil,
+                });
+                throw new Error(`Demasiados intentos. Inténtalo de nuevo más tarde.`);
+            } else {
+                await ctx.db.patch(existing._id, {
+                    attempts,
+                });
+            }
+        }
+    } else {
+        await ctx.db.insert("rateLimits", {
+            key,
+            attempts: 1,
+            windowStart: now,
+        });
+    }
+};

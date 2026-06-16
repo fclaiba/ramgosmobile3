@@ -71,15 +71,14 @@ http.route({
         try {
             if (isV2) {
                 // ----- V2 thin event routing -----
-                // The thin envelope sometimes carries `related_object.id` for
-                // account-scoped events. We use that to re-fetch and apply.
-                const relatedId = (event as any).related_object?.id as string | undefined;
-                console.log(`[Webhook V2] ${event.type} (related=${relatedId ?? "n/a"})`);
+                console.log(`[Webhook V2] Received thin event: ${event.type}. Fetching full payload...`);
+                // En V2 de Stripe, el evento que entra es "delgado" (thin event).
+                // Es indispensable hacer un fetch a la API para traer el payload real seguro.
+                const fullEvent = await stripe.v2.core.events.retrieve(event.id);
+                const relatedId = (fullEvent as any).related_object?.id as string | undefined;
+                console.log(`[Webhook V2] Fetched full event ${fullEvent.type} (related=${relatedId ?? "n/a"})`);
 
-                // V2 thin event types are not yet in the public @types/stripe
-                // bundled with this Stripe SDK version, so we narrow on the
-                // literal string explicitly via the `as` cast.
-                switch (event.type as string) {
+                switch (fullEvent.type as string) {
                     case "v2.core.account[requirements].updated":
                     case "v2.core.account[configuration.recipient].capability_status_updated": {
                         if (relatedId) {
@@ -90,7 +89,7 @@ http.route({
                         break;
                     }
                     default:
-                        console.log(`[Webhook V2] Unhandled type: ${event.type}`);
+                        console.log(`[Webhook V2] Unhandled type: ${fullEvent.type}`);
                 }
             } else {
                 // ----- V1 snapshot event routing -----
@@ -178,10 +177,6 @@ http.route({
                     }
 
                     // ----- Stripe Subscriptions (Sprint 4) -----
-                    // We mirror state into Convex `stripeSubscriptions` and
-                    // `users.subscriptionTier`. These events also fire on
-                    // dunning failures / proration changes, keeping us in
-                    // sync without polling the Stripe API.
                     case "customer.subscription.created":
                     case "customer.subscription.updated":
                     case "customer.subscription.deleted": {
@@ -198,9 +193,6 @@ http.route({
 
                     case "checkout.session.completed": {
                         const session = event.data.object as any;
-                        // Subscription mode → Stripe will also fire
-                        // customer.subscription.created right after; we
-                        // log here for traceability.
                         console.log(
                             `[Webhook] Checkout session completed: ${session.id} (mode=${session.mode})`,
                         );
@@ -211,9 +203,6 @@ http.route({
                     case "invoice.payment_failed": {
                         const invoice = event.data.object as any;
                         if (invoice.subscription) {
-                            // Pull the latest subscription state via the
-                            // shared handler (it does an upsert based on
-                            // current sub status).
                             try {
                                 const sub = await stripe.subscriptions.retrieve(
                                     invoice.subscription as string,
@@ -507,56 +496,6 @@ http.route({
     }),
 });
 
-// ---------------------------------------------------------------------------
-// /stripe-connect-webhook — receives Stripe Connect V2 Thin Events.
-// ---------------------------------------------------------------------------
-http.route({
-    path: "/stripe-connect-webhook",
-    method: "POST",
-    handler: httpAction(async (ctx, request) => {
-        if (!stripeWebhookSecret) {
-            return new Response("Stripe webhook no configurado para este entorno.", { status: 503 });
-        }
-
-        const body = await request.text();
-        const signature = request.headers.get("stripe-signature");
-
-        if (!signature) {
-            return new Response("Missing stripe-signature header", { status: 400 });
-        }
-
-        try {
-            // 1. Parse the thin event
-            const thinEvent = stripe.webhooks.constructEvent(body, signature, stripeWebhookSecret);
-
-            // 2. Fetch the full event data from the API
-            const event = await stripe.v2.core.events.retrieve(thinEvent.id);
-
-            // 3. Handle the event
-            console.log(`[Connect Webhook] Received thin event: ${event.type} for account: ${(event as any).related_object?.id}`);
-
-            switch (event.type) {
-                case "v2.core.account[requirements].updated":
-                case "v2.core.account[configuration.recipient].capability_status_updated": {
-                    const accountId = (event as any).related_object?.id;
-                    if (accountId) {
-                        console.log(`[Connect Webhook] Updating account ${accountId}`);
-                        await ctx.runAction(internal.connect.internalApplyV2AccountUpdate, {
-                            accountId: accountId,
-                        });
-                    }
-                    break;
-                }
-                default:
-                    console.log(`[Connect Webhook] Unhandled thin event type: ${event.type}`);
-            }
-
-            return new Response(null, { status: 200 });
-        } catch (err: any) {
-            console.error(`Connect Webhook Error: ${err.message}`);
-            return new Response(`Webhook Error: ${err.message}`, { status: 400 });
-        }
-    }),
-});
+// Converted to consolidated webhook in /stripe-webhook
 
 export default http;

@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import * as Haptics from 'expo-haptics';
 
 type ButtonVariant = 'default' | 'ghost' | 'outline';
 type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
@@ -12,16 +13,26 @@ interface ButtonProps {
     variant?: ButtonVariant;
     size?: ButtonSize;
     disabled?: boolean;
+    isLoading?: boolean;
 }
 
-export const Button = ({ onPress, children, style, variant = 'default', size = 'default', disabled = false }: ButtonProps) => {
+export const Button = ({ onPress, children, style, variant = 'default', size = 'default', disabled = false, isLoading = false }: ButtonProps) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+
+    const handlePress = () => {
+        if (!disabled && !isLoading) {
+            if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+            if (onPress) onPress();
+        }
+    };
     
     return (
     <TouchableOpacity
-        onPress={disabled ? undefined : onPress}
+        onPress={handlePress}
         style={[
             styles.button,
             variant === 'ghost' && styles.ghost,
@@ -29,31 +40,35 @@ export const Button = ({ onPress, children, style, variant = 'default', size = '
             size === 'sm' && styles.sizeSm,
             size === 'lg' && styles.sizeLg,
             size === 'icon' && styles.sizeIcon,
-            disabled && styles.disabled,
+            (disabled || isLoading) && styles.disabled,
             style,
         ]}
-        activeOpacity={disabled ? 1 : 0.7}
-        disabled={disabled}
+        activeOpacity={(disabled || isLoading) ? 1 : 0.7}
+        disabled={disabled || isLoading}
     >
-        {React.Children.map(children, (child) => {
-            if (typeof child === 'string' || typeof child === 'number') {
-                return (
-                    <Text
-                        style={[
-                            styles.text,
-                            variant === 'ghost' && styles.ghostText,
-                            variant === 'outline' && styles.outlineText,
-                            size === 'sm' && styles.textSm,
-                            size === 'lg' && styles.textLg,
-                            disabled && styles.disabledText,
-                        ]}
-                    >
-                        {child}
-                    </Text>
-                );
-            }
-            return child;
-        })}
+        {isLoading ? (
+            <ActivityIndicator color={variant === 'default' ? '#fff' : '#007AFF'} size="small" />
+        ) : (
+            React.Children.map(children, (child) => {
+                if (typeof child === 'string' || typeof child === 'number') {
+                    return (
+                        <Text
+                            style={[
+                                styles.text,
+                                variant === 'ghost' && styles.ghostText,
+                                variant === 'outline' && styles.outlineText,
+                                size === 'sm' && styles.textSm,
+                                size === 'lg' && styles.textLg,
+                                disabled && styles.disabledText,
+                            ]}
+                        >
+                            {child}
+                        </Text>
+                    );
+                }
+                return child;
+            })
+        )}
     </TouchableOpacity>
     );
 };

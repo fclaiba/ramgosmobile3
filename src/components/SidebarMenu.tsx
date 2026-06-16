@@ -96,10 +96,10 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
             }
 
             const credentials = {
-                business: { email: 'business@ramgos.com', pass: 'password123', name: 'Usuario Negocio' },
-                influencer: { email: 'influencer@ramgos.com', pass: 'password123', name: 'Usuario Influencer' },
-                admin: { email: 'admin@ramgos.com', pass: 'password123', name: 'Usuario Admin' },
-                consumer: { email: 'consumer@ramgos.com', pass: 'password123', name: 'Usuario Consumidor' },
+                business: { email: 'business@test.com', pass: 'password123', name: 'Usuario Negocio' },
+                influencer: { email: 'influencer@test.com', pass: 'password123', name: 'Usuario Influencer' },
+                admin: { email: 'admin@test.com', pass: 'password123', name: 'Usuario Admin' },
+                consumer: { email: 'consumer@test.com', pass: 'password123', name: 'Usuario Consumidor' },
             };
 
             const creds = credentials[role as keyof typeof credentials];

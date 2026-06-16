@@ -279,11 +279,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 lat: -34.6037, lng: -58.3816, name: 'Online', address: 'Online', distanceKm: 0
             };
 
-            // Resolve openPromotion + rate (only meaningful for business
-            // role; the toggle is hidden from the UI otherwise but we
-            // still guard here in case state was prefilled from edit).
-            const isBusiness = user?.role === 'business' || user?.role === 'admin';
-            const wantsOpenPromotion = isBusiness && form.openPromotion;
+            // Resolve openPromotion + rate.
+            const wantsOpenPromotion = form.openPromotion;
             const openCommissionRateValue = wantsOpenPromotion
                 ? Math.max(0.01, Math.min(0.5, (Number(form.openCommissionRate) || 0) / 100))
                 : undefined;
@@ -304,8 +301,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         gallery: uploadedImages.length > 0 ? uploadedImages : undefined,
                         condition: form.condition,
                         location: locationData,
-                        openPromotion: isBusiness ? wantsOpenPromotion : undefined,
-                        openCommissionRate: isBusiness ? openCommissionRateValue : undefined,
+                        openPromotion: wantsOpenPromotion || undefined,
+                        openCommissionRate: openCommissionRateValue,
                         discountValue: listingType === 'bono' ? discountValueFloat : undefined,
                         discountType: listingType === 'bono' ? 'fixed' : undefined,
                     }
@@ -436,13 +433,10 @@ export default function CreateListingScreen({ navigation, route }: any) {
         </TouchableOpacity>
     );
 
-    // Open Promotion section — visible to business sellers only. When
+    // Open Promotion section — visible to all sellers. When
     // ON, ANY influencer can earn `openCommissionRate` on this listing
-    // without an explicit campaign with the seller. Backend enforces
-    // role and rate validity in `convex/listings.ts`.
-    const isBusinessRole = user?.role === 'business' || user?.role === 'admin';
+    // without an explicit campaign with the seller.
     const renderOpenPromotionSection = () => {
-        if (!isBusinessRole) return null;
         return (
             <View style={styles.formGroup}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

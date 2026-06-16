@@ -52,6 +52,13 @@ export const sendOTP = action({
         code: v.string(),
     },
     handler: async (ctx, args) => {
+        // Rate Limiting: max 3 OTP requests per 10 minutes (600000 ms)
+        await ctx.runMutation(internal.users.internalCheckRateLimit, {
+            key: `otp_${args.email}`,
+            maxAttempts: 3,
+            windowMs: 600000
+        });
+
         const resendApiKey = process.env.RESEND_API_KEY;
         if (!resendApiKey) {
             console.error("Missing RESEND_API_KEY environment variable");

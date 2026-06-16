@@ -159,11 +159,7 @@ export const createListing = mutation({
             }
         }
 
-        // openPromotion is business-only and the rate must be sane.
         if (args.openPromotion) {
-            if (role !== 'business' && role !== 'admin') {
-                throw new Error('La promoción abierta solo está disponible para negocios.');
-            }
             const rate = args.openCommissionRate ?? 0;
             if (rate <= 0 || rate > 0.5) {
                 throw new Error('La comisión de promoción abierta debe estar entre 1% y 50%.');
@@ -291,15 +287,7 @@ export const updateListing = mutation({
             throw new Error("No autorizado.");
         }
 
-        // If toggling openPromotion ON, verify the seller is a business
-        // and the rate is sane. We re-check on patch because the seller
-        // role could have changed since creation (admin demotion, etc.).
         if (args.updates.openPromotion === true) {
-            const sellerNormId = ctx.db.normalizeId('users', listing.sellerId);
-            const seller: any = sellerNormId ? await ctx.db.get(sellerNormId) : null;
-            if (!seller || (seller.role !== 'business' && seller.role !== 'admin')) {
-                throw new Error('La promoción abierta solo está disponible para negocios.');
-            }
             const rate = args.updates.openCommissionRate ?? listing.openCommissionRate ?? 0;
             if (rate <= 0 || rate > 0.5) {
                 throw new Error('La comisión de promoción abierta debe estar entre 1% y 50%.');

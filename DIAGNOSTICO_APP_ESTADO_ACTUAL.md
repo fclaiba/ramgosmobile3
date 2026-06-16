@@ -1,6 +1,6 @@
 # Diagnostico Integral - ramgos-mobile v1.0.0
 
-Fecha: `2026-06-08T03:01:52-03:00`  
+Fecha: `2026-06-16T12:14:12-03:00`  
 Generado por: `scripts/app_integral_audit.py`  
 Modo: `run_checks=False online_checks=False`
 

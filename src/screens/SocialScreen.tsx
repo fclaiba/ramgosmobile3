@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, Animated, Image, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated, Image, useWindowDimensions, FlatList } from 'react-native';
 import { Search, Plus as PlusIcon, Heart, Send, Users, Sparkles, Flame, Award, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -26,11 +26,16 @@ import {
     CreateInstagramPost
 } from '../components/social';
 
-export default function SocialScreen({ navigation, onMenuPress }: any) {
+import { useResponsive } from '../hooks/useResponsive';
+import { ResponsiveLayout } from '../components/ResponsiveLayout';
+import { DesktopSidebar } from '../components/DesktopSidebar';
+
+export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any) {
     const { width } = useWindowDimensions();
     const { posts, instagramPosts, trendingTopics, suggestedUsers, communityGroups, followUser, isFollowing, joinGroup, leaveGroup } = useSocial();
     const { requireAuth } = useAuth();
     const { colorScheme } = useTheme();
+    const { isDesktop } = useResponsive();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
@@ -42,8 +47,7 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
     const [showMessages, setShowMessages] = useState(false);
     const [viewingStory, setViewingStory] = useState<string | null>(null);
     const [viewingProfile, setViewingProfile] = useState<string | null>(null);
-
-    // Animations
+    const [tabsWidth, setTabsWidth] = useState(width - 32); // Fallback to window width
     const tabAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -70,7 +74,21 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
     if (showMessages) return <DirectMessages onClose={() => setShowMessages(false)} />;
 
     return (
-        <View style={styles.container}>
+        <ResponsiveLayout 
+            style={styles.container}
+            sidebar={
+                !isTabMode ? (
+                    <DesktopSidebar 
+                        activeSection="social" 
+                        onSectionChange={(section) => {
+                            if (section === 'home') navigation.navigate('Home');
+                            else if (section === 'marketplace') navigation.navigate('Marketplace');
+                            else if (section === 'dashboard') navigation.navigate('Home', { initialTab: 'dashboard' });
+                        }} 
+                    />
+                ) : undefined
+            }
+        >
             <LinearGradient
                 colors={isDark ? ['#111827', '#000'] : ['#F9FAFB', '#F3F4F6']}
                 style={StyleSheet.absoluteFill}
@@ -105,7 +123,10 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
 
             {/* Tabs */}
             <View style={styles.tabsContainer}>
-                <View style={styles.tabsBg}>
+                <View 
+                    style={styles.tabsBg}
+                    onLayout={(e) => setTabsWidth(e.nativeEvent.layout.width)}
+                >
                     <TouchableOpacity style={styles.tab} onPress={() => setActiveTab('feed')}>
                         <Text style={[styles.tabText, activeTab === 'feed' && styles.activeTabText]}>Feed</Text>
                     </TouchableOpacity>
@@ -119,12 +140,12 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
                     <Animated.View
                         style={[
                             styles.activeIndicator,
-                            { width: (width - 48) / 3 },
+                            { width: (tabsWidth - 8) / 3 }, // 8px total padding (4px each side)
                             {
                                 transform: [{
                                     translateX: tabAnim.interpolate({
                                         inputRange: [0, 1, 2],
-                                        outputRange: [4, (width - 32) / 3, ((width - 32) / 3) * 2 - 4]
+                                        outputRange: [4, ((tabsWidth - 8) / 3) + 4, (((tabsWidth - 8) / 3) * 2) + 4]
                                     })
                                 }]
                             }
@@ -133,23 +154,23 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-
-                {/* FEED TAB */}
-                {activeTab === 'feed' && (
-                    <View>
+            {/* FEED TAB */}
+            {activeTab === 'feed' && (
+                <FlatList
+                    data={posts}
+                    keyExtractor={(item) => item.id}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    renderItem={({ item }) => <Post post={item} onUserClick={handleUserClick} />}
+                    ListHeaderComponent={
                         <TouchableOpacity style={styles.createPostBar} onPress={handleCreatePost}>
                             <View style={styles.avatarPlaceholder}><Text style={styles.avatarLetter}>T</Text></View>
                             <View style={styles.cpInput}><Text style={styles.cpText}>¿Qué estás pensando?</Text></View>
                             <PlusIcon size={20} color={isDark ? '#fff' : "#000"} />
                         </TouchableOpacity>
-
-                        {posts.map((post: PostType) => (
-                            <Post key={post.id} post={post} onUserClick={handleUserClick} />
-                        ))}
-
-                        {/* Instagram Grid Preview */}
-                        {instagramPosts && instagramPosts.length > 0 && (
+                    }
+                    ListFooterComponent={
+                        instagramPosts && instagramPosts.length > 0 ? (
                             <View style={styles.igSection}>
                                 <View style={styles.sectionHeader}>
                                     <Text style={styles.sectionTitle}>Galería Destacada</Text>
@@ -167,99 +188,116 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
                                     ))}
                                 </View>
                             </View>
-                        )}
-                    </View>
-                )}
+                        ) : null
+                    }
+                />
+            )}
 
-                {/* TRENDING TAB */}
-                {activeTab === 'trending' && (
-                    <View>
-                        <LinearGradient colors={['#EA580C', '#DC2626', '#DB2777']} style={styles.heroCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                            <View style={styles.heroHeader}>
-                                <View style={styles.heroIcon}><Flame size={24} color="#fff" /></View>
-                                <View>
-                                    <Text style={styles.heroTitle}>Tendencias Hoy</Text>
-                                    <Text style={styles.heroSub}>Lo más popular</Text>
+            {/* TRENDING TAB */}
+            {activeTab === 'trending' && (
+                <FlatList
+                    data={trendingTopics}
+                    keyExtractor={(item, idx) => `topic-${idx}`}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    ListHeaderComponent={
+                        <View>
+                            <LinearGradient colors={['#EA580C', '#DC2626', '#DB2777']} style={styles.heroCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                                <View style={styles.heroHeader}>
+                                    <View style={styles.heroIcon}><Flame size={24} color="#fff" /></View>
+                                    <View>
+                                        <Text style={styles.heroTitle}>Tendencias Hoy</Text>
+                                        <Text style={styles.heroSub}>Lo más popular</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.heroStats}>
+                                    <View style={styles.statBadge}><TrendingUp size={12} color="#fff" style={{ marginRight: 4 }} /><Text style={styles.statText}>+45%</Text></View>
+                                    <View style={styles.statBadge}><Text style={styles.statText}>12.5K posts</Text></View>
+                                </View>
+                            </LinearGradient>
+                            <Text style={styles.sectionTitle}>Temas Populares</Text>
+                        </View>
+                    }
+                    renderItem={({ item, index }) => (
+                        <TouchableOpacity style={styles.topicCard}>
+                            <View style={styles.rankBadge}><Text style={styles.rankText}>#{index + 1}</Text></View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.topicTag}>#{item.tag}</Text>
+                                <Text style={styles.topicCount}>{item.posts} publicaciones</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                    ListFooterComponent={
+                        <View>
+                            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Usuarios Destacados</Text>
+                            {suggestedUsers.map((user: any) => (
+                                <View key={user.id} style={styles.userCard}>
+                                    <Image source={{ uri: user.avatar }} style={styles.userAvatar} />
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={styles.userName}>{user.displayName}</Text>
+                                            {user.verified && <View style={styles.verified}><Award size={8} color="#fff" /></View>}
+                                        </View>
+                                        <Text style={styles.userHandle}>@{user.username}</Text>
+                                    </View>
+                                    <TouchableOpacity style={styles.followBtn} onPress={() => safeAction(() => followUser(user.id))}>
+                                        <Text style={styles.followText}>Seguir</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    }
+                />
+            )}
+
+            {/* COMMUNITY TAB */}
+            {activeTab === 'community' && (
+                <FlatList
+                    data={communityGroups}
+                    keyExtractor={(item) => item.id}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                    ListHeaderComponent={
+                        <View>
+                            <LinearGradient colors={['#059669', '#0D9488', '#0891B2']} style={styles.heroCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                                <View style={styles.heroHeader}>
+                                    <View style={styles.heroIcon}><Users size={24} color="#fff" /></View>
+                                    <View>
+                                        <Text style={styles.heroTitle}>Comunidades</Text>
+                                        <Text style={styles.heroSub}>Encuentra tu grupo</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.communityStats}>
+                                    <View style={styles.cStat}><Text style={styles.cVal}>12</Text><Text style={styles.cLabel}>Grupos</Text></View>
+                                    <View style={styles.cStat}><Text style={styles.cVal}>45K</Text><Text style={styles.cLabel}>Miembros</Text></View>
+                                </View>
+                            </LinearGradient>
+                            <Text style={styles.sectionTitle}>Grupos Destacados</Text>
+                        </View>
+                    }
+                    renderItem={({ item }) => (
+                        <View style={styles.groupCard}>
+                            <View style={styles.groupHeader}>
+                                <ImageWithFallback src={item.image} style={styles.groupImg} />
+                                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFill} />
+                                <View style={styles.groupInfo}>
+                                    <View style={styles.catTag}><Text style={styles.catTagText}>{item.category}</Text></View>
+                                    <Text style={styles.groupName}>{item.name}</Text>
+                                    <Text style={styles.groupMembers}>{item.members} miembros • Público</Text>
                                 </View>
                             </View>
-                            <View style={styles.heroStats}>
-                                <View style={styles.statBadge}><TrendingUp size={12} color="#fff" style={{ marginRight: 4 }} /><Text style={styles.statText}>+45%</Text></View>
-                                <View style={styles.statBadge}><Text style={styles.statText}>12.5K posts</Text></View>
-                            </View>
-                        </LinearGradient>
-
-                        <Text style={styles.sectionTitle}>Temas Populares</Text>
-                        {trendingTopics.map((topic: any, idx: number) => (
-                            <TouchableOpacity key={idx} style={styles.topicCard}>
-                                <View style={styles.rankBadge}><Text style={styles.rankText}>#{idx + 1}</Text></View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.topicTag}>#{topic.tag}</Text>
-                                    <Text style={styles.topicCount}>{topic.posts} publicaciones</Text>
-                                </View>
+                            <TouchableOpacity
+                                style={[styles.groupBtn, item.joined && styles.joinedBtn]}
+                                onPress={() => safeAction(() => item.joined ? leaveGroup(item.id) : joinGroup(item.id))}
+                            >
+                                <Text style={[styles.groupBtnText, item.joined && styles.joinedBtnText]}>
+                                    {item.joined ? 'Salir del Grupo' : 'Unirse al Grupo'}
+                                </Text>
                             </TouchableOpacity>
-                        ))}
-
-                        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Usuarios Destacados</Text>
-                        {suggestedUsers.map((user: any) => (
-                            <View key={user.id} style={styles.userCard}>
-                                <Image source={{ uri: user.avatar }} style={styles.userAvatar} />
-                                <View style={{ flex: 1 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={styles.userName}>{user.displayName}</Text>
-                                        {user.verified && <View style={styles.verified}><Award size={8} color="#fff" /></View>}
-                                    </View>
-                                    <Text style={styles.userHandle}>@{user.username}</Text>
-                                </View>
-                                <TouchableOpacity style={styles.followBtn} onPress={() => safeAction(() => followUser(user.id))}>
-                                    <Text style={styles.followText}>Seguir</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-                {/* COMMUNITY TAB */}
-                {activeTab === 'community' && (
-                    <View>
-                        <LinearGradient colors={['#059669', '#0D9488', '#0891B2']} style={styles.heroCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                            <View style={styles.heroHeader}>
-                                <View style={styles.heroIcon}><Users size={24} color="#fff" /></View>
-                                <View>
-                                    <Text style={styles.heroTitle}>Comunidades</Text>
-                                    <Text style={styles.heroSub}>Encuentra tu grupo</Text>
-                                </View>
-                            </View>
-                            <View style={styles.communityStats}>
-                                <View style={styles.cStat}><Text style={styles.cVal}>12</Text><Text style={styles.cLabel}>Grupos</Text></View>
-                                <View style={styles.cStat}><Text style={styles.cVal}>45K</Text><Text style={styles.cLabel}>Miembros</Text></View>
-                            </View>
-                        </LinearGradient>
-
-                        <Text style={styles.sectionTitle}>Grupos Destacados</Text>
-                        {communityGroups.map((group: any) => (
-                            <View key={group.id} style={styles.groupCard}>
-                                <View style={styles.groupHeader}>
-                                    <ImageWithFallback src={group.image} style={styles.groupImg} />
-                                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFill} />
-                                    <View style={styles.groupInfo}>
-                                        <View style={styles.catTag}><Text style={styles.catTagText}>{group.category}</Text></View>
-                                        <Text style={styles.groupName}>{group.name}</Text>
-                                        <Text style={styles.groupMembers}>{group.members} miembros • Público</Text>
-                                    </View>
-                                </View>
-                                <TouchableOpacity
-                                    style={[styles.groupBtn, group.joined && styles.joinedBtn]}
-                                    onPress={() => safeAction(() => group.joined ? leaveGroup(group.id) : joinGroup(group.id))}
-                                >
-                                    <Text style={[styles.groupBtnText, group.joined && styles.joinedBtnText]}>
-                                        {group.joined ? 'Salir del Grupo' : 'Unirse al Grupo'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                    </View>
-                )}
-            </ScrollView>
+                        </View>
+                    )}
+                />
+            )}
 
             {/* FAB */}
             <TouchableOpacity style={styles.fab} onPress={handleCreatePost}>
@@ -271,15 +309,17 @@ export default function SocialScreen({ navigation, onMenuPress }: any) {
             {showCreateStory && <CreateStory onClose={() => setShowCreateStory(false)} />}
             {viewingStory && <StoryViewer storyId={viewingStory} onClose={() => setViewingStory(null)} onNavigateProfile={handleUserClick} />}
             {/* Navbar for Standalone Mode */}
-            <MobileNav
-                activeSection="social"
-                onSectionChange={(section) => {
-                    if (section === 'home') navigation.navigate('Home');
-                    else if (section === 'marketplace') navigation.navigate('Marketplace');
-                    else if (section === 'dashboard') navigation.navigate('Home', { initialTab: 'dashboard' });
-                }}
-            />
-        </View>
+            {!isTabMode && !isDesktop && (
+                <MobileNav
+                    activeSection="social"
+                    onSectionChange={(section) => {
+                        if (section === 'home') navigation.navigate('Home');
+                        else if (section === 'marketplace') navigation.navigate('Marketplace');
+                        else if (section === 'dashboard') navigation.navigate('Home', { initialTab: 'dashboard' });
+                    }}
+                />
+            )}
+        </ResponsiveLayout>
     );
 }
 

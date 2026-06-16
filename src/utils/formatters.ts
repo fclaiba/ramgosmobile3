@@ -1,53 +1,46 @@
-/**
- * Validates and masks numeric input for prices.
- * Allows digits, dot, comma.
- * Normalizes to dot.
- * Limits to 2 decimal places.
- */
-export const formatPrice = (text: string) => {
-    let formatted = text.replace(/[^0-9.,]/g, '');
-    formatted = formatted.replace(',', '.');
-    const parts = formatted.split('.');
-    if (parts.length > 2) {
-        formatted = parts[0] + '.' + parts.slice(1).join('');
-    }
-    if (parts.length === 2 && parts[1].length > 2) {
-        formatted = parts[0] + '.' + parts[1].slice(0, 2);
-    }
-    return formatted;
+import { Coupon } from "../contexts/BusinessContext";
+
+export const formatCurrency = (value: number) =>
+    `$${value.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+export const formatDateShort = (value: string | number | Date) => {
+    const date = new Date(value);
+    return date.toLocaleDateString("es-AR", {
+        day: "numeric",
+        month: "short",
+    });
 };
 
-/**
- * Validates and keeps only integer digits.
- */
-export const formatInteger = (text: string) => text.replace(/[^0-9]/g, '');
-
-/**
- * Masks input to DD/MM/YYYY format.
- */
-export const formatDate = (text: string) => {
-    // Remove non-digits
-    const digits = text.replace(/[^0-9]/g, '');
-    let formatted = digits;
-
-    if (digits.length >= 2) {
-        formatted = digits.slice(0, 2) + '/' + digits.slice(2);
-    }
-    if (digits.length >= 4) {
-        formatted = formatted.slice(0, 5) + '/' + digits.slice(4, 8);
-    }
-    return formatted;
-};
-
-/**
- * Masks input to HH:MM format.
- */
-export const formatTime = (text: string) => {
-    const digits = text.replace(/[^0-9]/g, '');
-    let formatted = digits;
-
-    if (digits.length >= 2) {
-        formatted = digits.slice(0, 2) + ':' + digits.slice(2, 4);
-    }
-    return formatted;
+export const getCouponStatusStyles = (status: Coupon["status"], isDark: boolean) => {
+    const styles: Record<
+        Coupon["status"],
+        { background: string; color: string; label: string }
+    > = {
+        active: {
+            background: isDark ? "rgba(22, 101, 52, 0.2)" : "#DCFCE7",
+            color: isDark ? "#4ADE80" : "#166534",
+            label: "Activo",
+        },
+        scheduled: {
+            background: isDark ? "rgba(29, 78, 216, 0.2)" : "#E0F2FE",
+            color: isDark ? "#60A5FA" : "#1D4ED8",
+            label: "Programado",
+        },
+        expired: {
+            background: isDark ? "rgba(185, 28, 28, 0.2)" : "#FEE2E2",
+            color: isDark ? "#F87171" : "#B91C1C",
+            label: "Vencido",
+        },
+        paused: {
+            background: isDark ? "rgba(107, 114, 128, 0.2)" : "#F3F4F6",
+            color: isDark ? "#9CA3AF" : "#6B7280",
+            label: "Pausado",
+        },
+        draft: {
+            background: isDark ? "rgba(124, 58, 237, 0.2)" : "#F5F3FF",
+            color: isDark ? "#A78BFA" : "#7C3AED",
+            label: "Borrador",
+        },
+    };
+    return styles[status];
 };
