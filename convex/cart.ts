@@ -1,4 +1,4 @@
-import { mutation, query } from './_generated/server';
+import { mutation, query, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import { Id } from './_generated/dataModel';
 import { assertSelfOrAdmin, requireActor } from './authHelpers';
@@ -185,6 +185,23 @@ export const clearCart = mutation({
         const cartItems = await ctx.db
             .query("cart")
             .withIndex("by_user", q => q.eq("userId", userId))
+            .collect();
+
+        await Promise.all(
+            cartItems.map(item => ctx.db.delete(item._id))
+        );
+    },
+});
+
+// Internal clear cart for stripe webhook
+export const internalClearCart = internalMutation({
+    args: {
+        userId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const cartItems = await ctx.db
+            .query("cart")
+            .withIndex("by_user", q => q.eq("userId", args.userId))
             .collect();
 
         await Promise.all(

@@ -231,7 +231,8 @@ type OrderStatus =
     | 'completed'
     | 'disputed'
     | 'cancelled'
-    | 'pending';
+    | 'pending'
+    | 'paid_escrow';
 
 type DisputeReason =
     | 'not_received'
@@ -404,17 +405,14 @@ import { api } from '../../convex/_generated/api';
 const marketplaceReducer = (state: MarketplaceState, action: MarketplaceAction): MarketplaceState => {
     switch (action.type) {
         case 'CREATE_PRODUCT':
-            return { ...state, products: [action.payload, ...state.products] };
+            return state;
         case 'UPDATE_PRODUCT':
-            return {
-                ...state,
-                products: state.products.map((p) => (p.id === action.payload.id ? action.payload : p)),
-            };
+            return state;
         case 'DELETE_PRODUCT':
-            return { ...state, products: state.products.filter((p) => p.id !== action.payload) };
+            return state;
         case 'UPSERT_ORDERS':
             // Merge existing orders with new ones or replace? Usually replacement for sync.
-            // But let's assume we want to keep local state safe.
+            // Products have been moved to useMarketplaceProducts hook
             return { ...state, orders: action.payload };
         case 'UPDATE_ORDER':
             return {
@@ -441,7 +439,6 @@ const MarketplaceContext = createContext<MarketplaceContextType | undefined>(und
 export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     // --- CONVEX SYNC ---
     // --- CONVEX SYNC ---
-    const liveProducts = useQuery(api.listings.getFeed) ?? []; // Real-time feed from DB
     const createListingMutation = useMutation(api.listings.createListing);
     const updateListingMutation = useMutation(api.listings.updateListing);
     const deleteListingMutation = useMutation(api.listings.deleteListing);
@@ -458,35 +455,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
 
     const { show } = useToast();
 
-    // Convert DB structure to App structure
-    const products: Product[] = useMemo(() => {
-        if (!Array.isArray(liveProducts)) return [];
-        return liveProducts.filter((p: any) => p && p._id).map((p: any) => ({
-            ...p,
-            id: p._id,
-            metrics: p.metrics ?? { views: 0, favorites: 0, orders: 0 },
-            seller: p.sellerId ? { 
-                id: p.sellerId, 
-                name: p.seller?.name || 'Unknown', 
-                username: p.seller?.username || (p.seller?.name ? `@${p.seller.name.toLowerCase().replace(/\s+/g, '')}` : '@vendedor'),
-                avatar: p.seller?.avatar,
-                type: p.seller?.type || 'individual', 
-                rating: p.seller?.sellerRating || 0 
-            } : { 
-                id: 'unknown', 
-                name: 'Unknown', 
-                username: '@vendedor',
-                type: 'individual', 
-                rating: 0 
-            },
-            shippingProfile: p.shippingProfile ?? { weightKg: 1, allowPickup: false, shipsFrom: { city: 'Unknown', country: 'AR', postalCode: '0000' }, handlingTimeHours: 24 },
-            // Adapter: Map backend 'image'/'gallery' to frontend 'images' array
-            images: p.images ?? [
-                ...(p.image ? [{ id: 'main', url: p.image, isPrimary: true }] : []),
-                ...(p.gallery ? p.gallery.map((url: string, idx: number) => ({ id: `gal_${idx}`, url, isPrimary: false })) : [])
-            ],
-        }));
-    }, [liveProducts]);
+    // Products sync moved to useMarketplaceProducts.ts
 
     // Convert Backend Orders to App Structure
     // We sync this directly to state.orders via effect or just memo
@@ -639,7 +608,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const getProductById = (productId: string) =>
-        products.find((product) => product.id === productId);
+        state.products.find((product: Product) => product.id === productId);
 
     const getShippingOptions = (items: CartItem[], destinationPostalCode?: string) => {
         const methods: ShippingMethod[] = ['standard', 'express', 'pickup'];
@@ -817,7 +786,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const contextValue = useMemo<MarketplaceContextType>(() => ({
-        products: products, // Use derived query result directly
+        products: state.products, // Use derived query result directly
         orders: backendOrders, // Use derived query result directly
         createProduct,
         updateProduct,
@@ -856,7 +825,7 @@ export const MarketplaceProvider = ({ children }: { children: ReactNode }) => {
             });
             return { success: true };
         },
-    }), [products, backendOrders, state.wishlist, user, show, addDisputeMessageMutation, escalateDisputeMutation, confirmDelivery]);
+    }), [state.products, backendOrders, state.wishlist, user, show, addDisputeMessageMutation, escalateDisputeMutation, confirmDelivery]);
 
     return (
         <MarketplaceContext.Provider value={contextValue}>

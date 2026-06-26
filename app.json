@@ -44,15 +44,14 @@
           "paymentProvider": "Play Store"
         }
       ],
+      "@sentry/react-native",
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.ramgos",
+          "merchantIdentifier": "com.fclaiba.ramgosmobile.merchant",
           "enableGooglePay": true
         }
-      ],
-      "@sentry/react-native",
-      "expo-sharing"
+      ]
     ],
     "extra": {
       "eas": {

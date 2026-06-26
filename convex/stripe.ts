@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import Stripe from "stripe";
 import { requireActor } from "./authHelpers";
 
@@ -301,8 +301,8 @@ export const createConnectAccountLink = action({
             throw new Error("El usuario no tiene una cuenta de Stripe Connect vinculada.");
         }
 
-        // Delegamos a la acción de Connect V2 existente
-        return await ctx.runAction(api.connect.createOnboardingLink, {
+        // Delegamos a la accion de Connect V2 existente
+        return await ctx.runAction(internal.connect.internalCreateOnboardingLink, {
             actorId: args.userId,
             accountId: accountId,
         });
@@ -326,8 +326,8 @@ export const executePayout = action({
         arrivalDate: number | null;
         isMock: boolean;
     }> => {
-        // Delegamos a la acción de Connect V2 existente
-        return await ctx.runAction(api.connect.requestInstantPayout, {
+        // Delegamos a la accion de Connect V2 existente
+        return await ctx.runAction(internal.connect.internalRequestInstantPayout, {
             actorId: args.userId,
             userId: args.userId,
             amountInCents: args.amountInCents,
@@ -556,4 +556,262 @@ export const internalReleasePaymentAction = internalAction({
             });
         }
     },
+});
+
+export const internalProcessMultiVendorCart = internalAction({
+    args: {
+        stripePaymentIntentId: v.string(),
+        userId: v.string(),
+        cartId: v.string(), // This is the transfer_group
+        amount: v.number(),
+    },
+    handler: async (ctx, args) => {
+        // Fetch cart items via internal query
+        const cartItems = await ctx.runQuery(internal.stripe.internalGetCartForUser, { userId: args.userId });
+        if (!cartItems || cartItems.length === 0) {
+            console.log(`[Stripe Connect] Cart empty for user ${args.userId}. Skipping multi-vendor split.`);
+            return;
+        }
+
+        // Group by sellerId
+        const sellerGroups: Record<string, typeof cartItems> = {};
+        for (const item of cartItems) {
+            const sellerId = item.snapshot?.sellerId || "ramgos";
+            if (!sellerGroups[sellerId]) sellerGroups[sellerId] = [];
+            sellerGroups[sellerId].push(item);
+        }
+
+        for (const [sellerId, items] of Object.entries(sellerGroups)) {
+            // Calculate subtotal
+            const subtotal = items.reduce((sum: number, i: any) => sum + ((i.snapshot?.price || 0) * i.quantity), 0);
+            const commission = Math.round(subtotal * 0.12 * 100); // 12% in cents
+            const sellerNet = Math.round(subtotal * 100) - commission;
+
+            // Create Order for this seller with escrow fields
+            const orderId = await ctx.runMutation(internal.stripe.internalCreateSubOrder, {
+                userId: args.userId,
+                sellerId,
+                items: items.map((i: any) => ({
+                    listingId: i.listingId,
+                    title: i.snapshot?.title || "Producto",
+                    quantity: i.quantity,
+                    price: i.snapshot?.price || 0,
+                })),
+                total: subtotal,
+                netAmountCents: sellerNet,
+                commissionCents: commission,
+                transferGroup: args.cartId,
+                stripePaymentIntentId: args.stripePaymentIntentId,
+            });
+
+            console.log(`[Stripe Connect] Escrow: Sub-order created for seller ${sellerId}. Funds held in platform. Transfer delayed.`);
+        }
+
+        // Clear Cart
+        await ctx.runMutation(internal.cart.internalClearCart, { userId: args.userId });
+    }
+});
+
+
+
+export const internalGetCartForUser = internalQuery({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        return await ctx.db.query("cart").withIndex("by_user", q => q.eq("userId", args.userId)).collect();
+    }
+});
+
+export const internalCreateSubOrder = internalMutation({
+    args: {
+        userId: v.string(),
+        sellerId: v.string(),
+        items: v.array(v.object({
+            listingId: v.string(),
+            title: v.string(),
+            quantity: v.number(),
+            price: v.number(),
+        })),
+        total: v.number(),
+        netAmountCents: v.number(),
+        commissionCents: v.number(),
+        transferGroup: v.string(),
+        stripePaymentIntentId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const orderId = await ctx.db.insert("orders", {
+            userId: args.userId,
+            sellerId: args.sellerId,
+            items: args.items,
+            total: args.total,
+            currency: "USD",
+            status: "paid_escrow", // Delayed payout
+            escrowState: "held",
+            netAmountCents: args.netAmountCents,
+            commissionCents: args.commissionCents,
+            transferGroup: args.transferGroup,
+            stripePaymentIntentId: args.stripePaymentIntentId,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
+        return orderId;
+    }
+});
+
+export const releaseEscrowFunds = action({
+    args: { orderId: v.id("orders") },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx);
+        const userId = actor.idString;
+
+        // Fetch order info via internal query
+        const order = await ctx.runQuery(internal.stripe.internalGetOrderForEscrow, { orderId: args.orderId, userId });
+        if (!order) throw new Error("Order not found or not authorized");
+        if (order.status !== "paid_escrow" || order.escrowState !== "held") {
+            throw new Error("Order is not in held escrow state");
+        }
+        if (!order.netAmountCents || !order.transferGroup) {
+            throw new Error("Order missing escrow transfer data");
+        }
+
+        const sellerConnectAccountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: order.sellerId as any });
+        if (!sellerConnectAccountId) {
+            throw new Error("Seller does not have an active Connect account");
+        }
+
+        // Execute delayed transfer
+        const transfer = await stripe.transfers.create({
+            amount: order.netAmountCents,
+            currency: "usd",
+            destination: sellerConnectAccountId,
+            transfer_group: order.transferGroup,
+            metadata: {
+                orderId: String(args.orderId),
+                action: "escrow_release",
+            },
+        });
+
+        // Mark as completed in DB
+        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, { 
+            orderId: args.orderId,
+            stripeTransferId: transfer.id 
+        });
+
+        return { success: true, transferId: transfer.id };
+    }
+});
+
+export const internalGetOrderForEscrow = internalQuery({
+    args: { orderId: v.id("orders"), userId: v.string() },
+    handler: async (ctx, args) => {
+        const order = await ctx.db.get(args.orderId);
+        // Only buyer (or admin, but here buyer) can release
+        if (!order || order.userId !== args.userId) return null;
+        return order;
+    }
+});
+
+export const internalConfirmOrderEscrow = internalMutation({
+    args: { 
+        orderId: v.id("orders"), 
+        stripeTransferId: v.optional(v.string()),
+        status: v.optional(v.string()),
+        escrowState: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.orderId, {
+            ...(args.status ? { status: args.status as any } : { status: "completed" }),
+            ...(args.escrowState ? { escrowState: args.escrowState as any } : { escrowState: "released" }),
+            ...(args.stripeTransferId ? { stripeTransferId: args.stripeTransferId } : {}),
+            updatedAt: new Date().toISOString(),
+        });
+    }
+});
+
+export const adminForceReleaseEscrow = action({
+    args: { orderId: v.id("orders") },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx);
+        if (actor.role !== "admin" && actor.role !== "developer") {
+            throw new Error("No autorizado");
+        }
+
+        const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, { orderId: args.orderId });
+        if (!order) throw new Error("Order not found");
+        if (order.status !== "paid_escrow" || order.escrowState !== "held") {
+            throw new Error("Order is not in held escrow state");
+        }
+        if (!order.netAmountCents || !order.transferGroup) {
+            throw new Error("Order missing escrow transfer data");
+        }
+
+        const sellerConnectAccountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: order.sellerId as any });
+        if (!sellerConnectAccountId) {
+            throw new Error("Seller does not have an active Connect account");
+        }
+
+        // Execute delayed transfer (Forced by Admin)
+        const transfer = await stripe.transfers.create({
+            amount: order.netAmountCents,
+            currency: "usd",
+            destination: sellerConnectAccountId,
+            transfer_group: order.transferGroup,
+            metadata: {
+                orderId: String(args.orderId),
+                forcedByAdmin: "true",
+            },
+        });
+
+        // Patch order status to completed
+        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, {
+            orderId: args.orderId,
+            stripeTransferId: transfer.id,
+            status: "completed"
+        });
+
+        return { success: true, transferId: transfer.id };
+    }
+});
+
+export const adminRefundEscrow = action({
+    args: { orderId: v.id("orders") },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx);
+        if (actor.role !== "admin" && actor.role !== "developer") {
+            throw new Error("No autorizado");
+        }
+
+        const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, { orderId: args.orderId });
+        if (!order) throw new Error("Order not found");
+        if (order.status !== "paid_escrow" || order.escrowState !== "held") {
+            throw new Error("Order is not in held escrow state");
+        }
+        if (!order.stripePaymentIntentId) {
+            throw new Error("Order missing payment intent ID, cannot refund");
+        }
+
+        // Execute Refund for the specific amount (if multiple orders exist in cart, we do a partial refund)
+        // Wait, since we are doing Separate Charges and Transfers, the buyer's money is in the platform.
+        // We can refund the partial amount from the original PaymentIntent.
+        const refund = await stripe.refunds.create({
+            payment_intent: order.stripePaymentIntentId,
+            amount: Math.round(order.total * 100), // Refund total of this order
+            reason: "requested_by_customer"
+        });
+
+        // Patch order status to cancelled and refund escrow state
+        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, {
+            orderId: args.orderId,
+            status: "cancelled",
+            escrowState: "refunded"
+        });
+
+        return { success: true, refundId: refund.id };
+    }
+});
+
+export const internalGetOrderForAdminEscrow = internalQuery({
+    args: { orderId: v.id("orders") },
+    handler: async (ctx, args) => {
+        return await ctx.db.get(args.orderId);
+    }
 });

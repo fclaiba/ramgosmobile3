@@ -6,7 +6,6 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { useCart } from '../contexts/CartContext';
-import { usePoints, DISCOUNT_TIERS } from '../contexts/PointsContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useMarketplace, ShippingMethod, ShippingQuote } from '../contexts/MarketplaceContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -15,8 +14,6 @@ import { useActionGate } from '../utils/useActionGate';
 
 export default function CartScreen({ navigation }: any) {
     const { items, removeItem, updateQuantity, totalItems, totalPrice, clearCart } = useCart();
-    const { points } = usePoints();
-    const [selectedDiscount, setSelectedDiscount] = useState<number>(0);
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -25,15 +22,6 @@ export default function CartScreen({ navigation }: any) {
 
     // Obtener descuentos disponibles
     const { getShippingOptions } = useMarketplace();
-
-    const availableDiscounts = DISCOUNT_TIERS.filter(
-        (tier) => points >= tier.points && totalPrice >= tier.discount
-    );
-
-    const appliedDiscount =
-        selectedDiscount > 0
-            ? DISCOUNT_TIERS.find((t) => t.points === selectedDiscount)?.discount || 0
-            : 0;
 
     const requiresShipping = useMemo(
         () => items.some((item) => item.type === 'product'),
@@ -69,8 +57,7 @@ export default function CartScreen({ navigation }: any) {
     }, [shippingOptions, selectedShippingMethod]);
 
     const shippingCost = requiresShipping ? activeShippingQuote?.cost ?? 0 : 0;
-
-    const finalPrice = Math.max(0, totalPrice - appliedDiscount + shippingCost);
+    const finalPrice = totalPrice + shippingCost;
 
     const shippingLabels: Record<ShippingMethod, string> = {
         standard: 'Estándar',
@@ -97,9 +84,7 @@ export default function CartScreen({ navigation }: any) {
         };
 
         navigation.navigate('Payment', {
-            amount: finalPrice,
-            discountUsedPoints: selectedDiscount,
-            discountAmount: appliedDiscount,
+            subtotal: totalPrice,
             shippingMethod: requiresShipping
                 ? activeShippingQuote?.method ?? selectedShippingMethod
                 : 'pickup',
@@ -188,48 +173,7 @@ export default function CartScreen({ navigation }: any) {
                             ))}
                         </View>
 
-                        {/* DESCUENTOS SECTION - Hide if only subscriptions in cart */}
-                        {!items.every(item => item.type === 'subscription') && (
-                            <>
-                                <Text style={styles.sectionTitle}>Puntos y Descuentos</Text>
-                                <Card style={styles.discountCard}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                                            <Star size={16} color="#7c3aed" fill="#7c3aed" />
-                                            <Text style={{ color: isDark ? '#F9FAFB' : '#000' }}>Tus Puntos</Text>
-                                        </View>
-                                        <Badge variant="secondary"><Text style={{ color: isDark ? '#C4B5FD' : '#5b21b6' }}>{points} pts</Text></Badge>
-                                    </View>
 
-                                    {availableDiscounts.length > 0 ? (
-                                        <View>
-                                            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#666', marginBottom: 8 }}>Usar descuento:</Text>
-                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                                                <TouchableOpacity
-                                                    style={[styles.discountOption, selectedDiscount === 0 && styles.discountSelected]}
-                                                    onPress={() => setSelectedDiscount(0)}
-                                                >
-                                                    <Text style={[styles.discountText, selectedDiscount === 0 && styles.discountSelectedText]}>Ninguno</Text>
-                                                </TouchableOpacity>
-                                                {availableDiscounts.map(tier => (
-                                                    <TouchableOpacity
-                                                        key={tier.points}
-                                                        style={[styles.discountOption, selectedDiscount === tier.points && styles.discountSelected]}
-                                                        onPress={() => setSelectedDiscount(tier.points)}
-                                                    >
-                                                        <Text style={[styles.discountText, selectedDiscount === tier.points && styles.discountSelectedText]}>
-                                                            -${tier.discount} ({tier.points}pts)
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                ))}
-                                            </ScrollView>
-                                        </View>
-                                    ) : (
-                                        <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#999' }}>No tienes suficientes puntos para descuentos en esta compra.</Text>
-                                    )}
-                                </Card>
-                            </>
-                        )}
 
                         {requiresShipping && (
                             <>
@@ -331,12 +275,6 @@ export default function CartScreen({ navigation }: any) {
                                 <Text style={styles.summaryLabel}>Subtotal</Text>
                                 <Text style={styles.summaryValue}>${totalPrice.toFixed(2)}</Text>
                             </View>
-                            {appliedDiscount > 0 && (
-                                <View style={styles.summaryRow}>
-                                    <Text style={[styles.summaryLabel, { color: '#16a34a' }]}>Descuento</Text>
-                                    <Text style={[styles.summaryValue, { color: '#16a34a' }]}>-${appliedDiscount.toFixed(2)}</Text>
-                                </View>
-                            )}
                             <View style={styles.summaryRow}>
                                 <Text style={styles.summaryLabel}>Envío</Text>
                                 <Text style={styles.summaryValue}>

@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "test": "jest",
-    "test:constitution": "jest src/contexts/__tests__/constitution.test.tsx src/contexts/__tests__/marketplace-escrow.test.tsx src/contexts/__tests__/RewardsContext.test.tsx src/contexts/__tests__/endtoend-logic.test.tsx"
+    "test:constitution": "jest src/contexts/__tests__/constitution.test.tsx src/contexts/__tests__/marketplace-escrow.test.tsx src/contexts/__tests__/RewardsContext.test.tsx src/contexts/__tests__/endtoend-logic.test.tsx",
+    "check-readiness": "node scripts/check-readiness.js",
+    "db:seed": "npx convex run seed:seedE2E"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -21,6 +23,7 @@
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.8.0",
     "@stripe/stripe-react-native": "0.64.0",
+    "@types/stripe-v3": "^3.1.33",
     "convex": "^1.0.3",
     "expo": "^56.0.12",
     "expo-av": "~16.0.8",
@@ -41,7 +44,6 @@
     "jose": "^6.2.3",
     "lucide-react-native": "^0.562.0",
     "nativewind": "^4.2.1",
-    "pigeon-maps": "^0.22.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
@@ -55,9 +57,8 @@
     "react-native-screens": "4.25.2",
     "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.2",
-    "react-native-worklets": "0.8.3",
     "resend": "^6.10.0",
-    "stripe": "^22.0.1",
+    "stripe": "^22.3.0",
     "tailwindcss": "^3.4.19"
   },
   "private": true,

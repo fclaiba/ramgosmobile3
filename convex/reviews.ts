@@ -303,3 +303,27 @@ export const getReviewStats = query({
         };
     },
 });
+
+export const getBySeller = query({
+    args: { sellerId: v.string() },
+    handler: async (ctx, args) => {
+        const listings = await ctx.db
+            .query("listings")
+            .filter(q => q.eq(q.field("sellerId"), args.sellerId))
+            .collect();
+
+        const listingIds = listings.map(l => l._id.toString());
+        if (listingIds.length === 0) return [];
+
+        let allReviews: any[] = [];
+        for (const listingId of listingIds) {
+            const reviews = await ctx.db
+                .query("reviews")
+                .withIndex("by_listing", q => q.eq("listingId", listingId))
+                .collect();
+            allReviews = allReviews.concat(reviews);
+        }
+
+        return allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+});

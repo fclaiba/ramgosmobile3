@@ -32,6 +32,7 @@ export default defineSchema({
         // Fase 3 - Stripe Payments
         stripeCustomerId: v.optional(v.string()),
         stripeConnectAccountId: v.optional(v.string()),
+        stripeConnectStatus: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("rejected"))),
 
         // Seller Metrics
         sellerRating: v.optional(v.number()), // 0-5
@@ -193,7 +194,8 @@ export default defineSchema({
             v.literal('completed'),
             v.literal('disputed'),
             v.literal('cancelled'),
-            v.literal('pending')
+            v.literal('pending'),
+            v.literal('paid_escrow')
         ),
         shipping: v.optional(v.object({
             method: v.string(),
@@ -209,6 +211,10 @@ export default defineSchema({
             carrier: v.optional(v.string()),
         })),
         escrowState: v.optional(v.string()), // 'held', 'released', etc.
+        netAmountCents: v.optional(v.number()),
+        commissionCents: v.optional(v.number()),
+        transferGroup: v.optional(v.string()),
+        stripeTransferId: v.optional(v.string()),
         createdAt: v.string(),
         updatedAt: v.string(),
     })

@@ -274,8 +274,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         setState(prev => ({
                             ...prev,
                             session: storedSession,
-                            user: storedSession._mockUser || null,
-                            status: storedSession._mockUser ? 'authenticated' : 'loading',
+                            // CRITICAL: We intentionally do NOT set 'user' here yet.
+                            // We wait for the Convex 'getUser' query to confirm the user exists.
+                            // Otherwise, stale IDs from local storage cause useQuery crashes!
+                            user: null, 
+                            status: 'loading',
                         }));
                     } else {
                         setState(prev => ({ ...prev, status: 'anonymous' }));
@@ -292,6 +295,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Sync Query with Local State
     useEffect(() => {
+        // If Convex query finished and user is not found (e.g. DB wiped), log out!
+        if (userData === null && state.session) {
+            storage.removeItem(CURRENT_SESSION_KEY).catch(console.error);
+            setState(prev => ({
+                ...prev,
+                status: 'anonymous',
+                session: null,
+                user: null,
+            }));
+            return;
+        }
+
         if (userData && state.session?.userId === userData._id) {
             const serverUser: PublicUser = {
                 id: userData._id as string,

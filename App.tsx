@@ -21,24 +21,14 @@ import { BusinessProvider } from './src/contexts/BusinessContext';
 import { MarketplaceProvider } from './src/contexts/MarketplaceContext';
 import { ToastProvider } from './src/contexts/ToastContext';
 import { ReferralProvider } from './src/contexts/ReferralContext';
-import { StripeConnectProvider } from './src/contexts/StripeConnectContext';
 import { EscrowProvider } from './src/contexts/EscrowContext';
 import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
 import CartSidebar from './src/components/CartSidebar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PointsFeedback } from './src/components/ui/PointsFeedback';
-import { StripeWrapper } from './src/components/StripeWrapper';
 
 import { Platform } from 'react-native';
 
-const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_KEY;
-if (STRIPE_PUBLISHABLE_KEY && STRIPE_PUBLISHABLE_KEY.startsWith('sk_')) {
-    throw new Error('CRITICAL SECURITY ERROR: You have configured a Secret Key (sk_) as EXPO_PUBLIC_STRIPE_KEY. This will expose your secret to the public internet. Use a Publishable Key (pk_) instead.');
-}
-if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
-    throw new Error('Missing EXPO_PUBLIC_STRIPE_KEY. Configure Stripe publishable key for production builds.');
-}
-const stripePublishableKey = STRIPE_PUBLISHABLE_KEY ?? 'pk_test_mock_fallback';
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
 // Suppress known react-native-web aria-hidden warning caused by Modals
@@ -114,12 +104,10 @@ import ProductDetailScreen from './src/screens/marketplace/ProductDetailScreen';
 import WalletScreen from './src/screens/finance/WalletScreen';
 import CampaignManagerScreen from './src/screens/marketing/CampaignManagerScreen';
 import OrderDetailScreen from './src/screens/marketplace/OrderDetailScreen';
-import CheckoutScreen from './src/screens/marketplace/CheckoutScreen';
 import DisputeReasonScreen from './src/screens/marketplace/DisputeReasonScreen';
 import DisputeChatScreen from './src/screens/marketplace/DisputeChatScreen';
 import SellerWalletScreen from './src/screens/marketplace/SellerWalletScreen';
 import DisputeScreen from './src/screens/marketplace/DisputeScreen';
-import StripeConnectScreen from './src/screens/marketing/StripeConnectScreen';
 
 // Business Screens
 import BusinessProfileScreen from './src/screens/business/BusinessProfileScreen';
@@ -199,8 +187,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="CampaignManager" component={CampaignManagerScreen} />
                     <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
                     <Stack.Screen name="Cart" component={CartScreen} />
-                    <Stack.Screen name="Checkout" component={CheckoutScreen} />
-                    <Stack.Screen name="DisputeReason" component={DisputeReasonScreen} />
+                                        <Stack.Screen name="DisputeReason" component={DisputeReasonScreen} />
                     <Stack.Screen name="DisputeChat" component={DisputeChatScreen} />
                     <Stack.Screen name="SellerWallet" component={SellerWalletScreen} />
                     <Stack.Screen name="MiMascota" component={MiMascotaScreen} />
@@ -232,8 +219,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
                     <Stack.Screen name="MyListings" component={MyListingsScreen} />
                     <Stack.Screen name="AddEditProduct" component={AddEditProductScreen} />
-                    <Stack.Screen name="StripeConnect" component={StripeConnectScreen} />
-                    {/* Maps & QR Module */}
+                                        {/* Maps & QR Module */}
                     {/* MapExplorer integrated into Marketplace */}
                     <Stack.Screen name="BusinessDetail" component={PublicBusinessProfileScreen} />
                     <Stack.Screen name="BonusQR" component={BonusQRScreen} />
@@ -262,7 +248,10 @@ const convex = new ConvexReactClient(convexUrl, {
     unsavedChangesWarning: false,
 });
 
+import { PaymentProvider } from './src/payments/PaymentProvider';
 import { CrashHandler } from './src/components/CrashHandler';
+
+const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_KEY;
 
 function App() {
     console.log('[DEBUG] App: Rendering started');
@@ -273,11 +262,12 @@ function App() {
                     <ThemeProvider>
                         <SafeAreaProvider>
                             <ConvexProvider client={convex}>
-                                <ToastProvider>
-                                    <StripeWrapper publishableKey={stripePublishableKey}>
-                                        <AuthProvider>
-                                            <PointsProvider>
-                                                <WalletProvider>
+                                {stripePublishableKey ? (
+                                    <PaymentProvider stripePublishableKey={stripePublishableKey}>
+                                        <ToastProvider>
+                                            <AuthProvider>
+                                                    <PointsProvider>
+                                                        <WalletProvider>
                                                     <FintechProvider>
                                                         <RewardsProvider>
                                                             <BusinessProvider>
@@ -288,10 +278,8 @@ function App() {
                                                                                 <NotificationsProvider>
                                                                                     <SocialProvider>
                                                                                         <ReferralProvider>
-                                                                                            <StripeConnectProvider>
-                                                                                                <PointsFeedback />
+                                                                                            <PointsFeedback />
                                                                                                 <AppNavigator />
-                                                                                            </StripeConnectProvider>
                                                                                         </ReferralProvider>
                                                                                     </SocialProvider>
                                                                                 </NotificationsProvider>
@@ -305,8 +293,13 @@ function App() {
                                                 </WalletProvider>
                                             </PointsProvider>
                                         </AuthProvider>
-                                    </StripeWrapper>
-                                </ToastProvider>
+                                    </ToastProvider>
+                                </PaymentProvider>
+                                ) : (
+                                    <Text style={{ marginTop: 100, textAlign: 'center' }}>
+                                        Falta configurar EXPO_PUBLIC_STRIPE_KEY en .env.local
+                                    </Text>
+                                )}
                             </ConvexProvider>
                         </SafeAreaProvider>
                     </ThemeProvider>

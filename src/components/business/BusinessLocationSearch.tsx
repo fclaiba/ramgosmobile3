@@ -2,14 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Search, MapPin } from 'lucide-react-native';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
-const MOCK_PLACES = [
-    { id: '1', name: 'Restaurante El Criollo', address: 'Av. Corrientes 1234, Buenos Aires' },
-    { id: '2', name: 'Farmacia Central', address: 'Calle 50, Panamá City' },
-    { id: '3', name: 'Tienda de Ropa Moda', address: 'Shopping Center, Piso 2, Local 25' },
-    { id: '4', name: 'Café Java', address: 'Calle Real 456, Bogotá' },
-    { id: '5', name: 'Supermercado El Sol', address: 'Av. Libertador 7890, Santiago' },
-];
+
 
 interface Props {
     onSelect: (place: { name: string; address: string; placeId: string }) => void;
@@ -21,24 +17,11 @@ export const BusinessLocationSearch = ({ onSelect }: Props) => {
     const styles = getStyles(isDark);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
-    const [results, setResults] = useState<typeof MOCK_PLACES>([]);
+    const dbResults = useQuery(api.locations.search, { query: query.length > 2 ? query : "" });
+    const results = dbResults || [];
 
     const handleSearch = (text: string) => {
         setQuery(text);
-        if (text.length > 2) {
-            setLoading(true);
-            // Simulate API delay
-            setTimeout(() => {
-                const filtered = MOCK_PLACES.filter(p =>
-                    p.name.toLowerCase().includes(text.toLowerCase()) ||
-                    p.address.toLowerCase().includes(text.toLowerCase())
-                );
-                setResults(filtered);
-                setLoading(false);
-            }, 500);
-        } else {
-            setResults([]);
-        }
     };
 
     return (

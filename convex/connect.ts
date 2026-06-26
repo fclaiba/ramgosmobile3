@@ -447,6 +447,15 @@ export const internalSaveConnectFlags = internalMutation({
                 onboardingComplete: args.onboardingComplete,
             },
         });
+
+        // Sync back to users table
+        let newStatus: "pending" | "active" | "rejected" = "pending";
+        if (args.payoutsEnabled && args.onboardingComplete) {
+            newStatus = "active";
+        }
+        await ctx.db.patch(user._id, {
+            stripeConnectStatus: newStatus
+        });
     },
 });
 
@@ -640,6 +649,104 @@ export const requestInstantPayout = action({
             // pay the instant-payout fee and arrive within minutes (only
             // available for eligible debit cards). We default to standard.
             const payout = await withStripeBreadcrumb(
+                {
+                    api: "payouts.create",
+                    accountId,
+                    amountInCents: args.amountInCents,
+                    currency: args.currency ?? "usd",
+                    triggeredBy: String(args.userId),
+                },
+                () =>
+                    stripe.payouts.create(
+                        {
+                            amount: args.amountInCents,
+                            currency: args.currency ?? "usd",
+                            metadata: {
+                                triggeredBy: String(args.userId),
+                                source: "ramgos-app:requestInstantPayout",
+                            },
+                        },
+                        { stripeAccount: accountId },
+                    ),
+            );
+            return {
+                payoutId: payout.id,
+                amountInCents: payout.amount,
+                currency: payout.currency,
+                status: payout.status,
+                arrivalDate: payout.arrival_date ?? null,
+                isMock: false,
+            };
+        } catch (error: any) {
+            console.error("[Connect V2] requestInstantPayout error:", error);
+            throw new Error(
+                `No se pudo solicitar el payout: ${error.message}`,
+            );
+        }
+    },
+});
+
+export const internalCreateOnboardingLink = internalAction({
+    args: {
+        actorId: v.optional(v.any()),
+        accountId: v.string(),
+    },
+    handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
+        assertStripeConfigured();
+        if (!args.actorId) throw new Error("No autorizado.");
+
+        try {
+            const link = await (stripe as any).v2.core.accountLinks.create({
+                account: args.accountId,
+                use_case: {
+                    type: "account_onboarding",
+                    account_onboarding: {
+                        configurations: ["recipient"],
+                        refresh_url: "ramgos://onboarding/refresh",
+                        return_url: "ramgos://onboarding/complete",
+                    },
+                },
+            });
+            return { url: link.url, isMock: false };
+        } catch (error: any) {
+            console.error("[Connect V2] createOnboardingLink error:", error);
+            throw new Error(
+                `No se pudo generar el link de onboarding: ${error.message}`,
+            );
+        }
+    },
+});
+
+export const internalRequestInstantPayout = internalAction({
+    args: {
+        actorId: v.optional(v.any()),
+        userId: v.id("users"),
+        amountInCents: v.number(),
+        currency: v.optional(v.string()),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{
+        payoutId: string;
+        amountInCents: number;
+        currency: string;
+        status: string;
+        arrivalDate: number | null;
+        isMock: boolean;
+    }> => {
+        const accountId: string | null = await ctx.runQuery(
+            internal.connect.internalGetConnectAccountId,
+            { userId: args.userId },
+        );
+        if (!accountId) {
+            throw new Error(
+                "No tienes una cuenta de Stripe Connect. Completa el onboarding primero.",
+            );
+        }
+
+        try {
+            const payout: any = await withStripeBreadcrumb(
                 {
                     api: "payouts.create",
                     accountId,

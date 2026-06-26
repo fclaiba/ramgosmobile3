@@ -8,7 +8,7 @@ import { CheckCircle, Circle, MapPin, Calendar, Clock, ChevronDown } from 'lucid
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export type ListingType = 'product' | 'service' | 'event' | 'coupon';
+export type ListingType = 'product' | 'service' | 'event' | 'bono';
 
 interface BranchOption {
     id: string;
@@ -285,6 +285,9 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
     },
     col: {
         flex: 1,
+    },
+    inputGroup: {
+        gap: 8,
     },
     inputContainer: {
         marginBottom: 16,

@@ -8,6 +8,7 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useMarketplace } from '../contexts/MarketplaceContext';
+import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
 import { useUserLocation } from '../hooks/useUserLocation';
 import DarkMapView, { Marker, Circle } from '../components/map/DarkMapView';
 import { CustomMapMarker, type ListingType } from '../components/map/CustomMapMarker';
@@ -58,7 +59,8 @@ export default function MapExplorerScreen() {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
-    const { products } = useMarketplace();
+    const { } = useMarketplace();
+    const products = useMarketplaceProducts();
 
     const mapRef = useRef<any>(null);
     const { location, errorMsg: hookError, refetch: refetchLocation } = useUserLocation();

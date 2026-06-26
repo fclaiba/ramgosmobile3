@@ -91,7 +91,7 @@ export default function QRScannerScreen() {
     return (
         <View style={styles.container}>
             <CameraView
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 facing="back"
                 enableTorch={torchOn}
                 onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}

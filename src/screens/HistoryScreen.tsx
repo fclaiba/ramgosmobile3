@@ -8,13 +8,14 @@ import { Input } from '../components/ui/input';
 import { MobileHeader } from '../components/MobileHeader';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { MARKETPLACE_ESCROW_RELEASE_DAYS, useMarketplace } from '../contexts/MarketplaceContext';
+import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
 import { useFintech } from '../contexts/FintechContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { useAuth } from '../contexts/AuthContext';
 import { useEscrow } from '../contexts/EscrowContext';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 
@@ -32,6 +33,7 @@ interface HistoryItem {
     location: string;
     date: string;
     status: 'completed' | 'pending' | 'cancelled';
+    backendStatus?: string;
     orderId: string;
     category: string;
     paymentMethod: string;
@@ -53,10 +55,27 @@ export default function HistoryScreen({ navigation, route }: any) {
     const [activeTab, setActiveTab] = useState<'purchases' | 'sales'>(route?.params?.tab || 'purchases');
     const [purchaseKindFilter, setPurchaseKindFilter] = useState<PurchaseKindFilter>(route?.params?.filter || 'all');
     const [searchQuery, setSearchQuery] = useState('');
-    const { orders, products } = useMarketplace();
+    const { orders } = useMarketplace();
+    const products = useMarketplaceProducts();
     const { openEscrow } = useEscrow();
     const { payments: contextPayments } = useFintech();
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
+    const releaseEscrowFunds = useAction(api.stripe.releaseEscrowFunds);
+
+    const [isReleasingEscrow, setIsReleasingEscrow] = useState<Record<string, boolean>>({});
+
+    const handleReleaseEscrow = async (orderId: string) => {
+        setIsReleasingEscrow(prev => ({ ...prev, [orderId]: true }));
+        try {
+            await releaseEscrowFunds({ orderId: orderId as any });
+            show('Pago liberado exitosamente al vendedor.', 'success');
+        } catch (e: any) {
+            show(e.message || 'Error al liberar el pago.', 'error');
+        } finally {
+            setIsReleasingEscrow(prev => ({ ...prev, [orderId]: false }));
+        }
+    };
+
     const myBonos = useQuery(api.bonos.getMyBonos as any, { userId: user?.id }) || [];
     const mySellerBonos = useQuery(api.bonos.getBonosBySeller as any, { sellerId: user?.id }) || [];
     const [filtersOpen, setFiltersOpen] = useState(false);
@@ -183,6 +202,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                     location: order.shipping.destination.city ?? order.shipping.destination.country ?? 'A coordinar',
                     date: order.createdAt,
                     status,
+                    backendStatus: order.status,
                     orderId: order.id,
                     category: product?.category ?? 'Marketplace',
                     paymentMethod: 'Marketplace (escrow)',
@@ -598,6 +618,17 @@ export default function HistoryScreen({ navigation, route }: any) {
                                             <View style={styles.useBonoButton}>
                                                 <Text style={styles.useBonoText}>Tocar para escanear QR</Text>
                                             </View>
+                                        )}
+                                        {activeTab === 'purchases' && item.backendStatus === 'paid_escrow' && (
+                                            <TouchableOpacity
+                                                style={[styles.useBonoButton, { marginTop: 10, backgroundColor: isDark ? '#3B82F6' : '#2563EB' }]}
+                                                onPress={() => handleReleaseEscrow(item.orderId)}
+                                                disabled={isReleasingEscrow[item.orderId]}
+                                            >
+                                                <Text style={[styles.useBonoText, { color: 'white' }]}>
+                                                    {isReleasingEscrow[item.orderId] ? 'Procesando...' : 'Confirmar Recepción'}
+                                                </Text>
+                                            </TouchableOpacity>
                                         )}
                                     </View>
                                 </View>

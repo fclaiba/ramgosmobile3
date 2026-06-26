@@ -1,30 +1,5 @@
-/**
- * LocationPickerModal — native (iOS/Android) implementation.
- *
- * On web, Metro auto-resolves to `LocationPickerModal.web.tsx` which uses
- * `pigeon-maps`. This file uses `react-native-maps` (Google Maps under the
- * hood on Android via the API key configured in app.json, Apple Maps on
- * iOS by default).
- *
- * Behavior:
- *   1. On open, requests foreground location permission and centers on the
- *      user (or `initialLocation` if provided, or CABA as fallback).
- *   2. User taps the map → marker drops, we reverse-geocode to a human
- *      address with `expo-location`.
- *   3. "Confirmar" returns `{ lat, lng, address }` to the parent via
- *      `onSelect`.
- */
-
-import React, { useEffect, useRef, useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    Modal,
-    TouchableOpacity,
-    ActivityIndicator,
-} from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, type MapPressEvent } from 'react-native-maps';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import { X, Crosshair } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -39,13 +14,6 @@ interface LocationPickerModalProps {
     initialLocation?: { lat: number; lng: number };
 }
 
-const DEFAULT_REGION = {
-    latitude: -34.603722,
-    longitude: -58.381592,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-};
-
 export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     visible,
     onClose,
@@ -56,7 +24,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
-    const mapRef = useRef<MapView>(null);
 
     const [selectedCoord, setSelectedCoord] = useState<{ latitude: number; longitude: number } | null>(
         initialLocation
@@ -65,28 +32,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     );
     const [address, setAddress] = useState<string>('');
     const [loadingAddress, setLoadingAddress] = useState(false);
-    const [region, setRegion] = useState({
-        ...DEFAULT_REGION,
-        ...(initialLocation
-            ? { latitude: initialLocation.lat, longitude: initialLocation.lng }
-            : {}),
-    });
 
     const { location: hookLocation, refetch: refetchLocation } = useUserLocation();
-
-    useEffect(() => {
-        if (!visible || initialLocation) return;
-        if (hookLocation) {
-            const next = {
-                latitude: hookLocation.coords.latitude,
-                longitude: hookLocation.coords.longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
-            };
-            setRegion(next);
-            mapRef.current?.animateToRegion(next, 500);
-        }
-    }, [visible, initialLocation, hookLocation]);
 
     const reverseGeocode = async (lat: number, lng: number) => {
         setLoadingAddress(true);
@@ -115,24 +62,22 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
         }
     };
 
-    const handlePress = (event: MapPressEvent) => {
-        const { latitude, longitude } = event.nativeEvent.coordinate;
-        setSelectedCoord({ latitude, longitude });
-        void reverseGeocode(latitude, longitude);
-    };
+    useEffect(() => {
+        if (!visible) return;
+        if (selectedCoord) {
+            void reverseGeocode(selectedCoord.latitude, selectedCoord.longitude);
+        }
+    }, [visible]);
 
-    const recenterOnUser = async () => {
-        if (hookLocation) {
-            const next = {
-                latitude: hookLocation.coords.latitude,
-                longitude: hookLocation.coords.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-            };
-            setRegion(next);
-            mapRef.current?.animateToRegion(next, 400);
-        } else {
-            refetchLocation();
+    const handleGetCurrentLocation = async () => {
+        setLoadingAddress(true);
+        try {
+            const loc = await Location.getCurrentPositionAsync({});
+            setSelectedCoord({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+            void reverseGeocode(loc.coords.latitude, loc.coords.longitude);
+        } catch (e) {
+            console.log("Error getting location", e);
+            setLoadingAddress(false);
         }
     };
 
@@ -155,62 +100,27 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                     ]}
                 >
                     <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>
-                        Seleccionar Ubicación
+                        Ubicación
                     </Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <X size={24} color={isDark ? '#fff' : '#000'} />
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.mapWrap}>
-                    <MapView
-                        ref={mapRef}
-                        provider={PROVIDER_GOOGLE}
-                        style={styles.map}
-                        initialRegion={region}
-                        onPress={handlePress}
-                        showsUserLocation
-                        showsMyLocationButton={false}
-                    >
-                        {selectedCoord && (
-                            <Marker
-                                coordinate={selectedCoord}
-                                pinColor="#8B5CF6"
-                                draggable
-                                onDragEnd={(e) => {
-                                    const { latitude, longitude } = e.nativeEvent.coordinate;
-                                    setSelectedCoord({ latitude, longitude });
-                                    void reverseGeocode(latitude, longitude);
-                                }}
-                            />
-                        )}
-                    </MapView>
+                <View style={styles.contentWrap}>
+                    <Text style={{ color: isDark ? '#D1D5DB' : '#374151', textAlign: 'center', marginBottom: 20 }}>
+                        No necesitas ver un mapa pesado. Usa tu ubicación actual.
+                    </Text>
+                    
+                    <Button onPress={handleGetCurrentLocation} style={{ backgroundColor: '#8B5CF6', marginBottom: 20 }}>
+                        <Crosshair size={20} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Obtener Mi Ubicación Actual</Text>
+                    </Button>
 
-                    <TouchableOpacity
-                        style={[
-                            styles.crosshairBtn,
-                            { backgroundColor: isDark ? '#1F2937' : '#fff' },
-                        ]}
-                        onPress={recenterOnUser}
-                        accessibilityLabel="Centrar en mi ubicación"
-                    >
-                        <Crosshair size={20} color={isDark ? '#fff' : '#111'} />
-                    </TouchableOpacity>
-                </View>
-
-                <View
-                    style={[
-                        styles.footer,
-                        {
-                            paddingBottom: insets.bottom + 16,
-                            backgroundColor: isDark ? '#1F2937' : '#fff',
-                        },
-                    ]}
-                >
-                    {selectedCoord ? (
-                        <View>
+                    {selectedCoord && (
+                        <View style={{ marginTop: 20 }}>
                             <Text style={[styles.addressLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                                Ubicación seleccionada
+                                Ubicación seleccionada:
                             </Text>
                             {loadingAddress ? (
                                 <ActivityIndicator color="#8B5CF6" />
@@ -222,24 +132,31 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                                     {address || 'Coordenadas seleccionadas'}
                                 </Text>
                             )}
-                            <Button onPress={handleConfirm} style={{ marginTop: 16, backgroundColor: '#8B5CF6' }}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>
-                                    Confirmar Ubicación
-                                </Text>
-                            </Button>
                         </View>
-                    ) : (
-                        <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center' }}>
-                            Toca en el mapa para seleccionar una ubicación
-                        </Text>
                     )}
+                </View>
+
+                <View
+                    style={[
+                        styles.footer,
+                        {
+                            paddingBottom: insets.bottom + 16,
+                            backgroundColor: isDark ? '#1F2937' : '#fff',
+                        },
+                    ]}
+                >
+                    <Button onPress={handleConfirm} disabled={!selectedCoord} style={{ backgroundColor: selectedCoord ? '#8B5CF6' : '#9CA3AF' }}>
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+                            Confirmar Ubicación
+                        </Text>
+                    </Button>
                 </View>
             </View>
         </Modal>
     );
 };
 
-const getStyles = (isDark: any) => StyleSheet.create({
+const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     header: {
         padding: 16,
@@ -254,23 +171,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     title: { fontSize: 18, fontWeight: 'bold' },
     closeBtn: { padding: 4 },
-    mapWrap: { flex: 1, overflow: 'hidden', position: 'relative' },
-    map: { flex: 1 },
-    crosshairBtn: {
-        position: 'absolute',
-        right: 16,
-        bottom: 16,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
-    },
+    contentWrap: { flex: 1, padding: 24, justifyContent: 'center' },
     footer: {
         padding: 16,
         borderTopLeftRadius: 16,

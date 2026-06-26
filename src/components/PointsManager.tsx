@@ -101,7 +101,7 @@ export function PointsManager() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 locations={[0, 0.6, 1]}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
             />
             {/* Top Row: Tier & Value */}
             <View style={styles.heroTopRow}>

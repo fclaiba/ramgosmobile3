@@ -12,7 +12,7 @@ const zendeskEmail = process.env.ZENDESK_EMAIL;
 const zendeskApiToken = process.env.ZENDESK_API_TOKEN;
 
 const stripe = new Stripe(stripeSecretKey!, {
-    apiVersion: "2024-04-10" as any,
+    apiVersion: "2026-06-24.dahlia" as any,
 });
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,7 @@ http.route({
         try {
             if (stripeWebhookSecret) {
                 const signature = request.headers.get("stripe-signature") as string;
-                event = stripe.webhooks.constructEvent(body, signature, stripeWebhookSecret);
+                event = await stripe.webhooks.constructEventAsync(body, signature, stripeWebhookSecret);
             } else {
                 console.log("[Development Mock] Skipped Stripe Webhook signature validation");
                 event = JSON.parse(body) as Stripe.Event;
@@ -98,20 +98,35 @@ http.route({
                         const pi = event.data.object as Stripe.PaymentIntent;
                         console.log(`[Webhook] PaymentIntent ${pi.id} succeeded (${pi.amount / 100} USD)`);
 
-                        await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
-                            stripePaymentIntentId: pi.id,
-                            orderId: pi.metadata?.orderId,
-                        });
+                        // Wait, check if this is a multi-vendor cart payment (has cartId)
+                        const cartId = pi.metadata?.cartId;
+                        const userId = pi.metadata?.userId;
+                        
+                        if (cartId && userId) {
+                            console.log(`[Webhook] Processing multi-vendor cart ${cartId} for user ${userId}`);
+                            await ctx.runAction(internal.stripe.internalProcessMultiVendorCart, {
+                                stripePaymentIntentId: pi.id,
+                                userId: userId,
+                                cartId: cartId,
+                                amount: pi.amount,
+                            });
+                        } else {
+                            // Standard single-order fallback
+                            await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
+                                stripePaymentIntentId: pi.id,
+                                orderId: pi.metadata?.orderId,
+                            });
 
-                        const orderId = pi.metadata?.orderId;
-                        if (orderId) {
-                            try {
-                                await ctx.runMutation(internal.orders.internalUpdateOrderStatus, {
-                                    orderId: orderId as any,
-                                    status: "payment_received",
-                                });
-                            } catch (err) {
-                                console.error("[Webhook] Failed to update order status:", err);
+                            const orderId = pi.metadata?.orderId;
+                            if (orderId) {
+                                try {
+                                    await ctx.runMutation(internal.orders.internalUpdateOrderStatus, {
+                                        orderId: orderId as any,
+                                        status: "payment_received",
+                                    });
+                                } catch (err) {
+                                    console.error("[Webhook] Failed to update order status:", err);
+                                }
                             }
                         }
 

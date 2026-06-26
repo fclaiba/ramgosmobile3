@@ -13,7 +13,7 @@ import Animated, {
     FadeInDown,
 } from 'react-native-reanimated';
 import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
-import { useAction } from 'convex/react';
+import { useAction, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import {
     initIapConnection,
@@ -47,9 +47,8 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
     const validateAppleReceiptAction = useAction(
         api.iapActions.validateAppleReceipt
     );
-    const validateGoogleReceiptAction = useAction(
-        api.iapActions.validateGoogleReceipt
-    );
+    const validateGoogleReceiptAction = useAction(api.iapActions.validateGoogleReceipt);
+    const plansData = useQuery(api.subscriptions.getPlans);
 
     useEffect(() => {
         if (isIapSupported()) {
@@ -334,26 +333,26 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                         {user?.role !== 'business' && (
                             <PlanCard
                                 title="Usuario PRO"
-                                price={SUBSCRIPTION_PLANS.pro.priceMonthlyUsd.toFixed(2)}
+                                price={plansData?.pro?.priceMonthlyUsd || 2.99.toFixed(2)}
                                 tier="pro"
                                 icon={Crown}
                                 color="#F59E0B"
                                 gradient={['#F59E0B', '#D97706']}
                                 recommended={true}
-                                features={SUBSCRIPTION_PLANS.pro.perks}
+                                features={plansData?.pro?.perks || []}
                             />
                         )}
 
                         {user?.role === 'business' && (
                             <PlanCard
                                 title="Negocio Verificado"
-                                price={SUBSCRIPTION_PLANS.business.priceMonthlyUsd.toFixed(2)}
+                                price={plansData?.business?.priceMonthlyUsd || 5.99.toFixed(2)}
                                 tier="business"
                                 icon={ShieldCheck}
                                 color="#3B82F6"
                                 gradient={['#3B82F6', '#2563EB']}
                                 recommended={true}
-                                features={SUBSCRIPTION_PLANS.business.perks}
+                                features={plansData?.business?.perks || []}
                             />
                         )}
                     </View>

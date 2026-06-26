@@ -54,12 +54,10 @@ export default function ProfileScreen({ navigation }: any) {
     });
 
     const [stats, setStats] = useState<UserStats>({
-        purchases: 28,
-        bonuses: 12,
-        events: 5,
-        savings: 1250,
-        // level: 8, // Removed mock
-        // expProgress: 65, // Removed mock
+        purchases: 0,
+        bonuses: 0,
+        events: 0,
+        savings: 0,
     });
 
     const [editedProfile, setEditedProfile] = useState(profile);
@@ -217,9 +215,9 @@ export default function ProfileScreen({ navigation }: any) {
                                 <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' }}>
                                     {nextTier ? `Próximo: ${nextTier.label}` : 'Nivel Máximo'}
                                 </Text>
-                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{Math.floor(progressPercentage)}%</Text>
+                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{(user as any)?.expProgress || 0}%</Text>
                             </View>
-                            {renderProgressBar(progressPercentage)}
+                            {renderProgressBar((user as any)?.expProgress || 0)}
                         </View>
                     </View>
                 </View>
@@ -396,6 +394,23 @@ export default function ProfileScreen({ navigation }: any) {
                     </View>
 
                     {/* SETTINGS MENU */}
+                    {['admin', 'developer'].includes((user as any)?.role) && (
+                        <>
+                            <Text style={styles.sectionHeader}>Administración</Text>
+                            <View style={styles.card}>
+                                <TouchableOpacity style={styles.settingsItem} onPress={() => navigation.navigate('AdminDashboard')}>
+                                    <View style={styles.settingsLeft}>
+                                        <View style={styles.settingsIcon}>
+                                            <Shield size={18} color="#EF4444" />
+                                        </View>
+                                        <Text style={[styles.settingsLabel, { color: '#EF4444' }]}>Panel de Disputas y Pagos</Text>
+                                    </View>
+                                    <ChevronRight size={18} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
+
                     <Text style={styles.sectionHeader}>Ajustes</Text>
                     <View style={styles.card}>
                         {settingsOptions.map((opt, i) => (

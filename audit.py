@@ -120,7 +120,7 @@ def analyze_security(codebase: Codebase) -> List[Finding]:
 
     # Global Secrets Check
     for rel_path, content in codebase.files_cache.items():
-        if rel_path.endswith((".json", ".mjs")): continue
+        if rel_path.endswith((".json", ".mjs")) or ".env" in rel_path: continue
         
         for pat, label in secret_patterns:
             for m in re.finditer(pat, content, re.IGNORECASE):

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useMarketplace } from '../contexts/MarketplaceContext';
+import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
 import { useFavorites } from '../contexts/FavoritesContext';
 import { useTheme } from '../contexts/ThemeContext'; // Import useTheme
 
@@ -85,7 +86,8 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const { addItem, openCart, items: cartItems } = useCart();
     const { user, requireAuth } = useAuth();
     const { isFavorite, toggleFavorite } = useFavorites();
-    const { products } = useMarketplace();
+    const { } = useMarketplace();
+    const products = useMarketplaceProducts();
     const { theme, colorScheme } = useTheme(); // Use theme
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -177,11 +179,11 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             const newLoc = { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude };
             setAdvancedFilters(prev => ({ ...prev, searchLocation: newLoc }));
             setCurrentMapCenter(newLoc);
-        } else if (user?.location && !userLocation && !activeParams?.focusLocation) {
-            setAdvancedFilters(prev => ({ ...prev, searchLocation: user.location }));
-            setCurrentMapCenter(user.location);
+        } else if ((user as any)?.location && !userLocation && !activeParams?.focusLocation) {
+            setAdvancedFilters(prev => ({ ...prev, searchLocation: (user as any).location }));
+            setCurrentMapCenter((user as any).location);
         }
-    }, [userLocation, user?.location]);
+    }, [userLocation, (user as any)?.location]);
 
     // (keep param handling only via activeParams to avoid ReferenceError / duplication)
 

@@ -3,6 +3,9 @@ import { stripe } from '../../../lib/stripe';
 
 // Create checkout session
 export async function POST(request) {
+  const sessionUser = await getServerSession();
+  if (!sessionUser) return new NextResponse("Unauthorized", { status: 401 });
+
   const formData = await request.formData();
   const priceId = formData.get("priceId");
   const accountId = formData.get("accountId");

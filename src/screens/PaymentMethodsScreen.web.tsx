@@ -1,90 +1,38 @@
-/**
- * PaymentMethodsScreen — Web fallback.
- * The native Stripe SDK is not available on web, so we show a friendly
- * message directing users to the mobile app.
- */
-
 import React from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-} from 'react-native';
-import { CreditCard } from 'lucide-react-native';
-import { MobileHeader } from '../components/MobileHeader';
-import { useTheme } from '../contexts/ThemeContext';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { AlertCircle, ArrowLeft } from 'lucide-react-native';
 
 export default function PaymentMethodsScreen({ navigation }: any) {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
-
     return (
-        <View style={[styles.container, isDark && styles.containerDark]}>
-            <MobileHeader
-                title="Métodos de pago"
-                subtitle="Gestiona tus tarjetas guardadas"
-                backButton
-                onBack={() => navigation.goBack()}
-            />
-
-            <View style={styles.body}>
-                <View style={[styles.iconBox, isDark && styles.iconBoxDark]}>
-                    <CreditCard size={48} color={isDark ? '#6B7280' : '#9CA3AF'} />
-                </View>
-                <Text style={[styles.title, isDark && styles.titleDark]}>
-                    No disponible en web
+        <View style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <ArrowLeft color="#1F2937" size={24} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Métodos de Pago</Text>
+            </View>
+            <View style={styles.content}>
+                <AlertCircle size={64} color="#F59E0B" />
+                <Text style={styles.title}>Pagos en Mantenimiento</Text>
+                <Text style={styles.subtitle}>
+                    Estamos renovando el sistema de pagos. Pronto podrás gestionar tus tarjetas y billeteras aquí.
                 </Text>
-                <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-                    La gestión de tarjetas utiliza el SDK nativo de Stripe y solo está disponible en la app móvil.
-                </Text>
-                <TouchableOpacity
-                    style={styles.backBtn}
-                    onPress={() => navigation.goBack()}
-                >
-                    <Text style={styles.backBtnText}>Volver</Text>
+                <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
+                    <Text style={styles.buttonText}>Volver</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
 }
 
-const getStyles = (isDark: any) => StyleSheet.create({
+const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F9FAFB' },
-    containerDark: { backgroundColor: '#111827' },
-    body: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 32,
-        gap: 12,
-    },
-    iconBox: {
-        width: 80,
-        height: 80,
-        borderRadius: 20,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-    },
-    iconBoxDark: { backgroundColor: '#1F2937' },
-    title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-    titleDark: { color: isDark ? '#1F2937' : '#F3F4F6' },
-    subtitle: {
-        fontSize: 14,
-        color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280',
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    subtitleDark: { color: isDark ? '#6B7280' : '#9CA3AF' },
-    backBtn: {
-        marginTop: 16,
-        backgroundColor: '#7C3AED',
-        paddingVertical: 12,
-        paddingHorizontal: 32,
-        borderRadius: 12,
-    },
-    backBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '700', fontSize: 15 },
+    header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 60, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+    backButton: { marginRight: 16 },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+    content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+    title: { fontSize: 24, fontWeight: 'bold', color: '#1F2937', marginTop: 24, marginBottom: 12, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', marginBottom: 32, lineHeight: 24 },
+    button: { backgroundColor: '#7C3AED', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 12 },
+    buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

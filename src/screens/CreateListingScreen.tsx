@@ -305,7 +305,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         openCommissionRate: openCommissionRateValue,
                         discountValue: listingType === 'bono' ? discountValueFloat : undefined,
                         discountType: listingType === 'bono' ? 'fixed' : undefined,
-                    }
+                    } as any
                 });
                 show('Publicación actualizada exitosamente!', 'success');
                 navigation.goBack();
