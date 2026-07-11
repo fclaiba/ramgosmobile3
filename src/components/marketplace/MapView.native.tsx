@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity, Image, TextInput, ScrollView, Animated, LayoutAnimation, UIManager, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity, Image, Animated, LayoutAnimation, UIManager } from 'react-native';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 
 // Basic LayoutAnimation configuration for Android (Old Arch)
@@ -16,7 +16,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
 import { useToast } from '../../contexts/ToastContext';
-import { MapPin, ShoppingCart, Tag, Ticket, Crosshair, Minus, Plus, Search, Filter, ArrowRight, LayoutGrid, List, Heart, Map } from 'lucide-react-native';
+import { ShoppingCart, Crosshair, Minus, Plus, ArrowRight, Heart } from 'lucide-react-native';
+import { MarketplaceMapMarker } from '../map/MarketplaceMapMarker';
 import * as Location from 'expo-location';
 import { MapErrorBoundary, logMapEvent, logMapError } from '../MapErrorBoundary';
 import { DARK_MAP_STYLE, LIGHT_MAP_STYLE, MAP_DEFAULTS } from '../../constants/darkMapStyle';
@@ -85,11 +86,23 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     // State
     const [userLocation, setUserLocation] = useState<any>(null);
     const [activeItem, setActiveItem] = useState<any>(null);
-    const [isTrackingUser, setIsTrackingUser] = useState(true);
+    const [isTrackingUser, setIsTrackingUser] = useState(false); // Default to search center, not user location
     const [mapReady, setMapReady] = useState(false);
     const { location: hookLocation, errorMsg: hookError, refetch: refetchLocation } = useUserLocation();
     const [locationError, setLocationError] = useState<string | null>(null);
     const [mapKey, setMapKey] = useState(0); // For forcing re-mount on retry
+
+    // Use the provided search location as the map center. This keeps the
+    // marketplace map anchored on NYC/alrededores even without GPS permission.
+    const initialRegion = useMemo(() => {
+        const center = searchLocation || userLocation || { lat: 40.7549, lng: -73.9840 };
+        return {
+            latitude: center.lat,
+            longitude: center.lng,
+            latitudeDelta: 0.15,
+            longitudeDelta: 0.15,
+        };
+    }, [searchLocation, userLocation]);
 
     // Map ready handler with logging
     const handleMapReady = useCallback(() => {
@@ -107,11 +120,12 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
     useEffect(() => {
         if (hookError) {
-            setLocationError(hookError);
+            // Only surface a blocking error if we have no search location to fall back to.
+            if (!searchLocation) {
+                setLocationError(hookError);
+            }
             if (hookError.includes('denegado')) {
-                show('Activa los permisos de ubicación para ver el mapa', 'warning');
-            } else {
-                show('No se pudo obtener tu ubicación', 'error');
+                show('Activa los permisos de ubicación para ver tu posición', 'warning');
             }
         } else if (hookLocation) {
             const coords = {
@@ -128,7 +142,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                 lng: coords.longitude.toFixed(4)
             });
         }
-    }, [hookLocation, hookError, show]);
+    }, [hookLocation, hookError, show, searchLocation]);
 
     // Removed the searchLocation useEffect loop. Map only animates on Marker press or initial load.
 
@@ -151,27 +165,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
         });
     };
 
-    const getItemIcon = (type: string) => {
-        switch (type) {
-            case 'product': return ShoppingCart;
-            case 'bono': return Tag;
-            case 'event': return Ticket;
-            case 'service': return MapPin;
-            case 'business': return MapPin;
-            default: return MapPin;
-        }
-    };
 
-    const getMarkerColor = (type: string) => {
-        switch (type) {
-            case 'product': return '#8B5CF6'; // Violet
-            case 'bono': return '#10B981'; // Emerald
-            case 'event': return '#F59E0B'; // Amber
-            case 'service': return '#38BDF8'; // Sky
-            case 'business': return '#EC4899'; // Pink
-            default: return '#6B7280';
-        }
-    };
 
     // Retry handler for error boundary
     const handleMapRetry = useCallback(() => {
@@ -180,37 +174,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
         setLocationError(null);
     }, []);
 
-    // Loading state while getting location
-    if (!userLocation && !locationError) {
-        return (
-            <View style={[styles.container, styles.loadingContainer]}>
-                <ActivityIndicator size="large" color="#8B5CF6" />
-                <Text style={[styles.loadingText, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                    Obteniendo ubicación...
-                </Text>
-            </View>
-        );
-    }
 
-    // Error state for location permission
-    if (locationError && !userLocation) {
-        return (
-            <View style={[styles.container, styles.errorContainer]}>
-                <View style={[styles.errorIconContainer, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}>
-                    <Map size={40} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                </View>
-                <Text style={[styles.errorTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-                    Ubicación no disponible
-                </Text>
-                <Text style={[styles.errorMessage, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                    {locationError}
-                </Text>
-                <TouchableOpacity style={styles.retryButton} onPress={handleMapRetry}>
-                    <Text style={styles.retryButtonText}>Reintentar</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
 
     return (
         <MapErrorBoundary onRetry={handleMapRetry} isDark={isDark}>
@@ -221,7 +185,8 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                     style={styles.map}
                     provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
                     customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
-                    showsUserLocation={true}
+                    initialRegion={initialRegion}
+                    showsUserLocation={!!userLocation}
                     showsMyLocationButton={false}
                     onRegionChangeComplete={(region) => {
                         logMapEvent('REGION_CHANGE', {
@@ -254,8 +219,6 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
                     {/* Markers */}
                     {items?.map((item) => {
-                        const Icon = getItemIcon(item.type);
-                        const color = getMarkerColor(item.type);
                         const isSelected = activeItem?.id === item.id;
 
                         return (
@@ -266,15 +229,10 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                 title={item.name}
                                 description={item.type === 'service' ? 'Servicio' : item.type === 'business' ? 'Negocio' : 'Producto'}
                             >
-                                <View style={[styles.markerContainer, isSelected && styles.markerActive, { borderColor: color }]}>
-                                    {isSelected ? (
-                                        <Image source={{ uri: item.image }} style={styles.markerImage} />
-                                    ) : (
-                                        <Icon size={16} color={color} />
-                                    )}
-                                </View>
-                                <View style={[styles.triangle, { borderTopColor: color }]} />
-                                <Text style={{ fontSize: 10, fontWeight: 'bold', color: isDark ? '#fff' : '#000', backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)', paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden', textAlign: 'center', marginTop: 2 }}>{item.name}</Text>
+                                <MarketplaceMapMarker
+                                    item={{ id: item.id, name: item.name, image: item.image, type: item.type }}
+                                    isSelected={isSelected}
+                                />
                             </Marker>
                         );
                     })}
@@ -335,8 +293,9 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                     <TouchableOpacity
                         style={[styles.controlBtn, { backgroundColor: isDark ? 'rgba(31,41,55,0.9)' : 'rgba(255,255,255,0.9)' }]}
                         onPress={() => {
-                            setIsTrackingUser(true);
-                            if (userLocation) mapRef.current?.animateToRegion(userLocation, 1000);
+                            const target = userLocation || initialRegion;
+                            setIsTrackingUser(!!userLocation);
+                            if (target) mapRef.current?.animateToRegion(target, 1000);
                         }}
                     >
                         <Crosshair size={24} color={isTrackingUser ? '#8B5CF6' : (isDark ? '#fff' : '#000')} />
@@ -483,24 +442,6 @@ const getStyles = (isDark: any) => StyleSheet.create({
         fontWeight: '600',
         fontSize: 14,
     },
-    markerContainer: {
-        width: 36, height: 36, borderRadius: 18,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
-        borderWidth: 3,
-        justifyContent: 'center', alignItems: 'center',
-        shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5
-    },
-    markerActive: { width: 48, height: 48, borderRadius: 24, borderWidth: 4, zIndex: 10 },
-    markerImage: { width: 40, height: 40, borderRadius: 20 },
-    triangle: {
-        width: 0, height: 0,
-        backgroundColor: 'transparent',
-        borderStyle: 'solid',
-        borderLeftWidth: 6, borderRightWidth: 6, borderBottomWidth: 0, borderTopWidth: 8,
-        borderLeftColor: 'transparent', borderRightColor: 'transparent',
-        alignSelf: 'center', marginTop: -2
-    },
-
     // Top Overlay
     topOverlay: { position: 'absolute', left: 16, right: 16, zIndex: 10 },
     searchRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },

@@ -11,9 +11,10 @@ import { Sheet, SheetContent } from '../ui/sheet';
 
 interface DirectMessagesProps {
     onClose: () => void;
+    initialUserId?: string;
 }
 
-export const DirectMessages = ({ onClose }: DirectMessagesProps) => {
+export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) => {
     const { currentUser, sendMessage, createChat } = useSocial();
     const { user: authUser } = useAuth();
     const [selectedChat, setSelectedChat] = useState<string | null>(null);
@@ -47,6 +48,23 @@ export const DirectMessages = ({ onClose }: DirectMessagesProps) => {
             markAsReadMut({ chatId: selectedChat as any }).catch(() => {});
         }
     }, [selectedChat, authUser, markAsReadMut]);
+
+    // Open a specific user chat on mount if requested.
+    useEffect(() => {
+        if (!initialUserId || !authUser) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const chatId = await Promise.resolve(createChat(initialUserId));
+                if (!cancelled && chatId) {
+                    setSelectedChat(chatId);
+                }
+            } catch (err) {
+                console.warn('[DM] createChat failed', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [initialUserId, authUser, createChat]);
 
     const conversations = (chatsRows ?? []).map((chat: any) => {
         const other = chat.otherParticipants?.[0];

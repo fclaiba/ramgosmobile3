@@ -31,11 +31,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Update colorScheme and NativeWind when theme or system preference changes
   useEffect(() => {
-    const targetColorScheme = theme === 'system'
-      ? (systemColorScheme || 'light')
+    const targetColorScheme = (theme === 'system'
+      ? (systemColorScheme === 'dark' ? 'dark' : 'light')
       : theme === 'dark'
         ? 'dark'
-        : 'light';
+        : 'light') as 'light' | 'dark';
 
     setColorScheme(targetColorScheme);
     try {

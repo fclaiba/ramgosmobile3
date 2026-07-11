@@ -35,15 +35,14 @@ import { Sheet, SheetContent } from '../ui/sheet';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useEscrow } from '../../contexts/EscrowContext'; // New Context
-import type { EscrowPhase } from '../../contexts/EscrowContext';
-import type { Order } from '../../contexts/MarketplaceContext';
+import { useEscrow } from '../../contexts/EscrowContext';
+import type { EscrowPhase, EscrowState, EscrowOrder as Order } from '../../contexts/EscrowContext';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 // === STATE META ===
-type EscrowState = Order['escrow']['state'];
+type _EscrowState = EscrowState;
 
 interface StateMeta {
     label: string;
@@ -295,7 +294,8 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         if (!order || !user) return;
         try {
             await confirmReceiptMutation({
-                orderId: order.id as any
+                orderId: order.id as any,
+                userId: user.id,
             });
             show('Recepción confirmada. Fondos liberados.', 'success');
         } catch (e: any) {
@@ -629,34 +629,34 @@ const getStyles = (isDark: boolean, fontSize: any, cardPadding: number) => Style
     closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
     emptyText: { fontSize: fontSize.base, color: isDark ? '#6B7280' : '#9CA3AF' },
-    heroCard: { padding: cardPadding, borderRadius: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: 'transparent' },
-    heroIconContainer: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginRight: 12 },
+    heroCard: { padding: cardPadding + 4, borderRadius: 24, flexDirection: 'row', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 },
+    heroIconContainer: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginRight: 16 },
     heroContent: { flex: 1 },
-    heroTitle: { fontSize: fontSize.base, fontWeight: '700', marginBottom: 2 },
-    heroSubtitle: { fontSize: fontSize.xs },
-    heroBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-    heroBadgeText: { fontSize: fontSize.xs, fontWeight: '600' },
-    progressContainer: { marginBottom: 24, paddingHorizontal: 4 },
-    progressTrack: { height: 4, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 2, marginBottom: 8, overflow: 'hidden' },
-    progressFill: { height: '100%', borderRadius: 2 },
+    heroTitle: { fontSize: fontSize.lg, fontWeight: '800', marginBottom: 4, letterSpacing: -0.5 },
+    heroSubtitle: { fontSize: fontSize.xs, fontWeight: '500' },
+    heroBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+    heroBadgeText: { fontSize: fontSize.xs, fontWeight: '700', textTransform: 'uppercase' },
+    progressContainer: { marginBottom: 28, paddingHorizontal: 8 },
+    progressTrack: { height: 6, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 3, marginBottom: 12, overflow: 'hidden' },
+    progressFill: { height: '100%', borderRadius: 3 },
     progressSteps: { flexDirection: 'row', justifyContent: 'space-between' },
-    progressStep: { alignItems: 'center', width: 60 },
-    progressDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: isDark ? '#374151' : '#E5E7EB', alignItems: 'center', justifyContent: 'center', marginBottom: 4, borderWidth: 2, borderColor: 'transparent' },
-    progressDotCurrent: { transform: [{ scale: 1.2 }] },
-    progressLabel: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center' },
-    card: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: cardPadding, marginBottom: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
-    amountLabel: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280' },
-    amountValue: { fontSize: fontSize.xl, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
-    sectionTitle: { fontSize: fontSize.base, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 12 },
-    actionsContainer: { gap: 8 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 12, gap: 8 },
-    actionBtnPrimary: { backgroundColor: '#10B981' },
-    actionBtnPrimaryText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '600' },
-    actionBtnDanger: { backgroundColor: '#EF4444' },
-    actionBtnDangerText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '600' },
-    actionBtnInfo: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
-    actionBtnInfoText: { color: '#2563EB', fontSize: fontSize.sm, fontWeight: '600' },
-    explanationHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-    explanationTitle: { fontSize: fontSize.sm, fontWeight: '600' },
-    explanationText: { fontSize: fontSize.sm, lineHeight: 20 },
+    progressStep: { alignItems: 'center', width: 64 },
+    progressDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#E5E7EB', alignItems: 'center', justifyContent: 'center', marginBottom: 6, borderWidth: 2, borderColor: 'transparent' },
+    progressDotCurrent: { transform: [{ scale: 1.3 }], shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
+    progressLabel: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', fontWeight: '500' },
+    card: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, padding: cardPadding + 2, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+    amountLabel: { fontSize: fontSize.sm, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500', marginBottom: 4 },
+    amountValue: { fontSize: 28, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', letterSpacing: -1 },
+    sectionTitle: { fontSize: fontSize.lg, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 16, letterSpacing: -0.5 },
+    actionsContainer: { gap: 12 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 16, gap: 10 },
+    actionBtnPrimary: { backgroundColor: '#10B981', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+    actionBtnPrimaryText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+    actionBtnDanger: { backgroundColor: '#EF4444', shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+    actionBtnDangerText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
+    actionBtnInfo: { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', borderWidth: 1, borderColor: isDark ? '#1D4ED8' : '#BFDBFE' },
+    actionBtnInfoText: { color: isDark ? '#60A5FA' : '#2563EB', fontSize: fontSize.base, fontWeight: '700' },
+    explanationHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+    explanationTitle: { fontSize: fontSize.base, fontWeight: '700' },
+    explanationText: { fontSize: fontSize.sm, lineHeight: 22, fontWeight: '400' },
 });

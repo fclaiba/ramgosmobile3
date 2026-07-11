@@ -442,7 +442,7 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
                         { transform: [{ translateX: basketX }] }
                     ]}
                 >
-                    <Text style={{ fontSize: 50 }}>🧺</Text>
+                    <Text style={{ fontSize: 50 }}>😸</Text>
                 </Animated.View>
 
 
@@ -507,14 +507,14 @@ const getStyles = (isDark: any) => StyleSheet.create({
         alignItems: 'center',
     },
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 20,
     },
     centerContainer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(255,255,255,0.8)',
         justifyContent: 'center',
         alignItems: 'center',

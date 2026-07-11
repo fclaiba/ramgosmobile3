@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireActor } from "./authHelpers";
+import { requireActor, getActorFromAuth } from "./authHelpers";
 
 // 1. Añadir Influencer a Whitelist
 export const addToWhitelist = mutation({
@@ -63,8 +63,9 @@ export const removeFromWhitelist = mutation({
 export const getWhitelist = query({
     args: {},
     handler: async (ctx) => {
-        const actor = await requireActor(ctx);
-        
+        const actor = await getActorFromAuth(ctx);
+        if (!actor) return [];
+
         const whitelistItems = await ctx.db
             .query("influencerWhitelists")
             .withIndex("by_business", (q) => q.eq("businessId", String(actor.id)))

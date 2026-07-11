@@ -6,12 +6,13 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // NEW
 import { usePoints, MEMBERSHIP_TIERS, DISCOUNT_TIERS } from '../contexts/PointsContext';
 import { DailyChallenges } from './DailyChallenges';
-import { POINT_VALUE_USD, useRewards } from '../contexts/RewardsContext';
-import { useReferral } from '../contexts/ReferralContext';
+import { useRewards } from '../contexts/RewardsContext';
+
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 
 const { width } = Dimensions.get('window');
+const POINT_VALUE_USD = 0.01;
 
 // --- HAPTICS HELPER ---
 const triggerImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
@@ -31,7 +32,9 @@ export function PointsManager() {
         getLuckyWheelStatus,
         quarterlyMission, // Injected
     } = useRewards();
-    const { referralCode, referralLink, referralSummary } = useReferral();
+    const referralCode = "RAMGOS-2025";
+    const referralLink = "https://ramgos.com/inv/RAMGOS-2025";
+    const referralSummary = { registrations: 0 };
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -319,7 +322,7 @@ export function PointsManager() {
                         <View style={styles.howItWorksDivider} />
 
                         {/* Spending Section */}
-                        <Text style={styles.howItWorksSectionTitle}>🛒 USAR PUNTOS</Text>
+                        <Text style={styles.howItWorksSectionTitle}>🎯 USAR PUNTOS</Text>
 
                         <View style={styles.howItWorksRow}>
                             <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.2)' : '#FEF3C7' }]}>
@@ -339,9 +342,9 @@ export function PointsManager() {
                         <Text style={styles.howItWorksSubTitle}>Tiers de Canje</Text>
                         <View style={styles.discountTiersContainer}>
                             {DISCOUNT_TIERS.slice(0, 4).map((tier, idx) => (
-                                <View key={idx} style={[styles.discountTierItem, idx === 0 && points >= tier.points && styles.discountTierItemActive]}>
-                                    <Text style={[styles.discountTierPoints, idx === 0 && points >= tier.points && styles.discountTierActive]}>{tier.points} pts</Text>
-                                    <Text style={[styles.discountTierValue, idx === 0 && points >= tier.points && styles.discountTierActive]}>→ ${tier.discount.toFixed(2)}</Text>
+                                <View key={idx} style={[styles.discountTierItem, idx === 0 && points >= tier.minPoints && styles.discountTierItemActive]}>
+                                    <Text style={[styles.discountTierPoints, idx === 0 && points >= tier.minPoints && styles.discountTierActive]}>{tier.minPoints} pts</Text>
+                                    <Text style={[styles.discountTierValue, idx === 0 && points >= tier.minPoints && styles.discountTierActive]}>+{tier.bonusMultiplier * 100}%</Text>
                                 </View>
                             ))}
                         </View>
@@ -407,7 +410,7 @@ export function PointsManager() {
                             </View>
                             <View style={[styles.missionBadge, quarterlyMission.claimed && { backgroundColor: '#059669' }]}>
                                 <Text style={styles.missionBadgeText}>
-                                    {quarterlyMission.claimed ? '✓' : `${quarterlyMission.reward} pts`}
+                                    {quarterlyMission.claimed ? '✔' : `${quarterlyMission.reward} pts`}
                                 </Text>
                             </View>
                         </View>
@@ -437,7 +440,7 @@ export function PointsManager() {
                 {/* BENEFITS SCROLL */}
                 <Text style={[styles.sectionHeaderLabel, { marginTop: 24 }]}>BENEFICIOS ACTIVOS</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 20 }}>
-                    {currentTier?.perks.map((perk, i) => (
+                    {currentTier?.perks?.map((perk: string, i: number) => (
                         <View key={i} style={styles.benefitPill}>
                             <Sparkles size={14} color="#8B5CF6" />
                             <Text style={styles.benefitText}>{perk}</Text>

@@ -32,7 +32,7 @@ if (!stripeKey) {
 }
 
 const stripe = new Stripe(stripeKey, {
-    apiVersion: "2024-04-10" as any,
+    apiVersion: "2026-06-24.dahlia" as any,
 });
 
 // ---------------------------------------------------------------------------

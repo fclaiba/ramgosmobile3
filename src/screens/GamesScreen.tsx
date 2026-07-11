@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Modal, useWindowDimensions } from 'react-native';
-import { Gamepad2, Trophy, ArrowRight, Dna, Target, Grape, Brain, CircleDollarSign, Coins, X } from 'lucide-react-native';
+import { Gamepad2, Trophy, ArrowRight, Dna, Target, Grape, Brain, Bird, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MobileHeader } from '../components/MobileHeader';
 import { DailyChallenges } from '../components/games/DailyChallenges';
@@ -16,13 +16,12 @@ import { DinoGame } from '../components/games/DinoGame';
 import { DuckHunt } from '../components/games/DuckHunt';
 import { FruitCatcher } from '../components/games/FruitCatcher';
 import { MemoryGame } from '../components/games/MemoryGame';
-import { RouletteGame } from '../components/games/RouletteGame';
-import { SlotMachine } from '../components/games/SlotMachine';
+import { FlappyBird } from '../components/games/FlappyBird';
 import { GameWrapper } from '../components/games/GameWrapper';
 import type { GameId } from '../components/games/gameContracts';
 import { TierProgressBar } from '../components/ui/TierProgressBar';
 
-const ARCADE_REWARD_GAMES = new Set(['dino', 'duck', 'fruit', 'memory']);
+const ARCADE_REWARD_GAMES = new Set(['dino', 'duck', 'fruit', 'memory', 'flappy']);
 
 const GAMES = [
     {
@@ -62,29 +61,20 @@ const GAMES = [
         component: MemoryGame
     },
     {
-        id: 'roulette',
-        title: 'Ruleta de la Suerte',
-        description: 'Gira y gana premios increíbles diariamente.',
-        icon: <CircleDollarSign size={32} color="#fff" />,
-        color: ['#EF4444', '#DC2626'],
-        image: 'https://images.unsplash.com/photo-1606167668584-78701c57f13d?w=800&auto=format&fit=crop&q=60',
-        component: RouletteGame
-    },
-    {
-        id: 'slots',
-        title: 'Tragamonedas',
-        description: 'Prueba tu suerte con el jackpot.',
-        icon: <Coins size={32} color="#fff" />,
-        color: ['#3B82F6', '#2563EB'],
-        image: 'https://images.unsplash.com/photo-1596838132731-3301c3fd4317?w=800&auto=format&fit=crop&q=60',
-        component: SlotMachine
+        id: 'flappy',
+        title: 'Flappy Bird',
+        description: 'Vuela y esquiva los tubos sin chocar.',
+        icon: <Bird size={32} color="#fff" />,
+        color: ['#0EA5E9', '#0284C7'],
+        image: 'https://images.unsplash.com/photo-1444464666168-49d633b86797?w=800&auto=format&fit=crop&q=60',
+        component: FlappyBird
     }
 ];
 
 export default function GamesScreen() {
     const { width } = useWindowDimensions();
     const { points } = usePoints();
-    const { registerArcadeReward, getArcadeStatus, spinLuckyWheel, getLuckyWheelStatus, gameCoins, addGameCoins, spendGameCoins } = useRewards();
+    const { registerArcadeReward, getArcadeStatus, gameCoins, addGameCoins, spendGameCoins } = useRewards();
     const navigation = useNavigation<any>();
     const [activeGame, setActiveGame] = useState<string | null>(null);
     const { colorScheme } = useTheme();
@@ -105,14 +95,6 @@ export default function GamesScreen() {
     };
 
     const handlePlay = (gameId: string) => {
-        // Constitución: límites diarios (Arcade 3/día, Wheel 1/día)
-        if (gameId === 'roulette') {
-            const status = getLuckyWheelStatus();
-            if (!status.available) {
-                show('Ya giraste la rueda hoy. Vuelve mañana.', 'warning');
-                return;
-            }
-        }
         if (ARCADE_REWARD_GAMES.has(gameId)) {
             const arcade = getArcadeStatus();
             if (arcade.remaining <= 0) {
@@ -120,7 +102,6 @@ export default function GamesScreen() {
                 return;
             }
         }
-
         setActiveGame(gameId);
     };
 
@@ -134,7 +115,6 @@ export default function GamesScreen() {
 
         const GameComponent = game.component as any;
         const gameId = game.id as GameId;
-        const isCasino = game.id === 'roulette' || game.id === 'slots';
 
         return (
             <Modal animationType="slide" visible={!!activeGame} onRequestClose={handleCloseGame}>
@@ -143,23 +123,12 @@ export default function GamesScreen() {
                         <GameWrapper
                             gameId={gameId}
                             GameComponent={GameComponent}
-                            coins={isCasino ? gameCoins : 0}
+                            coins={0}
                             onClose={handleCloseGame}
                             onLegacyGameEnd={(value: number) => {
-                                if (isCasino) {
-                                    if (value >= 0) addGameCoins(value);
-                                    else spendGameCoins(Math.abs(value));
-                                    return;
-                                }
                                 if (ARCADE_REWARD_GAMES.has(game.id)) rewardArcadeGame(game.id, value);
                             }}
-                            gameProps={{
-                                ...(game.id === 'roulette'
-                                    ? { onClose: handleCloseGame, uiMode: 'wrapped' }
-                                    : isCasino
-                                        ? { coins: gameCoins, onClose: handleCloseGame }
-                                        : {}),
-                            }}
+                            gameProps={{}}
                         />
                     </View>
                 </SafeAreaView>

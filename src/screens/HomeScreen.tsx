@@ -3,6 +3,8 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBa
 import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
@@ -11,6 +13,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { MobileHeader } from '../components/MobileHeader';
 import { MobileNav, type NavSection, NAV_CONTENT_HEIGHT } from '../components/MobileNav';
 import { SidebarMenu } from '../components/SidebarMenu';
+import CartSidebar from '../components/CartSidebar';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { PointsManager } from '../components/PointsManager';
 
@@ -72,27 +75,7 @@ const quickActions = [
     { id: 3, title: 'Mis Puntos', icon: Zap, color: '#D97706', bg: 'rgba(217,119,6,0.1)', action: 'points' },
 ];
 
-const consumptionData = [
-    {
-        id: 1,
-        category: 'Marketplace',
-        icon: ShoppingBag,
-        color: ['#3B82F6', '#06B6D4'],
-        items: [
-            { name: 'Laptop Gaming', date: '15 Oct 2025', amount: '$1,299', status: 'Completado', statusColor: '#16A34A', image: 'https://images.unsplash.com/photo-1606625000171-fa7d471da28c?w=1080', description: 'ROG Strix G15' },
-            { name: 'Auriculares', date: '10 Oct 2025', amount: '$89', status: 'Completado', statusColor: '#16A34A', image: 'https://images.unsplash.com/photo-1638967277194-4b73d3d2e72b?w=1080', description: 'Sony WH-1000XM5' }
-        ]
-    },
-    {
-        id: 2,
-        category: 'Bonos',
-        icon: Tag,
-        color: ['#8B5CF6', '#A855F7'],
-        items: [
-            { name: 'Descuento 20%', date: '14 Oct 2025', amount: '-$260', status: 'Aplicado', statusColor: '#7C3AED', image: 'https://images.unsplash.com/photo-1703206390947-24130b2eaf9d?w=1080', description: 'Bono exclusivo' }
-        ]
-    }
-];
+const consumptionData: any[] = [];
 
 export default function HomeScreen({ navigation, route }: any) {
     const { user } = useAuth();
@@ -103,6 +86,50 @@ export default function HomeScreen({ navigation, route }: any) {
     const insets = useSafeAreaInsets();
     const { isDesktop } = useResponsive();
     const styles = getStyles(isDark);
+
+    const myOrders = useQuery(api.orders.getMyOrders, user?.id ? { userId: user.id } : "skip") || [];
+    const mySellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id ? { sellerId: user.id } : "skip") || [];
+
+    const allActivity = useMemo(() => {
+        const purchases = myOrders.map((o: any) => ({
+            id: `buy-${o._id}`,
+            name: o.items?.[0]?.title || 'Compra',
+            date: o.createdAt,
+            amount: `$${(o.total || 0).toFixed(2)}`,
+            rawAmount: o.total || 0,
+            status: o.status === 'completed' ? 'Completado' : o.status === 'cancelled' ? 'Cancelado' : 'Pendiente',
+            statusColor: o.status === 'completed' ? '#16A34A' : o.status === 'cancelled' ? '#EF4444' : '#D97706',
+            image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop',
+            description: `${o.items?.length || 0} item(s)`,
+            type: 'purchase',
+        }));
+        const sales = mySellerOrders.map((o: any) => ({
+            id: `sell-${o._id}`,
+            name: o.items?.[0]?.title || 'Venta',
+            date: o.createdAt,
+            amount: `+$${(o.total || 0).toFixed(2)}`,
+            rawAmount: o.total || 0,
+            status: o.status === 'completed' ? 'Completado' : o.status === 'cancelled' ? 'Cancelado' : 'Pendiente',
+            statusColor: o.status === 'completed' ? '#16A34A' : o.status === 'cancelled' ? '#EF4444' : '#D97706',
+            image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop',
+            description: `Venta a ${String(o.userId).slice(-6)}`,
+            type: 'sale',
+        }));
+        return [...purchases, ...sales].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [myOrders, mySellerOrders]);
+
+    const monthStats = useMemo(() => {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const recent = allActivity.filter(a => new Date(a.date) >= monthStart);
+        const totalSpent = recent
+            .filter(a => a.type === 'purchase' && a.status === 'Completado')
+            .reduce((sum, a) => sum + a.rawAmount, 0);
+        const totalEarned = recent
+            .filter(a => a.type === 'sale' && a.status === 'Completado')
+            .reduce((sum, a) => sum + a.rawAmount, 0);
+        return { totalSpent, totalEarned, count: recent.length };
+    }, [allActivity]);
 
     // UI State
     const [activeTab, setActiveTab] = useState<NavSection>('home');
@@ -389,7 +416,9 @@ export default function HomeScreen({ navigation, route }: any) {
                                             <View style={styles.summaryHeader}>
                                                 <View>
                                                     <Text style={styles.summaryLabel}>Resumen del Mes</Text>
-                                                    <Text style={styles.summaryMonth}>Octubre 2025</Text>
+                                                    <Text style={styles.summaryMonth}>
+                                                        {new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())}
+                                                    </Text>
                                                 </View>
                                                 <View style={styles.summaryIcon}>
                                                     <DollarSign size={24} color="#fff" />
@@ -399,35 +428,18 @@ export default function HomeScreen({ navigation, route }: any) {
                                             <View style={styles.summaryGrid}>
                                                 <View style={styles.summaryStat}>
                                                     <Text style={styles.statLabel}>Total Gastado</Text>
-                                                    <Text style={styles.statValue}>$1,658</Text>
-                                                    <Text style={styles.statSub}>7 transacciones</Text>
+                                                    <Text style={styles.statValue}>${monthStats.totalSpent.toFixed(2)}</Text>
+                                                    <Text style={styles.statSub}>{monthStats.count} transacciones</Text>
                                                 </View>
                                                 <View style={styles.summaryStat}>
-                                                    <Text style={styles.statLabel}>Ahorrado</Text>
-                                                    <Text style={styles.statValue}>$410</Text>
-                                                    <Text style={[styles.statSub, { color: '#6EE7B7' }]}>+$260 en bonos</Text>
+                                                    <Text style={styles.statLabel}>Ingresos (Ventas)</Text>
+                                                    <Text style={styles.statValue}>${monthStats.totalEarned.toFixed(2)}</Text>
+                                                    <Text style={[styles.statSub, { color: '#6EE7B7' }]}>Tus ganancias</Text>
                                                 </View>
                                             </View>
                                         </LinearGradient>
                                     </View>
 
-                                    {/* Category Stats */}
-                                    <View style={styles.grid3}>
-                                        {consumptionData.map((cat) => {
-                                            const Icon = cat.icon;
-                                            const total = cat.items.reduce((sum, item) => sum + parseFloat(item.amount.replace(/[^0-9.-]/g, '')), 0);
-                                            return (
-                                                <View key={cat.id} style={styles.statCard}>
-                                                    <LinearGradient colors={cat.color as [string, string, ...string[]]} style={styles.statIcon}>
-                                                        <Icon size={20} color="#fff" />
-                                                    </LinearGradient>
-                                                    <Text style={styles.catLabel}>{cat.category}</Text>
-                                                    <Text style={styles.catValue}>${Math.abs(total)}</Text>
-                                                    <Text style={styles.catCount}>{cat.items.length} items</Text>
-                                                </View>
-                                            );
-                                        })}
-                                    </View>
 
                                     {/* Timeline */}
                                     <View style={[styles.sectionHeader, { marginTop: 20 }]}>
@@ -437,10 +449,14 @@ export default function HomeScreen({ navigation, route }: any) {
                                         </View>
                                     </View>
 
-                                    {consumptionData.map((section) => (
-                                        <View key={section.id} style={{ gap: 12, marginTop: 12 }}>
-                                            {section.items.map((item, idx) => (
-                                                <View key={idx} style={styles.historyItem}>
+                                    {allActivity.length === 0 ? (
+                                        <View style={{ padding: 24, alignItems: 'center' }}>
+                                            <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>No hay actividad reciente.</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={{ gap: 12, marginTop: 12 }}>
+                                            {allActivity.map((item, idx) => (
+                                                <View key={item.id || idx} style={styles.historyItem}>
                                                     <Image source={{ uri: item.image }} style={styles.historyImg} />
                                                     <View style={styles.historyInfo}>
                                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -451,14 +467,14 @@ export default function HomeScreen({ navigation, route }: any) {
                                                         </View>
                                                         <Text style={styles.historyDesc}>{item.description}</Text>
                                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                                            <Text style={styles.historyDate}>{item.date}</Text>
+                                                            <Text style={styles.historyDate}>{new Date(item.date).toLocaleDateString()}</Text>
                                                             <Text style={styles.historyAmount}>{item.amount}</Text>
                                                         </View>
                                                     </View>
                                                 </View>
                                             ))}
                                         </View>
-                                    ))}
+                                    )}
                                 </View>
                             )}
 
@@ -485,6 +501,7 @@ export default function HomeScreen({ navigation, route }: any) {
 
             {!isDesktop && <MobileNav activeSection={activeTab} onSectionChange={handleTabChange} />}
             <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            <CartSidebar />
         </ResponsiveLayout>
     );
 }

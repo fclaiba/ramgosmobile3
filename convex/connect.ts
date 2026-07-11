@@ -39,8 +39,8 @@ if (!stripeKey) {
     throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
 }
 
-const stripe = new Stripe(stripeKey, {
-    apiVersion: "2024-04-10" as any,
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2026-06-24.dahlia" as any,
 });
 
 const assertStripeConfigured = () => {

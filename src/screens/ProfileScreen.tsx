@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform } from 'react-native';
 import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,26 +41,27 @@ export default function ProfileScreen({ navigation }: any) {
 
     const { user, logout } = useAuth();
     const { points, currentTier, nextTier, lifetimePoints, transactions } = usePoints();
-    const { referralSummary, referralCode } = useReferral();
+    const { referralSummary, referralCode } = useReferral() as any;
     const [isEditing, setIsEditing] = useState(false);
 
     // Initial State Mock
     const [profile, setProfile] = useState<UserProfile>({
-        name: user?.name || 'María García',
-        email: user?.email || 'maria@ejemplo.com',
-        phone: '+1 (555) 123-4567',
-        location: 'Miami, FL',
-        bio: 'Amante de las ofertas y la comunidad latina. Siempre buscando las mejores experiencias.',
-        joinDate: 'Octubre 2025',
-        avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop',
+        name: user?.name || '',
+        email: user?.email || '',
+        phone: (user as any)?.phone || '',
+        location: (user as any)?.location || '',
+        bio: (user as any)?.bio || '',
+        joinDate: (user as any)?.joinedAt ? new Date((user as any).joinedAt).toLocaleDateString() : '',
+        avatarUrl: (user as any)?.avatarUrl || (user as any)?.avatar || '',
     });
 
-    const [stats, setStats] = useState<UserStats>({
+    const rawStats = useQuery(api.users.getUserActivityStats, user?.id ? {} : "skip");
+    const stats = rawStats || {
         purchases: 0,
         bonuses: 0,
         events: 0,
         savings: 0,
-    });
+    };
 
     const [editedProfile, setEditedProfile] = useState(profile);
 
@@ -82,11 +85,11 @@ export default function ProfileScreen({ navigation }: any) {
 
     const pointHistoryPreview = useMemo(() => transactions.slice(0, 6), [transactions]);
     const totalEarnedPoints = useMemo(
-        () => transactions.filter((t) => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
+        () => transactions.filter((t: any) => t.amount > 0).reduce((sum: any, t: any) => sum + t.amount, 0),
         [transactions],
     );
     const totalSpentPoints = useMemo(
-        () => Math.abs(transactions.filter((t) => t.amount < 0).reduce((sum, t) => sum + t.amount, 0)),
+        () => Math.abs(transactions.filter((t: any) => t.amount < 0).reduce((sum: any, t: any) => sum + t.amount, 0)),
         [transactions],
     );
 
@@ -450,7 +453,7 @@ export default function ProfileScreen({ navigation }: any) {
                             <Text style={styles.sheetText}>Todavía no tenés movimientos de puntos.</Text>
                         ) : (
                             <View style={{ width: '100%', gap: 10 }}>
-                                {pointHistoryPreview.map((tx) => {
+                                {pointHistoryPreview.map((tx: any) => {
                                     const isEarn = tx.amount >= 0;
                                     const amountLabel = `${isEarn ? '+' : ''}${tx.amount}`;
                                     const dateLabel = new Date(tx.date).toLocaleString();

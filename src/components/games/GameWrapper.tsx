@@ -436,7 +436,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
   hudRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   gameArea: { flex: 1 },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',

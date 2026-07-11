@@ -254,7 +254,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
 
                 const rand = Math.random();
                 let type: FlyingObject['type'] = 'duck';
-                let emoji = '🦆';
+                let emoji = '🐁';
                 let speedX = (Math.random() * 1.5 + 1.5) * difficulty * speedMult;
                 let speedY = 0;
                 let x = 0;
@@ -467,7 +467,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         color: '#1F2937'
     },
     centerContainer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(255,255,255,0.5)',

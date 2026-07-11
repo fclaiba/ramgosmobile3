@@ -5,7 +5,7 @@ import Stripe from "stripe";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const stripe = new Stripe(stripeKey!, {
-    apiVersion: "2024-04-10" as any,
+    apiVersion: "2026-06-24.dahlia" as any,
 });
 
 /**

@@ -25,7 +25,7 @@ export default function MyListingsScreen() {
     const userId = (user as any)?._id || (user as any)?.id;
     const listings = useQuery(
         api.listings.getMyListings,
-        userId ? {} : "skip"
+        userId ? { sellerId: userId } : "skip"
     );
     const deleteListing = useMutation(api.listings.deleteListing);
 

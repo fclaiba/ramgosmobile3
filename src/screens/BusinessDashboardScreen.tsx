@@ -37,7 +37,8 @@ import {
 } from "lucide-react-native";
 import { MobileHeader } from "../components/MobileHeader";
 import { Badge } from "../components/ui/badge";
-import { useBusiness, Coupon } from "../contexts/BusinessContext";
+import { Coupon } from "../contexts/BusinessContext";
+import { useBusiness } from "../hooks/useBusiness";
 import { useFintech } from "../contexts/FintechContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
@@ -74,7 +75,8 @@ export default function BusinessDashboardScreen({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-  const { businessInfo, metrics, coupons, reviews } = useBusiness();
+  const { user } = useAuth();
+  const { businessInfo, metrics, coupons, reviews } = useBusiness(user?.id);
   const {
     ensureWalletAccount,
     getWalletByOwner,
@@ -86,7 +88,6 @@ export default function BusinessDashboardScreen({
   const isDark = colorScheme === "dark";
   const styles = getStyles(isDark);
   const { show } = useToast();
-  const { user } = useAuth();
   const { isDesktop } = useResponsive();
 
   // Stripe Connect V2 — onboarding to receive marketplace payouts.
@@ -314,7 +315,7 @@ export default function BusinessDashboardScreen({
     try {
       // Step 1: ensure account exists (idempotent — creates only if missing).
       const ensured = await ensureConnectAccountAction({
-        displayName: businessInfo.name || user.name || "Ramgos seller",
+        displayName: businessInfo?.name || user.name || "Ramgos seller",
         contactEmail: user.email,
       });
       const accountId = (ensured as any)?.accountId;
@@ -334,12 +335,16 @@ export default function BusinessDashboardScreen({
   };
 
   useEffect(() => {
-    if (!user?.id || !businessInfo.name || businessInfo.name === 'Cargando...') return;
+    if (!user?.id || !ensureWalletAccount || !businessInfo?.name || businessInfo.name === 'Cargando...') return;
     ensureWalletAccount(user.id, "business", businessInfo.name);
-  }, [user?.id, businessInfo.name, ensureWalletAccount]);
+  }, [user?.id, businessInfo?.name, ensureWalletAccount]);
 
-  const wallet = getWalletByOwner(user?.id ?? "business_demo");
-  const kycStatus = getKycStatus(user?.id ?? "business_demo");
+  const wallet = getWalletByOwner
+    ? getWalletByOwner(user?.id ?? "business_demo")
+    : null;
+  const kycStatus = getKycStatus
+    ? getKycStatus(user?.id ?? "business_demo")
+    : null;
   const verificationPending =
     route?.params?.verificationPending || kycStatus === "pending";
   const isVerified = kycStatus === "approved";

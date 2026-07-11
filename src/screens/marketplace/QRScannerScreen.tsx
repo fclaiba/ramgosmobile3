@@ -52,9 +52,11 @@ export default function QRScannerScreen() {
             }
 
             if (!orderId) throw new Error('Código no reconocido.');
+            if (!user?.id) throw new Error('Sesión no válida. Iniciá sesión nuevamente.');
 
             await confirmReceiptMutation({
                 orderId: orderId as any,
+                userId: user.id,
             });
 
             setLoading(false);

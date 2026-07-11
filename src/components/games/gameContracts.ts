@@ -9,7 +9,7 @@
  * - El wrapper puede usar este contrato para normalizar HUD/overlays/leveling/audio.
  */
 
-export type GameId = 'fruit' | 'duck' | 'memory' | 'dino' | 'roulette' | 'slots';
+export type GameId = 'fruit' | 'duck' | 'memory' | 'dino' | 'flappy';
 
 export type GameThemeFamily = 'arcade' | 'casino';
 
@@ -21,7 +21,7 @@ export type GameAction = 'start' | 'pause' | 'resume' | 'restart';
 
 /**
  * Métricas estándar para HUD / analytics / reward logic.
- * - lives: siempre presente en el contrato (aunque un juego hoy no lo implemente todavía).
+ * - lives: siempre presente en el contrato (aunque un juego hoy no implemente todavía).
  * - ammo: solo Duck Hunt (y juegos “shooter” futuros).
  */
 export interface GameMetrics {
@@ -233,13 +233,6 @@ const TYPO_ARCADE: GameThemeTokens['typography'] = {
   body: { fontSize: 14, fontWeight: '500' },
 };
 
-const TYPO_CASINO: GameThemeTokens['typography'] = {
-  display: { fontSize: 36, fontWeight: '900' },
-  title: { fontSize: 24, fontWeight: '900' },
-  hud: { fontSize: 14, fontWeight: '800' },
-  body: { fontSize: 14, fontWeight: '500' },
-};
-
 const BASE_ARCADE = {
   family: 'arcade',
   colors: {
@@ -266,37 +259,6 @@ const BASE_ARCADE = {
     hud: ['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.75)'] as const,
   },
   typography: TYPO_ARCADE,
-  spacing: SPACING,
-  radius: RADIUS,
-  shadows: SHADOWS,
-} as const satisfies Omit<GameThemeTokens, 'gameId'>;
-
-const BASE_CASINO = {
-  family: 'casino',
-  colors: {
-    bg: '#0B1220',
-    surface: 'rgba(255,255,255,0.08)',
-    surface2: 'rgba(255,255,255,0.14)',
-    text: '#FFFFFF',
-    textMuted: 'rgba(255,255,255,0.72)',
-    border: 'rgba(255,255,255,0.16)',
-
-    accent: '#F59E0B',
-    accent2: '#EC4899',
-    success: '#22C55E',
-    warning: '#F59E0B',
-    danger: '#EF4444',
-
-    hudBg: 'rgba(31,41,55,0.90)',
-    hudText: '#F9FAFB',
-    hudBorder: 'rgba(255,255,255,0.12)',
-  },
-  gradients: {
-    bg: ['#0B1220', '#111827'] as const,
-    cta: ['#F59E0B', '#B45309'] as const,
-    hud: ['rgba(31,41,55,0.96)', 'rgba(31,41,55,0.80)'] as const,
-  },
-  typography: TYPO_CASINO,
   spacing: SPACING,
   radius: RADIUS,
   shadows: SHADOWS,
@@ -376,40 +338,23 @@ export const GAME_THEMES: Record<GameId, GameThemeTokens> = {
       cta: ['#B45309', '#D97706'],
     },
   },
-  roulette: {
-    ...BASE_CASINO,
-    gameId: 'roulette',
+  flappy: {
+    ...BASE_ARCADE,
+    gameId: 'flappy',
     colors: {
-      ...BASE_CASINO.colors,
-      bg: '#FFFFFF',
-      accent: '#EF4444',
-      accent2: '#F59E0B',
-      hudBg: 'rgba(31,41,55,0.92)',
-      hudText: '#F9FAFB',
+      ...BASE_ARCADE.colors,
+      bg: '#E0F2FE',
+      accent: '#0284C7',
+      accent2: '#38BDF8',
+      hudBg: 'rgba(255,255,255,0.85)',
+      hudText: '#0369A1',
     },
     gradients: {
-      ...BASE_CASINO.gradients,
-      bg: ['#111827', '#0B1220'],
-      cta: ['#EF4444', '#B91C1C'],
+      ...BASE_ARCADE.gradients,
+      bg: ['#E0F2FE', '#BAE6FD'],
+      cta: ['#0284C7', '#0369A1'],
     },
-  },
-  slots: {
-    ...BASE_CASINO,
-    gameId: 'slots',
-    colors: {
-      ...BASE_CASINO.colors,
-      bg: '#FFFFFF',
-      accent: '#3B82F6',
-      accent2: '#F59E0B',
-      hudBg: 'rgba(31,41,55,0.92)',
-      hudText: '#F9FAFB',
-    },
-    gradients: {
-      ...BASE_CASINO.gradients,
-      bg: ['#111827', '#0B1220'],
-      cta: ['#3B82F6', '#1D4ED8'],
-    },
-  },
+  }
 };
 
 export const GAME_FAMILY_BY_ID: Record<GameId, GameThemeFamily> = {
@@ -417,8 +362,7 @@ export const GAME_FAMILY_BY_ID: Record<GameId, GameThemeFamily> = {
   duck: 'arcade',
   memory: 'arcade',
   dino: 'arcade',
-  roulette: 'casino',
-  slots: 'casino',
+  flappy: 'arcade',
 };
 
 /**
@@ -428,4 +372,3 @@ export const GAME_FAMILY_BY_ID: Record<GameId, GameThemeFamily> = {
 export function getGameTheme(gameId: GameId): GameThemeTokens {
   return GAME_THEMES[gameId];
 }
-

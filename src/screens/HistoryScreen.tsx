@@ -1,128 +1,368 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { ShoppingBag, Ticket, Calendar, Filter, Search, X, ChevronDown, History, TrendingUp, ShieldCheck, Lock } from 'lucide-react-native';
-import { Card, CardContent } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Input } from '../components/ui/input';
-import { MobileHeader } from '../components/MobileHeader';
-import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { MARKETPLACE_ESCROW_RELEASE_DAYS, useMarketplace } from '../contexts/MarketplaceContext';
-import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
-import { useFintech } from '../contexts/FintechContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { useToast } from '../contexts/ToastContext';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
-import { useAuth } from '../contexts/AuthContext';
-import { useEscrow } from '../contexts/EscrowContext';
+import React, { useMemo, useState, useCallback } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    ScrollView,
+    Platform,
+    StatusBar,
+    ActivityIndicator,
+    RefreshControl,
+    useWindowDimensions,
+} from 'react-native';
+import {
+    ShoppingBag,
+    TrendingUp,
+    Ticket,
+    Calendar,
+    Filter,
+    Search,
+    X,
+    ChevronDown,
+    History,
+    ShieldCheck,
+    Clock,
+    MapPin,
+    CreditCard,
+    Package,
+    Truck,
+    CheckCircle,
+    AlertCircle,
+    MessageSquare,
+    ChevronLeft,
+    RotateCcw,
+    Copy,
+} from 'lucide-react-native';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { useEscrow } from '../contexts/EscrowContext';
+import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { Input } from '../components/ui/input';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
-
+type HistoryTab = 'purchases' | 'sales';
+type HistoryKind = 'products' | 'services' | 'bonos' | 'events' | 'other';
+type HistoryStatus = 'completed' | 'pending' | 'cancelled';
+type HistorySource = 'marketplace_order' | 'fintech_payment' | 'legacy';
+type HistoryType = 'purchase' | 'sale' | 'bonus' | 'event';
 
 interface HistoryItem {
     id: string;
-    type: 'purchase' | 'sale' | 'bonus' | 'event';
-    kind: 'products' | 'services' | 'bonos' | 'events' | 'other';
+    type: HistoryType;
+    kind: HistoryKind;
     title: string;
     business: string;
+    businessId?: string;
     image: string;
     price?: number;
-    discount?: number;
     location: string;
     date: string;
-    status: 'completed' | 'pending' | 'cancelled';
+    status: HistoryStatus;
     backendStatus?: string;
     orderId: string;
-    category: string;
     paymentMethod: string;
     quantity?: number;
-    source: 'marketplace_order' | 'fintech_payment' | 'legacy';
+    source: HistorySource;
+    escrowState?: string;
 }
 
-type PurchaseKindFilter = 'all' | 'products' | 'services' | 'bonos' | 'events';
+type PurchaseKindFilter = 'all' | HistoryKind;
+type DatePreset = 'all' | 'today' | '7d' | '30d' | '90d' | '1y' | 'custom';
 
-const initialHistoryItems: HistoryItem[] = [];
+const STATUS_META: Record<HistoryStatus, { label: string; color: string; bg: string; text: string; icon: any }> = {
+    completed: { label: 'Exitoso', color: '#10B981', bg: '#D1FAE5', text: '#065F46', icon: CheckCircle },
+    pending: { label: 'Pendiente', color: '#F59E0B', bg: '#FEF3C7', text: '#92400E', icon: Clock },
+    cancelled: { label: 'Cancelado', color: '#EF4444', bg: '#FEE2E2', text: '#991B1B', icon: AlertCircle },
+};
+
+const KIND_META: Record<HistoryKind | 'all', { label: string; icon: any; color: string }> = {
+    all: { label: 'Todos', icon: ShoppingBag, color: '#7C3AED' },
+    products: { label: 'Productos', icon: Package, color: '#8B5CF6' },
+    services: { label: 'Servicios', icon: ShoppingBag, color: '#38BDF8' },
+    bonos: { label: 'Bonos', icon: Ticket, color: '#3B82F6' },
+    events: { label: 'Eventos', icon: Calendar, color: '#F59E0B' },
+    other: { label: 'Otros', icon: ShoppingBag, color: '#6B7280' },
+};
+
+const TYPE_ICON: Record<HistoryType, any> = {
+    purchase: ShoppingBag,
+    sale: TrendingUp,
+    bonus: Ticket,
+    event: Calendar,
+};
+
+const ESCROW_META: Record<string, { label: string; color: string }> = {
+    held: { label: 'En retención', color: '#D97706' },
+    release_scheduled: { label: 'Liberación programada', color: '#2563EB' },
+    released: { label: 'Liberado', color: '#059669' },
+    disputed: { label: 'En disputa', color: '#DC2626' },
+    refunded: { label: 'Reembolsado', color: '#6B7280' },
+};
+
+function formatDate(dateString: string | number | Date): string {
+    if (!dateString) return '—';
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return String(dateString);
+    return d.toLocaleDateString('es-ES', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+}
+
+function formatShortDate(dateString: string | number | Date): string {
+    if (!dateString) return '—';
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return String(dateString);
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+}
+
+function formatCurrency(n?: number): string {
+    if (n === undefined || n === null || Number.isNaN(n)) return '$0.00';
+    return `$${Number(n).toFixed(2)}`;
+}
+
+function parseDateInput(value: string): Date | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return date;
+}
+
+function detectKindFromListing(listing: any): HistoryKind {
+    const t = String(listing?.listingType || listing?.type || '').toLowerCase();
+    if (t === 'service') return 'services';
+    if (t === 'event') return 'events';
+    if (t === 'bono' || t === 'bonus') return 'bonos';
+    return 'products';
+}
 
 export default function HistoryScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
+    const styles = getStyles(isDark, insets, width);
     const { show } = useToast();
-
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'purchases' | 'sales'>(route?.params?.tab || 'purchases');
+    const { openEscrow } = useEscrow();
+
+    const [activeTab, setActiveTab] = useState<HistoryTab>(route?.params?.tab || 'purchases');
     const [purchaseKindFilter, setPurchaseKindFilter] = useState<PurchaseKindFilter>(route?.params?.filter || 'all');
     const [searchQuery, setSearchQuery] = useState('');
-    const { orders } = useMarketplace();
-    const products = useMarketplaceProducts();
-    const { openEscrow } = useEscrow();
-    const { payments: contextPayments } = useFintech();
-    const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
-    const releaseEscrowFunds = useAction(api.stripe.releaseEscrowFunds);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const [datePreset, setDatePreset] = useState<DatePreset>('all');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
 
     const [isReleasingEscrow, setIsReleasingEscrow] = useState<Record<string, boolean>>({});
 
-    const handleReleaseEscrow = async (orderId: string) => {
-        setIsReleasingEscrow(prev => ({ ...prev, [orderId]: true }));
-        try {
-            await releaseEscrowFunds({ orderId: orderId as any });
-            show('Pago liberado exitosamente al vendedor.', 'success');
-        } catch (e: any) {
-            show(e.message || 'Error al liberar el pago.', 'error');
-        } finally {
-            setIsReleasingEscrow(prev => ({ ...prev, [orderId]: false }));
-        }
-    };
-
+    const orders = useQuery(api.orders.getMyOrders as any, user?.id ? { userId: user.id } : 'skip') || [];
+    const mySellerOrders = useQuery(api.orders.getOrdersBySeller as any, user?.id ? { sellerId: user.id } : 'skip') || [];
+    const payments = useQuery(api.finance.getPaymentsByUser as any, user?.id ? { userId: user.id } : 'skip') || [];
     const myBonos = useQuery(api.bonos.getMyBonos as any, { userId: user?.id }) || [];
     const mySellerBonos = useQuery(api.bonos.getBonosBySeller as any, { sellerId: user?.id }) || [];
-    const [filtersOpen, setFiltersOpen] = useState(false);
+    const listings = useQuery(api.listings.getFeed) || [];
 
-    const [datePreset, setDatePreset] = useState<'all' | 'today' | '7d' | '30d' | '90d' | '1y' | 'custom'>('all');
-    const [dateFrom, setDateFrom] = useState(''); // YYYY-MM-DD
-    const [dateTo, setDateTo] = useState(''); // YYYY-MM-DD
+    const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
+    const releaseEscrowFunds = useAction(api.stripe.releaseEscrowFunds);
 
-    const escrowMeta = (state?: string) => {
-        switch (state) {
-            case 'held':
-                return { label: 'En retención (escrow)', color: '#D97706' };
-            case 'release_scheduled':
-                return { label: 'Liberación programada', color: '#2563EB' };
-            case 'released':
-                return { label: 'Liberado', color: '#059669' };
-            case 'disputed':
-                return { label: 'En disputa', color: '#DC2626' };
-            case 'refunded':
-                return { label: 'Reembolsado', color: '#6B7280' };
-            default:
-                return { label: state ? String(state) : 'No aplica', color: '#6B7280' };
-        }
+    const loading =
+        orders === undefined ||
+        mySellerOrders === undefined ||
+        payments === undefined ||
+        myBonos === undefined ||
+        mySellerBonos === undefined ||
+        listings === undefined;
+
+    const findListing = useCallback((listingId?: string) => {
+        if (!listingId) return undefined;
+        return (listings as any[]).find((l: any) => l._id === listingId || l.id === listingId);
+    }, [listings]);
+
+    const getOrderStatus = (status?: string): HistoryStatus => {
+        if (!status) return 'pending';
+        if (status === 'refunded' || status === 'cancelled') return 'cancelled';
+        if (status === 'completed' || status === 'delivered') return 'completed';
+        return 'pending';
     };
 
-    const parseDateInput = (value: string): Date | null => {
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-        const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!match) return null;
-        const year = Number(match[1]);
-        const month = Number(match[2]);
-        const day = Number(match[3]);
-        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-        const date = new Date(year, month - 1, day);
-        // Validate normalization (e.g., 2026-02-31 should be invalid)
-        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-        return date;
+    const getListingImage = (listingId?: string, fallback?: string) => {
+        const listing = findListing(listingId);
+        return listing?.image || listing?.images?.[0]?.url || listing?.gallery?.[0] || fallback;
     };
+
+    const purchaseOrderItems: HistoryItem[] = useMemo(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
+        return (orders as any[]).map((order: any) => {
+            const firstItem = order.items?.[0];
+            const listing = findListing(firstItem?.listingId);
+            const kind = detectKindFromListing(listing);
+            const status = getOrderStatus(order.status);
+            return {
+                id: `purchase-${order._id}`,
+                type: 'purchase',
+                kind,
+                title: firstItem?.title ?? 'Compra Marketplace',
+                business: listing?.seller?.name || `Vendedor ${String(order.sellerId).slice(-6).toUpperCase()}`,
+                businessId: order.sellerId,
+                image: getListingImage(firstItem?.listingId, fallbackImage),
+                price: order.total || 0,
+                location: order.shipping?.address?.city ?? order.shipping?.address?.country ?? 'A coordinar',
+                date: order.createdAt,
+                status,
+                backendStatus: order.status,
+                orderId: order._id,
+                paymentMethod: 'Marketplace (escrow)',
+                quantity: order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0),
+                source: 'marketplace_order',
+                escrowState: order.escrowState || order.escrow?.state,
+            };
+        });
+    }, [orders, findListing]);
+
+    const salesOrderItems: HistoryItem[] = useMemo(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
+        return (mySellerOrders as any[])
+            .filter((order: any) => {
+                if (!user) return false;
+                if (user.role !== 'consumer' && user.role !== 'influencer') return true;
+                const firstItem = order.items?.[0];
+                const listing = findListing(firstItem?.listingId);
+                const t = String(listing?.listingType || listing?.type || '').toLowerCase();
+                return t !== 'event';
+            })
+            .map((order: any) => {
+                const firstItem = order.items?.[0];
+                const listing = findListing(firstItem?.listingId);
+                const kind = detectKindFromListing(listing);
+                const status = getOrderStatus(order.status);
+                return {
+                    id: `sale-${order._id}`,
+                    type: 'sale',
+                    kind,
+                    title: firstItem?.title ?? 'Venta Marketplace',
+                    business: `Cliente ${String(order.userId).slice(-6).toUpperCase()}`,
+                    businessId: order.userId,
+                    image: getListingImage(firstItem?.listingId, fallbackImage),
+                    price: order.total || 0,
+                    location: order.shipping?.address?.city ?? order.shipping?.address?.country ?? 'A coordinar',
+                    date: order.createdAt,
+                    status,
+                    backendStatus: order.status,
+                    orderId: order._id,
+                    paymentMethod: 'Marketplace (escrow)',
+                    quantity: order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0),
+                    source: 'marketplace_order',
+                    escrowState: order.escrowState || order.escrow?.state,
+                };
+            });
+    }, [mySellerOrders, findListing, user]);
+
+    const fintechItems: HistoryItem[] = useMemo(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
+        return (payments as any[]).map((payment: any) => {
+            const status: HistoryStatus =
+                payment.status === 'succeeded' ? 'completed' :
+                payment.status === 'processing' ? 'pending' : 'cancelled';
+            return {
+                id: `fintech-${payment.id || payment._id}`,
+                type: 'purchase',
+                kind: 'products',
+                title: payment.description ?? 'Compra Ramgos',
+                business: payment.split?.sellerId ?? 'Ramgos',
+                image: payment.metadata?.image || fallbackImage,
+                price: payment.amount,
+                location: payment.metadata?.location || 'Online',
+                date: payment.createdAt,
+                status,
+                orderId: payment.metadata?.orderId || payment.id,
+                paymentMethod: payment.method?.brand
+                    ? `${payment.method.brand} •••• ${payment.method.last4 ?? '****'}`
+                    : 'Stripe',
+                quantity: payment.metadata?.quantity ? Number(payment.metadata.quantity) : undefined,
+                source: 'fintech_payment',
+            };
+        });
+    }, [payments]);
+
+    const bonoPurchaseItems: HistoryItem[] = useMemo(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
+        return (myBonos as any[]).map((bono: any) => {
+            const isRedeemed = bono.status === 'redeemed';
+            const isExpired = bono.status === 'expired';
+            const status: HistoryStatus = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
+            const businessName = bono.seller?.name || bono.seller?.nickname || 'Negocio Asociado';
+            return {
+                id: `bono-${bono._id}`,
+                type: 'bonus',
+                kind: 'bonos',
+                title: bono.listing?.title || 'Bono Digital',
+                business: businessName,
+                businessId: bono.sellerId,
+                image: bono.listing?.image || fallbackImage,
+                price: bono.listing?.price ?? 0,
+                location: 'Bono Digital',
+                date: bono.createdAt,
+                status,
+                orderId: bono.bonoCode,
+                paymentMethod: 'Digital Voucher',
+                quantity: 1,
+                source: 'marketplace_order',
+            };
+        });
+    }, [myBonos]);
+
+    const bonoSaleItems: HistoryItem[] = useMemo(() => {
+        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
+        return (mySellerBonos as any[]).map((bono: any) => {
+            const isRedeemed = bono.status === 'redeemed';
+            const isExpired = bono.status === 'expired';
+            const status: HistoryStatus = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
+            const buyerName = bono.buyer?.name || bono.buyer?.nickname || 'Cliente';
+            return {
+                id: `bono-sale-${bono._id}`,
+                type: 'bonus',
+                kind: 'bonos',
+                title: bono.listing?.title || 'Bono Digital',
+                business: `Canjea: ${buyerName} • Cod: ${bono.bonoCode}`,
+                businessId: bono.buyerId,
+                image: bono.listing?.image || fallbackImage,
+                price: bono.listing?.price ?? 0,
+                location: 'Digital',
+                date: bono.createdAt,
+                status,
+                orderId: bono.bonoCode,
+                paymentMethod: 'Voucher Emitido',
+                quantity: 1,
+                source: 'marketplace_order',
+            };
+        });
+    }, [mySellerBonos]);
 
     const dateRange = useMemo(() => {
         if (datePreset === 'all') return { from: null as Date | null, to: null as Date | null };
-
         const now = new Date();
         const end = new Date(now);
         end.setHours(23, 59, 59, 999);
-
         if (datePreset === 'custom') {
             const fromDate = parseDateInput(dateFrom);
             const toDate = parseDateInput(dateTo);
@@ -130,19 +370,15 @@ export default function HistoryScreen({ navigation, route }: any) {
             if (toDate) toDate.setHours(23, 59, 59, 999);
             return { from: fromDate, to: toDate };
         }
-
         const start = new Date(now);
         start.setHours(0, 0, 0, 0);
-
         const days =
             datePreset === 'today' ? 0 :
-                datePreset === '7d' ? 7 :
-                    datePreset === '30d' ? 30 :
-                        datePreset === '90d' ? 90 :
-                            datePreset === '1y' ? 365 :
-                                0;
+            datePreset === '7d' ? 7 :
+            datePreset === '30d' ? 30 :
+            datePreset === '90d' ? 90 :
+            datePreset === '1y' ? 365 : 0;
         start.setDate(start.getDate() - days);
-
         return { from: start, to: end };
     }, [datePreset, dateFrom, dateTo]);
 
@@ -150,676 +386,967 @@ export default function HistoryScreen({ navigation, route }: any) {
         datePreset !== 'all' &&
         (datePreset !== 'custom' || !!parseDateInput(dateFrom) || !!parseDateInput(dateTo));
 
-    const baseHistoryItems = useMemo(
-        () =>
-            initialHistoryItems
-                .filter((item) => item.type !== 'purchase')
-                .map((item) => ({ ...item, source: 'legacy' as const })),
-        []
-    );
+    const allItems = useMemo(() => {
+        const purchases = [...purchaseOrderItems, ...fintechItems, ...bonoPurchaseItems];
+        const sales = [...salesOrderItems, ...bonoSaleItems];
+        const combined = activeTab === 'sales' ? sales : purchases;
+        return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [activeTab, purchaseOrderItems, salesOrderItems, fintechItems, bonoPurchaseItems, bonoSaleItems]);
 
-    const getMarketplaceListingType = (productId?: string) => {
-        const product = products.find((p) => p.id === productId);
-        return (product?.listingType ?? 'product') as 'product' | 'service' | 'event';
-    };
-
-    const getOrderListingTypes = (order: any): Array<'product' | 'service' | 'event'> => {
-        const types = order.items.map((it: any) => getMarketplaceListingType(it.productId));
-        return types.length > 0 ? types : ['product'];
-    };
-
-    const listingTypesToKind = (types: Array<'product' | 'service' | 'event'>): HistoryItem['kind'] => {
-        // Prioritize "service" and "event" if present, otherwise default to products.
-        if (types.includes('service')) return 'services';
-        if (types.includes('event')) return 'events';
-        return 'products';
-    };
-
-    const purchaseOrderHistoryItems = useMemo<HistoryItem[]>(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
-        return orders
-            .filter((order) => (user?.id ? order.buyerId === user.id : true))
-            .map((order) => {
-                const firstItem = order.items[0];
-                const product = products.find((p) => p.id === firstItem?.productId);
-                const listingTypes = getOrderListingTypes(order);
-                const kind = listingTypesToKind(listingTypes);
-                const status: HistoryItem['status'] =
-                    order.paymentStatus === 'refunded'
-                        ? 'cancelled'
-                        : order.status === 'completed'
-                            ? 'completed'
-                            : 'pending';
-
-                return {
-                    id: `purchase-${order.id}`,
-                    type: 'purchase',
-                    kind,
-                    title: firstItem?.title ?? 'Compra Marketplace',
-                    business: order.sellerName,
-                    image: product?.images[0]?.url ?? fallbackImage,
-                    price: order.totals.grandTotal,
-                    location: order.shipping.destination.city ?? order.shipping.destination.country ?? 'A coordinar',
-                    date: order.createdAt,
-                    status,
-                    backendStatus: order.status,
-                    orderId: order.id,
-                    category: product?.category ?? 'Marketplace',
-                    paymentMethod: 'Marketplace (escrow)',
-                    quantity: order.items.reduce((sum, item) => sum + item.quantity, 0),
-                    source: 'marketplace_order',
-                };
-            });
-    }, [orders, products, user?.id]);
-
-    const salesOrderHistoryItems = useMemo<HistoryItem[]>(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
-        return orders
-            .filter((order) => (user?.id ? order.sellerId === user.id : false))
-            .filter((order) => {
-                // Consumer/Influencer: only allow sales of products/services (exclude events)
-                if (!user) return false;
-                if (user.role !== 'consumer' && user.role !== 'influencer') return true;
-                const listingTypes = getOrderListingTypes(order);
-                return listingTypes.every((t) => t === 'product' || t === 'service');
-            })
-            .map((order) => {
-                const firstItem = order.items[0];
-                const product = products.find((p) => p.id === firstItem?.productId);
-                const listingTypes = getOrderListingTypes(order);
-                const kind = listingTypesToKind(listingTypes);
-                const status: HistoryItem['status'] =
-                    order.paymentStatus === 'refunded'
-                        ? 'cancelled'
-                        : order.status === 'completed'
-                            ? 'completed'
-                            : 'pending';
-
-                return {
-                    id: `sale-${order.id}`,
-                    type: 'sale',
-                    kind,
-                    title: firstItem?.title ?? 'Venta Marketplace',
-                    business: `Venta a ${order.buyerId.slice(-6).toUpperCase()}`,
-                    image: product?.images[0]?.url ?? fallbackImage,
-                    price: order.totals.grandTotal,
-                    location: order.shipping.destination.city ?? order.shipping.destination.country ?? 'A coordinar',
-                    date: order.createdAt,
-                    status,
-                    orderId: order.id,
-                    category: product?.category ?? 'Marketplace',
-                    paymentMethod: 'Marketplace (escrow)',
-                    quantity: order.items.reduce((sum, item) => sum + item.quantity, 0),
-                    source: 'marketplace_order',
-                };
-            });
-    }, [orders, products, user]);
-
-    const fintechHistoryItems = useMemo<HistoryItem[]>(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
-        return contextPayments.map((payment) => {
-            const status: HistoryItem['status'] =
-                payment.status === 'succeeded'
-                    ? 'completed'
-                    : payment.status === 'processing'
-                        ? 'pending'
-                        : 'cancelled';
-
-            return {
-                id: `fintech-${payment.id}`,
-                type: 'purchase' as const,
-                kind: 'products' as const,
-                title: payment.description ?? 'Compra Ramgos',
-                business: payment.split?.sellerId ?? 'Ramgos',
-                image: (payment.metadata?.image as string) ?? fallbackImage,
-                price: payment.amount,
-                location: (payment.metadata?.location as string) ?? 'Online',
-                date: payment.createdAt,
-                status,
-                orderId: (payment.metadata?.orderId as string) ?? payment.id,
-                category: (payment.metadata?.category as string) ?? 'Fintech',
-                paymentMethod: payment.method?.brand
-                    ? `${payment.method.brand} •••• ${payment.method.last4 ?? '****'}`
-                    : 'Stripe',
-                quantity: payment.metadata?.quantity ? Number(payment.metadata.quantity) : undefined,
-                source: 'fintech_payment' as const,
-            };
-        });
-    }, [contextPayments]);
-
-    const bonoHistoryItems = useMemo<HistoryItem[]>(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
-        return myBonos.map((bono: any) => {
-            const isRedeemed = bono.status === 'redeemed';
-            const isExpired = bono.status === 'expired';
-            const status: HistoryItem['status'] = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
-            const businessName = bono.seller?.name || bono.seller?.nickname || 'Negocio Asociado';
-            
-            return {
-                id: `bono-${bono._id}`,
-                type: 'bonus' as const,
-                kind: 'bonos' as const,
-                title: bono.listing?.title || 'Bono Digital',
-                business: businessName,
-                image: bono.listing?.image ?? fallbackImage,
-                price: bono.listing?.price ?? 0,
-                location: 'Bono Digital',
-                date: bono.createdAt,
-                status,
-                orderId: bono.bonoCode, // Abusing orderId to pass bonoCode
-                category: bono.listing?.category ?? 'Bonos',
-                paymentMethod: 'Digital Voucher',
-                quantity: 1,
-                source: 'marketplace_order' as const,
-            };
-        });
-    }, [myBonos]);
-
-    const bonoSellerHistoryItems = useMemo<HistoryItem[]>(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
-        return mySellerBonos.map((bono: any) => {
-            const isRedeemed = bono.status === 'redeemed';
-            const isExpired = bono.status === 'expired';
-            const status: HistoryItem['status'] = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
-            const buyerName = bono.buyer?.name || bono.buyer?.nickname || 'Cliente';
-            
-            return {
-                id: `bono-sale-${bono._id}`,
-                type: 'bonus' as const,
-                kind: 'bonos' as const,
-                title: bono.listing?.title || 'Bono Digital',
-                business: `Canjea: ${buyerName} • Cod: ${bono.bonoCode}`,
-                image: bono.listing?.image ?? fallbackImage,
-                price: bono.listing?.price ?? 0,
-                location: 'Digital',
-                date: bono.createdAt,
-                status,
-                orderId: bono.bonoCode,
-                category: bono.listing?.category ?? 'Bonos',
-                paymentMethod: 'Voucher Emitido',
-                quantity: 1,
-                source: 'marketplace_order' as const,
-            };
-        });
-    }, [mySellerBonos]);
-
-    const historyItems = useMemo(() => {
-        const combinedPurchases = [...purchaseOrderHistoryItems, ...fintechHistoryItems, ...baseHistoryItems, ...bonoHistoryItems];
-        const combinedSales = [...salesOrderHistoryItems, ...bonoSellerHistoryItems];
-        const combined = activeTab === 'sales' ? combinedSales : combinedPurchases;
-        return combined.sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-    }, [activeTab, purchaseOrderHistoryItems, salesOrderHistoryItems, fintechHistoryItems, baseHistoryItems, bonoHistoryItems, bonoSellerHistoryItems]);
-
-    const filteredItems = historyItems.filter(item => {
+    const filteredItems = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        const matchesSearch =
-            !q ||
-            item.title.toLowerCase().includes(q) ||
-            item.business.toLowerCase().includes(q) ||
-            item.orderId.toLowerCase().includes(q);
-
-        const matchesPurchaseKind =
-            activeTab !== 'purchases' ||
-            purchaseKindFilter === 'all' ||
-            item.kind === purchaseKindFilter;
-
-        const itemTime = new Date(item.date).getTime();
-        const matchesDate =
-            !activeDateFilter ||
-            (!Number.isNaN(itemTime) &&
-                (!dateRange.from || itemTime >= dateRange.from.getTime()) &&
-                (!dateRange.to || itemTime <= dateRange.to.getTime()));
-
-        return matchesSearch && matchesPurchaseKind && matchesDate;
-    });
-
-    const getItemIcon = (type: HistoryItem['type']) => {
-        switch (type) {
-            case 'purchase': return ShoppingBag;
-            case 'sale': return TrendingUp;
-            case 'bonus': return Ticket;
-            case 'event': return Calendar;
-        }
-    };
-
-    const getStatusColor = (status: HistoryItem['status']) => {
-        switch (status) {
-            case 'completed': return isDark ? '#064E3B' : '#DCFCE7'; // green-900 / green-100
-            case 'pending': return isDark ? '#451A03' : '#FEF9C3'; // yellow-900 / yellow-100
-            case 'cancelled': return isDark ? '#450A0A' : '#FEE2E2'; // red-900 / red-100
-        }
-    };
-
-    const getStatusTextColor = (status: HistoryItem['status']) => {
-        switch (status) {
-            case 'completed': return isDark ? '#6EE7B7' : '#166534'; // green-300 / green-800
-            case 'pending': return isDark ? '#FDE047' : '#854d0e'; // yellow-300 / yellow-800
-            case 'cancelled': return isDark ? '#FCA5A5' : '#991b1b'; // red-300 / red-800
-        }
-    };
-
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('es-ES', {
-            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        return allItems.filter((item) => {
+            const matchesSearch =
+                !q ||
+                item.title.toLowerCase().includes(q) ||
+                item.business.toLowerCase().includes(q) ||
+                String(item.orderId).toLowerCase().includes(q);
+            const matchesKind = activeTab !== 'purchases' || purchaseKindFilter === 'all' || item.kind === purchaseKindFilter;
+            const itemTime = new Date(item.date).getTime();
+            const matchesDate =
+                !activeDateFilter ||
+                (!Number.isNaN(itemTime) &&
+                    (!dateRange.from || itemTime >= dateRange.from.getTime()) &&
+                    (!dateRange.to || itemTime <= dateRange.to.getTime()));
+            return matchesSearch && matchesKind && matchesDate;
         });
-    };
+    }, [allItems, searchQuery, activeTab, purchaseKindFilter, activeDateFilter, dateRange]);
 
-    const stats = {
-        all: historyItems.length,
-        totalSpent: historyItems
-            .filter(i => i.status === 'completed' && i.price)
-            .reduce((sum, i) => sum + (i.price || 0), 0),
-    };
+    const stats = useMemo(() => {
+        const relevant = activeTab === 'sales' ? salesOrderItems : [...purchaseOrderItems, ...fintechItems, ...bonoPurchaseItems];
+        const completed = relevant.filter((i) => i.status === 'completed');
+        const total = completed.reduce((sum, i) => sum + (i.price || 0), 0);
+        const pendingCount = relevant.filter((i) => i.status === 'pending').length;
+        return {
+            count: relevant.length,
+            total,
+            pendingCount,
+        };
+    }, [activeTab, purchaseOrderItems, salesOrderItems, fintechItems, bonoPurchaseItems]);
 
-
-    const handleAction = (item: HistoryItem, action: 'dispute' | 'confirm') => {
-        if (action === 'dispute') {
-            navigation.navigate('Dispute', { orderId: item.orderId });
+    const handleReleaseEscrow = async (orderId: string) => {
+        if (!user?.id) {
+            show('Sesión no válida. Iniciá sesión nuevamente.', 'error');
             return;
         }
+        setIsReleasingEscrow((prev) => ({ ...prev, [orderId]: true }));
+        try {
+            await releaseEscrowFunds({ orderId: orderId as any, userId: user.id });
+            show('Pago liberado exitosamente al vendedor.', 'success');
+        } catch (e: any) {
+            show(e.message || 'Error al liberar el pago.', 'error');
+        } finally {
+            setIsReleasingEscrow((prev) => ({ ...prev, [orderId]: false }));
+        }
+    };
 
+    const handleConfirmReceipt = (item: HistoryItem) => {
         if (!item.orderId) {
             show('No encontramos información de la orden', 'error');
             return;
         }
-
-        // Confirm receipt via Convex (releases escrow server-side)
-        confirmReceiptMutation({ orderId: item.orderId as any })
-            .then(() => {
-                show('Entrega confirmada. El pago se liberará al vendedor', 'success');
-            })
-            .catch((err: any) => {
-                show(err.message ?? 'No pudimos confirmar la entrega', 'error');
-            });
+        if (!user?.id) {
+            show('Sesión no válida. Iniciá sesión nuevamente.', 'error');
+            return;
+        }
+        confirmReceiptMutation({ orderId: item.orderId as any, userId: user.id })
+            .then(() => show('Entrega confirmada. El pago se liberará al vendedor', 'success'))
+            .catch((err: any) => show(err.message ?? 'No pudimos confirmar la entrega', 'error'));
     };
 
-    return (
-        <View style={styles.container}>
-            <MobileHeader
-                title="Mis compras"
-                subtitle={`${filteredItems.length} transacciones`}
-                onMenuPress={() => navigation.openDrawer && navigation.openDrawer()}
-                backButton
-                onBack={() => navigation.goBack()}
-            />
+    const handleDispute = (item: HistoryItem) => {
+        setSelectedItem(null);
+        navigation.navigate('Dispute', { orderId: item.orderId });
+    };
 
-            <View style={styles.searchContainer}>
+    const handleUseBono = (item: HistoryItem) => {
+        navigation.navigate('BonusQR', { bonusId: item.orderId, businessName: item.business });
+    };
+
+    const handleOpenEscrow = (item: HistoryItem) => {
+        setSelectedItem(null);
+        openEscrow(item.orderId, activeTab === 'sales' ? 'seller' : 'buyer');
+    };
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        setTimeout(() => setRefreshing(false), 1000);
+    }, []);
+
+    const clearFilters = () => {
+        setDatePreset('all');
+        setDateFrom('');
+        setDateTo('');
+        setPurchaseKindFilter('all');
+        setSearchQuery('');
+    };
+
+    const scrollY = useSharedValue(0);
+    const headerOpacity = useAnimatedStyle(() => ({
+        opacity: interpolate(scrollY.value, [60, 120], [0, 1], Extrapolation.CLAMP),
+    }));
+
+    const kindChips: { id: PurchaseKindFilter; label: string; icon: any }[] = [
+        { id: 'all', label: 'Todos', icon: ShoppingBag },
+        { id: 'products', label: 'Productos', icon: Package },
+        { id: 'services', label: 'Servicios', icon: ShoppingBag },
+        { id: 'bonos', label: 'Bonos', icon: Ticket },
+        { id: 'events', label: 'Eventos', icon: Calendar },
+    ];
+
+    const renderHeader = () => (
+        <View style={styles.headerWrapper}>
+            <View style={styles.hero}>
+                <View style={styles.headerTop}>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+                        <ChevronLeft size={24} color={isDark ? '#FFF' : '#111827'} />
+                    </TouchableOpacity>
+                    <View style={styles.headerTitles}>
+                        <Text style={styles.headerTitle}>Mis compras</Text>
+                        <Text style={styles.headerSubtitle}>{filteredItems.length} transacciones</Text>
+                    </View>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => setFiltersOpen(true)} activeOpacity={0.8}>
+                        <View style={{ position: 'relative' }}>
+                            <Filter size={20} color={isDark ? '#FFF' : '#111827'} />
+                            {activeDateFilter && <View style={styles.filterDot} />}
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Search */}
                 <View style={styles.searchBar}>
-                    <Search size={18} color={isDark ? "#9CA3AF" : "#666"} style={{ marginRight: 8 }} />
+                    <Search size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
                     <Input
-                        placeholder="Buscar..."
+                        placeholder="Buscar compras, ventas o códigos..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        style={{ flex: 1, borderWidth: 0, color: isDark ? '#F9FAFB' : '#000' }}
-                        placeholderTextColor={isDark ? "#6B7280" : "#999"}
+                        style={styles.searchInput}
+                        placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <X size={18} color={isDark ? "#9CA3AF" : "#666"} />
+                            <X size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
                         </TouchableOpacity>
                     )}
                 </View>
-                <Button variant="outline" style={styles.filterBtn} onPress={() => setFiltersOpen(true)}>
-                    <View style={{ position: 'relative', width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
-                        <Filter size={18} color={isDark ? "#F9FAFB" : "#000"} />
-                        {activeDateFilter && <View style={styles.filterActiveDot} />}
-                    </View>
-                </Button>
             </View>
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-                {/* Stats Cards Row */}
-                <View style={styles.statsRow}>
-                    <Card style={[styles.statsCard, { backgroundColor: isDark ? '#064E3B' : '#F0FDF4' }]}>
-                        <CardContent style={styles.statsContent}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                <ShoppingBag size={14} color="#16A34A" />
-                                <Text style={styles.statsLabel}> {activeTab === 'sales' ? 'Total Vendido' : 'Total Gastado'}</Text>
+            {/* Sticky header backdrop */}
+            <Animated.View style={[styles.stickyHeader, headerOpacity]}>
+                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
+                <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
+                    <Text style={styles.stickyTitle}>Mis compras</Text>
+                </View>
+            </Animated.View>
+        </View>
+    );
+
+    const renderStats = () => (
+        <View style={styles.statsRow}>
+            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5' }]}>
+                <View style={styles.statIconWrap}>
+                    <ShoppingBag size={18} color="#10B981" />
+                </View>
+                <Text style={[styles.statValue, { color: '#10B981' }]}>{formatCurrency(stats.total)}</Text>
+                <Text style={styles.statLabel}>{activeTab === 'sales' ? 'Total vendido' : 'Total gastado'}</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.12)' : '#F5F3FF' }]}>
+                <View style={[styles.statIconWrap, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE' }]}>
+                    <History size={18} color="#7C3AED" />
+                </View>
+                <Text style={[styles.statValue, { color: '#7C3AED' }]}>{stats.count}</Text>
+                <Text style={styles.statLabel}>Transacciones</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB' }]}>
+                <View style={[styles.statIconWrap, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7' }]}>
+                    <Clock size={18} color="#F59E0B" />
+                </View>
+                <Text style={[styles.statValue, { color: '#F59E0B' }]}>{stats.pendingCount}</Text>
+                <Text style={styles.statLabel}>Pendientes</Text>
+            </View>
+        </View>
+    );
+
+    const renderTabs = () => (
+        <View style={styles.controlsBar}>
+            <View style={styles.tabPill}>
+                <TouchableOpacity
+                    style={[styles.tabPillBtn, activeTab === 'purchases' && styles.tabPillBtnActive]}
+                    onPress={() => {
+                        setActiveTab('purchases');
+                        setPurchaseKindFilter('all');
+                    }}
+                >
+                    <ShoppingBag size={16} color={activeTab === 'purchases' ? '#fff' : isDark ? '#9CA3AF' : '#6B7280'} />
+                    <Text style={[styles.tabPillText, activeTab === 'purchases' && styles.tabPillTextActive]}>Compras</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tabPillBtn, activeTab === 'sales' && styles.tabPillBtnActive]}
+                    onPress={() => setActiveTab('sales')}
+                >
+                    <TrendingUp size={16} color={activeTab === 'sales' ? '#fff' : isDark ? '#9CA3AF' : '#6B7280'} />
+                    <Text style={[styles.tabPillText, activeTab === 'sales' && styles.tabPillTextActive]}>Ventas</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+
+    const renderKindChips = () => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll} nestedScrollEnabled>
+            {kindChips.map((chip) => {
+                const active = purchaseKindFilter === chip.id;
+                const Icon = chip.icon;
+                return (
+                    <TouchableOpacity
+                        key={chip.id}
+                        style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => setPurchaseKindFilter(chip.id)}
+                    >
+                        <Icon size={14} color={active ? '#fff' : isDark ? '#9CA3AF' : '#6B7280'} />
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{chip.label}</Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </ScrollView>
+    );
+
+    const renderItem = (item: HistoryItem, index: number) => {
+        const meta = STATUS_META[item.status];
+        const StatusIcon = meta.icon;
+        const TypeIcon = TYPE_ICON[item.type];
+        const isBono = item.kind === 'bonos' && item.type === 'bonus';
+        const canUseBono = isBono && activeTab === 'purchases' && item.status === 'pending';
+        const canConfirm = activeTab === 'purchases' && item.backendStatus === 'paid_escrow';
+
+        return (
+            <TouchableOpacity
+                key={item.id || `history-${index}`}
+                style={styles.itemCard}
+                activeOpacity={canUseBono ? 0.8 : 1}
+                onPress={() => canUseBono ? handleUseBono(item) : setSelectedItem(item)}
+            >
+                <View style={styles.itemRow}>
+                    <View style={styles.imageWrap}>
+                        <ImageWithFallback src={item.image} style={styles.itemImage} />
+                        <View style={styles.typeBadge}>
+                            <TypeIcon size={12} color="#fff" />
+                        </View>
+                    </View>
+
+                    <View style={styles.itemBody}>
+                        <View style={styles.itemTopRow}>
+                            <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                            <View style={[styles.statusBadge, { backgroundColor: isDark ? `${meta.color}30` : meta.bg }]}>
+                                <StatusIcon size={10} color={isDark ? meta.color : meta.text} />
+                                <Text style={[styles.statusText, { color: isDark ? meta.color : meta.text }]}>
+                                    {item.status === 'completed' ? (isBono ? 'Canjeado' : 'Exitoso') : item.status === 'pending' ? (isBono ? 'Disponible' : 'Pendiente') : 'Cancelado'}
+                                </Text>
                             </View>
-                            <Text style={[styles.statsValue, { color: '#16A34A' }]}>${stats.totalSpent.toFixed(2)}</Text>
-                        </CardContent>
-                    </Card>
-                    <Card style={[styles.statsCard, { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF' }]}>
-                        <CardContent style={styles.statsContent}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                <History size={14} color="#2563EB" />
-                                <Text style={styles.statsLabel}> Transacciones</Text>
-                            </View>
-                            <Text style={[styles.statsValue, { color: '#2563EB' }]}>{stats.all}</Text>
-                        </CardContent>
-                    </Card>
+                        </View>
+                        <Text style={styles.itemBusiness}>{item.business}</Text>
+                        <Text style={styles.itemMeta}>{formatShortDate(item.date)} • {item.paymentMethod}</Text>
+
+                        <View style={styles.itemFooter}>
+                            <Text style={styles.itemPrice}>
+                                {isBono && item.price === 0 ? 'GRATIS' : formatCurrency(item.price)}
+                            </Text>
+                            {canConfirm && (
+                                <TouchableOpacity
+                                    style={styles.confirmBtn}
+                                    onPress={(e) => { e.stopPropagation(); handleReleaseEscrow(item.orderId); }}
+                                    disabled={isReleasingEscrow[item.orderId]}
+                                >
+                                    {isReleasingEscrow[item.orderId] ? (
+                                        <ActivityIndicator size="small" color="#fff" />
+                                    ) : (
+                                        <Text style={styles.confirmBtnText}>Confirmar</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
                 </View>
 
-                {/* Controls Bar (single horizontal bar like Marketplace) */}
-                <View style={styles.controlsBar}>
-                    <View style={styles.tabsGroup}>
-                        <TouchableOpacity
-                            style={[styles.tabBtn, activeTab === 'purchases' && styles.tabBtnActive]}
-                            onPress={() => {
-                                setActiveTab('purchases');
-                                setPurchaseKindFilter('all');
-                            }}
-                        >
-                            <Text style={[styles.tabBtnText, activeTab === 'purchases' && styles.tabBtnTextActive]}>
-                                Compras
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.tabBtn, activeTab === 'sales' && styles.tabBtnActive]}
-                            onPress={() => setActiveTab('sales')}
-                        >
-                            <Text style={[styles.tabBtnText, activeTab === 'sales' && styles.tabBtnTextActive]}>
-                                Ventas
-                            </Text>
+                {!canConfirm && !canUseBono && (
+                    <TouchableOpacity style={styles.detailBtn} onPress={() => setSelectedItem(item)} activeOpacity={0.8}>
+                        <Text style={styles.detailBtnText}>Ver detalle</Text>
+                        <ChevronDown size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                    </TouchableOpacity>
+                )}
+
+                {canUseBono && (
+                    <View style={styles.bonoHint}>
+                        <Text style={styles.bonoHintText}>Tocá para escanear el QR</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+        );
+    };
+
+    const renderDetailSheet = () => {
+        if (!selectedItem) return null;
+        const meta = STATUS_META[selectedItem.status];
+        const StatusIcon = meta.icon;
+        const isBono = selectedItem.kind === 'bonos' && selectedItem.type === 'bonus';
+        const canConfirm = activeTab === 'purchases' && selectedItem.backendStatus === 'paid_escrow';
+        const escrowMeta = selectedItem.escrowState ? ESCROW_META[selectedItem.escrowState] : null;
+
+        return (
+            <Sheet open={!!selectedItem} onOpenChange={(open: boolean) => { if (!open) setSelectedItem(null); }}>
+                <SheetContent side="bottom" style={[styles.detailSheet, { backgroundColor: isDark ? '#18181B' : '#fff' }]}>
+                    <View style={styles.detailHandle} />
+                    <View style={styles.detailHeader}>
+                        <View>
+                            <Text style={styles.detailTitle}>Detalle de transacción</Text>
+                            <Text style={styles.detailSubtitle}>#{String(selectedItem.orderId).slice(-6).toUpperCase()}</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setSelectedItem(null)} style={styles.detailCloseBtn}>
+                            <X size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
                         </TouchableOpacity>
                     </View>
 
-                    {activeTab === 'purchases' && (
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.purchaseFilterContent}
-                            style={styles.purchaseFilterScrollInline}
-                        >
-                            {([
-                                { id: 'all', label: 'Todos' },
-                                { id: 'products', label: 'Productos' },
-                                { id: 'services', label: 'Servicios' },
-                                { id: 'bonos', label: 'Bonos' },
-                                { id: 'events', label: 'Eventos' },
-                            ] as const).map((chip) => {
-                                const active = purchaseKindFilter === chip.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={chip.id}
-                                        style={[styles.purchaseChip, active && styles.purchaseChipActive]}
-                                        onPress={() => setPurchaseKindFilter(chip.id)}
-                                    >
-                                        <Text style={[styles.purchaseChipText, active && styles.purchaseChipTextActive]}>
-                                            {chip.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                    )}
-                </View>
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}>
+                        {/* Hero status */}
+                        <View style={[styles.detailHero, { backgroundColor: isDark ? `${meta.color}18` : meta.bg }]}>
+                            <View style={[styles.detailHeroIcon, { borderColor: meta.color }]}>
+                                <StatusIcon size={28} color={meta.color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.detailHeroTitle}>
+                                    {selectedItem.status === 'completed' ? 'Transacción exitosa' : selectedItem.status === 'pending' ? 'En progreso' : 'Cancelada'}
+                                </Text>
+                                <Text style={styles.detailHeroSubtitle}>
+                                    {selectedItem.type === 'purchase' ? 'Compra' : selectedItem.type === 'sale' ? 'Venta' : selectedItem.type === 'bonus' ? 'Bono' : 'Evento'} • {selectedItem.paymentMethod}
+                                </Text>
+                            </View>
+                            <View style={[styles.detailHeroBadge, { backgroundColor: isDark ? `${meta.color}28` : meta.bg, borderColor: meta.color }]}>
+                                <Text style={[styles.detailHeroBadgeText, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
+                            </View>
+                        </View>
 
-                {/* List Items */}
-                <View style={styles.listContainer}>
-                    {filteredItems.map((item) => {
-                        const IconComponent = getItemIcon(item.type);
-                        const canOpenEscrow =
-                            item.source === 'marketplace_order' &&
-                            (item.kind === 'products' || item.kind === 'services');
-                            
-                        const isBono = item.kind === 'bonos' && item.type === 'bonus';
+                        {/* Product image */}
+                        <View style={styles.detailImageWrap}>
+                            <ImageWithFallback src={selectedItem.image} style={styles.detailImage} />
+                            <View style={styles.detailImageOverlay}>
+                                <Text style={styles.detailImageTitle} numberOfLines={1}>{selectedItem.title}</Text>
+                                <Text style={styles.detailImagePrice}>{isBono && selectedItem.price === 0 ? 'GRATIS' : formatCurrency(selectedItem.price)}</Text>
+                            </View>
+                        </View>
 
-                        const handleItemPress = () => {
-                            if (isBono && activeTab === 'purchases' && item.status === 'pending') {
-                                // 'pending' for bonos means 'issued' / ready to use
-                                navigation.navigate('BonusQR', { 
-                                    bonusId: item.orderId, // We mapped bonoCode to orderId
-                                    businessName: item.business
-                                });
-                            }
-                        };
-
-                        const cardContent = (
-                            <CardContent style={styles.itemContent}>
-                                <View style={styles.itemRow}>
-                                    <View style={styles.imageContainer}>
-                                        <ImageWithFallback src={item.image} style={styles.itemImage} />
-                                        <View style={styles.iconOverlay}>
-                                            <IconComponent size={12} color="#fff" />
-                                        </View>
-                                    </View>
-                                    <View style={styles.itemDetails}>
-                                        <View style={styles.itemHeader}>
-                                            <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                                            <View style={{
-                                                backgroundColor: getStatusColor(item.status),
-                                                paddingHorizontal: 6,
-                                                paddingVertical: 2,
-                                                borderRadius: 4
-                                            }}>
-                                                <Text style={{
-                                                    color: getStatusTextColor(item.status),
-                                                    fontSize: 10,
-                                                    fontWeight: '700'
-                                                }}>
-                                                    {item.status === 'completed' ? (isBono ? 'CANJEADO' : 'EXITOSO') : item.status === 'pending' ? (isBono ? 'DISPONIBLE' : 'PENDIENTE') : 'CANCELADO'}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.itemBusiness}>{item.business}</Text>
-                                        <Text style={styles.itemMeta}>{formatDate(item.date)} • {item.paymentMethod}</Text>
-                                        <Text style={styles.itemPrice}>
-                                            {isBono && item.price === 0 ? 'GRATIS' : `$${item.price?.toFixed(2)}`}
-                                        </Text>
-
-                                        {canOpenEscrow && (
-                                            <TouchableOpacity
-                                                style={styles.detailsButton}
-                                                onPress={(e) => {
-                                                    e.stopPropagation();
-                                                    openEscrow(item.orderId, activeTab === 'sales' ? 'seller' : 'buyer');
-                                                }}
-                                            >
-                                                <Text style={styles.detailsButtonText}>Ver escrow</Text>
-                                                <ChevronDown size={14} color={isDark ? '#9CA3AF' : '#666'} />
-                                            </TouchableOpacity>
-                                        )}
-                                        
-                                        {isBono && activeTab === 'purchases' && item.status === 'pending' && (
-                                            <View style={styles.useBonoButton}>
-                                                <Text style={styles.useBonoText}>Tocar para escanear QR</Text>
-                                            </View>
-                                        )}
-                                        {activeTab === 'purchases' && item.backendStatus === 'paid_escrow' && (
-                                            <TouchableOpacity
-                                                style={[styles.useBonoButton, { marginTop: 10, backgroundColor: isDark ? '#3B82F6' : '#2563EB' }]}
-                                                onPress={() => handleReleaseEscrow(item.orderId)}
-                                                disabled={isReleasingEscrow[item.orderId]}
-                                            >
-                                                <Text style={[styles.useBonoText, { color: 'white' }]}>
-                                                    {isReleasingEscrow[item.orderId] ? 'Procesando...' : 'Confirmar Recepción'}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )}
+                        {/* Summary */}
+                        <View style={styles.detailCard}>
+                            <Text style={styles.detailSectionTitle}>Resumen</Text>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Producto/Servicio</Text>
+                                <Text style={styles.detailValue}>{selectedItem.title}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>{selectedItem.type === 'sale' ? 'Comprador' : 'Vendedor / Negocio'}</Text>
+                                <Text style={styles.detailValue}>{selectedItem.business}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Fecha</Text>
+                                <Text style={styles.detailValue}>{formatDate(selectedItem.date)}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Cantidad</Text>
+                                <Text style={styles.detailValue}>{selectedItem.quantity ?? 1}</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Método de pago</Text>
+                                <Text style={styles.detailValue}>{selectedItem.paymentMethod}</Text>
+                            </View>
+                            {selectedItem.location && (
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>Ubicación</Text>
+                                    <View style={styles.detailValueRow}>
+                                        <MapPin size={12} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                        <Text style={styles.detailValue}>{selectedItem.location}</Text>
                                     </View>
                                 </View>
-                            </CardContent>
-                        );
+                            )}
+                            {escrowMeta && (
+                                <View style={styles.detailRow}>
+                                    <Text style={styles.detailLabel}>Escrow</Text>
+                                    <Text style={[styles.detailValue, { color: escrowMeta.color }]}>{escrowMeta.label}</Text>
+                                </View>
+                            )}
+                            <View style={[styles.detailRow, styles.detailTotalRow]}>
+                                <Text style={styles.detailTotalLabel}>Total</Text>
+                                <Text style={styles.detailTotalValue}>{formatCurrency(selectedItem.price)}</Text>
+                            </View>
+                        </View>
 
-                        return (
-                            <TouchableOpacity 
-                                key={item.id} 
-                                activeOpacity={isBono ? 0.7 : 1}
-                                onPress={handleItemPress}
-                            >
-                                <Card style={[styles.itemCard, { backgroundColor: isDark ? '#1F2937' : '#fff', borderColor: isBono ? '#3B82F650' : isDark ? '#374151' : 'transparent', borderWidth: isBono ? 1 : (isDark ? 1 : 0) }]}>
-                                    {cardContent}
-                                </Card>
+                        {/* Actions */}
+                        <View style={styles.detailCard}>
+                            <Text style={styles.detailSectionTitle}>Acciones</Text>
+                            <View style={styles.detailActions}>
+                                {canConfirm && (
+                                    <TouchableOpacity
+                                        style={[styles.detailActionBtn, styles.detailActionPrimary]}
+                                        onPress={() => { setSelectedItem(null); handleReleaseEscrow(selectedItem.orderId); }}
+                                        disabled={isReleasingEscrow[selectedItem.orderId]}
+                                    >
+                                        {isReleasingEscrow[selectedItem.orderId] ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={16} color="#fff" />
+                                                <Text style={styles.detailActionPrimaryText}>Confirmar Recepción</Text>
+                                            </>
+                                        )}
+                                    </TouchableOpacity>
+                                )}
+                                {(selectedItem.kind === 'products' || selectedItem.kind === 'services') && selectedItem.source === 'marketplace_order' && (
+                                    <TouchableOpacity
+                                        style={[styles.detailActionBtn, styles.detailActionSecondary]}
+                                        onPress={() => handleOpenEscrow(selectedItem)}
+                                    >
+                                        <ShieldCheck size={16} color={isDark ? '#F9FAFB' : '#111827'} />
+                                        <Text style={styles.detailActionSecondaryText}>Ver escrow</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {activeTab === 'purchases' && selectedItem.source === 'marketplace_order' && (
+                                    <TouchableOpacity
+                                        style={[styles.detailActionBtn, styles.detailActionSecondary]}
+                                        onPress={() => handleDispute(selectedItem)}
+                                    >
+                                        <AlertCircle size={16} color={isDark ? '#F9FAFB' : '#111827'} />
+                                        <Text style={styles.detailActionSecondaryText}>Iniciar disputa</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {isBono && activeTab === 'purchases' && selectedItem.status === 'pending' && (
+                                    <TouchableOpacity
+                                        style={[styles.detailActionBtn, styles.detailActionPrimary]}
+                                        onPress={() => { setSelectedItem(null); handleUseBono(selectedItem); }}
+                                    >
+                                        <Ticket size={16} color="#fff" />
+                                        <Text style={styles.detailActionPrimaryText}>Usar bono</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+                    </ScrollView>
+                </SheetContent>
+            </Sheet>
+        );
+    };
+
+    const renderFiltersSheet = () => (
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetContent side="bottom" style={[styles.filterSheet, { backgroundColor: isDark ? '#18181B' : '#fff' }]}>
+                <SheetHeader>
+                    <SheetTitle style={{ color: isDark ? '#F9FAFB' : '#111827' }}>Filtros</SheetTitle>
+                </SheetHeader>
+                <View style={styles.filterBody}>
+                    <Text style={styles.filterLabel}>Fecha de {activeTab === 'sales' ? 'venta' : 'compra'}</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsScroll} nestedScrollEnabled>
+                        {([
+                            { id: 'all', label: 'Todo' },
+                            { id: 'today', label: 'Hoy' },
+                            { id: '7d', label: '7 días' },
+                            { id: '30d', label: '30 días' },
+                            { id: '90d', label: '90 días' },
+                            { id: '1y', label: '1 año' },
+                            { id: 'custom', label: 'Rango' },
+                        ] as const).map((chip) => {
+                            const active = datePreset === chip.id;
+                            return (
+                                <TouchableOpacity
+                                    key={chip.id}
+                                    style={[styles.filterChip, active && styles.filterChipActive]}
+                                    onPress={() => {
+                                        setDatePreset(chip.id);
+                                        if (chip.id !== 'custom') { setDateFrom(''); setDateTo(''); }
+                                    }}
+                                >
+                                    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{chip.label}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+
+                    {datePreset === 'custom' && (
+                        <View style={styles.customDateWrap}>
+                            <Input
+                                placeholder="Desde (YYYY-MM-DD)"
+                                value={dateFrom}
+                                onChangeText={setDateFrom}
+                                style={styles.dateInput}
+                                placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                            />
+                            <Input
+                                placeholder="Hasta (YYYY-MM-DD)"
+                                value={dateTo}
+                                onChangeText={setDateTo}
+                                style={styles.dateInput}
+                                placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                            />
+                            {(dateFrom.trim() && !parseDateInput(dateFrom)) || (dateTo.trim() && !parseDateInput(dateTo)) ? (
+                                <Text style={styles.dateError}>Formato inválido. Usá YYYY-MM-DD</Text>
+                            ) : null}
+                        </View>
+                    )}
+
+                    <View style={styles.filterFooter}>
+                        <TouchableOpacity style={styles.filterClearBtn} onPress={() => { clearFilters(); setFiltersOpen(false); }}>
+                            <RotateCcw size={16} color={isDark ? '#D1D5DB' : '#374151'} />
+                            <Text style={styles.filterClearText}>Limpiar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.filterApplyBtn} onPress={() => setFiltersOpen(false)}>
+                            <Text style={styles.filterApplyText}>Aplicar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </SheetContent>
+        </Sheet>
+    );
+
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#7C3AED" />
+                <Text style={styles.loadingText}>Cargando historial...</Text>
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.container}>
+            <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+            {renderHeader()}
+
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? '#fff' : '#111827'} />}
+                onScroll={(e) => { scrollY.value = e.nativeEvent.contentOffset.y; }}
+                scrollEventThrottle={16}
+            >
+                {renderStats()}
+                {renderTabs()}
+                {activeTab === 'purchases' && renderKindChips()}
+
+                <View style={styles.listSection}>
+                    <View style={styles.listHeader}>
+                        <Text style={styles.listTitle}>Historial</Text>
+                        <Text style={styles.listCount}>{filteredItems.length} resultados</Text>
+                    </View>
+
+                    {filteredItems.length === 0 ? (
+                        <View style={styles.emptyWrap}>
+                            <History size={48} color={isDark ? '#374151' : '#E5E7EB'} />
+                            <Text style={styles.emptyTitle}>Sin transacciones</Text>
+                            <Text style={styles.emptyText}>No encontramos movimientos con los filtros actuales.</Text>
+                            <TouchableOpacity style={styles.emptyClearBtn} onPress={clearFilters}>
+                                <Text style={styles.emptyClearText}>Limpiar filtros</Text>
                             </TouchableOpacity>
-                        );
-                    })}
+                        </View>
+                    ) : (
+                        filteredItems.map((item, index) => renderItem(item, index))
+                    )}
                 </View>
             </ScrollView>
 
-            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-                <SheetContent side="bottom" style={[styles.sheetContent, { backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
-                    <SheetHeader>
-                        <SheetTitle>Filtros</SheetTitle>
-                    </SheetHeader>
-
-                    <View style={{ padding: 16, gap: 12 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#D1D5DB' : '#374151' }}>
-                            Fecha de {activeTab === 'sales' ? 'venta' : 'compra'}
-                        </Text>
-
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.purchaseFilterContent}>
-                            {([
-                                { id: 'all', label: 'Todo' },
-                                { id: 'today', label: 'Hoy' },
-                                { id: '7d', label: '7d' },
-                                { id: '30d', label: '30d' },
-                                { id: '90d', label: '90d' },
-                                { id: '1y', label: '1 año' },
-                                { id: 'custom', label: 'Rango' },
-                            ] as const).map((chip) => {
-                                const active = datePreset === chip.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={chip.id}
-                                        style={[styles.purchaseChip, active && styles.purchaseChipActive]}
-                                        onPress={() => {
-                                            setDatePreset(chip.id);
-                                            if (chip.id !== 'custom') {
-                                                setDateFrom('');
-                                                setDateTo('');
-                                            }
-                                        }}
-                                    >
-                                        <Text style={[styles.purchaseChipText, active && styles.purchaseChipTextActive]}>
-                                            {chip.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-
-                        {datePreset === 'custom' && (
-                            <View style={{ gap: 8 }}>
-                                <Input
-                                    placeholder="Desde (YYYY-MM-DD)"
-                                    value={dateFrom}
-                                    onChangeText={setDateFrom}
-                                    style={{ borderColor: isDark ? '#374151' : '#E5E7EB', color: isDark ? '#F9FAFB' : '#111827' }}
-                                    placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-                                />
-                                <Input
-                                    placeholder="Hasta (YYYY-MM-DD)"
-                                    value={dateTo}
-                                    onChangeText={setDateTo}
-                                    style={{ borderColor: isDark ? '#374151' : '#E5E7EB', color: isDark ? '#F9FAFB' : '#111827' }}
-                                    placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-                                />
-                                {(dateFrom.trim() && !parseDateInput(dateFrom)) || (dateTo.trim() && !parseDateInput(dateTo)) ? (
-                                    <Text style={{ fontSize: 12, color: '#EF4444' }}>
-                                        Formato inválido. Usá YYYY-MM-DD (ej: 2026-01-17)
-                                    </Text>
-                                ) : null}
-                            </View>
-                        )}
-
-                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-                            <Button
-                                variant="outline"
-                                style={{ flex: 1 }}
-                                onPress={() => {
-                                    setDatePreset('all');
-                                    setDateFrom('');
-                                    setDateTo('');
-                                    setFiltersOpen(false);
-                                }}
-                            >
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#374151' }}>Limpiar</Text>
-                            </Button>
-                            <Button
-                                style={{ flex: 1, backgroundColor: '#7C3AED' }}
-                                onPress={() => setFiltersOpen(false)}
-                            >
-                                <Text style={{ color: '#fff', fontWeight: '700' }}>Aplicar</Text>
-                            </Button>
-                        </View>
-                    </View>
-                </SheetContent>
-            </Sheet>
+            {renderDetailSheet()}
+            {renderFiltersSheet()}
         </View>
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
-    searchContainer: { flexDirection: 'row', padding: 16, gap: 8 },
-    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F0F0F0', borderRadius: 12, paddingHorizontal: 12, height: 44 },
-    filterBtn: { width: 44, height: 44, paddingHorizontal: 0, backgroundColor: isDark ? '#1F2937' : '#fff', borderColor: isDark ? '#374151' : '#E5E7EB' },
-    statsRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginBottom: 16 },
-    statsCard: { flex: 1, borderWidth: 0 },
-    statsContent: { padding: 12 },
-    statsLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666' },
-    statsValue: { fontSize: 20, fontWeight: 'bold' },
-    controlsBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, marginBottom: 16 },
-    tabsGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 4,
-        borderRadius: 18,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
-        borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
-    },
-    tabBtn: { paddingHorizontal: 12, height: 34, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    tabBtnActive: { backgroundColor: isDark ? '#374151' : '#fff' },
-    tabBtnText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '700' },
-    tabBtnTextActive: { color: '#7C3AED' },
+function getStyles(isDark: boolean, insets: any, width: number) {
+    const bg = isDark ? '#09090B' : '#FAFAFA';
+    const surface = isDark ? '#18181B' : '#FFFFFF';
+    const text = isDark ? '#FAFAFA' : '#111827';
+    const muted = isDark ? '#A1A1AA' : '#6B7280';
+    const border = isDark ? '#27272A' : '#E5E7EB';
+    const primary = '#7C3AED';
 
-    // Purchases filter chips (Marketplace-style)
-    purchaseFilterScroll: { paddingHorizontal: 16, marginBottom: 16 }, // (kept for backwards compat; no longer used)
-    purchaseFilterScrollInline: { flex: 1 },
-    purchaseFilterContent: { flexDirection: 'row', alignItems: 'center', paddingRight: 4 },
-    purchaseChip: {
-        paddingHorizontal: 12,
-        height: 34,
-        borderRadius: 17,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 8,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
-        borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
-    },
-    purchaseChipActive: { backgroundColor: isDark ? '#374151' : '#fff', borderColor: '#7C3AED' },
-    purchaseChipText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '600' },
-    purchaseChipTextActive: { color: '#7C3AED' },
-    filterActiveDot: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#7C3AED',
-        borderWidth: 1,
-        borderColor: isDark ? '#1F2937' : '#fff',
-    },
-    listContainer: { padding: 16, paddingTop: 0 },
-    itemCard: { marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: isDark ? '#374151' : 'transparent' },
-    itemContent: { padding: 12 },
-    itemRow: { flexDirection: 'row', gap: 12 },
-    imageContainer: { width: 64, height: 64, borderRadius: 12, overflow: 'hidden', position: 'relative', backgroundColor: isDark ? '#374151' : '#eee' },
-    itemImage: { width: '100%', height: '100%' },
-    iconOverlay: { position: 'absolute', top: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.6)', padding: 4, borderRadius: 8 },
-    itemDetails: { flex: 1 },
-    itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-    itemTitle: { fontSize: 14, fontWeight: '600', flex: 1, color: isDark ? '#F9FAFB' : '#000' },
-    itemBusiness: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666', marginTop: 2 },
-    itemMeta: { fontSize: 11, color: isDark ? '#6B7280' : '#999', marginTop: 2 },
-    itemPrice: { fontSize: 14, fontWeight: 'bold', color: '#007AFF', marginTop: 4 },
-    detailsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#f0f0f0' },
-    detailsButtonText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666', marginRight: 4 },
-    actionBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6, borderWidth: 1, borderColor: isDark ? '#374151' : '#eee', alignItems: 'center', justifyContent: 'center' },
-    actionBtnText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#374151' },
+    return StyleSheet.create({
+        container: { flex: 1, backgroundColor: bg },
+        loadingContainer: { flex: 1, backgroundColor: bg, justifyContent: 'center', alignItems: 'center', gap: 16 },
+        loadingText: { color: muted, fontSize: 15, fontWeight: '500' },
 
-    // Details sheet
-    sheetContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-    detailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    detailLabel: { fontSize: 12, fontWeight: '600' },
-    detailValue: { fontSize: 12, fontWeight: '800' },
-    useBonoButton: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#E5E7EB', alignItems: 'center' },
-    useBonoText: { color: '#3B82F6', fontWeight: 'bold', fontSize: 12 }
-});
+        headerWrapper: { zIndex: 50 },
+        hero: {
+            backgroundColor: isDark ? '#18181B' : '#FFFFFF',
+            paddingHorizontal: 16,
+            paddingTop: insets.top + 12,
+            paddingBottom: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: border,
+        },
+        headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+        iconBtn: {
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+        },
+        headerTitles: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
+        headerTitle: { fontSize: 18, fontWeight: '800', color: text },
+        headerSubtitle: { fontSize: 13, color: muted, marginTop: 2 },
+        filterDot: {
+            position: 'absolute',
+            top: -2,
+            right: -2,
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: primary,
+            borderWidth: 1,
+            borderColor: isDark ? '#18181B' : '#fff',
+        },
+
+        stickyHeader: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: insets.top + 56,
+            overflow: 'hidden',
+        },
+        stickyHeaderContent: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 60,
+        },
+        stickyTitle: { fontSize: 17, fontWeight: '800', color: text },
+
+        searchBar: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            borderRadius: 14,
+            paddingHorizontal: 14,
+            height: 48,
+            gap: 10,
+        },
+        searchInput: {
+            flex: 1,
+            borderWidth: 0,
+            color: text,
+            fontSize: 15,
+            backgroundColor: 'transparent',
+            paddingHorizontal: 0,
+        },
+
+        scroll: { flex: 1 },
+        scrollContent: { paddingBottom: 32 },
+
+        statsRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginTop: 16, marginBottom: 18 },
+        statCard: {
+            flex: 1,
+            borderRadius: 18,
+            padding: 14,
+            alignItems: 'flex-start',
+            borderWidth: 1,
+            borderColor: border,
+        },
+        statIconWrap: {
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5',
+            marginBottom: 10,
+        },
+        statValue: { fontSize: 18, fontWeight: '800', marginBottom: 2 },
+        statLabel: { fontSize: 11, color: muted, fontWeight: '600' },
+
+        controlsBar: { paddingHorizontal: 16, marginBottom: 12 },
+        tabPill: {
+            flexDirection: 'row',
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            borderRadius: 18,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: border,
+        },
+        tabPillBtn: {
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            paddingVertical: 10,
+            borderRadius: 14,
+        },
+        tabPillBtnActive: { backgroundColor: primary },
+        tabPillText: { fontSize: 14, fontWeight: '700', color: muted },
+        tabPillTextActive: { color: '#fff' },
+
+        chipsScroll: { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
+        chip: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 14,
+            paddingVertical: 9,
+            borderRadius: 20,
+            backgroundColor: surface,
+            borderWidth: 1,
+            borderColor: border,
+            marginRight: 8,
+        },
+        chipActive: { backgroundColor: primary, borderColor: primary },
+        chipText: { fontSize: 13, fontWeight: '600', color: muted },
+        chipTextActive: { color: '#fff' },
+
+        listSection: { paddingHorizontal: 16, marginTop: 8 },
+        listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+        listTitle: { fontSize: 18, fontWeight: '800', color: text },
+        listCount: { fontSize: 13, color: muted, fontWeight: '500' },
+
+        emptyWrap: { alignItems: 'center', paddingVertical: 48, gap: 12 },
+        emptyTitle: { fontSize: 17, fontWeight: '700', color: text },
+        emptyText: { fontSize: 14, color: muted, textAlign: 'center' },
+        emptyClearBtn: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: primary },
+        emptyClearText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+        itemCard: {
+            backgroundColor: surface,
+            borderRadius: 18,
+            padding: 14,
+            marginBottom: 12,
+            borderWidth: 1,
+            borderColor: border,
+        },
+        itemRow: { flexDirection: 'row', gap: 14 },
+        imageWrap: { width: 76, height: 76, borderRadius: 14, overflow: 'hidden', position: 'relative', backgroundColor: border },
+        itemImage: { width: '100%', height: '100%' },
+        typeBadge: {
+            position: 'absolute',
+            top: 6,
+            left: 6,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            padding: 4,
+            borderRadius: 8,
+        },
+        itemBody: { flex: 1, justifyContent: 'space-between' },
+        itemTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+        itemTitle: { fontSize: 15, fontWeight: '700', color: text, flex: 1 },
+        statusBadge: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 10,
+        },
+        statusText: { fontSize: 10, fontWeight: '800' },
+        itemBusiness: { fontSize: 13, color: muted, marginTop: 3 },
+        itemMeta: { fontSize: 11, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 2 },
+        itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+        itemPrice: { fontSize: 17, fontWeight: '800', color: '#10B981' },
+        confirmBtn: {
+            backgroundColor: primary,
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            borderRadius: 10,
+        },
+        confirmBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+        detailBtn: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 12,
+            paddingTop: 12,
+            borderTopWidth: 1,
+            borderTopColor: border,
+            gap: 4,
+        },
+        detailBtnText: { fontSize: 13, color: muted, fontWeight: '600' },
+        bonoHint: {
+            marginTop: 12,
+            paddingTop: 12,
+            borderTopWidth: 1,
+            borderTopColor: border,
+            alignItems: 'center',
+        },
+        bonoHintText: { color: '#3B82F6', fontWeight: '700', fontSize: 13 },
+
+        detailSheet: {
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingHorizontal: 0,
+            paddingBottom: 0,
+            maxHeight: '90%',
+        },
+        detailHandle: {
+            width: 40,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: isDark ? '#3F3F46' : '#D1D5DB',
+            alignSelf: 'center',
+            marginTop: 12,
+            marginBottom: 12,
+        },
+        detailHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingBottom: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: border,
+        },
+        detailTitle: { fontSize: 20, fontWeight: '800', color: text },
+        detailSubtitle: { fontSize: 13, color: muted, marginTop: 2 },
+        detailCloseBtn: {
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        detailScroll: { paddingBottom: 32 },
+        detailHero: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 14,
+            margin: 16,
+            padding: 16,
+            borderRadius: 20,
+        },
+        detailHeroIcon: {
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            borderWidth: 2,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: isDark ? '#18181B' : '#fff',
+        },
+        detailHeroTitle: { fontSize: 17, fontWeight: '800', color: text },
+        detailHeroSubtitle: { fontSize: 12, color: muted, marginTop: 2 },
+        detailHeroBadge: {
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 12,
+            borderWidth: 1,
+        },
+        detailHeroBadgeText: { fontSize: 10, fontWeight: '800' },
+
+        detailImageWrap: {
+            marginHorizontal: 16,
+            marginBottom: 16,
+            height: 180,
+            borderRadius: 20,
+            overflow: 'hidden',
+            position: 'relative',
+        },
+        detailImage: { width: '100%', height: '100%' },
+        detailImageOverlay: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            padding: 16,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+        },
+        detailImageTitle: { fontSize: 16, fontWeight: '700', color: '#fff' },
+        detailImagePrice: { fontSize: 18, fontWeight: '800', color: '#34D399', marginTop: 2 },
+
+        detailCard: {
+            backgroundColor: isDark ? '#27272A' : '#F9FAFB',
+            borderRadius: 20,
+            padding: 16,
+            marginHorizontal: 16,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: border,
+        },
+        detailSectionTitle: { fontSize: 16, fontWeight: '800', color: text, marginBottom: 14 },
+        detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+        detailLabel: { fontSize: 13, color: muted, fontWeight: '600', flex: 0.45 },
+        detailValue: { fontSize: 13, color: text, fontWeight: '700', flex: 0.55, textAlign: 'right' },
+        detailValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+        detailTotalRow: {
+            marginTop: 10,
+            paddingTop: 12,
+            borderTopWidth: 1,
+            borderTopColor: border,
+            marginBottom: 0,
+        },
+        detailTotalLabel: { fontSize: 15, fontWeight: '800', color: text },
+        detailTotalValue: { fontSize: 18, fontWeight: '800', color: '#10B981' },
+
+        detailActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+        detailActionBtn: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: 14,
+            minWidth: 140,
+            flex: 1,
+        },
+        detailActionPrimary: { backgroundColor: primary },
+        detailActionPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+        detailActionSecondary: {
+            backgroundColor: isDark ? '#3F3F46' : '#F3F4F6',
+            borderWidth: 1,
+            borderColor: border,
+        },
+        detailActionSecondaryText: { color: text, fontWeight: '700', fontSize: 14 },
+
+        filterSheet: {
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+        },
+        filterBody: { padding: 20, paddingBottom: 32 },
+        filterLabel: { fontSize: 13, fontWeight: '800', color: text, marginBottom: 12 },
+        filterChipsScroll: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+        filterChip: {
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 20,
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            borderWidth: 1,
+            borderColor: border,
+            marginRight: 6,
+        },
+        filterChipActive: { backgroundColor: primary, borderColor: primary },
+        filterChipText: { fontSize: 13, fontWeight: '600', color: muted },
+        filterChipTextActive: { color: '#fff' },
+        customDateWrap: { gap: 10, marginBottom: 20 },
+        dateInput: {
+            borderColor: border,
+            color: text,
+            backgroundColor: isDark ? '#18181B' : '#fff',
+            borderRadius: 12,
+        },
+        dateError: { fontSize: 12, color: '#EF4444' },
+        filterFooter: { flexDirection: 'row', gap: 12, marginTop: 8 },
+        filterClearBtn: {
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            paddingVertical: 14,
+            borderRadius: 14,
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            borderWidth: 1,
+            borderColor: border,
+        },
+        filterClearText: { color: text, fontWeight: '700', fontSize: 15 },
+        filterApplyBtn: {
+            flex: 1,
+            paddingVertical: 14,
+            borderRadius: 14,
+            backgroundColor: primary,
+            alignItems: 'center',
+        },
+        filterApplyText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+    });
+}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch } from 'react-native';
-import { Settings, Bell, Globe, Lock, CreditCard, Download, Trash2, ChevronRight, Moon, Sun, Smartphone, Volume2, Mail, MessageSquare, Shield, Eye, Database, FileText, Plus, Check, Keyboard, Key, Fingerprint, UserX, MapPin, History as HistoryIcon, Target, Camera, Mic, Wifi, Share2 } from 'lucide-react-native';
+import { Settings, Bell, Globe, Lock, CreditCard, Download, Trash2, ChevronRight, Moon, Sun, Smartphone, Volume2, Mail, MessageSquare, Shield, Eye, Database, FileText, Plus, Check, Keyboard, Key, Fingerprint, UserX, MapPin, History as HistoryIcon, Target, Camera, Mic, Wifi, Share2, FlaskConical, Zap } from 'lucide-react-native';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { MobileHeader } from '../components/MobileHeader';
@@ -9,12 +9,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/s
 import { LogOut } from 'lucide-react-native';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePaymentMode } from '../contexts/PaymentModeContext';
 
 export default function SettingsScreen({ navigation }: any) {
     const { theme, setTheme, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { mode, isTest, toggle } = usePaymentMode();
 
     const [language, setLanguage] = useState('es');
 
@@ -125,6 +127,51 @@ export default function SettingsScreen({ navigation }: any) {
                             value={language === 'es' ? 'Español' : 'English'}
                             onPress={() => setLanguage(l => l === 'es' ? 'en' : 'es')}
                         />
+                    </CardContent>
+                </Card>
+
+                <SectionHeader title="Pagos" />
+                <Card style={styles.card}>
+                    <CardContent style={styles.cardContent}>
+                        <View style={styles.settingRow}>
+                            <View style={styles.settingIconContainer}>
+                                {isTest ? <FlaskConical size={20} color="#F59E0B" /> : <Zap size={20} color="#10B981" />}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.settingLabel}>Modo de Pagos</Text>
+                                <Text style={[styles.settingValueText, { color: isTest ? '#F59E0B' : '#10B981' }]}>
+                                    {isTest ? 'TEST (simulado)' : 'LIVE (real)'}
+                                </Text>
+                            </View>
+                            <Switch
+                                value={isTest}
+                                onValueChange={() => {
+                                    toggle();
+                                    show(isTest ? 'Pagos en modo LIVE (producción)' : 'Pagos en modo TEST (simulación)', 'info');
+                                }}
+                                trackColor={{ false: '#10B981', true: '#F59E0B' }}
+                                thumbColor="#fff"
+                            />
+                        </View>
+                        {isTest && (
+                            <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                                <View style={{
+                                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
+                                    borderRadius: 10,
+                                    padding: 12,
+                                    borderLeftWidth: 3,
+                                    borderLeftColor: '#F59E0B',
+                                }}>
+                                    <Text style={{
+                                        fontSize: 13,
+                                        color: isDark ? '#FCD34D' : '#92400E',
+                                        lineHeight: 18,
+                                    }}>
+                                        MODO TEST: Los pagos se procesan con tarjetas de prueba de Stripe. Se simulan órdenes, escrow y disputas completas. No se mueve dinero real.
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
                     </CardContent>
                 </Card>
 

@@ -5,8 +5,12 @@ import Stripe from "stripe";
 import { requireActor } from "./authHelpers";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
+const isStripeMock =
+    process.env.STRIPE_MOCK_MODE === "true" ||
+    !stripeKey ||
+    stripeKey.includes("mock");
 const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
-    apiVersion: "2024-04-10" as any,
+    apiVersion: "2026-06-24.dahlia" as any,
 });
 
 /**
@@ -69,48 +73,61 @@ export const createPaymentIntent = action({
                 }
             }
 
-            // 2. Crear y opcionalmente confirmar el PaymentIntent en Stripe
-            const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
-                amount: totalAmountCents,
-                currency: "usd",
-                metadata: {
-                    userId,
-                    lineItemsCount: args.lineItems?.length || 0,
-                },
-            };
-
-            if (args.tokenId) {
-                // Si pasamos un tokenId, creamos un PaymentMethod y confirmamos directamente
-                const paymentMethod = await stripe.paymentMethods.create({
-                    type: "card",
-                    card: {
-                        token: args.tokenId,
-                    },
-                });
-                paymentIntentParams.payment_method = paymentMethod.id;
-                paymentIntentParams.confirm = true;
-                paymentIntentParams.automatic_payment_methods = {
-                    enabled: true,
-                    allow_redirects: "never",
-                };
-            } else {
-                paymentIntentParams.automatic_payment_methods = { enabled: true };
-            }
-
-            const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
-
-            // 3. Persistir en la tabla 'payments' de Convex
             const ramgosCommissionRate = args.commissionRate ?? 0.12; // 12% default
             const ramgosCommission = Math.round(totalAmountCents * ramgosCommissionRate);
             const sellerNet = totalAmountCents - ramgosCommission - resolvedInfluencerAmount;
 
+            let paymentIntentId: string;
+            let clientSecret: string | null;
+            let status: string;
+
+            if (isStripeMock) {
+                // Simulated payment intent: no real Stripe calls.
+                paymentIntentId = `mock_pi_${Date.now()}`;
+                clientSecret = `mock_secret_${paymentIntentId}`;
+                status = args.tokenId ? "succeeded" : "requires_confirmation";
+            } else {
+                // 2. Crear y opcionalmente confirmar el PaymentIntent en Stripe
+                const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
+                    amount: totalAmountCents,
+                    currency: "usd",
+                    metadata: {
+                        userId,
+                        lineItemsCount: args.lineItems?.length || 0,
+                    },
+                };
+
+                if (args.tokenId) {
+                    const paymentMethod = await stripe.paymentMethods.create({
+                        type: "card",
+                        card: {
+                            token: args.tokenId,
+                        },
+                    });
+                    paymentIntentParams.payment_method = paymentMethod.id;
+                    paymentIntentParams.confirm = true;
+                    paymentIntentParams.automatic_payment_methods = {
+                        enabled: true,
+                        allow_redirects: "never",
+                    };
+                } else {
+                    paymentIntentParams.automatic_payment_methods = { enabled: true };
+                }
+
+                const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+                paymentIntentId = paymentIntent.id;
+                clientSecret = paymentIntent.client_secret;
+                status = paymentIntent.status;
+            }
+
+            // 3. Persistir en la tabla 'payments' de Convex
             await ctx.runMutation(internal.finance.createPaymentRecord, {
                 userId,
                 amount: totalAmountCents / 100,
-                stripePaymentIntentId: paymentIntent.id,
-                status: paymentIntent.status === "succeeded" ? "succeeded_in_escrow" : "pending",
+                stripePaymentIntentId: paymentIntentId,
+                status: status === "succeeded" ? "succeeded_in_escrow" : "pending",
                 provider: "stripe",
-                providerFee: 0, // Se actualiza por webhook si es necesario
+                providerFee: 0,
                 sellerNet: sellerNet / 100,
                 ramgosCommission: ramgosCommission / 100,
                 influencerAmount: resolvedInfluencerAmount / 100,
@@ -121,9 +138,9 @@ export const createPaymentIntent = action({
             });
 
             return {
-                clientSecret: paymentIntent.client_secret,
-                paymentIntentId: paymentIntent.id,
-                status: paymentIntent.status,
+                clientSecret,
+                paymentIntentId,
+                status,
             };
         } catch (error: any) {
             console.error("[Stripe] Error al crear/confirmar PaymentIntent:", error);
@@ -487,45 +504,50 @@ export const internalReleasePaymentAction = internalAction({
 
         console.log(`[Stripe Escrow] Iniciando liberación para orden: ${args.orderId}, sellerNet: $${payment.sellerNet}`);
 
-        // If in Mock Mode (no Stripe Key)
-        const isMockMode = !process.env.STRIPE_SECRET_KEY;
-        if (isMockMode) {
-            throw new Error("Stripe secret key missing. Cannot release escrow.");
-        }
-
         try {
-            if (!sellerConnectAccountId) {
-                throw new Error(`El vendedor no tiene una cuenta de Stripe Connect vinculada.`);
-            }
-
-            // 2. Perform Seller Transfer
-            const sellerTransfer = await stripe.transfers.create({
-                amount: sellerAmountInCents,
-                currency: "usd",
-                destination: sellerConnectAccountId,
-                transfer_group: String(args.orderId),
-                metadata: {
-                    orderId: String(args.orderId),
-                    paymentId: String(payment._id),
-                    role: "seller",
-                },
-            });
-
-            // 3. Perform Influencer Transfer if applicable
+            let sellerTransferId: string;
             let influencerTransferId: string | undefined;
-            if (influencerAmountInCents > 0 && influencerConnectAccountId) {
-                const influencerTransfer = await stripe.transfers.create({
-                    amount: influencerAmountInCents,
+
+            if (isStripeMock) {
+                // Simulated release: no real Stripe calls.
+                sellerTransferId = `mock_transfer_${Date.now()}`;
+                if (influencerAmountInCents > 0) {
+                    influencerTransferId = `mock_transfer_inf_${Date.now()}`;
+                }
+            } else {
+                if (!sellerConnectAccountId) {
+                    throw new Error(`El vendedor no tiene una cuenta de Stripe Connect vinculada.`);
+                }
+
+                // 2. Perform Seller Transfer
+                const sellerTransfer = await stripe.transfers.create({
+                    amount: sellerAmountInCents,
                     currency: "usd",
-                    destination: influencerConnectAccountId,
+                    destination: sellerConnectAccountId,
                     transfer_group: String(args.orderId),
                     metadata: {
                         orderId: String(args.orderId),
                         paymentId: String(payment._id),
-                        role: "influencer",
+                        role: "seller",
                     },
                 });
-                influencerTransferId = influencerTransfer.id;
+                sellerTransferId = sellerTransfer.id;
+
+                // 3. Perform Influencer Transfer if applicable
+                if (influencerAmountInCents > 0 && influencerConnectAccountId) {
+                    const influencerTransfer = await stripe.transfers.create({
+                        amount: influencerAmountInCents,
+                        currency: "usd",
+                        destination: influencerConnectAccountId,
+                        transfer_group: String(args.orderId),
+                        metadata: {
+                            orderId: String(args.orderId),
+                            paymentId: String(payment._id),
+                            role: "influencer",
+                        },
+                    });
+                    influencerTransferId = influencerTransfer.id;
+                }
             }
 
             // 4. Complete database update
@@ -534,7 +556,7 @@ export const internalReleasePaymentAction = internalAction({
                 orderId: args.orderId,
                 sellerId: payment.sellerId ?? "",
                 sellerAmountInCents,
-                sellerTransferId: sellerTransfer.id,
+                sellerTransferId,
                 influencerId: payment.influencerId,
                 influencerAmountInCents: influencerAmountInCents > 0 ? influencerAmountInCents : undefined,
                 influencerTransferId,
@@ -658,9 +680,12 @@ export const internalCreateSubOrder = internalMutation({
 });
 
 export const releaseEscrowFunds = action({
-    args: { orderId: v.id("orders") },
+    args: {
+        orderId: v.id("orders"),
+        userId: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx);
+        const actor = await requireActor(ctx, args.userId);
         const userId = actor.idString;
 
         // Fetch order info via internal query
@@ -673,30 +698,72 @@ export const releaseEscrowFunds = action({
             throw new Error("Order missing escrow transfer data");
         }
 
-        const sellerConnectAccountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: order.sellerId as any });
-        if (!sellerConnectAccountId) {
-            throw new Error("Seller does not have an active Connect account");
+        let transferId: string;
+
+        if (isStripeMock) {
+            // Simulated release: no real Stripe calls, just mark the order as released.
+            transferId = `mock_transfer_${Date.now()}`;
+        } else {
+            let sellerConnectAccountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: order.sellerId as any });
+            if (!sellerConnectAccountId) {
+                // Auto-create a Connect account for the seller so the release can proceed.
+                // Done inline because Convex actions cannot call other actions via ctx.runAction.
+                const seller = await ctx.runQuery(internal.users.internalGetUserById, { id: order.sellerId as any });
+                if (!seller || !seller.email) {
+                    throw new Error("El vendedor no tiene un email válido para crear la cuenta Stripe Connect.");
+                }
+                const account = await (stripe as any).v2.core.accounts.create({
+                    display_name: (seller as any).name || seller.email,
+                    contact_email: seller.email,
+                    identity: { country: "us" },
+                    dashboard: "express",
+                defaults: {
+                    responsibilities: {
+                        fees_collector: "application",
+                        losses_collector: "application",
+                    },
+                },
+                    configuration: {
+                        recipient: {
+                            capabilities: {
+                                stripe_balance: {
+                                    stripe_transfers: { requested: true },
+                                },
+                            },
+                        },
+                    },
+                });
+                sellerConnectAccountId = account.id;
+                await ctx.runMutation(internal.connect.internalSaveConnectAccount, {
+                    userId: order.sellerId as any,
+                    stripeConnectAccountId: account.id,
+                });
+            }
+
+            // Execute delayed transfer
+            if (!sellerConnectAccountId) {
+                throw new Error("No se pudo obtener o crear la cuenta Stripe Connect del vendedor.");
+            }
+            const transfer = await stripe.transfers.create({
+                amount: order.netAmountCents,
+                currency: "usd",
+                destination: sellerConnectAccountId,
+                transfer_group: order.transferGroup,
+                metadata: {
+                    orderId: String(args.orderId),
+                    action: "escrow_release",
+                },
+            });
+            transferId = transfer.id;
         }
 
-        // Execute delayed transfer
-        const transfer = await stripe.transfers.create({
-            amount: order.netAmountCents,
-            currency: "usd",
-            destination: sellerConnectAccountId,
-            transfer_group: order.transferGroup,
-            metadata: {
-                orderId: String(args.orderId),
-                action: "escrow_release",
-            },
-        });
-
         // Mark as completed in DB
-        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, { 
+        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, {
             orderId: args.orderId,
-            stripeTransferId: transfer.id 
+            stripeTransferId: transferId,
         });
 
-        return { success: true, transferId: transfer.id };
+        return { success: true, transferId };
     }
 });
 

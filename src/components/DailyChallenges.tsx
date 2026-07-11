@@ -49,8 +49,11 @@ export function DailyChallenges() {
         }
     };
 
-    const dailyChallenges = challenges.filter(c => c.type === 'daily');
-    const weeklyChallenges = challenges.filter(c => c.type === 'weekly');
+    const completedDailies = challenges.filter((c: DailyChallenge) => c.type === 'daily' && c.claimed).length;
+    const totalDailies = challenges.filter((c: DailyChallenge) => c.type === 'daily').length;
+
+    const dailyChallenges = challenges.filter((c: DailyChallenge) => c.type === 'daily');
+    const weeklyChallenges = challenges.filter((c: DailyChallenge) => c.type === 'weekly');
 
     const today = new Date().toISOString().split('T')[0];
     const alreadyClaimed = challengeProgress.dailyClaimDate === today;
@@ -116,7 +119,7 @@ export function DailyChallenges() {
                         </View>
                     </View>
 
-                    {dailyChallenges.map((challenge) => (
+                    {dailyChallenges.map((challenge: DailyChallenge) => (
                         <ChallengeCard
                             key={challenge.id}
                             challenge={challenge}
@@ -142,7 +145,7 @@ export function DailyChallenges() {
                         </View>
                     </View>
 
-                    {weeklyChallenges.map((challenge) => (
+                    {weeklyChallenges.map((challenge: DailyChallenge) => (
                         <ChallengeCard
                             key={challenge.id}
                             challenge={challenge}
@@ -196,7 +199,7 @@ const ChallengeCard = ({ challenge, onClaim, getIcon, isWeekly = false, isDark, 
                     styles.challengeIcon,
                     { backgroundColor: isClaimed ? '#22C55E' : (isCompleted ? activeColor : (isDark ? '#374151' : '#E5E7EB')) }
                 ]}>
-                    {isClaimed ? <CheckCircle2 size={24} color="#fff" /> : getIcon(challenge.icon)}
+                    {isClaimed ? <CheckCircle2 size={24} color="#fff" /> : getIcon(challenge.icon || 'default')}
                 </View>
 
                 <View style={{ flex: 1 }}>

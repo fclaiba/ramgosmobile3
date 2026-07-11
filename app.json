@@ -51,7 +51,8 @@
           "merchantIdentifier": "com.fclaiba.ramgosmobile.merchant",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

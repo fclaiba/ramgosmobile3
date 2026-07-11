@@ -5,16 +5,16 @@ import {
     StyleSheet,
     TouchableOpacity,
     FlatList,
-    Image,
     useWindowDimensions,
     Platform,
     StatusBar,
     ScrollView,
-    ActivityIndicator
+    ActivityIndicator,
+    Share,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-    ArrowLeft,
+    ChevronLeft,
     Star,
     Heart,
     Building2,
@@ -30,7 +30,12 @@ import {
     Package,
     Ticket,
     PartyPopper,
-    Briefcase
+    Briefcase,
+    ShoppingCart,
+    Share2,
+    ShoppingBag,
+    Wrench,
+    Tag,
 } from 'lucide-react-native';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -42,10 +47,55 @@ import { useSocial } from '../contexts/SocialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { ItemDetailView } from '../components/ItemDetailView';
 import { DirectMessages } from '../components/social/DirectMessages';
+import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, interpolate, Extrapolation } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+
+const HERO_HEIGHT = 260;
+const MIN_HEADER_HEIGHT = Platform.OS === 'ios' ? 90 : 72;
+
+const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 type TabType = 'product' | 'service' | 'event' | 'bono';
+
+const typeMeta: Record<TabType, { label: string; icon: any; color: string }> = {
+    product: { label: 'Producto', icon: ShoppingBag, color: '#8B5CF6' },
+    service: { label: 'Servicio', icon: Wrench, color: '#38BDF8' },
+    event: { label: 'Evento', icon: Calendar, color: '#F59E0B' },
+    bono: { label: 'Bono', icon: Tag, color: '#10B981' },
+};
+
+const AnimatedButton = ({ onPress, style, children, isDark, active = true }: any) => {
+    const scale = useSharedValue(1);
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: scale.value }],
+        opacity: active ? 1 : 0.5,
+    }));
+
+    const handlePressIn = () => {
+        if (!active) return;
+        scale.value = 0.96;
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+
+    const handlePressOut = () => {
+        scale.value = 1;
+    };
+
+    return (
+        <AnimatedTouchable
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            onPress={active ? onPress : undefined}
+            style={[style, animatedStyle]}
+            activeOpacity={0.9}
+        >
+            {children}
+        </AnimatedTouchable>
+    );
+};
 
 export default function CommercialProfileScreen({ navigation, route }: any) {
     const sellerId = route?.params?.sellerId;
@@ -62,46 +112,30 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     const { show } = useToast();
 
     const [activeTab, setActiveTab] = useState<TabType>('product');
-    const [detailItemId, setDetailItemId] = useState<string | null>(null);
     const [followLoading, setFollowLoading] = useState(false);
     const [dmOpen, setDmOpen] = useState(false);
     const [contactLoading, setContactLoading] = useState(false);
 
-    // Fetch Profile
     const profile = useQuery(api.users.getUser, sellerId ? { id: sellerId as any } : "skip");
-
-    // Fetch Listings
     const allListings = useQuery(api.listings.getFeed);
-    
-    // Process items
-    // In a real scenario, we'd also fetch influencerCampaigns if role === 'influencer'
+
     const listings = useMemo(() => {
         if (!allListings) return [];
-        return allListings.filter(l => (l.seller as any)?.id === sellerId || l.sellerId === sellerId);
+        return allListings.filter((l: any) => (l.seller as any)?.id === sellerId || l.sellerId === sellerId);
     }, [allListings, sellerId]);
 
     const activeItems = useMemo(() => {
-        return listings.filter(item => (item.listingType || item.type || 'product') === activeTab);
+        return listings.filter((item: any) => (item.listingType || item.type || 'product') === activeTab);
     }, [listings, activeTab]);
 
-    const handleAddToCart = (item: any) => {
-        addItem({
-            id: item._id || item.id,
-            name: item.title || item.name,
-            price: item.price,
-            image: item.image || item.images?.[0]?.url,
-            type: item.listingType || item.type || 'product',
-            location: item.location?.name || '',
-            sellerId: item.sellerId,
-            sellerName: item.sellerName,
-        });
-        openCart();
-    };
-
-    const selectedItem = useMemo(() => listings.find(p => p._id === detailItemId || p.id === detailItemId), [listings, detailItemId]);
+    const scrollY = useSharedValue(0);
+    const scrollHandler = useAnimatedScrollHandler({
+        onScroll: (event) => { scrollY.value = event.contentOffset.y; },
+    });
 
     const isBusiness = profile?.role === 'business';
     const isVerified = isBusiness || profile?.kycStatus === 'approved';
+    const alreadyFollowing = sellerId ? isFollowing(sellerId) : false;
 
     const tabs: { id: TabType; label: string; icon: any }[] = [
         { id: 'product', label: 'Productos', icon: Package },
@@ -110,8 +144,24 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         { id: 'bono', label: 'Bonos', icon: Ticket },
     ];
 
-    // Follow state
-    const alreadyFollowing = sellerId ? isFollowing(sellerId) : false;
+    const handleAddToCart = (item: any) => {
+        addItem({
+            id: String(item._id || item.id),
+            name: item.title || item.name,
+            price: item.price,
+            image: item.image || item.images?.[0]?.url,
+            type: item.listingType || item.type || 'product',
+            location: item.location?.name || '',
+            sellerId: item.seller?.id || item.sellerId,
+            sellerName: item.seller?.name || item.sellerName,
+            condition: item.condition,
+            shippingWeightKg: item.shippingProfile?.weightKg,
+            shippingDimensionsCm: item.shippingProfile?.dimensionsCm,
+            distanceKm: item.location?.distanceKm,
+            quantity: 1,
+        });
+        openCart();
+    };
 
     const handleToggleFollow = async () => {
         if (!sellerId || !authUser) {
@@ -129,7 +179,6 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
             console.warn('[CommercialProfile] follow toggle failed', err);
             show('Error al actualizar seguimiento', 'error');
         } finally {
-            // Small delay so the reactive query catches up
             setTimeout(() => setFollowLoading(false), 500);
         }
     };
@@ -151,32 +200,54 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         }
     };
 
+    const handleShare = async () => {
+        try {
+            await Share.share({
+                title: profile?.name || 'Perfil comercial',
+                message: `Mirá el perfil de ${profile?.name || 'este vendedor'} en Ramgos`,
+            });
+        } catch (e) { /* ignore */ }
+    };
+
+    const headerOpacity = useAnimatedStyle(() => ({
+        opacity: interpolate(scrollY.value, [HERO_HEIGHT - MIN_HEADER_HEIGHT - 40, HERO_HEIGHT - MIN_HEADER_HEIGHT + 20], [0, 1], Extrapolation.CLAMP),
+    }));
+
     const renderGridItem = ({ item }: any) => {
         const saved = isFavorite(item._id || item.id);
         const imageUrl = item.image || item.images?.[0]?.url;
+        const meta = typeMeta[(item.listingType || item.type || 'product') as TabType] || typeMeta.product;
+        const TypeIcon = meta.icon;
 
         return (
             <TouchableOpacity
                 style={[styles.gridCard, { width: (width - 48) / 2 }]}
                 activeOpacity={0.9}
-                onPress={() => setDetailItemId(item._id || item.id)}
+                onPress={() => navigation.navigate('ItemDetail', { itemId: item._id || item.id, itemData: item })}
             >
                 <View style={styles.gridImgContainer}>
                     <ImageWithFallback src={imageUrl} style={styles.cardImg} />
+                    <View style={[styles.typePill, { backgroundColor: `${meta.color}20` }]}>
+                        <TypeIcon size={10} color={meta.color} />
+                        <Text style={[styles.typePillText, { color: meta.color }]}>{meta.label}</Text>
+                    </View>
                     <TouchableOpacity
                         style={[styles.favBtn, saved && styles.favBtnActive]}
                         onPress={(e) => {
                             e.stopPropagation();
-                            toggleFavorite({ id: item._id || item.id, type: item.listingType || item.type || 'product' } as any);
+                            toggleFavorite({ id: item._id || item.id, type: item.listingType || item.type || 'product' });
                         }}
                     >
-                        <Heart size={16} color={saved ? styles.favIconActive.color : styles.iconMuted.color} fill={saved ? styles.favIconActive.color : 'transparent'} />
+                        <Heart size={16} color={saved ? '#EF4444' : (isDark ? '#E5E7EB' : '#4B5563')} fill={saved ? '#EF4444' : 'transparent'} />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.gridContent}>
                     <Text style={styles.cardTitle} numberOfLines={2}>{item.title || item.name}</Text>
                     <View style={styles.priceRow}>
+                        {item.originalPrice ? (
+                            <Text style={styles.originalPrice}>${item.originalPrice}</Text>
+                        ) : null}
                         <Text style={styles.price}>${item.price}</Text>
                     </View>
                     <TouchableOpacity
@@ -186,6 +257,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                             handleAddToCart(item);
                         }}
                     >
+                        <ShoppingCart size={14} color={isDark ? '#E5E7EB' : '#374151'} style={{ marginRight: 6 }} />
                         <Text style={styles.btnSmText}>Agregar</Text>
                     </TouchableOpacity>
                 </View>
@@ -194,79 +266,77 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     };
 
     const renderHeader = () => (
-        <View style={styles.headerWrapper}>
-            {/* Hero Cover */}
-            <View style={styles.coverPhotoContainer}>
+        <View>
+            {/* Hero cover */}
+            <View style={styles.heroContainer}>
                 {(profile as any)?.coverImage ? (
-                    <Image source={{ uri: (profile as any).coverImage }} style={StyleSheet.absoluteFillObject} />
+                    <ImageWithFallback src={(profile as any).coverImage} style={styles.heroImage} resizeMode="cover" />
                 ) : (
                     <LinearGradient
-                        colors={styles.coverGradient as [string, string]}
-                        style={StyleSheet.absoluteFillObject}
+                        colors={isDark ? ['#1F2937', '#111827'] : ['#E0E7FF', '#F9FAFB']}
+                        style={StyleSheet.absoluteFill}
                     />
                 )}
+                <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FFFFFF']} style={styles.heroGradient} />
             </View>
 
-            {/* Top Bar Floating */}
-            <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <ArrowLeft size={24} color={styles.iconMain.color} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.backBtn}>
-                    <MoreVertical size={24} color={styles.iconMain.color} />
-                </TouchableOpacity>
+            {/* Floating top bar */}
+            <View style={[styles.topBar, { top: insets.top + 8 }]}>
+                <AnimatedButton style={styles.glassBtn} onPress={() => navigation.goBack()} isDark={isDark}>
+                    <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
+                </AnimatedButton>
+                <View style={styles.topBarActions}>
+                    <AnimatedButton style={styles.glassBtn} onPress={handleShare} isDark={isDark}>
+                        <Share2 size={20} color={isDark ? '#FFF' : '#000'} />
+                    </AnimatedButton>
+                    <AnimatedButton style={styles.glassBtn} onPress={() => {}} isDark={isDark}>
+                        <MoreVertical size={20} color={isDark ? '#FFF' : '#000'} />
+                    </AnimatedButton>
+                </View>
             </View>
 
-            {/* Profile Info */}
-            <View style={styles.profileHeader}>
+            {/* Profile header card */}
+            <View style={styles.profileCard}>
                 <View style={styles.avatarWrapper}>
                     {profile?.avatar ? (
-                        <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+                        <ImageWithFallback src={profile.avatar} style={styles.avatar} />
                     ) : (
                         <View style={[styles.avatar, styles.avatarPlaceholder]}>
                             {isBusiness ? (
-                                <Building2 size={36} color={styles.iconMuted.color} />
+                                <Building2 size={36} color={isDark ? '#9CA3AF' : '#6B7280'} />
                             ) : (
-                                <UserCircle size={36} color={styles.iconMuted.color} />
+                                <UserCircle size={36} color={isDark ? '#9CA3AF' : '#6B7280'} />
                             )}
                         </View>
                     )}
                     {isVerified && (
                         <View style={styles.verifiedBadge}>
-                            <ShieldCheck size={16} color={styles.verifiedBadgeIcon.color} fill={styles.verifiedBadgeIcon.backgroundColor} />
+                            <ShieldCheck size={16} color="#fff" fill="#2563EB" />
                         </View>
                     )}
                 </View>
 
                 <Text style={styles.name}>{profile?.name || 'Usuario Comercial'}</Text>
-                
+
                 <View style={styles.handleRow}>
                     <Text style={styles.handle}>@{profile?.name?.toLowerCase().replace(/\s+/g, '') || 'usuario'}</Text>
-                    {isBusiness ? (
-                        <View style={styles.roleTag}>
-                            <Text style={styles.roleTagText}>Negocio</Text>
-                        </View>
-                    ) : (
-                        <View style={[styles.roleTag, styles.roleTagInfluencer]}>
-                            <Text style={styles.roleTagText}>Influencer</Text>
-                        </View>
-                    )}
+                    <View style={[styles.roleTag, isBusiness ? styles.roleTagBusiness : styles.roleTagInfluencer]}>
+                        <Text style={styles.roleTagText}>{isBusiness ? 'Negocio verificado' : 'Vendedor'}</Text>
+                    </View>
                 </View>
 
-                {profile?.bio && (
+                {profile?.bio ? (
                     <Text style={styles.bio}>{profile.bio}</Text>
-                )}
+                ) : null}
 
                 <View style={styles.metaRow}>
                     <View style={styles.metaItem}>
-                        <MapPin size={14} color={styles.iconMuted.color} />
-                        <Text style={styles.metaText}>Montevideo, UY</Text>
+                        <MapPin size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                        <Text style={styles.metaText}>{(profile as any)?.location?.name || (profile as any)?.location?.city || 'Nueva York, NY'}</Text>
                     </View>
                     <View style={styles.metaItem}>
-                        <Calendar size={14} color={styles.iconMuted.color} />
-                        <Text style={styles.metaText}>
-                            Desde {profile?.joinedAt ? new Date(profile.joinedAt).getFullYear() : '2025'}
-                        </Text>
+                        <Calendar size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                        <Text style={styles.metaText}>Desde {profile?.joinedAt ? new Date(profile.joinedAt).getFullYear() : '2025'}</Text>
                     </View>
                 </View>
 
@@ -274,7 +344,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 <View style={styles.statsContainer}>
                     <View style={styles.statBox}>
                         <View style={styles.statValueRow}>
-                            <Star size={16} color={styles.ratingStar.color} fill={styles.ratingStar.color} />
+                            <Star size={16} color="#F59E0B" fill="#F59E0B" />
                             <Text style={styles.statValue}>{profile?.sellerRating?.toFixed(1) || '4.9'}</Text>
                         </View>
                         <Text style={styles.statLabel}>{profile?.sellerReviewCount || 120} reseñas</Text>
@@ -287,7 +357,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                     <View style={styles.statDivider} />
                     <View style={styles.statBox}>
                         <View style={styles.statValueRow}>
-                            <Clock size={16} color={styles.iconMuted.color} />
+                            <Clock size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
                             <Text style={styles.statValue}>{profile?.sellerResponseTimeHours || '< 1'}h</Text>
                         </View>
                         <Text style={styles.statLabel}>Respuesta</Text>
@@ -305,12 +375,12 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                             <ActivityIndicator size="small" color="#FFFFFF" />
                         ) : alreadyFollowing ? (
                             <>
-                                <UserCheck size={18} color={styles.iconMain.color} />
+                                <UserCheck size={18} color={isDark ? '#F9FAFB' : '#111827'} />
                                 <Text style={[styles.primaryBtnText, styles.followingBtnText]}>Siguiendo</Text>
                             </>
                         ) : (
                             <>
-                                <UserPlus size={18} color={styles.primaryBtnIcon.color} />
+                                <UserPlus size={18} color="#FFFFFF" />
                                 <Text style={styles.primaryBtnText}>Seguir</Text>
                             </>
                         )}
@@ -321,10 +391,10 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                         disabled={contactLoading}
                     >
                         {contactLoading ? (
-                            <ActivityIndicator size="small" color={styles.iconMain.color} />
+                            <ActivityIndicator size="small" color={isDark ? '#F9FAFB' : '#111827'} />
                         ) : (
                             <>
-                                <MessageCircle size={18} color={styles.iconMain.color} />
+                                <MessageCircle size={18} color={isDark ? '#F9FAFB' : '#111827'} />
                                 <Text style={styles.secondaryBtnText}>Contactar</Text>
                             </>
                         )}
@@ -332,9 +402,9 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 </View>
             </View>
 
-            {/* Catalog Tabs */}
+            {/* Tabs */}
             <View style={styles.tabsContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll} nestedScrollEnabled>
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -344,7 +414,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                                 style={[styles.tabBtn, isActive && styles.tabBtnActive]}
                                 onPress={() => setActiveTab(tab.id)}
                             >
-                                <Icon size={16} color={isActive ? styles.tabTextActive.color : styles.iconMuted.color} />
+                                <Icon size={16} color={isActive ? '#fff' : (isDark ? '#9CA3AF' : '#6B7280')} />
                                 <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
                                     {tab.label}
                                 </Text>
@@ -358,11 +428,19 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
-            
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+            {/* Sticky header */}
+            <Animated.View style={[styles.stickyHeader, headerOpacity]}>
+                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
+                <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
+                    <Text style={styles.stickyHeaderTitle} numberOfLines={1}>{profile?.name || 'Perfil comercial'}</Text>
+                </View>
+            </Animated.View>
+
             <FlatList
                 data={activeItems}
-                keyExtractor={(item) => (item._id || item.id).toString()}
+                keyExtractor={(item: any) => (item._id || item.id).toString()}
                 numColumns={2}
                 renderItem={renderGridItem}
                 columnWrapperStyle={styles.gridColumnWrapper}
@@ -371,108 +449,108 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 ListHeaderComponent={renderHeader}
                 ListEmptyComponent={() => (
                     <View style={styles.emptyContainer}>
-                        <Package size={48} color={styles.emptyIcon.color} />
+                        <Package size={48} color={isDark ? '#374151' : '#E5E7EB'} />
                         <Text style={styles.emptyText}>No hay {tabs.find(t => t.id === activeTab)?.label.toLowerCase()} disponibles.</Text>
                     </View>
                 )}
             />
 
-            {selectedItem && (
-                <ItemDetailView
-                    item={{ ...selectedItem, id: selectedItem._id || selectedItem.id, name: selectedItem.title, image: selectedItem.image || selectedItem.images?.[0]?.url, type: selectedItem.listingType || selectedItem.type } as any}
-                    product={selectedItem}
-                    onClose={() => setDetailItemId(null)}
-                    onAddToCart={() => handleAddToCart(selectedItem)}
-                    onOpenCart={openCart}
-                />
-            )}
-
             {/* Direct Messages Sheet */}
             {dmOpen && (
-                <DirectMessages onClose={() => setDmOpen(false)} />
+                <DirectMessages onClose={() => setDmOpen(false)} initialUserId={sellerId} />
             )}
         </View>
     );
 }
 
 function getStyles(isDark: boolean, insets: any) {
-    const bg = isDark ? '#111827' : '#F9FAFB';
-    const cardBg = isDark ? '#1F2937' : '#FFFFFF';
-    const textMain = isDark ? '#F9FAFB' : '#111827';
-    const textMuted = isDark ? '#9CA3AF' : '#6B7280';
-    const border = isDark ? '#374151' : '#E5E7EB';
-    
-    // Extracted dynamic colors for icons
-    const iconMainColor = isDark ? '#F9FAFB' : '#111827';
-    const iconMutedColor = isDark ? '#9CA3AF' : '#6B7280';
-    const emptyIconColor = isDark ? '#374151' : '#E5E7EB';
-    const btnSecondaryBg = isDark ? '#374151' : '#E5E7EB';
-    const favBtnBg = isDark ? '#1F2937' : '#FFFFFF';
-    const favBtnBorder = isDark ? '#374151' : '#F3F4F6';
-    const btnSmBg = isDark ? '#374151' : '#F3F4F6';
-    const backBtnBg = isDark ? 'rgba(31, 41, 55, 0.7)' : 'rgba(255, 255, 255, 0.8)';
-    
-    // Premium theme colors
+    const bg = isDark ? '#09090B' : '#FFFFFF';
+    const surface = isDark ? '#18181B' : '#F9FAFB';
+    const text = isDark ? '#FAFAFA' : '#111827';
+    const muted = isDark ? '#A1A1AA' : '#6B7280';
+    const border = isDark ? '#27272A' : '#E5E7EB';
     const primary = isDark ? '#8B5CF6' : '#7C3AED';
-    const roleBusiness = isDark ? '#3B82F6' : '#2563EB';
-    const roleInfluencer = primary;
     const price = isDark ? '#34D399' : '#10B981';
-    const error = isDark ? '#F87171' : '#EF4444';
-    const verifiedBg = isDark ? '#111827' : '#FFFFFF';
-    const verifiedBadge = isDark ? '#3B82F6' : '#2563EB';
-    const coverGradient = isDark ? ['#1F2937', '#111827'] : ['#E0E7FF', '#F9FAFB'];
 
-    const rawColors = {
-        iconMain: { color: iconMainColor },
-        iconMuted: { color: iconMutedColor },
-        emptyIcon: { color: emptyIconColor },
-        ratingStar: { color: '#F59E0B' },
-        favIconActive: { color: error },
-        primaryBtnIcon: { color: '#FFFFFF' },
-        verifiedBadgeIcon: { color: '#FFFFFF', backgroundColor: verifiedBadge },
-        coverGradient: coverGradient,
-    };
-
-    const styles = StyleSheet.create({
+    return StyleSheet.create({
         container: {
             flex: 1,
             backgroundColor: bg,
         },
-        headerWrapper: {
-            backgroundColor: bg,
-        },
-        coverPhotoContainer: {
-            width: '100%',
-            height: 180,
-            backgroundColor: border,
-        },
-        topBar: {
+
+        stickyHeader: {
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            zIndex: 10,
+            zIndex: 50,
+            overflow: 'hidden',
+            height: MIN_HEADER_HEIGHT + insets.top,
         },
-        backBtn: {
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: backBtnBg,
+        stickyHeaderContent: {
+            flex: 1,
             alignItems: 'center',
             justifyContent: 'center',
+            paddingHorizontal: 60,
         },
-        profileHeader: {
-            paddingHorizontal: 24,
-            paddingBottom: 24,
-            marginTop: -50,
+        stickyHeaderTitle: {
+            color: text,
+            fontSize: 16,
+            fontWeight: '700',
+        },
+
+        heroContainer: {
+            width: '100%',
+            height: HERO_HEIGHT,
+            position: 'relative',
+            backgroundColor: isDark ? '#1F2937' : '#E0E7FF',
+        },
+        heroImage: {
+            width: '100%',
+            height: '100%',
+        },
+        heroGradient: {
+            position: 'absolute',
+            bottom: -2,
+            left: 0,
+            right: 0,
+            height: 120,
+        },
+
+        topBar: {
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            zIndex: 100,
+        },
+        topBarActions: { flexDirection: 'row', gap: 10 },
+        glassBtn: {
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            overflow: 'hidden',
+            justifyContent: 'center',
             alignItems: 'center',
+            backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)',
+        },
+
+        profileCard: {
+            backgroundColor: bg,
+            borderRadius: 28,
+            marginTop: -60,
+            marginHorizontal: 16,
+            padding: 24,
+            paddingTop: 0,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: border,
         },
         avatarWrapper: {
             position: 'relative',
-            marginBottom: 12,
+            marginTop: -50,
+            marginBottom: 16,
         },
         avatar: {
             width: 100,
@@ -480,87 +558,86 @@ function getStyles(isDark: boolean, insets: any) {
             borderRadius: 50,
             borderWidth: 4,
             borderColor: bg,
-            backgroundColor: cardBg,
+            backgroundColor: surface,
         },
         avatarPlaceholder: {
-            alignItems: 'center',
             justifyContent: 'center',
+            alignItems: 'center',
         },
         verifiedBadge: {
             position: 'absolute',
             bottom: 4,
             right: 4,
-            backgroundColor: verifiedBg,
+            backgroundColor: isDark ? '#111827' : '#FFFFFF',
             borderRadius: 12,
-            padding: 2,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 2,
+            padding: 3,
         },
         name: {
-            fontSize: 24,
-            fontWeight: 'bold',
-            color: textMain,
-            marginBottom: 4,
+            fontSize: 26,
+            fontWeight: '800',
+            color: text,
+            marginBottom: 6,
             textAlign: 'center',
         },
         handleRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
-            marginBottom: 16,
+            gap: 10,
+            marginBottom: 14,
         },
         handle: {
             fontSize: 15,
-            color: textMuted,
+            color: muted,
+            fontWeight: '500',
         },
         roleTag: {
-            backgroundColor: roleBusiness,
-            paddingHorizontal: 8,
-            paddingVertical: 2,
-            borderRadius: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: 10,
+        },
+        roleTagBusiness: {
+            backgroundColor: '#2563EB',
+        },
+        roleTagInfluencer: {
+            backgroundColor: primary,
         },
         roleTagText: {
             color: '#FFFFFF',
             fontSize: 11,
-            fontWeight: '600',
-        },
-        roleTagInfluencer: {
-            backgroundColor: roleInfluencer,
+            fontWeight: '700',
         },
         bio: {
-            fontSize: 14,
-            color: textMain,
+            fontSize: 15,
+            color: muted,
             textAlign: 'center',
-            marginBottom: 16,
-            lineHeight: 20,
+            marginBottom: 18,
+            lineHeight: 22,
         },
         metaRow: {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 16,
-            marginBottom: 24,
+            gap: 18,
+            marginBottom: 22,
         },
         metaItem: {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 4,
+            gap: 6,
         },
         metaText: {
             fontSize: 13,
-            color: textMuted,
+            color: muted,
+            fontWeight: '500',
         },
         statsContainer: {
             flexDirection: 'row',
-            backgroundColor: cardBg,
-            borderRadius: 16,
+            backgroundColor: surface,
+            borderRadius: 18,
             paddingVertical: 16,
             paddingHorizontal: 20,
             width: '100%',
-            marginBottom: 24,
+            marginBottom: 22,
             borderWidth: 1,
             borderColor: border,
         },
@@ -575,18 +652,19 @@ function getStyles(isDark: boolean, insets: any) {
             marginBottom: 4,
         },
         statValue: {
-            fontSize: 16,
-            fontWeight: 'bold',
-            color: textMain,
+            fontSize: 17,
+            fontWeight: '800',
+            color: text,
         },
         statLabel: {
             fontSize: 12,
-            color: textMuted,
+            color: muted,
+            fontWeight: '500',
         },
         statDivider: {
             width: 1,
             backgroundColor: border,
-            marginHorizontal: 12,
+            marginHorizontal: 10,
         },
         actionRow: {
             flexDirection: 'row',
@@ -598,46 +676,52 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             backgroundColor: primary,
             paddingVertical: 14,
-            borderRadius: 12,
+            borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'center',
+            gap: 8,
         },
         primaryBtnText: {
             color: '#FFFFFF',
-            fontWeight: '600',
+            fontWeight: '700',
             fontSize: 15,
         },
         secondaryBtn: {
             flex: 1,
             flexDirection: 'row',
-            backgroundColor: btnSecondaryBg,
+            backgroundColor: surface,
             paddingVertical: 14,
-            borderRadius: 12,
+            borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'center',
+            gap: 8,
+            borderWidth: 1,
+            borderColor: border,
         },
         secondaryBtnText: {
-            color: textMain,
-            fontWeight: '600',
+            color: text,
+            fontWeight: '700',
             fontSize: 15,
         },
         followingBtn: {
-            backgroundColor: btnSecondaryBg,
+            backgroundColor: surface,
             borderWidth: 1,
             borderColor: border,
         },
         followingBtnText: {
-            color: textMain,
+            color: text,
         },
+
         tabsContainer: {
             borderBottomWidth: 1,
             borderBottomColor: border,
             backgroundColor: bg,
+            marginTop: 8,
         },
         tabsScroll: {
             paddingHorizontal: 16,
-            gap: 8,
-            paddingBottom: 12,
+            gap: 10,
+            paddingVertical: 14,
         },
         tabBtn: {
             flexDirection: 'row',
@@ -646,7 +730,7 @@ function getStyles(isDark: boolean, insets: any) {
             paddingHorizontal: 16,
             paddingVertical: 10,
             borderRadius: 20,
-            backgroundColor: cardBg,
+            backgroundColor: surface,
             borderWidth: 1,
             borderColor: border,
         },
@@ -657,11 +741,12 @@ function getStyles(isDark: boolean, insets: any) {
         tabText: {
             fontSize: 14,
             fontWeight: '600',
-            color: textMuted,
+            color: muted,
         },
         tabTextActive: {
             color: '#FFFFFF',
         },
+
         scrollContent: {
             paddingBottom: 100,
         },
@@ -670,8 +755,8 @@ function getStyles(isDark: boolean, insets: any) {
             gap: 16,
         },
         gridCard: {
-            backgroundColor: cardBg,
-            borderRadius: 16,
+            backgroundColor: surface,
+            borderRadius: 18,
             overflow: 'hidden',
             borderWidth: 1,
             borderColor: border,
@@ -679,64 +764,87 @@ function getStyles(isDark: boolean, insets: any) {
         },
         gridImgContainer: {
             width: '100%',
-            height: 140,
+            height: 150,
             backgroundColor: border,
             position: 'relative',
         },
         cardImg: {
             width: '100%',
             height: '100%',
-            resizeMode: 'cover',
+        },
+        typePill: {
+            position: 'absolute',
+            top: 10,
+            left: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 10,
+        },
+        typePillText: {
+            fontSize: 10,
+            fontWeight: '800',
         },
         favBtn: {
             position: 'absolute',
-            top: 12,
-            right: 12,
+            top: 10,
+            right: 10,
             width: 32,
             height: 32,
             borderRadius: 16,
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 10,
-            overflow: 'hidden',
-            backgroundColor: favBtnBg,
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
             borderWidth: 1,
-            borderColor: favBtnBorder
+            borderColor: isDark ? '#374151' : '#F3F4F6',
         },
         favBtnActive: {
             shadowColor: '#000',
             shadowOpacity: 0.1,
             shadowRadius: 4,
-            elevation: 2
+            elevation: 2,
         },
         gridContent: {
             padding: 12,
         },
         cardTitle: {
             fontSize: 14,
-            fontWeight: '600',
-            color: textMain,
+            fontWeight: '700',
+            color: text,
             marginBottom: 8,
-            lineHeight: 20,
+            lineHeight: 19,
         },
         priceRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
             marginBottom: 12,
         },
+        originalPrice: {
+            fontSize: 13,
+            color: muted,
+            textDecorationLine: 'line-through',
+            fontWeight: '500',
+        },
         price: {
-            fontSize: 16,
-            fontWeight: 'bold',
+            fontSize: 17,
+            fontWeight: '800',
             color: price,
         },
         btnSm: {
-            backgroundColor: btnSmBg,
-            paddingVertical: 8,
-            borderRadius: 8,
+            flexDirection: 'row',
+            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            paddingVertical: 9,
+            borderRadius: 10,
             alignItems: 'center',
+            justifyContent: 'center',
         },
         btnSmText: {
             fontSize: 13,
-            fontWeight: '600',
-            color: textMain,
+            fontWeight: '700',
+            color: text,
         },
         emptyContainer: {
             padding: 40,
@@ -746,10 +854,8 @@ function getStyles(isDark: boolean, insets: any) {
         },
         emptyText: {
             fontSize: 15,
-            color: textMuted,
+            color: muted,
             textAlign: 'center',
-        }
+        },
     });
-
-    return { ...styles, ...rawColors } as any;
 }

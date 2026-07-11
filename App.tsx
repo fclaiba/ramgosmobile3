@@ -8,24 +8,12 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { useTheme, ThemeProvider } from './src/contexts/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { CartProvider } from './src/contexts/CartContext';
-import { SocialProvider } from './src/contexts/SocialContext';
-import { PointsProvider } from './src/contexts/PointsContext';
-import { WalletProvider } from './src/contexts/WalletContext';
+import { AuthProvider } from './src/contexts/AuthContext';
+import { ToastProvider } from './src/contexts/ToastContext';
 import { RewardsProvider } from './src/contexts/RewardsContext';
 import { FavoritesProvider } from './src/contexts/FavoritesContext';
-import { NotificationsProvider } from './src/contexts/NotificationsContext';
-import { FintechProvider } from './src/contexts/FintechContext';
-import { AuthProvider } from './src/contexts/AuthContext';
-import { BusinessProvider } from './src/contexts/BusinessContext';
-import { MarketplaceProvider } from './src/contexts/MarketplaceContext';
-import { ToastProvider } from './src/contexts/ToastContext';
-import { ReferralProvider } from './src/contexts/ReferralContext';
-import { EscrowProvider } from './src/contexts/EscrowContext';
-import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
-import CartSidebar from './src/components/CartSidebar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { PointsFeedback } from './src/components/ui/PointsFeedback';
+import { CartProvider } from './src/contexts/CartContext';
 
 import { Platform } from 'react-native';
 
@@ -230,8 +218,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
                     <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
                 </Stack.Navigator>
-                <CartSidebar />
-                <EscrowSheet />
             </View>
         </NavigationContainer>
     );
@@ -249,9 +235,39 @@ const convex = new ConvexReactClient(convexUrl, {
 });
 
 import { PaymentProvider } from './src/payments/PaymentProvider';
+import { PaymentModeProvider, usePaymentMode } from './src/contexts/PaymentModeContext';
+import { EscrowProvider } from './src/contexts/EscrowContext';
 import { CrashHandler } from './src/components/CrashHandler';
 
-const stripePublishableKey = process.env.EXPO_PUBLIC_STRIPE_KEY;
+function StripeKeyGate() {
+    const { stripePublishableKey, mode } = usePaymentMode();
+    console.log(`[DEBUG] StripeKeyGate: mode=${mode}, key=${stripePublishableKey ? 'set' : 'missing'}`);
+    return (
+        <>
+            {stripePublishableKey ? (
+<PaymentProvider stripePublishableKey={stripePublishableKey}>
+                                    <ToastProvider>
+                                        <CartProvider>
+                                            <AuthProvider>
+                                                <FavoritesProvider>
+                                                    <EscrowProvider>
+                                                        <RewardsProvider>
+                                                            <AppNavigator />
+                                                        </RewardsProvider>
+                                                    </EscrowProvider>
+                                                </FavoritesProvider>
+                                            </AuthProvider>
+                                        </CartProvider>
+                                    </ToastProvider>
+                                </PaymentProvider>
+            ) : (
+                <Text style={{ marginTop: 100, textAlign: 'center' }}>
+                    Falta configurar EXPO_PUBLIC_STRIPE_KEY_TEST o EXPO_PUBLIC_STRIPE_KEY_LIVE en .env.local
+                </Text>
+            )}
+        </>
+    );
+}
 
 function App() {
     console.log('[DEBUG] App: Rendering started');
@@ -262,44 +278,9 @@ function App() {
                     <ThemeProvider>
                         <SafeAreaProvider>
                             <ConvexProvider client={convex}>
-                                {stripePublishableKey ? (
-                                    <PaymentProvider stripePublishableKey={stripePublishableKey}>
-                                        <ToastProvider>
-                                            <AuthProvider>
-                                                    <PointsProvider>
-                                                        <WalletProvider>
-                                                    <FintechProvider>
-                                                        <RewardsProvider>
-                                                            <BusinessProvider>
-                                                                <MarketplaceProvider>
-                                                                    <EscrowProvider>
-                                                                        <CartProvider>
-                                                                            <FavoritesProvider>
-                                                                                <NotificationsProvider>
-                                                                                    <SocialProvider>
-                                                                                        <ReferralProvider>
-                                                                                            <PointsFeedback />
-                                                                                                <AppNavigator />
-                                                                                        </ReferralProvider>
-                                                                                    </SocialProvider>
-                                                                                </NotificationsProvider>
-                                                                            </FavoritesProvider>
-                                                                        </CartProvider>
-                                                                    </EscrowProvider>
-                                                                </MarketplaceProvider>
-                                                            </BusinessProvider>
-                                                        </RewardsProvider>
-                                                    </FintechProvider>
-                                                </WalletProvider>
-                                            </PointsProvider>
-                                        </AuthProvider>
-                                    </ToastProvider>
-                                </PaymentProvider>
-                                ) : (
-                                    <Text style={{ marginTop: 100, textAlign: 'center' }}>
-                                        Falta configurar EXPO_PUBLIC_STRIPE_KEY en .env.local
-                                    </Text>
-                                )}
+                                <PaymentModeProvider>
+                                    <StripeKeyGate />
+                                </PaymentModeProvider>
                             </ConvexProvider>
                         </SafeAreaProvider>
                     </ThemeProvider>

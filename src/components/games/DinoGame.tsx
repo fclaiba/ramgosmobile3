@@ -372,7 +372,7 @@ export const DinoGame = (props: DinoGameProps) => {
                 }
             ]}>
                 <View style={{ transform: [{ rotateY: '180deg' }] }}>
-                    <Text style={{ fontSize: 40 }}>{isCrouching ? '🦎' : '🦖'}</Text>
+                    <Text style={{ fontSize: 40 }}>{isCrouching ? '🙀' : '😺'}</Text>
                 </View>
             </Animated.View>
 
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
         color: '#92400E'
     },
     centerContainer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(255,255,255,0.6)',
         justifyContent: 'center',
         alignItems: 'center',

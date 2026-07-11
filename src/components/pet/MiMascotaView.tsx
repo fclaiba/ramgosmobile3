@@ -17,8 +17,7 @@ import { FruitCatcher } from '../games/FruitCatcher';
 import { DuckHunt } from '../games/DuckHunt';
 import { MemoryGame } from '../games/MemoryGame';
 import { DinoGame } from '../games/DinoGame';
-import { RouletteGame } from '../games/RouletteGame';
-import { SlotMachine } from '../games/SlotMachine';
+import { FlappyBird } from '../games/FlappyBird';
 import { GameWrapper } from '../games/GameWrapper';
 import type { GameId } from '../games/gameContracts';
 
@@ -38,15 +37,14 @@ interface PetStats {
 }
 
 type PetMood = 'happy' | 'normal' | 'sad' | 'sleeping' | 'playing' | 'eating';
-type GameType = 'fruit' | 'duck' | 'memory' | 'dino' | 'roulette' | 'slots' | null;
+type GameType = 'fruit' | 'duck' | 'memory' | 'dino' | 'flappy' | null;
 
 const GAMES = [
     { id: 'fruit', name: 'Atrapar Frutas', icon: '🍎', gradient: ['#EF4444', '#F97316'] as const, description: 'Ayuda al gatito a atrapar frutas', type: 'skill' },
     { id: 'duck', name: 'Duck Hunt', icon: '🦆', gradient: ['#3B82F6', '#06B6D4'] as const, description: 'Caza patos voladores', type: 'skill' },
     { id: 'memory', name: 'Memoria Gatuna', icon: '🧠', gradient: ['#A855F7', '#EC4899'] as const, description: 'Encuentra las parejas', type: 'skill' },
     { id: 'dino', name: 'Dino Run', icon: '🦖', gradient: ['#22C55E', '#10B981'] as const, description: 'Salta obstáculos sin parar', type: 'skill' },
-    { id: 'roulette', name: 'Ruleta', icon: '🎰', gradient: ['#EAB308', '#F97316'] as const, description: 'Gira y prueba tu suerte', type: 'casino' },
-    { id: 'slots', name: 'Tragamonedas', icon: '🎲', gradient: ['#9333EA', '#DB2777'] as const, description: 'Consigue el Jackpot', type: 'casino' },
+    { id: 'flappy', name: 'Flappy Cat', icon: '🕊️', gradient: ['#38BDF8', '#0284C7'] as const, description: 'Vuela entre los tubos', type: 'skill' },
 ] as const;
 
 const STAGE_CONFIG = {
@@ -68,7 +66,7 @@ const HATS = [
 ];
 
 export function MiMascotaView({ navigation }: any) {
-    const { convertCoinsToPoints, conversionRate, petStage, challengeProgress, transactions } = usePoints();
+    const { convertCoinsToPoints, conversionRate } = usePoints();
     const { feedVirtualPet, registerArcadeReward, gameCoins, addGameCoins, spendGameCoins, petConfig, unlockAccessory, equipAccessory } = useRewards();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -77,6 +75,7 @@ export function MiMascotaView({ navigation }: any) {
 
     // --- State ---
     const [stats, setStats] = useState<PetStats>({ happiness: 80, hunger: 60, energy: 70, level: 1, exp: 0 });
+    const petStage = stats.level < 3 ? 'EGG' : stats.level < 8 ? 'BABY' : stats.level < 30 ? 'YOUNG' : 'ADULT';
     const [currentGame, setCurrentGame] = useState<GameType>(null);
     const [petMood, setPetMood] = useState<PetMood>('happy');
     const [isAnimating, setIsAnimating] = useState(false);
@@ -134,40 +133,6 @@ export function MiMascotaView({ navigation }: any) {
         });
     }, []);
 
-    useEffect(() => {
-        AsyncStorage.setItem('petPurchaseRewards', JSON.stringify(purchaseRewards));
-    }, [purchaseRewards]);
-
-    // Purchase -> Pet: each purchase unlocks a cosmetic (free hat) + pet grows (level++).
-    useEffect(() => {
-        const purchaseTxs = (transactions ?? []).filter((tx: any) => tx?.source === 'purchase' && tx?.amount > 0);
-        if (purchaseTxs.length === 0) return;
-
-        // Process oldest -> newest for deterministic ordering.
-        const ordered = [...purchaseTxs].reverse();
-        const newOnes = ordered.filter((tx: any) => !purchaseRewards.processedPurchaseTxnIds.includes(tx.id));
-        if (newOnes.length === 0) return;
-
-        setPurchaseRewards((prev) => {
-            let processed = [...prev.processedPurchaseTxnIds];
-            let gifted = [...prev.giftedHatIds];
-
-            newOnes.forEach(() => {
-                const nextHat = PURCHASE_GIFT_HATS.find((id) => !gifted.includes(id)) ?? null;
-                if (nextHat) {
-                    // Free unlock (0 coins)
-                    unlockAccessory('hat', nextHat, 0);
-                    gifted.push(nextHat);
-                    setStats((s) => ({ ...s, level: s.level + 1 }));
-                }
-            });
-
-            newOnes.forEach((tx: any) => processed.push(tx.id));
-            return { processedPurchaseTxnIds: processed, giftedHatIds: gifted };
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [transactions]);
-
     // Decay Loop
     useEffect(() => {
         const interval = setInterval(() => {
@@ -180,6 +145,15 @@ export function MiMascotaView({ navigation }: any) {
         }, 30000);
         return () => clearInterval(interval);
     }, []);
+
+    // Level Up Logic
+    useEffect(() => {
+        const requiredExp = stats.level * 100;
+        if (stats.exp >= requiredExp) {
+            setStats(prev => ({ ...prev, level: prev.level + 1, exp: prev.exp - requiredExp, happiness: 100, hunger: 100, energy: 100 }));
+            show(`¡Subiste al nivel ${stats.level + 1}! 🎉`, 'success');
+        }
+    }, [stats.exp, stats.level, show]);
 
     // Mood Logic
     useEffect(() => {
@@ -245,25 +219,51 @@ export function MiMascotaView({ navigation }: any) {
         setIsAnimating(true);
         setCatAnimation('eating');
         animateCat('jump');
-        setStats(prev => ({ ...prev, hunger: Math.min(100, prev.hunger + 30) }));
+        setStats(prev => ({ ...prev, hunger: Math.min(100, prev.hunger + 30), exp: prev.exp + 15 }));
+        show('¡Comida deliciosa! +30 Hambre, +15 XP 🍖', 'success');
         setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 2000);
-        show(`¡Ñam ñam! +${result.pointsAwarded ?? 0} Puntos`);
     };
 
     const playWithPet = () => {
         if (petStage === 'EGG') return show('¡Le diste calorcito al huevo! 🥚❤️', 'success');
-        if (stats.energy < 15) return show('Está muy cansado 😴', 'error');
+        if (stats.energy < 15) return show('Está muy cansado 😿', 'error');
+        if (gameCoins < 2) return show('Necesitas 2 monedas para jugar 🪙', 'error');
+        
+        const spent = spendGameCoins(2);
+        if (spent) {
+            setIsAnimating(true);
+            setCatAnimation('playing');
+            animateCat('shake');
+            setStats(prev => ({
+                ...prev,
+                happiness: Math.min(100, prev.happiness + 20),
+                energy: Math.max(0, prev.energy - 15),
+                exp: prev.exp + 25
+            }));
+            show('¡A jugar! +20 Felicidad, +25 XP 😺', 'success');
+            setTimeout(() => {
+                setIsAnimating(false);
+                setCatAnimation('idle');
+            }, 1000);
+        }
+    };
 
-        setIsAnimating(true);
-        setCatAnimation('playing');
-        animateCat('shake');
-        setStats(prev => ({
-            ...prev,
-            happiness: Math.min(100, prev.happiness + 20),
-            energy: Math.max(0, prev.energy - 15),
-        }));
-        show('¡Diversión total! +20 Felicidad');
-        setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 2000);
+    const sleepPet = () => {
+        if (petStage === 'EGG') return show('¡El huevo ya está descansando! 🥚', 'info');
+        if (gameCoins < 2) return show('Necesitas 2 monedas para dormir 🪙', 'error');
+        
+        const spent = spendGameCoins(2);
+        if (spent) {
+            setIsAnimating(true);
+            setCatAnimation('sleeping');
+            animateCat('sleep');
+            setStats(prev => ({ ...prev, energy: Math.min(100, prev.energy + 40), exp: prev.exp + 10 }));
+            show('Zzz... +40 Energía, +10 XP 💤', 'success');
+            setTimeout(() => {
+                setIsAnimating(false);
+                setCatAnimation('idle');
+            }, 1000);
+        }
     };
 
     const cleanPet = () => {
@@ -273,11 +273,11 @@ export function MiMascotaView({ navigation }: any) {
         if (spent) {
             setIsAnimating(true);
             animateCat('shake');
-            setStats(prev => ({ ...prev, happiness: Math.min(100, prev.happiness + 15) }));
-            show('¡Ba\u00f1o completado! +15 Felicidad ✨', 'success');
+            setStats(prev => ({ ...prev, happiness: Math.min(100, prev.happiness + 15), exp: prev.exp + 20 }));
+            show('¡Baño completado! +15 Felicidad, +20 XP 🛁', 'success');
             setTimeout(() => setIsAnimating(false), 1000);
         } else {
-            show('No se pudo realizar el ba\u00f1o', 'error');
+            show('No se pudo realizar el baño', 'error');
         }
     };
 
@@ -308,15 +308,14 @@ export function MiMascotaView({ navigation }: any) {
     );
 
     const renderEvolutionTrack = () => {
-        const currentConfig = STAGE_CONFIG[petStage];
-        const nextStageGoal = currentConfig.next;
-        const currentStreak = challengeProgress.loginStreak || 0;
-        const progress = Math.min(100, (currentStreak / nextStageGoal) * 100);
+        const currentConfig = STAGE_CONFIG[petStage as keyof typeof STAGE_CONFIG] || STAGE_CONFIG.ADULT;
+        const requiredExp = stats.level * 100;
+        const progress = Math.min(100, (stats.exp / requiredExp) * 100);
 
         return (
             <TouchableOpacity style={styles.evoCard} onPress={() => setShowGuide(true)}>
                 <View style={styles.evoHeader}>
-                    <Text style={styles.evoTitle}>Evolución ({currentConfig.name})</Text>
+                    <Text style={styles.evoTitle}>Nivel {stats.level} ({currentConfig.name})</Text>
                     <HelpCircle size={16} color="#9CA3AF" />
                 </View>
                 <View style={styles.evoTrackContainer}>
@@ -329,7 +328,7 @@ export function MiMascotaView({ navigation }: any) {
                         />
                     </View>
                     <Text style={styles.evoText}>
-                        Racha: {currentStreak} / {nextStageGoal} días
+                        EXP: {stats.exp} / {requiredExp}
                     </Text>
                 </View>
             </TouchableOpacity>
@@ -455,11 +454,9 @@ export function MiMascotaView({ navigation }: any) {
         if (currentGame === 'duck') ComponentToRender = DuckHunt;
         if (currentGame === 'memory') ComponentToRender = MemoryGame;
         if (currentGame === 'dino') ComponentToRender = DinoGame;
-        if (currentGame === 'roulette') ComponentToRender = RouletteGame;
-        if (currentGame === 'slots') ComponentToRender = SlotMachine;
+        if (currentGame === 'flappy') ComponentToRender = FlappyBird;
 
         const gameId = currentGame as GameId;
-        const isCasino = currentGame === 'roulette' || currentGame === 'slots';
 
         return (
             <View style={[styles.gameContainer, { paddingTop: 0 }]}>
@@ -471,14 +468,6 @@ export function MiMascotaView({ navigation }: any) {
                         autoCloseOnSave
                         onClose={() => setCurrentGame(null)}
                         onLegacyGameEnd={(value: number) => {
-                            // Arcade: value is score. Casino: value is net delta.
-                            if (isCasino) {
-                                if (value >= 0) addGameCoins(value);
-                                else spendGameCoins(Math.abs(value));
-                                show(`Resultado: ${value >= 0 ? '+' : ''}${value} monedas`);
-                                return;
-                            }
-
                             const score = value;
                             const coins = Math.floor(score / 5);
                             if (coins > 0) addGameCoins(coins);
@@ -490,10 +479,7 @@ export function MiMascotaView({ navigation }: any) {
                             }
                             show(`Fin de juego: Ganaste ${coins} monedas`);
                         }}
-                        gameProps={{
-                            // Casino components currently require these props.
-                            ...(isCasino ? { coins: gameCoins, onClose: () => setCurrentGame(null) } : {}),
-                        }}
+                        gameProps={{}}
                     />
                 </SafeAreaView>
             </View>
@@ -504,7 +490,7 @@ export function MiMascotaView({ navigation }: any) {
         <View style={styles.container}>
             <MobileHeader
                 title="Mi Mascota"
-                subtitle={STAGE_CONFIG[petStage].desc}
+                subtitle={(STAGE_CONFIG[petStage as keyof typeof STAGE_CONFIG] || STAGE_CONFIG.ADULT).desc}
                 onBack={() => navigation?.goBack()}
                 backButton={true}
                 actions={
@@ -576,12 +562,19 @@ export function MiMascotaView({ navigation }: any) {
                         <Text style={styles.actionLabel}>Baño</Text>
                     </TouchableOpacity>
 
+                    <TouchableOpacity style={styles.actionBtn} onPress={sleepPet}>
+                        <View style={[styles.actionIcon, { backgroundColor: '#FAF5FF' }]}>
+                            <Moon size={24} color="#8B5CF6" />
+                        </View>
+                        <Text style={styles.actionLabel}>Dormir</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.actionBtn} onPress={() => {
                         if (petStage === 'EGG') return show('¡Eclosiona primero!', 'info');
                         setShowWardrobe(true);
                     }}>
-                        <View style={[styles.actionIcon, { backgroundColor: '#FAF5FF' }]}>
-                            <Shirt size={24} color="#A855F7" />
+                        <View style={[styles.actionIcon, { backgroundColor: '#FDF4FF' }]}>
+                            <Shirt size={24} color="#D946EF" />
                         </View>
                         <Text style={styles.actionLabel}>Ropa</Text>
                     </TouchableOpacity>
@@ -612,7 +605,7 @@ export function MiMascotaView({ navigation }: any) {
                             </LinearGradient>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.gameTitle}>{game.name}</Text>
-                                <Text style={styles.gameDesc} numberOfLines={1}>{game.type === 'casino' ? 'Gana Monedas' : 'Gana Puntos'}</Text>
+                                <Text style={styles.gameDesc} numberOfLines={1}>{game.description}</Text>
                             </View>
                             <ArrowRight size={16} color={isDark ? '#6B7280' : '#CBD5E1'} />
                         </TouchableOpacity>

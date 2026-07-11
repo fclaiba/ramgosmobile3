@@ -23,7 +23,7 @@ import { MobileNav, NAV_CONTENT_HEIGHT } from '../components/MobileNav';
 import { AdvancedFilters } from '../components/AdvancedFilters';
 import { RadiusFilterCard } from '../components/marketplace/RadiusFilterCard';
 import { MapView as MarketplaceMap } from '../components/marketplace/MapView';
-import { ItemDetailView } from '../components/ItemDetailView';
+
 
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
@@ -79,6 +79,40 @@ type MarketplaceFeedItem = {
 
 // Mock definitions removed.
 
+// ─── NYC default location helpers ─────────────────────────────────────────
+const NYC_DEFAULT_CENTER = { lat: 40.7549, lng: -73.9840 };
+const NYC_RADIUS_KM = 18; // Spread listings around NYC within this radius
+
+/** Simple numeric hash for a string id. */
+const hashId = (id: string | number) => {
+    const str = String(id);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+};
+
+/**
+ * Returns a stable pseudo-random coordinate around NYC for listings that have
+ * no real location. Keeps the marker position consistent across renders.
+ */
+const getStableNycLocation = (id: string | number, name: string = '') => {
+    const seed = hashId(id) + hashId(name);
+    const r = NYC_RADIUS_KM * Math.sqrt((seed % 10000) / 10000);
+    const theta = (seed * 0.61803398875) % (2 * Math.PI);
+    const latOffset = r * Math.cos(theta) / 111.32;
+    const lngOffset = r * Math.sin(theta) / (111.32 * Math.cos(NYC_DEFAULT_CENTER.lat * (Math.PI / 180)));
+    return {
+        lat: NYC_DEFAULT_CENTER.lat + latOffset,
+        lng: NYC_DEFAULT_CENTER.lng + lngOffset,
+        name: 'Nueva York, NY',
+        address: 'Ubicación aproximada',
+    };
+};
+
 
 export default function MarketplaceScreen({ navigation, route, initialParams }: any) {
     const { width } = useWindowDimensions();
@@ -92,7 +126,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const { numColumns, isDesktop } = useResponsive();
+    const { numColumns, isDesktop, maxContainerWidth } = useResponsive();
     const { location: userLocation } = useUserLocation();
 
     const canPublish = !!user && (user.role === 'business' || user.role === 'consumer' || user.role === 'influencer');
@@ -100,15 +134,12 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     // Determine params from either navigation route or direct prop (for tab mode)
     const activeParams = initialParams || route?.params;
 
-    const NYC_DEFAULT_CENTER = useMemo(() => ({ lat: 40.7549, lng: -73.9840 }), []);
     const lastNonServiceSearchLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
     // State
     const [viewMode, setViewMode] = useState<ViewMode>(activeParams?.viewMode || 'grid');
     const [filter, setFilter] = useState<ItemType | 'all'>(activeParams?.filter || 'all');
-    const [radius, setRadius] = useState<number>(5);
-    const [detailItemId, setDetailItemId] = useState<string | number | null>(null);
-
+    const [radius, setRadius] = useState<number>(50);
     // Map List Overlay
     const [isMapListVisible, setIsMapListVisible] = useState(false);
     const mapListAnim = useSharedValue(MAP_LIST_HEIGHT);
@@ -170,20 +201,19 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
         minDiscount: null,
         categories: [],
         sortBy: 'relevancia',
-        searchLocation: { lat: -34.603722, lng: -58.381592 }, // Default fallback
+        searchLocation: NYC_DEFAULT_CENTER, // Default to NYC marketplace center
     });
-    const [currentMapCenter, setCurrentMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+    const [currentMapCenter, setCurrentMapCenter] = useState<{ lat: number; lng: number } | null>(NYC_DEFAULT_CENTER);
 
+    // Keep the marketplace centered on NYC by default. We no longer override
+    // the map center with the user's live location so that every published item
+    // remains visible in the NYC/alrededores area.
     useEffect(() => {
-        if (userLocation && !activeParams?.focusLocation) {
-            const newLoc = { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude };
-            setAdvancedFilters(prev => ({ ...prev, searchLocation: newLoc }));
-            setCurrentMapCenter(newLoc);
-        } else if ((user as any)?.location && !userLocation && !activeParams?.focusLocation) {
-            setAdvancedFilters(prev => ({ ...prev, searchLocation: (user as any).location }));
-            setCurrentMapCenter((user as any).location);
+        if (activeParams?.focusLocation) {
+            setAdvancedFilters(prev => ({ ...prev, searchLocation: activeParams.focusLocation }));
+            setCurrentMapCenter(activeParams.focusLocation);
         }
-    }, [userLocation, (user as any)?.location]);
+    }, [activeParams?.focusLocation]);
 
     // (keep param handling only via activeParams to avoid ReferenceError / duplication)
 
@@ -217,6 +247,21 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             ? Math.max(0, Math.round((1 - item.price / originalPrice) * 100))
             : undefined;
 
+        // If the listing has no real coordinates, give it a stable location
+        // around NYC so it still appears on the marketplace map.
+        const hasValidLocation =
+            item.location?.lat && item.location?.lng &&
+            !(item.location.lat === 0 && item.location.lng === 0);
+        const fallbackLocation = getStableNycLocation(item._id || item.id, item.title);
+        const location = hasValidLocation
+            ? {
+                lat: item.location.lat,
+                lng: item.location.lng,
+                name: item.location.name || 'Nueva York, NY',
+                address: item.location.address || '',
+            }
+            : fallbackLocation;
+
         return {
             id: item.id || item._id, // Handle both id formats
             type: (item.listingType ?? item.type ?? 'product') as MarketplaceFeedItem['type'],
@@ -230,12 +275,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             image: primaryImage,
             gallery: item.images?.map((img: any) => img.url) || [],
             category: item.category,
-            location: {
-                lat: item.location?.lat || 0,
-                lng: item.location?.lng || 0,
-                name: item.location?.name || '',
-                address: item.location?.address || '',
-            },
+            location,
             distance: Number(item.location?.distanceKm ?? 0),
             description: item.description,
             sellerId: item.seller?.id || '',
@@ -341,11 +381,11 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const handleAddToCart = (item: MarketplaceFeedItem) => {
         if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         addItem({
-            id: item.id,
+            id: String(item.id),
             name: item.name,
             price: item.price,
             image: item.image,
-            type: item.type as any,
+            type: item.type,
             location: item.location.name,
             sellerId: item.sellerId,
             sellerName: item.sellerName,
@@ -353,22 +393,12 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             shippingWeightKg: item.shippingWeightKg,
             shippingDimensionsCm: item.shippingDimensionsCm,
             distanceKm: item.distance,
+            quantity: 1,
         });
     };
 
-    const selectedItem = useMemo(
-        () => combinedItems.find((item) => item.id === detailItemId) ?? null,
-        [combinedItems, detailItemId]
-    );
-
-    const selectedProduct = useMemo(() => {
-        if (!selectedItem) return null;
-        const productId = selectedItem.sourceProductId || (typeof selectedItem.id === 'string' ? selectedItem.id : undefined);
-        if (!productId) return null;
-        return products.find((product) => product.id === productId) ?? null;
-    }, [products, selectedItem]);
-
-    const cardWidth = Math.floor((width - 32 - (16 * (numColumns - 1))) / numColumns);
+    const effectiveWidth = Math.min(width, maxContainerWidth);
+    const cardWidth = Math.floor((effectiveWidth - 32 - (16 * (numColumns - 1))) / numColumns);
 
     const renderGridItem = ({ item, index }: any) => {
         const Icon = getItemIcon(item.type);
@@ -385,7 +415,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                 activeOpacity={0.8}
                 onPress={() => {
                     if (Platform.OS !== 'web') Haptics.selectionAsync();
-                    setDetailItemId(item.id);
+                    navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
                 }}
             >
                 <View style={styles.gridImgContainer}>
@@ -490,7 +520,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                 activeOpacity={0.8}
                 onPress={() => {
                     if (Platform.OS !== 'web') Haptics.selectionAsync();
-                    setDetailItemId(item.id);
+                    navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
                 }}
             >
                 <View style={styles.listImgContainer}>
@@ -621,7 +651,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                             if (item.type === 'business') {
                                 navigation.navigate('BusinessDetail', { businessId: item.id, business: item });
                             } else {
-                                setDetailItemId(item.id);
+                                navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
                             }
                         }}
                         radius={radius}
@@ -781,22 +811,6 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             </View >
 
             {/* Modals */}
-            {
-                selectedItem && (
-                    <ItemDetailView
-                        item={selectedItem}
-                        product={selectedProduct}
-                        onClose={() => setDetailItemId(null)}
-                        onAddToCart={() => handleAddToCart(selectedItem)}
-                        onOpenCart={openCart}
-                        onViewSellerProfile={(sellerId) => {
-                            setDetailItemId(null);
-                            navigation.navigate('CommercialProfile', { sellerId });
-                        }}
-                    />
-                )
-            }
-
             <AdvancedFilters
                 open={advancedFiltersOpen}
                 onOpenChange={setAdvancedFiltersOpen}

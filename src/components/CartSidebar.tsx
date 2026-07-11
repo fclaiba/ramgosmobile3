@@ -1,11 +1,9 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, SafeAreaView, Platform, TextInput, Alert } from 'react-native';
-import { ShoppingCart as CartIcon, Trash2, Plus as PlusIcon, Minus, X, ArrowRight, Ticket } from 'lucide-react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import { ShoppingCart as CartIcon, Trash2, Plus as PlusIcon, Minus, X, ArrowRight, ShoppingBag, Search } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { useCart } from '../contexts/CartContext';
-import { usePoints, DISCOUNT_TIERS } from '../contexts/PointsContext';
+import { usePoints } from '../contexts/PointsContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
@@ -20,47 +18,7 @@ export default function CartSidebar() {
     const styles = getStyles(isDark);
     const { show } = useToast();
 
-    const [selectedDiscount, setSelectedDiscount] = React.useState<number>(0);
-    const [referralCode, setReferralCode] = React.useState('');
-    const [appliedReferralDiscount, setAppliedReferralDiscount] = React.useState(0);
     const navigation = useNavigation<any>();
-
-    const availableDiscounts = DISCOUNT_TIERS.filter((tier) =>
-        points >= tier.points && totalPrice >= tier.discount
-    );
-
-    const appliedDiscount = selectedDiscount > 0
-        ? DISCOUNT_TIERS.find((t) => t.points === selectedDiscount)?.discount || 0
-        : 0;
-
-    const finalPrice = Math.max(0, totalPrice - appliedDiscount - appliedReferralDiscount);
-
-    const handleApplyReferral = () => {
-        // Mock validation logic
-        const validCodes: Record<string, number> = {
-            'WELCOME20': 20,
-            'RAMGOS10': totalPrice * 0.10,
-            'REF2024': 15,
-        };
-
-        const discount = validCodes[referralCode.trim().toUpperCase()];
-
-        if (discount) {
-            setAppliedReferralDiscount(discount);
-            show(`Descuento de $${discount.toFixed(2)} aplicado.`, 'success');
-        } else {
-            // Check for potential user ID format or generic fallback for demo
-            if (referralCode.length > 5) {
-                // Simulate a 5% discount for any "valid looking" code not in list
-                const genericDiscount = totalPrice * 0.05;
-                setAppliedReferralDiscount(genericDiscount);
-                show('Descuento de referido (5%) aplicado.', 'success');
-            } else {
-                show('El código ingresado no existe o expiró.', 'error');
-                setAppliedReferralDiscount(0);
-            }
-        }
-    };
 
     const handleCheckout = () => {
         closeCart();
@@ -70,11 +28,11 @@ export default function CartSidebar() {
         // remaining stuck open over the Payment screen transition.
         setTimeout(() => {
             navigation.navigate('Payment', {
-                amount: totalPrice, // Sending GROSS amount so PaymentScreen can subtract discounts correctly
-                discountUsedPoints: selectedDiscount,
-                discountAmount: appliedDiscount,
-                referralCode: referralCode || undefined,
-                referralDiscount: appliedReferralDiscount,
+                amount: totalPrice,
+                discountUsedPoints: 0,
+                discountAmount: 0,
+                referralCode: undefined,
+                referralDiscount: 0,
                 shippingMethod: 'pickup',
                 shippingCost: 0,
                 shippingDestination: {
@@ -112,14 +70,30 @@ export default function CartSidebar() {
 
                     {Number(items?.length || 0) === 0 ? (
                         <View style={styles.emptyContainer}>
-                            <View style={styles.emptyIconBg}>
-                                <CartIcon size={48} color={isDark ? '#9CA3AF' : '#9CA3AF'} />
+                            <View style={styles.emptyIconContainer}>
+                                <LinearGradient
+                                    colors={isDark ? ['rgba(124, 58, 237, 0.25)', 'rgba(59, 130, 246, 0.25)'] : ['rgba(124, 58, 237, 0.15)', 'rgba(59, 130, 246, 0.15)']}
+                                    style={styles.emptyIconBg}
+                                >
+                                    <ShoppingBag size={56} color={isDark ? '#A78BFA' : '#7C3AED'} strokeWidth={1.5} />
+                                </LinearGradient>
+                                <View style={[styles.decorativeDot, { top: 10, right: 10, width: 14, height: 14, backgroundColor: '#3B82F6' }]} />
+                                <View style={[styles.decorativeDot, { bottom: 20, left: -5, width: 10, height: 10, backgroundColor: '#EC4899' }]} />
+                                <View style={[styles.decorativeDot, { top: 40, right: -15, width: 8, height: 8, backgroundColor: '#10B981' }]} />
                             </View>
-                            <Text style={styles.emptyTitle}>Carrito vacío</Text>
-                            <Text style={styles.emptyText}>Explora el marketplace y encuentra lo que necesitas.</Text>
-                            <Button variant="outline" onPress={closeCart} style={styles.shopBtn}>
-                                <Text style={{ fontWeight: '600' }}>Ir a la Tienda</Text>
-                            </Button>
+                            <Text style={styles.emptyTitle}>Tu carrito está vacío</Text>
+                            <Text style={styles.emptyText}>Parece que aún no has añadido nada. {"\n"}¡Descubre productos locales y ofertas exclusivas!</Text>
+                            
+                            <TouchableOpacity style={styles.shopBtnContainer} onPress={closeCart} activeOpacity={0.85}>
+                                <LinearGradient
+                                    colors={isDark ? ['#3B82F6', '#7C3AED'] : ['#2563EB', '#6D28D9']}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                    style={styles.shopBtnGradient}
+                                >
+                                    <Search size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                                    <Text style={styles.shopBtnText}>Explorar la Tienda</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
                         </View>
                     ) : (
                         <>
@@ -157,80 +131,6 @@ export default function CartSidebar() {
                                     </View>
                                 ))}
 
-                                {/* Points Section - Hide if only subscriptions in cart */}
-                                {availableDiscounts.length > 0 && !items.every(item => item.type === 'subscription') && (
-                                    <View style={styles.discountSection}>
-                                        <LinearGradient
-                                            colors={isDark ? ['#4C1D95', '#5B21B6'] : ['#F5F3FF', '#EDE9FE']}
-                                            style={StyleSheet.absoluteFill}
-                                        />
-                                        <View style={styles.discountHeader}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Ticket size={16} color={isDark ? '#C4B5FD' : '#7C3AED'} />
-                                                <Text style={styles.discountTitle}>Canjear Puntos</Text>
-                                            </View>
-                                            <Badge variant="secondary" style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.4)' : 'rgba(124, 58, 237, 0.1)' }}>
-                                                <Text style={{ color: isDark ? '#DDD6FE' : '#7C3AED', fontWeight: 'bold' }}>{points} pts</Text>
-                                            </Badge>
-                                        </View>
-
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 8 }}>
-                                            <TouchableOpacity
-                                                style={[styles.discountChip, selectedDiscount === 0 && styles.discountChipSelected]}
-                                                onPress={() => setSelectedDiscount(0)}
-                                            >
-                                                <Text style={[styles.discountText, selectedDiscount === 0 && styles.discountTextSelected]}>Sin descuento</Text>
-                                            </TouchableOpacity>
-                                            {availableDiscounts.map(tier => (
-                                                <TouchableOpacity
-                                                    key={tier.points}
-                                                    style={[styles.discountChip, selectedDiscount === tier.points && styles.discountChipSelected]}
-                                                    onPress={() => setSelectedDiscount(tier.points)}
-                                                >
-                                                    <Text style={[styles.discountText, selectedDiscount === tier.points && styles.discountTextSelected]}>
-                                                        -${tier.discount} ({tier.points}p)
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </ScrollView>
-                                    </View>
-                                )}
-
-                                {/* Referral Code Section */}
-                                <View style={styles.discountSection}>
-                                    <View style={styles.discountHeader}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Ticket size={16} color={isDark ? '#C4B5FD' : '#7C3AED'} />
-                                            <Text style={styles.discountTitle}>Código de Referido</Text>
-                                        </View>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <TextInput
-                                            style={[styles.input, { flex: 1 }]}
-                                            placeholder="Ingresa tu código"
-                                            placeholderTextColor="#9CA3AF"
-                                            value={referralCode}
-                                            onChangeText={setReferralCode}
-                                            autoCapitalize="characters"
-                                        />
-                                        <TouchableOpacity
-                                            style={[styles.applyBtn, !referralCode && styles.applyBtnDisabled]}
-                                            onPress={handleApplyReferral}
-                                            disabled={!referralCode}
-                                        >
-                                            <Text style={styles.applyBtnText}>Aplicar</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                    {appliedReferralDiscount > 0 && (
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                                            <Text style={{ fontSize: 13, color: '#16a34a' }}>Descuento aplicado</Text>
-                                            <TouchableOpacity onPress={() => { setAppliedReferralDiscount(0); setReferralCode(''); }}>
-                                                <Text style={{ fontSize: 13, color: '#EF4444' }}>Remover</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                </View>
-
                             </ScrollView>
 
                             <View style={styles.footer}>
@@ -238,15 +138,9 @@ export default function CartSidebar() {
                                     <Text style={styles.summaryLabel}>Subtotal</Text>
                                     <Text style={styles.summaryValue}>${totalPrice.toFixed(2)}</Text>
                                 </View>
-                                {appliedDiscount > 0 && (
-                                    <View style={styles.summaryRow}>
-                                        <Text style={[styles.summaryLabel, { color: isDark ? '#86EFAC' : '#16a34a' }]}>Descuento</Text>
-                                        <Text style={[styles.summaryValue, { color: isDark ? '#86EFAC' : '#16a34a' }]}>-${appliedDiscount.toFixed(2)}</Text>
-                                    </View>
-                                )}
                                 <View style={[styles.summaryRow, { marginTop: 12, marginBottom: 20 }]}>
                                     <Text style={styles.totalLabel}>Total</Text>
-                                    <Text style={styles.totalValue}>${finalPrice.toFixed(2)}</Text>
+                                    <Text style={styles.totalValue}>${totalPrice.toFixed(2)}</Text>
                                 </View>
 
                                 <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout} activeOpacity={0.9}>
@@ -284,11 +178,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     headerSubtitle: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
     closeBtn: { padding: 8, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 20 },
 
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-    emptyIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-    emptyTitle: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 8 },
-    emptyText: { fontSize: 15, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 24 },
-    shopBtn: { width: '100%' },
+    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+    emptyIconContainer: { position: 'relative', marginBottom: 32 },
+    emptyIconBg: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 5 },
+    decorativeDot: { position: 'absolute', borderRadius: 20 },
+    emptyTitle: { fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 12, textAlign: 'center' },
+    emptyText: { fontSize: 15, lineHeight: 22, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 40, paddingHorizontal: 10 },
+    shopBtnContainer: { width: '100%', maxWidth: 280, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
+    shopBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 24, borderRadius: 16 },
+    shopBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
 
     // Items
     itemRow: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
@@ -303,15 +201,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     qtyText: { fontSize: 13, fontWeight: '600', paddingHorizontal: 8, color: isDark ? '#F9FAFB' : '#000' },
     priceText: { fontSize: 15, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
 
-    // Discount
-    discountSection: { padding: 16, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: isDark ? '#5B21B6' : '#EDE9FE' },
-    discountHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    discountTitle: { color: isDark ? '#C4B5FD' : '#7C3AED', fontWeight: 'bold', fontSize: 14 },
-    discountChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#6D28D9' : '#DDD6FE', marginRight: 8 },
-    discountChipSelected: { backgroundColor: isDark ? '#7C3AED' : '#7C3AED', borderColor: isDark ? '#7C3AED' : '#7C3AED' },
-    discountText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '500' },
-    discountTextSelected: { color: '#fff' },
-
     // Footer
     footer: { padding: 24, paddingBottom: 34, backgroundColor: isDark ? '#1F2937' : '#fff', borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#F3F4F6' },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
@@ -323,9 +212,4 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     checkoutBtn: { height: 50, borderRadius: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
     checkoutBtnGradient: { flex: 1, borderRadius: 25, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
     checkoutBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-
-    input: { backgroundColor: isDark ? '#374151' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, color: isDark ? '#F9FAFB' : '#111827' },
-    applyBtn: { backgroundColor: isDark ? '#7C3AED' : '#7C3AED', paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-    applyBtnDisabled: { backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
-    applyBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
 });

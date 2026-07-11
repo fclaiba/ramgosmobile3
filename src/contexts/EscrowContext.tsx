@@ -1,75 +1,136 @@
-import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
-import type { Order } from './MarketplaceContext';
-import { useMarketplace } from './MarketplaceContext';
+import React, { createContext, useContext, useState } from 'react';
+import { useQuery, useMutation, useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from './AuthContext';
+import { usePaymentMode } from './PaymentModeContext';
 
-export type EscrowPhase = 'status' | 'dispute_init' | 'chat' | 'resolution';
+export type EscrowState = 'held' | 'release_scheduled' | 'released' | 'disputed' | 'refunded';
+export type EscrowPhase = 'status' | 'dispute_init' | 'chat';
 
-interface EscrowContextType {
-    // State
+export interface EscrowOrderItem {
+    listingId: string;
+    title: string;
+    quantity: number;
+    price: number;
+    listingType?: string;
+}
+
+export interface EscrowOrder {
+    id: string;
+    status: string;
+    paymentStatus: string;
+    escrow: {
+        state: EscrowState;
+        releaseScheduledAt?: string;
+    };
+    items: EscrowOrderItem[];
+    totals: {
+        grandTotal: number;
+        currency: string;
+    };
+    dispute?: {
+        reason: string;
+        description?: string;
+    };
+    deliveryConfirmedAt?: string;
+}
+
+interface EscrowContextValue {
+    orders: any[];
+    sellerOrders: any[];
+    releaseEscrow: (orderId: string) => Promise<void>;
+    confirmReceipt: (orderId: string) => Promise<void>;
+    openDispute: (orderId: string, reason: string) => Promise<void>;
+    isEscrowEnabled: boolean;
+    // Legacy interface for EscrowSheet compatibility
     isOpen: boolean;
-    activeOrderId: string | null;
-    phase: EscrowPhase;
-    activeOrder: Order | undefined;
-    role: 'buyer' | 'seller';
-
-    // Actions
-    openEscrow: (orderId: string, role: 'buyer' | 'seller', initialPhase?: EscrowPhase) => void;
+    openEscrow: (order?: any, role?: 'buyer' | 'seller') => void;
     closeEscrow: () => void;
+    activeOrder: EscrowOrder | null;
+    role: 'buyer' | 'seller';
+    phase: EscrowPhase;
     setPhase: (phase: EscrowPhase) => void;
 }
 
-const EscrowContext = createContext<EscrowContextType | undefined>(undefined);
+const EscrowContext = createContext<EscrowContextValue>({
+    orders: [],
+    sellerOrders: [],
+    releaseEscrow: async () => {},
+    confirmReceipt: async () => {},
+    openDispute: async () => {},
+    isEscrowEnabled: false,
+    isOpen: false,
+    openEscrow: () => {},
+    closeEscrow: () => {},
+    activeOrder: null,
+    role: 'buyer',
+    phase: 'status',
+    setPhase: () => {},
+});
 
-export function EscrowProvider({ children }: { children: ReactNode }) {
-    const { orders } = useMarketplace();
+export function EscrowProvider({ children }: { children: React.ReactNode }) {
+    const { user } = useAuth();
+    const { isTest } = usePaymentMode();
+
     const [isOpen, setIsOpen] = useState(false);
-    const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-    const [phase, setPhase] = useState<EscrowPhase>('status');
+    const [activeOrder, setActiveOrder] = useState<EscrowOrder | null>(null);
     const [role, setRole] = useState<'buyer' | 'seller'>('buyer');
+    const [phase, setPhase] = useState<EscrowPhase>('status');
 
-    const activeOrder = useMemo(() =>
-        orders.find(o => o.id === activeOrderId),
-        [orders, activeOrderId]
-    );
+    const orders = useQuery(api.orders.getMyOrders, user?.id ? { userId: user.id } : "skip") ?? [];
+    const sellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id ? { sellerId: user.id } : "skip") ?? [];
 
-    const openEscrow = (orderId: string, userRole: 'buyer' | 'seller', initialPhase: EscrowPhase = 'status') => {
-        setActiveOrderId(orderId);
-        setRole(userRole);
-        setPhase(initialPhase);
+    const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
+    const openDisputeMutation = useMutation(api.orders.openDispute);
+    const releaseEscrowMutation = useAction(api.stripe.releaseEscrowFunds);
+
+    const confirmReceipt = async (orderId: string) => {
+        if (!user?.id) throw new Error('Sesión no válida');
+        await confirmReceiptMutation({ orderId: orderId as any, userId: user.id });
+    };
+
+    const openDispute = async (orderId: string, reason: string) => {
+        if (!user?.id) throw new Error('Sesión no válida');
+        await openDisputeMutation({ orderId: orderId as any, reason, userId: user.id });
+    };
+
+    const releaseEscrow = async (orderId: string) => {
+        if (!user?.id) throw new Error('Sesión no válida');
+        await releaseEscrowMutation({ orderId: orderId as any, userId: user.id });
+    };
+
+    const openEscrow = (order?: any, r?: 'buyer' | 'seller') => {
+        if (order) setActiveOrder(order);
+        if (r) setRole(r);
+        setPhase('status');
         setIsOpen(true);
     };
 
     const closeEscrow = () => {
         setIsOpen(false);
-        // Optional: Reset state after animation
-        setTimeout(() => {
-            setActiveOrderId(null);
-            setPhase('status');
-        }, 300);
+        setActiveOrder(null);
+        setPhase('status');
     };
 
-    const value = {
+    const value: EscrowContextValue = {
+        orders,
+        sellerOrders,
+        releaseEscrow,
+        confirmReceipt,
+        openDispute,
+        isEscrowEnabled: isTest,
         isOpen,
-        activeOrderId,
-        phase,
-        activeOrder,
-        role,
         openEscrow,
         closeEscrow,
+        activeOrder,
+        role,
+        phase,
         setPhase,
     };
 
-    return (
-        <EscrowContext.Provider value={value}>
-            {children}
-        </EscrowContext.Provider>
-    );
+    return <EscrowContext.Provider value={value}>{children}</EscrowContext.Provider>;
 }
 
-export const useEscrow = () => {
-    const context = useContext(EscrowContext);
-    if (context === undefined) {
-        throw new Error('useEscrow must be used within an EscrowProvider');
-    }
-    return context;
-};
+export function useEscrow() {
+    return useContext(EscrowContext);
+}

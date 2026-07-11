@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireActor } from "./authHelpers";
 
@@ -250,6 +250,151 @@ export const getDisputeEvidence = query({
             .query("disputeEvidence")
             .withIndex("by_order", (q) => q.eq("orderId", args.orderId))
             .collect();
+    },
+});
+
+/**
+ * Internal query: gets order + user role for dispute resolution auth.
+ */
+export const internalGetOrderAndRole = internalQuery({
+    args: {
+        orderIdString: v.string(),
+        userId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const orderId = ctx.db.normalizeId("orders", args.orderIdString);
+        if (!orderId) return null;
+        const order = await ctx.db.get(orderId);
+        if (!order) return null;
+
+        const userDocId = ctx.db.normalizeId("users", args.userId);
+        const user = userDocId ? await ctx.db.get(userDocId) : null;
+        const isSupport = user?.role === 'admin' || user?.role === 'developer';
+
+        return {
+            orderId,
+            order,
+            isSupport,
+        };
+    },
+});
+
+/**
+ * Internal mutation: applies dispute resolution DB changes.
+ */
+export const internalApplyDisputeResolution = internalMutation({
+    args: {
+        orderId: v.id("orders"),
+        resolveInFavorOf: v.union(v.literal('buyer'), v.literal('seller')),
+        resolutionNote: v.optional(v.string()),
+        resolverUserId: v.string(),
+        sellerId: v.string(),
+        buyerId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const now = new Date().toISOString();
+
+        if (args.resolveInFavorOf === 'buyer') {
+            await ctx.db.patch(args.orderId, {
+                status: 'cancelled',
+                escrowState: 'refunded',
+                updatedAt: now,
+            });
+        } else {
+            await ctx.db.patch(args.orderId, {
+                status: 'completed',
+                escrowState: 'released',
+                updatedAt: now,
+            });
+        }
+
+        if (args.resolutionNote) {
+            await ctx.db.insert("disputeMessages", {
+                orderId: String(args.orderId),
+                sender: 'support',
+                senderUserId: args.resolverUserId,
+                body: `**Resolución:** ${args.resolutionNote}`,
+                sentAt: now,
+            });
+        }
+
+        await ctx.db.insert("audit_logs", {
+            actorUserId: args.resolverUserId,
+            targetUserId: args.sellerId,
+            action: "DISPUTE_RESOLVED",
+            timestamp: now,
+            metadata: {
+                orderId: String(args.orderId),
+                resolveInFavorOf: args.resolveInFavorOf,
+                resolutionNote: args.resolutionNote,
+            },
+        });
+    },
+});
+
+/**
+ * Resolves a dispute — admin/support decides outcome.
+ * - resolveInFavorOf: "buyer" → refund (escrow → refunded), "seller" → release (escrow → released)
+ * Transitions order from "disputed" to "completed" or "cancelled".
+ */
+export const resolveDispute = action({
+    args: {
+        orderId: v.string(),
+        resolveInFavorOf: v.union(v.literal('buyer'), v.literal('seller')),
+        resolutionNote: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+
+        const data = await ctx.runQuery(internal.disputes.internalGetOrderAndRole, {
+            orderIdString: args.orderId,
+            userId: actor.idString,
+        });
+
+        if (!data) throw new Error("Orden no encontrada");
+        if (!data.isSupport) throw new Error("No autorizado — solo soporte/admin puede resolver disputas.");
+
+        const { orderId, order } = data;
+        if (order.status !== 'disputed') {
+            throw new Error("La orden no está en estado de disputa.");
+        }
+
+        await ctx.runMutation(internal.disputes.internalApplyDisputeResolution, {
+            orderId,
+            resolveInFavorOf: args.resolveInFavorOf,
+            resolutionNote: args.resolutionNote,
+            resolverUserId: actor.idString,
+            sellerId: order.sellerId,
+            buyerId: order.userId,
+        });
+
+        if (args.resolveInFavorOf === 'seller') {
+            await ctx.runMutation(internal.stripe.internalReleasePayment, {
+                orderId,
+            });
+        }
+
+        const shortOrderId = String(args.orderId).slice(-6);
+        const outcomeMsg = args.resolveInFavorOf === 'buyer'
+            ? 'a favor del comprador (reembolso)'
+            : 'a favor del vendedor (liberación de fondos)';
+
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            userId: order.userId,
+            title: `Disputa resuelta #${shortOrderId}`,
+            body: `La disputa se resolvió ${outcomeMsg}.`,
+            category: 'dispute',
+            data: { type: 'dispute_resolved', orderId: args.orderId, resolveInFavorOf: args.resolveInFavorOf },
+        });
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            userId: order.sellerId,
+            title: `Disputa resuelta #${shortOrderId}`,
+            body: `La disputa se resolvió ${outcomeMsg}.`,
+            category: 'dispute',
+            data: { type: 'dispute_resolved', orderId: args.orderId, resolveInFavorOf: args.resolveInFavorOf },
+        });
+
+        return { success: true, orderId: args.orderId, resolveInFavorOf: args.resolveInFavorOf };
     },
 });
 

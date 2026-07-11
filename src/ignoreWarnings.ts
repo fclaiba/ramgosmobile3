@@ -11,7 +11,10 @@ if (__DEV__) {
         '"shadow*" style props are deprecated',
         '[Reanimated] Reduced motion setting is enabled',
         '[expo-notifications] Listening to push token changes is not yet fully supported on web',
-        'Animated: `useNativeDriver` is not supported'
+        'Animated: `useNativeDriver` is not supported',
+        'Blocked aria-hidden on an element because its descendant retained focus',
+        'live Stripe.js integrations must use HTTPS',
+        'You may test your Stripe.js integration over HTTP'
     ];
 
     console.warn = (...args) => {

@@ -26,7 +26,18 @@ export const getMyOrders = query({
             .withIndex("by_user", (q) => q.eq("userId", targetUserId))
             .order("desc")
             .collect();
-        return orders;
+        return orders.map(order => {
+            if (order.escrowState) {
+                return {
+                    ...order,
+                    escrow: {
+                        state: order.escrowState,
+                        releaseScheduledAt: new Date(new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                    }
+                };
+            }
+            return order;
+        });
     },
 });
 
@@ -52,7 +63,45 @@ export const getOrdersBySeller = query({
             .withIndex("by_seller", (q) => q.eq("sellerId", targetSellerId))
             .order("desc")
             .collect();
-        return orders;
+        return orders.map(order => {
+            if (order.escrowState) {
+                return {
+                    ...order,
+                    escrow: {
+                        state: order.escrowState,
+                        releaseScheduledAt: new Date(new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+                    }
+                };
+            }
+            return order;
+        });
+    },
+});
+
+export const getOrderById = query({
+    args: {
+        orderId: v.id("orders"),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx);
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return null;
+        const isBuyer = order.userId === actor.idString;
+        const isSeller = order.sellerId === actor.idString;
+        const isAdmin = actor.role === "admin" || actor.role === "developer";
+        if (!isBuyer && !isSeller && !isAdmin) {
+            throw new Error("No autorizado para ver esta orden.");
+        }
+        if (order.escrowState) {
+            return {
+                ...order,
+                escrow: {
+                    state: order.escrowState,
+                    releaseScheduledAt: new Date(new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                },
+            };
+        }
+        return order;
     },
 });
 
@@ -261,9 +310,10 @@ export const markAsDelivered = mutation({
 export const confirmReceipt = mutation({
     args: {
         orderId: v.id("orders"),
+        userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -345,10 +395,11 @@ export const cancelOrder = mutation({
 export const openDispute = mutation({
     args: {
         orderId: v.id("orders"),
-        reason: v.string()
+        reason: v.string(),
+        userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -387,9 +438,10 @@ export const escalateDispute = mutation({
     args: {
         orderId: v.id("orders"),
         role: v.union(v.literal('buyer'), v.literal('seller')),
+        userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, args.userId);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 

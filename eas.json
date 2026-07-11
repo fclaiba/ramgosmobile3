@@ -9,21 +9,24 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://academic-lapwing-311.convex.cloud",
-        "EXPO_PUBLIC_STRIPE_KEY": "pk_test_replace_me"
+        "EXPO_PUBLIC_STRIPE_KEY_TEST": "pk_test_51R3hWPA7Fz349bFUBjxbETbOvw78Pcm6QxIexmUBBobCoKeLbtsAWlPHcci0AbJi2krCMcOCZhAHfeGfP5uQ350300xEbrp1B2",
+        "EXPO_PUBLIC_STRIPE_KEY_LIVE": "pk_live_51R3hWPA7Fz349bFU5V7xyr1WWDbOdXT6Y1RdOxcTc8dzULNkr93VNW4o9rdYSyVUr9wx5sDqpPeQu6vUb79glmr500u8dzLvAf"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://academic-lapwing-311.convex.cloud",
-        "EXPO_PUBLIC_STRIPE_KEY": "pk_test_replace_me"
+        "EXPO_PUBLIC_STRIPE_KEY_TEST": "pk_test_51R3hWPA7Fz349bFUBjxbETbOvw78Pcm6QxIexmUBBobCoKeLbtsAWlPHcci0AbJi2krCMcOCZhAHfeGfP5uQ350300xEbrp1B2",
+        "EXPO_PUBLIC_STRIPE_KEY_LIVE": "pk_live_51R3hWPA7Fz349bFU5V7xyr1WWDbOdXT6Y1RdOxcTc8dzULNkr93VNW4o9rdYSyVUr9wx5sDqpPeQu6vUb79glmr500u8dzLvAf"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://deafening-turtle-227.convex.cloud",
-        "EXPO_PUBLIC_STRIPE_KEY": "pk_live_51R3hWPA7Fz349bFU5V7xyr1WWDbOdXT6Y1RdOxcTc8dzULNkr93VNW4o9rdYSyVUr9wx5sDqpPeQu6vUb79glmr500u8dzLvAf"
+        "EXPO_PUBLIC_STRIPE_KEY_TEST": "pk_test_51R3hWPA7Fz349bFUBjxbETbOvw78Pcm6QxIexmUBBobCoKeLbtsAWlPHcci0AbJi2krCMcOCZhAHfeGfP5uQ350300xEbrp1B2",
+        "EXPO_PUBLIC_STRIPE_KEY_LIVE": "pk_live_51R3hWPA7Fz349bFU5V7xyr1WWDbOdXT6Y1RdOxcTc8dzULNkr93VNW4o9rdYSyVUr9wx5sDqpPeQu6vUb79glmr500u8dzLvAf"
       }
     }
   },

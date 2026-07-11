@@ -8,7 +8,7 @@ import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent, GameThemeTokens } from './gameContracts';
 import { useTheme } from '../../contexts/ThemeContext';
 
-const EMOJIS = ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵'];
+const EMOJIS = ['🐟', '🐁', '🧶', '🥛', '🐾', '📦', '🧸', '🔔', '🍗', '🦋'];
 const getRandomLifeInterval = () => (Math.random() < 0.5 ? 2 : 3);
 
 interface CardItem {
@@ -454,7 +454,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         fontSize: 28
     },
     centerContainer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(255,255,255,0.9)',

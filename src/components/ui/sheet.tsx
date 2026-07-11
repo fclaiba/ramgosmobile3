@@ -22,11 +22,11 @@ const SheetContent = ({ children, side = "right", className, style }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
-    const isBottom = side === "bottom";
     const contentStyle = [
         styles.content,
         side === "left" && styles.left,
         side === "right" && styles.right,
+        side === "top" && styles.top,
         side === "bottom" && styles.bottom,
         style
     ];
@@ -126,24 +126,31 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderLeftWidth: 1,
         borderColor: isDark ? "#374151" : "#E5E7EB",
     },
+    top: {
+        top: 0,
+        left: 0,
+        right: 0,
+        marginHorizontal: 'auto',
+        width: '100%',
+        maxWidth: 600,
+        height: '85%',
+        maxHeight: '90%',
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        borderWidth: 1,
+        borderColor: isDark ? "#374151" : "#E5E7EB",
+    },
     bottom: {
-        ...Platform.select({
-            web: {
-                margin: 'auto', // Centers it horizontally and vertically if it has max dimensions
-                maxHeight: '90%',
-                maxWidth: 600,
-                alignSelf: 'center',
-                borderRadius: 24,
-            },
-            default: {
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: "85%", // Default height, can be overridden
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-            }
-        }),
+        bottom: 0,
+        left: 0,
+        right: 0,
+        marginHorizontal: 'auto', // Centers horizontally on large screens
+        width: '100%',
+        maxWidth: 600, // Max width for desktop
+        height: '85%',
+        maxHeight: '90%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         borderWidth: 1,
         borderColor: isDark ? "#374151" : "#E5E7EB",
     },

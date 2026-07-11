@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
-import { Home, ShoppingBag, Users, LayoutDashboard, Settings, LogOut } from 'lucide-react-native';
+import { Home, ShoppingBag, Users, LayoutDashboard, Settings, LogOut, MapPin } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

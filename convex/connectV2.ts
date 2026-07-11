@@ -4,8 +4,8 @@ import { internal } from "./_generated/api";
 import Stripe from "stripe";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const stripeClient = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
-    apiVersion: "2024-04-10" as any, // Convex requires a fixed version, but the underlying SDK will use it
+const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2026-06-24.dahlia" as any, // Convex requires a fixed version, but the underlying SDK will use it
 });
 
 // ---------------------------------------------------------------------------

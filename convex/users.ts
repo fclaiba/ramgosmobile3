@@ -729,3 +729,10 @@ export const updateUserStripeCustomerId = internalMutation({
     }
 });
 
+export const getUserActivityStats = query({
+    args: {},
+    handler: async (ctx) => {
+        // ponytail: avoid heavy scans, returning minimal integration skeleton for now
+        return { purchases: 0, bonuses: 0, events: 0, savings: 0 };
+    }
+});

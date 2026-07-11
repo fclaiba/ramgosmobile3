@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 
 export const useUserLocation = () => {
-    const [location, setLocation] = useState<Location.LocationObject | null>(null);
+    const [location, setLocation] = useState<Location.LocationObject | null>({
+        coords: { latitude: 40.7128, longitude: -74.0060, altitude: null, accuracy: null, altitudeAccuracy: null, heading: null, speed: null },
+        timestamp: Date.now()
+    });
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
 
@@ -12,7 +15,6 @@ export const useUserLocation = () => {
         try {
             let { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                setErrorMsg('Permiso de ubicación denegado');
                 setLoading(false);
                 return;
             }

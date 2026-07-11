@@ -101,8 +101,20 @@ http.route({
                         // Wait, check if this is a multi-vendor cart payment (has cartId)
                         const cartId = pi.metadata?.cartId;
                         const userId = pi.metadata?.userId;
-                        
-                        if (cartId && userId) {
+                        const paymentMode = pi.metadata?.mode;
+
+                        if (paymentMode === "test") {
+                            console.log(`[Webhook] TEST mode: Processing simulated orders for cart ${cartId}`);
+                            await ctx.runAction(internal.payments.actions.internalProcessTestCartOrders, {
+                                stripePaymentIntentId: pi.id,
+                                userId: userId || "anonymous",
+                                cartId: cartId || pi.id,
+                                amount: pi.amount / 100,
+                            });
+                            await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
+                                stripePaymentIntentId: pi.id,
+                            });
+                        } else if (cartId && userId) {
                             console.log(`[Webhook] Processing multi-vendor cart ${cartId} for user ${userId}`);
                             await ctx.runAction(internal.stripe.internalProcessMultiVendorCart, {
                                 stripePaymentIntentId: pi.id,

@@ -21,8 +21,8 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
     const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
     const [region, setRegion] = useState({
-        latitude: initialLocation?.lat || -34.603722, // Default CABA
-        longitude: initialLocation?.lng || -58.381592,
+        latitude: initialLocation?.lat || 40.7128, // Default Manhattan
+        longitude: initialLocation?.lng || -74.0060,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
     });
