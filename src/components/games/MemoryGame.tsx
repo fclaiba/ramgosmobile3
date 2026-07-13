@@ -115,8 +115,8 @@ export const MemoryGame = (props: MemoryGameProps) => {
 
     // Logic refs
     const processingRef = useRef(false);
-    const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const matchTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const previewTimerRef = useRef<number | null>(null);
+    const matchTimerRef = useRef<number | null>(null);
     const lastActionNonce = useRef(0);
     const lastLevelReported = useRef(1);
     const nextLifeLevelRef = useRef<number>(1 + getRandomLifeInterval());

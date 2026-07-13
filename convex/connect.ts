@@ -33,6 +33,7 @@ import {
 import { internal } from "./_generated/api";
 import Stripe from "stripe";
 import { withStripeBreadcrumb } from "./observability";
+import { requireActor, AuthActor } from "./authHelpers";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 if (!stripeKey) {
@@ -90,25 +91,21 @@ export const internalGetActorRole = internalQuery({
     },
 });
 
+// SECURITY (Fase 1): identity comes from the server-issued session token —
+// never from a client-supplied actorId (that was an IDOR: any caller could
+// impersonate any user by sending their id).
 const assertSelfOrAdminAction = async (
     ctx: any,
-    actorId: any,
+    sessionToken: string | undefined,
     targetUserId: string,
-) => {
-    if (!actorId) {
-        throw new Error("No autorizado.");
-    }
-    const actor: { role: string; email: string | null } | null =
-        await ctx.runQuery(internal.connect.internalGetActorRole, {
-            actorId,
-        });
-    if (!actor) throw new Error("No autorizado.");
-
-    const isSelf = String(actorId) === targetUserId;
+): Promise<AuthActor> => {
+    const actor = await requireActor(ctx, sessionToken);
+    const isSelf = actor.idString === String(targetUserId);
     const isAdmin = actor.role === "admin" || actor.role === "developer";
     if (!isSelf && !isAdmin) {
         throw new Error("No autorizado.");
     }
+    return actor;
 };
 
 // ---------------------------------------------------------------------------
@@ -117,6 +114,7 @@ const assertSelfOrAdminAction = async (
 // ---------------------------------------------------------------------------
 export const createConnectAccount = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         displayName: v.string(),
@@ -128,7 +126,7 @@ export const createConnectAccount = action({
         args,
     ): Promise<{ accountId: string; isMock: boolean }> => {
         assertStripeConfigured();
-        await assertSelfOrAdminAction(ctx, args.actorId, String(args.userId));
+        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
 
         try {
             // EXACT shape required by V2 — no top-level `type`. Capabilities
@@ -189,18 +187,17 @@ export const createConnectAccount = action({
 // ---------------------------------------------------------------------------
 export const createOnboardingLink = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         accountId: v.string(),
     },
     handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
         assertStripeConfigured();
 
-        // Light auth: must have an actor at minimum (actions can't run
-        // assertSelfOrAdmin without an internal query on a known target user;
-        // here the target is the account itself, validated server-side by
-        // Stripe — anyone calling with a random accountId would just get a
-        // link that's useless to them).
-        if (!args.actorId) throw new Error("No autorizado.");
+        // Auth: any valid session may request a link. The target is the
+        // account itself, validated server-side by Stripe — a random
+        // accountId just yields a link that's useless to the caller.
+        await requireActor(ctx, (args as any).sessionToken);
 
         try {
             const link = await (stripe as any).v2.core.accountLinks.create({
@@ -232,6 +229,7 @@ export const createOnboardingLink = action({
 // ---------------------------------------------------------------------------
 export const getAccountStatus = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         accountId: v.string(),
     },
@@ -247,6 +245,7 @@ export const getAccountStatus = action({
         isMock: boolean;
     }> => {
         assertStripeConfigured();
+        await requireActor(ctx, (args as any).sessionToken);
 
         try {
             const account = await (stripe as any).v2.core.accounts.retrieve(
@@ -289,6 +288,7 @@ export const getAccountStatus = action({
 // ---------------------------------------------------------------------------
 export const ensureConnectAccount = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         displayName: v.string(),
@@ -299,7 +299,7 @@ export const ensureConnectAccount = action({
         ctx,
         args,
     ): Promise<{ accountId: string; created: boolean }> => {
-        await assertSelfOrAdminAction(ctx, args.actorId, String(args.userId));
+        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
 
         const existing: string | null = await ctx.runQuery(
             internal.connect.internalGetConnectAccountId,
@@ -485,6 +485,7 @@ export const internalSaveConnectFlags = internalMutation({
 
 export const getConnectBalance = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
     },
@@ -498,7 +499,7 @@ export const getConnectBalance = action({
         currency: string;
         isMock: boolean;
     }> => {
-        await assertSelfOrAdminAction(ctx, args.actorId, String(args.userId));
+        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
 
         const accountId: string | null = await ctx.runQuery(
             internal.connect.internalGetConnectAccountId,
@@ -555,6 +556,7 @@ export const getConnectBalance = action({
 
 export const updatePayoutSchedule = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         // 'manual' disables auto-payouts (sellers must call requestInstantPayout).
@@ -569,7 +571,7 @@ export const updatePayoutSchedule = action({
         ctx,
         args,
     ): Promise<{ updated: boolean; isMock: boolean }> => {
-        await assertSelfOrAdminAction(ctx, args.actorId, String(args.userId));
+        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
 
         const accountId: string | null = await ctx.runQuery(
             internal.connect.internalGetConnectAccountId,
@@ -611,6 +613,7 @@ export const updatePayoutSchedule = action({
 
 export const requestInstantPayout = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         amountInCents: v.number(),
@@ -627,7 +630,7 @@ export const requestInstantPayout = action({
         arrivalDate: number | null;
         isMock: boolean;
     }> => {
-        await assertSelfOrAdminAction(ctx, args.actorId, String(args.userId));
+        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
 
         if (args.amountInCents < 100) {
             throw new Error("Monto inválido. Mínimo 100 centavos (USD $1).");
@@ -688,6 +691,7 @@ export const requestInstantPayout = action({
 
 export const internalCreateOnboardingLink = internalAction({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         accountId: v.string(),
     },
@@ -719,6 +723,7 @@ export const internalCreateOnboardingLink = internalAction({
 
 export const internalRequestInstantPayout = internalAction({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         amountInCents: v.number(),

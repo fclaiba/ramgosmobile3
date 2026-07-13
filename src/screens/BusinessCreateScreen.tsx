@@ -128,7 +128,7 @@ export default function BusinessCreateScreen({ navigation, route }: any) {
                     initialData={initialData}
                     onSubmit={handleUnifiedSubmit}
                     onCancel={() => setSelectedType(null)}
-                    branches={branches}
+                    branches={branches.map((b) => ({ ...b, id: b.id ?? `branch_${b.name}` }))}
                 />
             </View>
         );

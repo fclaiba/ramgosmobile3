@@ -185,7 +185,7 @@ export interface EscrowSheetProps {
 
 export function EscrowSheet(props: EscrowSheetProps = {}) {
     const { colorScheme } = useTheme();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
     const openDisputeMutation = useMutation(api.orders.openDispute);
     const addDisputeMessageMutation = useMutation(api.disputes.addDisputeMessage);
@@ -295,7 +295,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         try {
             await confirmReceiptMutation({
                 orderId: order.id as any,
-                userId: user.id,
+                sessionToken, userId: user.id,
             });
             show('Recepción confirmada. Fondos liberados.', 'success');
         } catch (e: any) {

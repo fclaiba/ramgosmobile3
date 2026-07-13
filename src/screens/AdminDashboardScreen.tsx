@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { DollarSign, ShoppingBag, TrendingUp, AlertTriangle, ShieldCheck, Users, XCircle } from 'lucide-react-native';
 
 export default function AdminDashboardScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const { sessionToken } = useAuth();
 
     const platformStats = useQuery(api.adminQueries.getPlatformStats);
     const escrowOrders = useQuery(api.adminQueries.getDisputedOrEscrowOrders) || [];
@@ -30,7 +32,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     onPress: async () => {
                         setProcessingIds(prev => ({ ...prev, [orderId]: true }));
                         try {
-                            await adminForceReleaseEscrow({ orderId: orderId as any });
+                            await adminForceReleaseEscrow({ sessionToken, orderId: orderId as any });
                             Alert.alert("Éxito", "Pago liberado al vendedor exitosamente.");
                         } catch (e: any) {
                             Alert.alert("Error", e.message || "Error al liberar pago");
@@ -55,7 +57,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     onPress: async () => {
                         setProcessingIds(prev => ({ ...prev, [orderId]: true }));
                         try {
-                            await adminRefundEscrow({ orderId: orderId as any });
+                            await adminRefundEscrow({ sessionToken, orderId: orderId as any });
                             Alert.alert("Éxito", "Reembolso procesado exitosamente.");
                         } catch (e: any) {
                             Alert.alert("Error", e.message || "Error al procesar reembolso");
@@ -79,7 +81,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     onPress: async () => {
                         setProcessingIds(prev => ({ ...prev, [orderId]: true }));
                         try {
-                            await resolveDispute({ orderId, resolveInFavorOf: inFavorOf });
+                            await resolveDispute({ sessionToken, orderId, resolveInFavorOf: inFavorOf });
                             Alert.alert("Éxito", "Disputa resuelta.");
                         } catch (e: any) {
                             Alert.alert("Error", e.message || "Error al resolver disputa");

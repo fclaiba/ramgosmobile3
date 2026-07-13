@@ -58,8 +58,6 @@ const usages = [
 "api.economy.saveRewardsState",
 "api.economy.claimReward",
 "api.economy.playGame",
-"api.casino.playCasinoSlots",
-"api.casino.playCasinoRoulette",
 "api.social.lookupUserSocial",
 "api.social.getFeed",
 "api.social.getStoriesForFollowing",

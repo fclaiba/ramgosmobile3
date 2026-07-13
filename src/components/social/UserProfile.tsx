@@ -287,7 +287,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     // Cover
     coverContainer: { height: COVER_HEIGHT, width: '100%' },
     coverImage: { width: '100%', height: '100%' },
-    coverGradient: { ...StyleSheet.absoluteFillObject },
+    coverGradient: { ...StyleSheet.absoluteFill },
 
     // Body
     profileBody: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30, paddingBottom: 40 },

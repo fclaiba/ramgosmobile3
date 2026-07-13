@@ -98,29 +98,22 @@ http.route({
                         const pi = event.data.object as Stripe.PaymentIntent;
                         console.log(`[Webhook] PaymentIntent ${pi.id} succeeded (${pi.amount / 100} USD)`);
 
-                        // Wait, check if this is a multi-vendor cart payment (has cartId)
+                        // Multi-vendor cart payment (has cartId in metadata).
+                        // Fase 5: la rama del simulador (metadata.mode === "test",
+                        // convex/payments/actions.ts) fue desconectada — camino único.
                         const cartId = pi.metadata?.cartId;
                         const userId = pi.metadata?.userId;
-                        const paymentMode = pi.metadata?.mode;
 
-                        if (paymentMode === "test") {
-                            console.log(`[Webhook] TEST mode: Processing simulated orders for cart ${cartId}`);
-                            await ctx.runAction(internal.payments.actions.internalProcessTestCartOrders, {
-                                stripePaymentIntentId: pi.id,
-                                userId: userId || "anonymous",
-                                cartId: cartId || pi.id,
-                                amount: pi.amount / 100,
-                            });
-                            await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
-                                stripePaymentIntentId: pi.id,
-                            });
-                        } else if (cartId && userId) {
+                        if (cartId && userId) {
                             console.log(`[Webhook] Processing multi-vendor cart ${cartId} for user ${userId}`);
                             await ctx.runAction(internal.stripe.internalProcessMultiVendorCart, {
                                 stripePaymentIntentId: pi.id,
                                 userId: userId,
                                 cartId: cartId,
                                 amount: pi.amount,
+                            });
+                            await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
+                                stripePaymentIntentId: pi.id,
                             });
                         } else {
                             // Standard single-order fallback

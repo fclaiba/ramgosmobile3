@@ -45,7 +45,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { show } = useToast();
 
     const [amount, setAmount] = useState('');
@@ -75,7 +75,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         }
         (async () => {
             try {
-                const result: any = await getConnectBalance({ userId: userId as any });
+                const result: any = await getConnectBalance({ sessionToken, userId: userId as any });
                 if (!cancelled && result) {
                     setBalance({
                         accountId: result.accountId,
@@ -109,6 +109,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         setScheduleSaving(true);
         try {
             await updatePayoutSchedule({
+                sessionToken,
                 userId: userId as any,
                 interval: next,
             });
@@ -140,6 +141,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         setLoading(true);
         try {
             const result: any = await requestInstantPayout({
+                sessionToken,
                 userId: userId as any,
                 amountInCents: Math.round(usd * 100),
                 currency: balance?.currency ?? 'usd',
@@ -151,7 +153,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
             setAmount('');
             // Re-pull balance.
             try {
-                const fresh: any = await getConnectBalance({ userId: userId as any });
+                const fresh: any = await getConnectBalance({ sessionToken, userId: userId as any });
                 if (fresh) {
                     setBalance({
                         accountId: fresh.accountId,

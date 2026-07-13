@@ -71,7 +71,7 @@ export const DuckHunt = (props: DuckHuntProps) => {
 
     // Refs
     const gameLoopRef = useRef<number | null>(null);
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const timerRef = useRef<number | null>(null);
 
     // Sync Refs
     useEffect(() => { scoreRef.current = score; }, [score]);

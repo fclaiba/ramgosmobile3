@@ -34,6 +34,7 @@ import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { decodeProtectedHeader, importX509, jwtVerify, createRemoteJWKSet } from "jose";
 import { JWT } from "google-auth-library";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 const appleSharedSecret = process.env.APPLE_SHARED_SECRET ?? "";
 const appleBundleId = process.env.APPLE_BUNDLE_ID ?? "";
@@ -114,6 +115,7 @@ const verifyAppleJws = async (jws: string): Promise<any> => {
 // ---------------------------------------------------------------------------
 export const validateAppleReceipt = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         receiptData: v.optional(v.string()),
@@ -124,6 +126,10 @@ export const validateAppleReceipt = action({
         ctx,
         args,
     ): Promise<{ success: boolean; status: string; isMock: boolean }> => {
+        // SECURITY (Fase 1): el recibo solo puede aplicarse al propio usuario.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, String(args.userId));
+
         if (!isAppleConfigured) {
             throw new Error(
                 "IAP Apple no configurado. Define APPLE_SHARED_SECRET en Convex.",
@@ -248,6 +254,7 @@ const fetchGoogleSubscription = async (
 
 export const validateGoogleReceipt = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         productId: v.string(),
@@ -258,6 +265,10 @@ export const validateGoogleReceipt = action({
         ctx,
         args,
     ): Promise<{ success: boolean; status: string; isMock: boolean }> => {
+        // SECURITY (Fase 1): el recibo solo puede aplicarse al propio usuario.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, String(args.userId));
+
         if (!isGoogleConfigured) {
             throw new Error(
                 "IAP Google no configurado. Define GOOGLE_PLAY_SERVICE_ACCOUNT_JSON en Convex.",

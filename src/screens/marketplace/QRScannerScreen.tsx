@@ -17,7 +17,7 @@ export default function QRScannerScreen() {
     const styles = getStyles(isDark);
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -56,7 +56,7 @@ export default function QRScannerScreen() {
 
             await confirmReceiptMutation({
                 orderId: orderId as any,
-                userId: user.id,
+                sessionToken, userId: user.id,
             });
 
             setLoading(false);

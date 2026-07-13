@@ -1,4 +1,8 @@
 import { mutation } from "./_generated/server";
+import { hashPassword } from "./passwordHelpers";
+
+// Development-only credential. This is stored as bcrypt and grants no bypass.
+const DEMO_PASSWORD = "RamgosDemo1!";
 
 export const createTests = mutation({
     args: {},
@@ -12,7 +16,7 @@ export const createTests = mutation({
                 await ctx.db.insert("users", {
                     uid: Math.random().toString(36).slice(2),
                     email,
-                    password: "hashed_321drowssap", // 'password123' hashed
+                    password: await hashPassword(DEMO_PASSWORD),
                     name: role.charAt(0).toUpperCase() + role.slice(1),
                     role: role as any,
                     kycStatus: "approved", // Verified status

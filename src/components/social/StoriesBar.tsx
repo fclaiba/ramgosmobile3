@@ -36,7 +36,7 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
 
                 {stories.map((story: Story) => {
                     const hasStory = story.items?.length > 0;
-                    const hasUnviewed = story.items?.some(item => !item.viewed);
+                    const hasUnviewed = story.items?.some((item: any) => !item.viewed);
 
                     return (
                         <TouchableOpacity key={story.id} style={styles.storyItem} onPress={() => onStoryClick(story.id)}>

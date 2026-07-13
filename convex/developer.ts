@@ -2,6 +2,10 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { assertAdminOrDeveloper, requireActor } from "./authHelpers";
+import { hashPassword } from "./passwordHelpers";
+
+// Development-only credential. This is stored as bcrypt and grants no bypass.
+const DEMO_PASSWORD = "RamgosDemo1!";
 
 // Helper to check dev permissions
 const checkDevAccess = async (ctx: any, userId: Id<"users">) => {
@@ -27,9 +31,10 @@ const sanitizeDevUser = (user: any) => ({
 });
 
 export const seedTestUsers = mutation({
-    args: {},
+    args: {
+        sessionToken: v.optional(v.string()),},
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== "admin" && actor.role !== "developer" && !actor.isTest) {
             throw new Error("Se requiere rol de desarrollador o admin.");
         }
@@ -67,7 +72,7 @@ export const seedTestUsers = mutation({
                 // Ensure flags
                 await ctx.db.patch(existing._id, {
                     isTest: true,
-                    password: 'hashed_321drowssap', // Force reset password to ensure access
+                    password: await hashPassword(DEMO_PASSWORD),
                     kycStatus: u.kycStatus // Also ensure KYC status matches expectations
                 });
                 results.push({ ...sanitizeDevUser(existing), status: 'updated' });
@@ -84,7 +89,7 @@ export const seedTestUsers = mutation({
                     isTest: true,
                     joinedAt: new Date().toISOString(),
                     subscriptionStatus: 'active',
-                    password: 'hashed_321drowssap' // Hash of 'password123'
+                    password: await hashPassword(DEMO_PASSWORD)
                 });
                 results.push({ _id: newId, status: 'created' });
             }
@@ -95,9 +100,10 @@ export const seedTestUsers = mutation({
 });
 
 export const getTestUsers = query({
-    args: {},
+    args: {
+        sessionToken: v.optional(v.string()),},
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== "admin" && actor.role !== "developer" && !actor.isTest) {
             throw new Error("Se requiere rol de desarrollador o admin.");
         }
@@ -111,11 +117,12 @@ export const getTestUsers = query({
 
 export const impersonate = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         targetUserId: v.id("users"), // The test user to enter
     },
     handler: async (ctx, args) => {
         // 1. Security Check
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         // 2. Target Check

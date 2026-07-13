@@ -13,13 +13,14 @@ import { requireActor } from "./authHelpers";
  */
 export const createDispute = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
         reason: v.string(),
         description: v.string(),
         role: v.union(v.literal('buyer'), v.literal('seller')),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         // Validate order
         const orderId = ctx.db.normalizeId("orders", args.orderId);
@@ -96,6 +97,7 @@ const assertOrderParticipantOrSupport = async (ctx: any, order: any, requesterId
 
 export const addDisputeMessage = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
         sender: v.union(v.literal('buyer'), v.literal('seller'), v.literal('support')),
         body: v.string(),
@@ -106,7 +108,7 @@ export const addDisputeMessage = mutation({
         }))),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         // Verify order exists
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
@@ -159,10 +161,11 @@ export const addDisputeMessage = mutation({
 
 export const getDisputeMessages = query({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
         const order = await ctx.db.get(orderId);
@@ -179,6 +182,7 @@ export const getDisputeMessages = query({
 
 export const addEvidence = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
         uploadedBy: v.union(v.literal('buyer'), v.literal('seller'), v.literal('support')),
         type: v.union(v.literal('photo'), v.literal('video'), v.literal('note')),
@@ -186,7 +190,7 @@ export const addEvidence = mutation({
         description: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         // Verify order exists
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
@@ -236,10 +240,11 @@ export const addEvidence = mutation({
 
 export const getDisputeEvidence = query({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
         const order = await ctx.db.get(orderId);
@@ -339,12 +344,13 @@ export const internalApplyDisputeResolution = internalMutation({
  */
 export const resolveDispute = action({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
         resolveInFavorOf: v.union(v.literal('buyer'), v.literal('seller')),
         resolutionNote: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const data = await ctx.runQuery(internal.disputes.internalGetOrderAndRole, {
             orderIdString: args.orderId,
@@ -401,10 +407,11 @@ export const resolveDispute = action({
 // Helper to get complete dispute info (messages + evidence)
 export const getDisputeDetails = query({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const orderId = ctx.db.normalizeId("orders", args.orderId);
         if (!orderId) throw new Error("Orden no encontrada");
         const order = await ctx.db.get(orderId);

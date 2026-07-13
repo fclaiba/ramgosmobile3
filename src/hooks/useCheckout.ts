@@ -71,7 +71,7 @@ export const getShippingOptions = (items: CartItem[], destinationPostalCode?: st
 };
 
 export const useCheckout = () => {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const createOrderMutation = useMutation(api.orders.createOrder);
 
     const placeOrder = async (payload: PlaceOrderPayload): Promise<{ success: boolean; orders?: any[]; error?: string }> => {
@@ -126,7 +126,7 @@ export const useCheckout = () => {
                 const sellerShipping = shippingPerSeller.get(sellerId) ?? 0;
 
                 const createdOrderId = await createOrderMutation({
-                    userId: user.id,
+                    sessionToken, userId: user.id,
                     sellerId: sellerId,
                     idempotencyKey: orderRequestKey,
                     items: items.map(i => ({

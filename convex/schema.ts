@@ -63,6 +63,19 @@ export default defineSchema({
         .index("by_tokenIdentifier", ["tokenIdentifier"])
         .index("by_referral_code", ["referralCode"]),
 
+    // FASE 1 — Auth server-side estricto.
+    // Sesiones emitidas por el servidor en login/register. requireActor solo
+    // acepta estos tokens; nunca un userId enviado por el cliente.
+    sessions: defineTable({
+        userId: v.string(),
+        token: v.string(),
+        createdAt: v.string(),
+        expiresAt: v.number(), // epoch ms
+        revokedAt: v.optional(v.string()),
+    })
+        .index("by_token", ["token"])
+        .index("by_user", ["userId"]),
+
     audit_logs: defineTable({
         actorUserId: v.string(),
         targetUserId: v.optional(v.string()),
@@ -681,37 +694,6 @@ export default defineSchema({
         lastRunAt: v.optional(v.string()),
         runsCompleted: v.number(),
     }).index("by_scope", ["scope"]),
-
-    // ===== GAMIFICATION MODULE (PHASE 1) =====
-    // gameConfigs — store RTP, costs, and paytables for each game.
-    gameConfigs: defineTable({
-        gameId: v.string(), // 'roulette', 'slots'
-        costPerSpin: v.number(), // in points
-        status: v.union(v.literal('active'), v.literal('maintenance'), v.literal('disabled')),
-        paytable: v.array(v.object({
-            id: v.string(),
-            label: v.string(),
-            weight: v.number(), // for probabilistic engine
-            multiplier: v.number(), // prize = cost * multiplier
-            fixedPrize: v.optional(v.number()), // if present, overrides multiplier
-        })),
-        updatedAt: v.string(),
-    }).index("by_game", ["gameId"]),
-
-    // gameSpins — audit log of every spin for fairness and anti-fraud.
-    gameSpins: defineTable({
-        userId: v.string(),
-        gameId: v.string(),
-        cost: v.number(),
-        outcome: v.object({
-            paytableId: v.string(),
-            prizePoints: v.number(),
-            metadata: v.optional(v.any()), // symbols for slots, angle for roulette
-        }),
-        ledgerId: v.id('pointsLedger'), // FK to the transaction that deducted/added points
-        createdAt: v.string(),
-    }).index("by_user", ["userId"])
-        .index("by_game_user", ["gameId", "userId"]),
 
     // ===== SOCIAL MODULE =====
     // socialUsers — extends `users` with the social-specific profile fields

@@ -130,7 +130,7 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
     // Powerup Refs
     const magnetActive = useRef(false);
     const speedEffect = useRef(1); // 1 = normal, >1 fast, <1 slow
-    const powerupTimer = useRef<NodeJS.Timeout | null>(null);
+    const powerupTimer = useRef<number | null>(null);
 
     // Basket Position
     const basketX = useRef(new Animated.Value(width / 2 - BASKET_WIDTH / 2)).current;

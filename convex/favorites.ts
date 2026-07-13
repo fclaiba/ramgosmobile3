@@ -1,16 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // PHASE 3: Favorites/Wishlist Management
 
 export const addFavorite = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         listingId: v.string(),
         referralCode: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         // Check if already exists
         const existing = await ctx.db
             .query("favorites")
@@ -51,11 +55,14 @@ export const addFavorite = mutation({
 });
 
 export const removeFavorite = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         listingId: v.string(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const favorite = await ctx.db
             .query("favorites")
             .withIndex("by_user_listing", (q) =>
@@ -87,8 +94,11 @@ export const removeFavorite = mutation({
 });
 
 export const getMyFavorites = query({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const favorites = await ctx.db
             .query("favorites")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -116,11 +126,14 @@ export const getMyFavorites = query({
 });
 
 export const isFavorited = query({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         listingId: v.string(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const favorite = await ctx.db
             .query("favorites")
             .withIndex("by_user_listing", (q) =>

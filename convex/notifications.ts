@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireActor } from "./authHelpers";
+import { assertAdminOrDeveloper, requireActor } from "./authHelpers";
 import { Resend } from "resend";
 
 // ---------------------------------------------------------------------------
@@ -9,11 +9,12 @@ import { Resend } from "resend";
 // ---------------------------------------------------------------------------
 export const registerPushToken = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         token: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const fullUser = await ctx.db.get(actor.id);
         const existingTokens = fullUser?.pushTokens || [];
@@ -27,11 +28,12 @@ export const registerPushToken = mutation({
 
 export const removePushToken = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         token: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const fullUser = await ctx.db.get(actor.id);
         const existingTokens = fullUser?.pushTokens || [];
@@ -288,12 +290,16 @@ export const notifyUser = internalAction({
 // ---------------------------------------------------------------------------
 export const sendPushNotification = action({
     args: {
+        sessionToken: v.optional(v.string()),
         tokens: v.array(v.string()),
         title: v.string(),
         body: v.string(),
         data: v.optional(v.any()),
     },
-    handler: async (_ctx, args): Promise<{ success: boolean; receipt?: any; reason?: string }> => {
+    handler: async (ctx, args): Promise<{ success: boolean; receipt?: any; reason?: string }> => {
+        // SECURITY (Fase 1): enviar pushes arbitrarios es admin-only.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertAdminOrDeveloper(actor);
         if (args.tokens.length === 0) return { success: false, reason: 'No tokens provided' };
 
         const message = {

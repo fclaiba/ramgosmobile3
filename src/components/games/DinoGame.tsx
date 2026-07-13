@@ -69,7 +69,7 @@ export const DinoGame = (props: DinoGameProps) => {
     const scoreRef = useRef(0);
     const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const gameSpeed = useRef(GAME_SPEED_START);
-    const crouchTimer = useRef<NodeJS.Timeout | null>(null);
+    const crouchTimer = useRef<number | null>(null);
     const isCrouchingRef = useRef(false);
 
     const GRAVITY = 0.8;

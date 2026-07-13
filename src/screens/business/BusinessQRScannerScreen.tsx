@@ -86,7 +86,7 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
                                 <TouchableOpacity
                                     key={branch.id}
                                     style={[styles.branchChip, isActive && styles.branchChipActive]}
-                                    onPress={() => setSelectedBranch(branch.id)}
+                                    onPress={() => setSelectedBranch(branch.id ?? '')}
                                 >
                                     <Text style={[styles.branchChipText, isActive && styles.branchChipTextActive]}>
                                         {branch.name}

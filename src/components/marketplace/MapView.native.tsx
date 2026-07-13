@@ -71,7 +71,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     onViewModeChange
 }) => {
     const mapRef = useRef<MapView>(null);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const intervalRef = useRef<number | null>(null);
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);

@@ -39,13 +39,14 @@ const generateQrCode = (): string => {
 // ---------------------------------------------------------------------------
 export const holdEventCapacity = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         listingId: v.id("listings"),
         quantity: v.number(),
     },
     handler: async (ctx, args) => {
         // Auth: any logged-in user may hold capacity for themselves.
-        await requireActor(ctx, args.actorId);
+        await requireActor(ctx, (args as any).sessionToken);
         if (args.quantity <= 0) throw new Error("Cantidad inválida.");
 
         const listing = await ctx.db.get(args.listingId);
@@ -79,12 +80,13 @@ export const holdEventCapacity = mutation({
 // ---------------------------------------------------------------------------
 export const releaseEventCapacity = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         listingId: v.id("listings"),
         quantity: v.number(),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx, args.actorId);
+        await requireActor(ctx, (args as any).sessionToken);
         const listing = await ctx.db.get(args.listingId);
         if (!listing) return;
         const sold = ((listing as any).eventSoldCount as number | undefined) ?? 0;
@@ -170,11 +172,12 @@ export const internalIssueEventReservationsForPayment = internalMutation({
 // ---------------------------------------------------------------------------
 export const checkInReservation = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         qrCode: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const res = await ctx.db
             .query("eventReservations")
@@ -207,11 +210,12 @@ export const checkInReservation = mutation({
 // Buyer-facing list of their event reservations.
 export const getMyReservations = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = args.userId ?? actor.idString;
         if (userId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");
@@ -227,11 +231,12 @@ export const getMyReservations = query({
 // Seller-facing reservations for an event.
 export const getReservationsByListing = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         listingId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const listingNormId = ctx.db.normalizeId("listings", args.listingId);
         if (!listingNormId) return [];
         const listing = await ctx.db.get(listingNormId);

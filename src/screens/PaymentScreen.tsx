@@ -1,18 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
-import { ArrowLeft, CheckCircle, Shield, CreditCard, Plus, Trash2 } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { ArrowLeft, CheckCircle, Shield } from 'lucide-react-native';
 import { PaymentForm } from '../payments/components/PaymentForm';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAction } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 
-// ── MOCK DATA FOR SAVED CARDS ──
-const INITIAL_MOCK_CARDS = [
-    { id: 'card_1', brand: 'Visa', last4: '4242' },
-    { id: 'card_2', brand: 'Mastercard', last4: '5555' },
-];
+// Fase 5 — camino único de pagos: PaymentForm → api.stripe.createPaymentIntent
+// (Stripe TEST) → webhook → sub-órdenes con escrow "held". Las tarjetas
+// guardadas mock y el pago simulado fueron eliminados de esta pantalla.
 
 export default function PaymentScreen({ navigation, route }: any) {
     const { user } = useAuth();
@@ -32,54 +27,22 @@ export default function PaymentScreen({ navigation, route }: any) {
         title: item.name,
         price: item.price,
         quantity: item.quantity,
+        referralCode: item.referralCode,
     }));
 
     // ── Payment state ──
-    const [savedCards, setSavedCards] = useState(INITIAL_MOCK_CARDS);
-    const [selectedCardId, setSelectedCardId] = useState<string>('new');
     const [isSuccess, setIsSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isMockPaying, setIsMockPaying] = useState(false);
+
+    // Estable durante la vida de la pantalla: es el transfer_group que el
+    // webhook usa para agrupar las sub-órdenes del carrito.
+    const cartId = useMemo(() => `cart_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, []);
 
     const { colorScheme } = useTheme();
     const dark = colorScheme === 'dark';
 
     const handleSuccess = (intentId: string) => {
         setIsSuccess(true);
-    };
-
-    const createPaymentIntent = useAction(api.payments.actions.createPaymentIntent);
-    const { show } = useToast();
-
-    const handleMockPayment = async () => {
-        setIsMockPaying(true);
-        try {
-            const result = await createPaymentIntent({
-                amount: finalAmount,
-                currency,
-                cartId: `cart_${Date.now()}`,
-                mode: 'test',
-                userId,
-                lineItems,
-            });
-            if (result.directSuccess) {
-                // ponytail: mock success without internal actions
-            }
-            setIsSuccess(true);
-            show('Pago simulado exitoso', 'success');
-        } catch (e: any) {
-            setError(e?.message || 'Error inesperado');
-            show(e?.message || 'Error inesperado', 'error');
-        } finally {
-            setIsMockPaying(false);
-        }
-    };
-
-    const handleDeleteCard = (id: string) => {
-        setSavedCards(prev => prev.filter(c => c.id !== id));
-        if (selectedCardId === id) {
-            setSelectedCardId('new');
-        }
     };
 
     const fmt = (v: number) => `$${v.toFixed(2)}`;
@@ -135,88 +98,15 @@ export default function PaymentScreen({ navigation, route }: any) {
             </View>
 
             <ScrollView style={st.scroll} contentContainerStyle={st.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                
-                {/* ── SAVED CARDS SECTION (CAROUSEL) ── */}
+
+                {/* ── STRIPE TEST FORM (camino único Fase 5) ── */}
                 <View style={st.section}>
                     <Text style={[st.sectionTitle, { color: C.text }]}>Método de pago</Text>
-                    
-                    <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false} 
-                        contentContainerStyle={st.cardsContainer}
-                    >
-                        {savedCards.map(card => {
-                            const isSelected = selectedCardId === card.id;
-                            return (
-                                <TouchableOpacity 
-                                    key={card.id} 
-                                    style={[
-                                        st.miniCard, 
-                                        { backgroundColor: C.card, borderColor: isSelected ? C.accent : C.border, borderWidth: isSelected ? 2 : 1 }
-                                    ]}
-                                    onPress={() => setSelectedCardId(card.id)}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={st.miniCardTop}>
-                                        <View style={[st.cardIconWrap, { backgroundColor: dark ? '#334155' : '#F1F5F9' }]}>
-                                            <CreditCard size={18} color={C.text} />
-                                        </View>
-                                        <TouchableOpacity 
-                                            style={st.deleteBtn}
-                                            onPress={() => handleDeleteCard(card.id)}
-                                            hitSlop={10}
-                                        >
-                                            <Trash2 size={16} color={C.muted} />
-                                        </TouchableOpacity>
-                                    </View>
-                                    
-                                    <View style={st.miniCardTextWrap}>
-                                        <Text style={[st.cardName, { color: C.text }]} numberOfLines={1}>{card.brand}</Text>
-                                        <Text style={[st.cardLast4, { color: C.muted }]}>•••• {card.last4}</Text>
-                                    </View>
-                                    
-                                    {isSelected && (
-                                        <View style={st.miniCardCheck}>
-                                            <CheckCircle size={16} color={C.accent} fill={C.card} />
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
-                            )
-                        })}
-
-                        {/* Add New Card Button */}
-                        <TouchableOpacity 
-                            style={[
-                                st.miniCard, 
-                                { backgroundColor: C.card, borderColor: selectedCardId === 'new' ? C.accent : C.border, borderWidth: selectedCardId === 'new' ? 2 : 1 }
-                            ]}
-                            onPress={() => setSelectedCardId('new')}
-                            activeOpacity={0.7}
-                        >
-                            <View style={st.miniCardTop}>
-                                <View style={[st.cardIconWrap, { backgroundColor: C.accent + '15' }]}>
-                                    <Plus size={18} color={C.accent} />
-                                </View>
-                            </View>
-                            <View style={st.miniCardTextWrap}>
-                                <Text style={[st.cardName, { color: C.accent, fontWeight: '600' }]} numberOfLines={1}>Nueva Tarjeta</Text>
-                            </View>
-                            {selectedCardId === 'new' && (
-                                <View style={st.miniCardCheck}>
-                                    <CheckCircle size={16} color={C.accent} fill={C.card} />
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    </ScrollView>
-                </View>
-
-                {/* ── STRIPE FORM (Visible only if "new" is selected) ── */}
-                {selectedCardId === 'new' && (
                     <View style={[st.stripeContainer, { backgroundColor: C.card, borderColor: C.border }]}>
                         <PaymentForm
                             amount={finalAmount}
                             currency={currency}
-                            cartId={`cart_${Date.now()}`}
+                            cartId={cartId}
                             lineItems={lineItems}
                             userId={userId}
                             onSuccess={handleSuccess}
@@ -232,7 +122,7 @@ export default function PaymentScreen({ navigation, route }: any) {
                             }}
                         />
                     </View>
-                )}
+                </View>
 
                 {/* ── ERROR DISPLAY ── */}
                 {error && (
@@ -259,22 +149,6 @@ export default function PaymentScreen({ navigation, route }: any) {
                         <Text style={[st.totalVal, { color: C.accent }]}>{fmt(finalAmount)}</Text>
                     </View>
                 </View>
-
-                {/* ── PAY BUTTON (For Saved Cards) ── */}
-                {selectedCardId !== 'new' && (
-                    <TouchableOpacity 
-                        style={[st.mainPayBtn, { backgroundColor: C.accent }]}
-                        onPress={handleMockPayment}
-                        disabled={isMockPaying}
-                        activeOpacity={0.8}
-                    >
-                        {isMockPaying ? (
-                            <ActivityIndicator color="#FFF" size="small" />
-                        ) : (
-                            <Text style={st.mainPayBtnText}>Pagar {fmt(finalAmount)}</Text>
-                        )}
-                    </TouchableOpacity>
-                )}
 
                 <View style={st.trust}>
                     <Shield size={14} color={C.muted} />

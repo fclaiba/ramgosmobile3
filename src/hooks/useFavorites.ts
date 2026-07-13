@@ -21,12 +21,12 @@ export interface FavoriteItem {
 }
 
 export const useFavorites = () => {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
 
     // Query favorites from Convex
     const favoritesData = useQuery(
         api.favorites.getMyFavorites,
-        user ? { userId: user.id } : "skip"
+        user ? { sessionToken, userId: user.id } : "skip"
     );
 
     // Mutations
@@ -62,7 +62,7 @@ export const useFavorites = () => {
         if (isFavorite(itemId)) return;
 
         await addFavoriteMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             listingId: itemId as Id<"listings">,
         });
     };
@@ -72,7 +72,7 @@ export const useFavorites = () => {
         const listingId = typeof id === 'number' ? String(id) : id;
 
         await removeFavoriteMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             listingId: listingId as Id<"listings">,
         });
     };

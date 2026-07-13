@@ -98,6 +98,7 @@ const ensureSocialUser = async (
 
 export const upsertSocialProfile = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         username: v.optional(v.string()),
         displayName: v.optional(v.string()),
@@ -105,7 +106,7 @@ export const upsertSocialProfile = mutation({
         avatar: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
 
         const profile = await ensureSocialUser(ctx, actor.idString, {
             name: args.displayName,
@@ -137,6 +138,7 @@ export const upsertSocialProfile = mutation({
 
 export const lookupUserSocial = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
         username: v.optional(v.string()),
@@ -145,7 +147,7 @@ export const lookupUserSocial = query({
         // Gracefully return null if no valid session — this is a read-only
         // query and should never crash the app's error boundary.
         try {
-            await assertSocialActor(ctx, args.actorId);
+            await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return null;
         }
@@ -168,12 +170,13 @@ export const lookupUserSocial = query({
 
 export const searchUsers = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         term: v.string(),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        await assertSocialActor(ctx, (args as any).sessionToken);
         const term = args.term.trim().toLowerCase();
         if (!term) return [];
 
@@ -188,13 +191,14 @@ export const searchUsers = query({
 
 export const getSuggestedUsers = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await assertSocialActor(ctx, args.actorId);
+            actor = await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -220,12 +224,13 @@ export const getSuggestedUsers = query({
 
 export const getUsersByIds = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userIds: v.array(v.string()),
     },
     handler: async (ctx, args) => {
         try {
-            await assertSocialActor(ctx, args.actorId);
+            await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -249,6 +254,7 @@ export const getUsersByIds = query({
 
 export const createPost = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         type: v.union(
             v.literal('text'),
@@ -278,7 +284,7 @@ export const createPost = mutation({
         })),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         await ensureSocialUser(ctx, actor.idString, { name: actor.email, email: actor.email });
 
         const now = NOW();
@@ -324,11 +330,12 @@ export const createPost = mutation({
 
 export const deletePost = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const post = await ctx.db.get(args.postId);
         if (!post) throw new Error('Post no encontrado.');
         const isAuthor = post.authorUserId === actor.idString;
@@ -340,12 +347,13 @@ export const deletePost = mutation({
 
 export const votePoll = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
         optionId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const post = await ctx.db.get(args.postId);
         if (!post) throw new Error('Post no encontrado.');
         if (!post.poll) throw new Error('Este post no es una encuesta.');
@@ -372,6 +380,7 @@ export const votePoll = mutation({
 
 export const getFeed = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
@@ -379,7 +388,7 @@ export const getFeed = query({
     },
     handler: async (ctx, args) => {
         try {
-            await assertSocialActor(ctx, args.actorId);
+            await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return { items: [], nextCursor: null };
         }
@@ -430,11 +439,12 @@ export const getFeed = query({
 
 export const getPostById = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        await assertSocialActor(ctx, (args as any).sessionToken);
         const post = await ctx.db.get(args.postId);
         if (!post || post.deletedAt) return null;
         const author = await ctx.db
@@ -447,12 +457,13 @@ export const getPostById = query({
 
 export const getPostsByUser = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        await assertSocialActor(ctx, (args as any).sessionToken);
         const cap = Math.min(args.limit ?? 50, 200);
         const posts = await ctx.db
             .query('socialPosts')
@@ -469,12 +480,13 @@ export const getPostsByUser = query({
 
 export const addComment = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
         content: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const post = await ctx.db.get(args.postId);
         if (!post || post.deletedAt) throw new Error('Post no encontrado.');
 
@@ -507,11 +519,12 @@ export const addComment = mutation({
 
 export const deleteComment = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         commentId: v.id('socialComments'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const comment = await ctx.db.get(args.commentId);
         if (!comment) throw new Error('Comentario no encontrado.');
         const isAuthor = comment.authorUserId === actor.idString;
@@ -529,6 +542,7 @@ export const deleteComment = mutation({
 
 export const getCommentsForPost = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
         cursor: v.optional(v.string()),
@@ -536,7 +550,7 @@ export const getCommentsForPost = query({
     },
     handler: async (ctx, args) => {
         try {
-            await assertSocialActor(ctx, args.actorId);
+            await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return { items: [], nextCursor: null };
         }
@@ -573,6 +587,7 @@ export const getCommentsForPost = query({
 
 export const toggleLike = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         targetType: v.union(
             v.literal('post'),
@@ -582,7 +597,7 @@ export const toggleLike = mutation({
         targetId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const existing = await ctx.db
             .query('socialLikes')
             .withIndex('by_user_target', (q) =>
@@ -680,11 +695,12 @@ const adjustLikeCount = async (
 
 export const follow = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         targetUserId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         if (actor.idString === args.targetUserId) {
             throw new Error('No podés seguirte a vos mismo.');
         }
@@ -735,11 +751,12 @@ export const follow = mutation({
 
 export const unfollow = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         targetUserId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const existing = await ctx.db
             .query('socialFollows')
             .withIndex('by_pair', (q) =>
@@ -771,10 +788,11 @@ export const unfollow = mutation({
 });
 
 export const getFollowers = query({
-    args: { actorId: v.optional(v.any()), userId: v.string() },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), userId: v.string() },
     handler: async (ctx, args) => {
         try {
-            await assertSocialActor(ctx, args.actorId);
+            await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -786,10 +804,11 @@ export const getFollowers = query({
 });
 
 export const getFollowing = query({
-    args: { actorId: v.optional(v.any()), userId: v.string() },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), userId: v.string() },
     handler: async (ctx, args) => {
         try {
-            await assertSocialActor(ctx, args.actorId);
+            await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -802,12 +821,13 @@ export const getFollowing = query({
 
 export const isFollowing = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         followerUserId: v.string(),
         followeeUserId: v.string(),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        await assertSocialActor(ctx, (args as any).sessionToken);
         const row = await ctx.db
             .query('socialFollows')
             .withIndex('by_pair', (q) =>
@@ -824,13 +844,14 @@ export const isFollowing = query({
 
 export const createStory = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         type: v.union(v.literal('image'), v.literal('video')),
         url: v.string(),
         durationSec: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const now = NOW();
         const expiresAt = new Date(Date.now() + STORY_TTL_MS).toISOString();
         return await ctx.db.insert('socialStories', {
@@ -847,11 +868,12 @@ export const createStory = mutation({
 
 export const viewStory = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         storyId: v.id('socialStories'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const existing = await ctx.db
             .query('socialStoryViews')
             .withIndex('by_story_viewer', (q) =>
@@ -873,11 +895,12 @@ export const viewStory = mutation({
 });
 
 export const getStoriesForFollowing = query({
-    args: { actorId: v.optional(v.any()) },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()) },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await assertSocialActor(ctx, args.actorId);
+            actor = await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -913,11 +936,12 @@ export const getStoriesForFollowing = query({
 
 export const getStoryViewers = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         storyId: v.id('socialStories'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const story = await ctx.db.get(args.storyId);
         if (!story) return [];
         if (story.authorUserId !== actor.idString) {
@@ -955,11 +979,12 @@ export const internalExpireStories = internalMutation({
 
 export const createChat = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         participantId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         if (actor.idString === args.participantId) {
             throw new Error('No podés crear un chat con vos mismo.');
         }
@@ -985,6 +1010,7 @@ export const createChat = mutation({
 
 export const sendDirectMessage = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
         body: v.string(),
@@ -995,7 +1021,7 @@ export const sendDirectMessage = mutation({
         }))),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const chat = await ctx.db.get(args.chatId);
         if (!chat) throw new Error('Chat no encontrado.');
         if (!chat.participantIds.includes(actor.idString)) {
@@ -1047,11 +1073,12 @@ export const sendDirectMessage = mutation({
 
 export const markChatAsRead = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const chat = await ctx.db.get(args.chatId);
         if (!chat || !chat.participantIds.includes(actor.idString)) {
             throw new Error('No autorizado.');
@@ -1075,11 +1102,12 @@ export const markChatAsRead = mutation({
 });
 
 export const getMyChats = query({
-    args: { actorId: v.optional(v.any()) },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()) },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await assertSocialActor(ctx, args.actorId);
+            actor = await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -1115,13 +1143,14 @@ export const getMyChats = query({
 
 export const getChatMessages = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const chat = await ctx.db.get(args.chatId);
         if (!chat || !chat.participantIds.includes(actor.idString)) {
             throw new Error('No autorizado.');
@@ -1166,11 +1195,12 @@ export const internalGetMutualFollowers = internalQuery({
 
 export const toggleSavePost = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const existing = await ctx.db
             .query('socialSavedPosts')
             .withIndex('by_user_post', (q) =>
@@ -1193,9 +1223,10 @@ export const toggleSavePost = mutation({
 });
 
 export const getSavedPosts = query({
-    args: { actorId: v.optional(v.any()), cursor: v.optional(v.string()), limit: v.optional(v.number()) },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), cursor: v.optional(v.string()), limit: v.optional(v.number()) },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const cap = Math.min(args.limit ?? 20, 50);
         const result = await ctx.db
             .query('socialSavedPosts')
@@ -1228,11 +1259,12 @@ export const getSavedPosts = query({
 
 export const toggleRetweet = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const post = await ctx.db.get(args.postId);
         if (!post || post.deletedAt) throw new Error('Post no encontrado.');
 
@@ -1260,9 +1292,10 @@ export const toggleRetweet = mutation({
 });
 
 export const getRetweetsByUser = query({
-    args: { actorId: v.optional(v.any()), userId: v.string(), cursor: v.optional(v.string()), limit: v.optional(v.number()) },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), userId: v.string(), cursor: v.optional(v.string()), limit: v.optional(v.number()) },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        await assertSocialActor(ctx, (args as any).sessionToken);
         const cap = Math.min(args.limit ?? 20, 50);
         const result = await ctx.db
             .query('socialRetweets')
@@ -1283,13 +1316,14 @@ export const getRetweetsByUser = query({
 
 export const addHighlight = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         title: v.string(),
         coverImage: v.string(),
         storyIds: v.array(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, args.actorId);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         return await ctx.db.insert('socialHighlights', {
             userId: actor.idString,
             title: args.title,
@@ -1301,9 +1335,10 @@ export const addHighlight = mutation({
 });
 
 export const getHighlights = query({
-    args: { actorId: v.optional(v.any()), userId: v.string() },
+    args: {
+        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), userId: v.string() },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, args.actorId);
+        await assertSocialActor(ctx, (args as any).sessionToken);
         return await ctx.db
             .query('socialHighlights')
             .withIndex('by_user', (q) => q.eq('userId', args.userId))

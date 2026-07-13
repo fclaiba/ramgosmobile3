@@ -94,11 +94,11 @@ export default function KYCScreen({ navigation, route }: any) {
                     documentFront: idFront as string,
                     documentBack: idBack as string,
                     selfieValidated: faceScanned,
-                    ein: accountType === 'business' ? ein : undefined,
-                    incorporationDoc: accountType === 'business' ? incorporationDoc : undefined,
-                    businessAddress: accountType === 'business' ? businessAddress : undefined,
-                    premisesPhoto: accountType === 'business' ? premisesPhoto : undefined,
-                    socialLink: accountType === 'influencer' ? socialLink : undefined,
+                    ein: accountType === 'business' ? (ein ?? undefined) : undefined,
+                    incorporationDoc: accountType === 'business' ? (incorporationDoc ?? undefined) : undefined,
+                    businessAddress: accountType === 'business' ? (businessAddress ?? undefined) : undefined,
+                    premisesPhoto: accountType === 'business' ? (premisesPhoto ?? undefined) : undefined,
+                    socialLink: accountType === 'influencer' ? (socialLink ?? undefined) : undefined,
                 }
             });
 

@@ -191,7 +191,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                 pending: metrics.commissions.pending,
             };
         }
-        const totalEarned = wallet.transactions
+        const totalEarned = (wallet?.transactions ?? [])
             .filter((tx) => tx.type === 'credit')
             .reduce((sum, tx) => sum + tx.amount, 0);
         return {

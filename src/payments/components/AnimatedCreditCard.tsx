@@ -138,7 +138,7 @@ const s = StyleSheet.create({
         marginBottom: 20,
     },
     face: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         borderRadius: 18,
         overflow: 'hidden',
         backfaceVisibility: 'hidden',

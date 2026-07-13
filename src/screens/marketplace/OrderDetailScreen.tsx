@@ -118,7 +118,7 @@ export default function OrderDetailScreen() {
     const { width } = useWindowDimensions();
     const styles = getStyles(isDark, insets, width);
 
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { show } = useToast();
     const { openEscrow } = useEscrow();
     const { currentTier } = usePoints();
@@ -202,7 +202,7 @@ export default function OrderDetailScreen() {
         if (!canConfirm || !user?.id || !order.id) return;
         setConfirming(true);
         try {
-            await confirmReceiptMutation({ orderId: order.id as any, userId: user.id });
+            await confirmReceiptMutation({ orderId: order.id as any, sessionToken, userId: user.id });
             show('Entrega confirmada. El pago se liberará al vendedor.', 'success');
         } catch (err: any) {
             show(err.message || 'No pudimos confirmar la entrega', 'error');

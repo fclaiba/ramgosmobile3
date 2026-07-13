@@ -36,6 +36,7 @@ import {
 import { internal } from "./_generated/api";
 import Stripe from "stripe";
 import { withStripeBreadcrumb } from "./observability";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 if (!stripeKey) {
@@ -150,6 +151,7 @@ export const internalUpsertSubscription = internalMutation({
 // ---------------------------------------------------------------------------
 export const createSubscriptionCheckout = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
         tier: v.union(v.literal("pro"), v.literal("business")),
@@ -161,6 +163,10 @@ export const createSubscriptionCheckout = action({
         args,
     ): Promise<{ url: string | null; sessionId: string | null; isMock: boolean }> => {
         assertStripeConfigured();
+
+        // SECURITY (Fase 1): el checkout solo puede iniciarse para uno mismo.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, String(args.userId));
 
         const priceId = resolvePriceForTier(args.tier);
         if (!priceId) {
@@ -247,11 +253,17 @@ export const createSubscriptionCheckout = action({
 // ---------------------------------------------------------------------------
 export const cancelSubscription = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
     },
     handler: async (ctx, args): Promise<{ success: boolean }> => {
         assertStripeConfigured();
+
+        // SECURITY (Fase 1): sin esto cualquiera podía cancelar la
+        // suscripción de otro usuario enviando su userId.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, String(args.userId));
 
         const sub: any = await ctx.runQuery(
             internal.subscriptions.internalGetActiveSubscription,
@@ -396,14 +408,21 @@ export const internalGetUserByStripeCustomer = internalQuery({
 // ---------------------------------------------------------------------------
 export const getMySubscription = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const userId = args.userId;
-        if (!userId) return null;
-        // No actor restriction for self-read; subscription state is shown in
-        // the user's own dashboard.
+        // Fail-soft query: without a valid session it returns null instead
+        // of throwing, but it never leaks another user's subscription.
+        let actor;
+        try {
+            actor = await requireActor(ctx, (args as any).sessionToken);
+        } catch {
+            return null;
+        }
+        const userId = args.userId ?? actor.idString;
+        assertSelfOrAdmin(actor, userId);
         return await ctx.db
             .query("stripeSubscriptions")
             .withIndex("by_user", (q) => q.eq("userId", userId))

@@ -3,11 +3,11 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 
 export const useUserPreferences = () => {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
 
     const preferences = useQuery(
         api.userProfile.getPreferences,
-        user ? { userId: user.id } : "skip"
+        user ? { sessionToken, userId: user.id } : "skip"
     );
 
     const updatePrefsMutation = useMutation(api.userProfile.updatePreferences);
@@ -15,7 +15,7 @@ export const useUserPreferences = () => {
     const setLanguage = async (language: string) => {
         if (!user) return;
         await updatePrefsMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             preferences: { language }
         });
     };
@@ -23,7 +23,7 @@ export const useUserPreferences = () => {
     const setCurrency = async (currency: string) => {
         if (!user) return;
         await updatePrefsMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             preferences: { currency }
         });
     };
@@ -36,7 +36,7 @@ export const useUserPreferences = () => {
     }) => {
         if (!user) return;
         await updatePrefsMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             preferences: { notifications }
         });
     };
@@ -44,7 +44,7 @@ export const useUserPreferences = () => {
     const setSearchRadius = async (searchRadius: number) => {
         if (!user) return;
         await updatePrefsMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             preferences: { searchRadius }
         });
     };
@@ -52,7 +52,7 @@ export const useUserPreferences = () => {
     const setPreferredCategories = async (preferredCategories: string[]) => {
         if (!user) return;
         await updatePrefsMutation({
-            userId: user.id,
+            sessionToken, userId: user.id,
             preferences: { preferredCategories }
         });
     };

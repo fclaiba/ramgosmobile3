@@ -18,7 +18,7 @@ export default function BusinessScannerScreen() {
     const styles = getStyles(isDark);
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
 
     const [inputCode, setInputCode] = useState('');
     const [loading, setLoading] = useState(false);
@@ -41,7 +41,7 @@ export default function BusinessScannerScreen() {
         try {
             await redeemBonoMutation({
                 bonoCode: trimmed,
-                actorId: user?.id,
+                sessionToken, actorId: user?.id,
             });
 
             setLoading(false);

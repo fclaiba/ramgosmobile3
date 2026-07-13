@@ -78,7 +78,7 @@ const quickActions = [
 const consumptionData: any[] = [];
 
 export default function HomeScreen({ navigation, route }: any) {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { openCart, items: cartItems } = useCart();
     const { width: windowWidth } = useWindowDimensions();
     const { colorScheme } = useTheme();
@@ -87,7 +87,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const { isDesktop } = useResponsive();
     const styles = getStyles(isDark);
 
-    const myOrders = useQuery(api.orders.getMyOrders, user?.id ? { userId: user.id } : "skip") || [];
+    const myOrders = useQuery(api.orders.getMyOrders, user?.id ? { sessionToken, userId: user.id } : "skip") || [];
     const mySellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id ? { sellerId: user.id } : "skip") || [];
 
     const allActivity = useMemo(() => {

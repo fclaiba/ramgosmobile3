@@ -19,6 +19,7 @@ const stripe = new Stripe(stripeKey!, {
  */
 export const startKyc = action({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         accountType: v.union(
             v.literal("consumer"),
@@ -27,7 +28,7 @@ export const startKyc = action({
         ),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         if (!stripeKey) {
             throw new Error(

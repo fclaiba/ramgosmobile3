@@ -99,7 +99,7 @@ export default function WalletScreen() {
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.txDesc}>{tx.description}</Text>
-                                <Text style={styles.txDate}>{tx.date.toLocaleDateString()} • {tx.status === 'PENDING' ? 'Pendiente' : 'Completado'}</Text>
+                                <Text style={styles.txDate}>{new Date(tx.date).toLocaleDateString()} • {tx.status === 'PENDING' ? 'Pendiente' : 'Completado'}</Text>
                             </View>
                             <Text style={[styles.txAmount, { color: tx.status === 'PENDING' ? '#F59E0B' : (isDark ? '#F9FAFB' : '#111827') }]}>
                                 +${tx.amount.toFixed(2)}

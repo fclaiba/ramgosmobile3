@@ -8,6 +8,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useActionGate } from '../utils/useActionGate';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 
 export default function CartSidebar() {
@@ -17,10 +18,21 @@ export default function CartSidebar() {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { gateCheckout } = useActionGate();
 
     const navigation = useNavigation<any>();
 
     const handleCheckout = () => {
+        // CART-03 (Fase 4): same gate as CartScreen — guests never reach PaymentScreen.
+        // On anonymous block we close the sheet first so the Login screen (reached via
+        // the alert CTA) isn't hidden behind this Modal.
+        const allowed = gateCheckout({
+            onBlocked: (block) => {
+                if (block.reason === 'anonymous') closeCart();
+            },
+        });
+        if (!allowed) return;
+
         closeCart();
         
         // Use a slight delay to allow the modal/sheet closing animation to finish 

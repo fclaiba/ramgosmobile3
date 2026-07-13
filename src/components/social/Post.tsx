@@ -120,10 +120,11 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                                         name: post.commercialProduct!.name,
                                         price: post.commercialProduct!.price,
                                         image: post.commercialProduct!.image,
-                                        type: 'product', // Mapping types if needed
-                                        sellerId: post.user.id, // Assuming seller is the post author or linked
+                                        type: 'product',
+                                        sellerId: post.user.id,
                                         sellerName: post.user.name,
-                                        referralCode: post.commercialProduct!.referralLink
+                                        referralCode: post.commercialProduct!.referralLink,
+                                        quantity: 1,
                                     })}
                                 >
                                     <ShoppingBag size={16} color="#ffffff" />

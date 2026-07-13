@@ -183,7 +183,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                                     <Badge style={[styles.badge, { backgroundColor: `${conditionColor}1A` }]}>
                                         <Text style={[styles.badgeText, { color: conditionColor }]}>{conditionLabel}</Text>
                                     </Badge>
-                                    {product?.seller.type === 'business' && (
+                                    {product?.seller?.type === 'business' && (
                                         <Badge style={[styles.badge, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF' }]}>
                                             <ShieldCheck size={12} color="#2563EB" />
                                             <Text style={[styles.badgeText, { color: '#1D4ED8', marginLeft: 4 }]}>Escrow protegido</Text>
@@ -265,7 +265,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                                         <View style={styles.featureContent}>
                                             <Text style={styles.featureTitle}>Peso estimado</Text>
                                             <Text style={styles.featureSubtitle}>
-                                                {shippingProfile ? `${shippingProfile.weightKg.toFixed(2)} kg` : 'No especificado'}
+                                                {shippingProfile?.weightKg != null ? `${shippingProfile.weightKg.toFixed(2)} kg` : 'No especificado'}
                                             </Text>
                                         </View>
                                     </View>

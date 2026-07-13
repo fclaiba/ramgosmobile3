@@ -76,13 +76,13 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
     const insets = useSafeAreaInsets();
     const styles = getStyles(isDark, insets);
     const { show } = useToast();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
 
     const openDisputeMutation = useMutation(api.orders.openDispute);
 
     const orderQuery = useQuery(
         api.orders.getOrderById,
-        orderId ? { orderId: orderId as any } : 'skip'
+        orderId ? { sessionToken, orderId: orderId as any } : 'skip'
     );
     const order = orderQuery as any;
 

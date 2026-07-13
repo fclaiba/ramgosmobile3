@@ -13,6 +13,7 @@ import {
 
 export const ensureWalletAccount = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
         ownerType: v.union(
@@ -25,7 +26,7 @@ export const ensureWalletAccount = mutation({
         currency: v.optional(v.literal("USD")),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, args.userId);
 
         const existing = await ctx.db
@@ -50,13 +51,14 @@ export const ensureWalletAccount = mutation({
 
 export const getWalletAccount = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId ?? args.userId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return null;
         }
@@ -227,13 +229,14 @@ export const updatePaymentByIntentId = internalMutation({
 
 export const getPaymentsByUser = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId ?? args.userId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -249,6 +252,7 @@ export const getPaymentsByUser = query({
 
 export const getPaymentsByOrder = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
         orderId: v.string(),
@@ -256,7 +260,7 @@ export const getPaymentsByOrder = query({
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId ?? args.userId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -368,13 +372,14 @@ export const updatePayoutStatus = internalMutation({
 
 export const getPayoutsBySeller = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         sellerId: v.string(),
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -404,6 +409,7 @@ export const getPayoutsBySeller = query({
 
 export const createWithdrawal = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
         amount: v.number(),
@@ -413,7 +419,7 @@ export const createWithdrawal = mutation({
         metadata: v.optional(v.any()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         // Sprint 6: lock to admin / developer. Sellers + influencers must
         // use the Stripe Connect payout flow exposed in convex/connect.ts.
         const role = (actor as any).role;
@@ -478,13 +484,14 @@ export const createWithdrawal = mutation({
 
 export const getWithdrawalsByUser = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId ?? args.userId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -567,11 +574,12 @@ export const getPayoutById = internalMutation({
 //    back to a `payments` row so the admin can see the buyer + seller.
 export const listFailedTransfers = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         const cap = Math.min(args.limit ?? 100, 500);
@@ -589,11 +597,12 @@ export const listFailedTransfers = query({
 //    that have not flipped to completed yet.
 export const listStuckEscrows = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         olderThanDays: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         const days = args.olderThanDays ?? 30;
@@ -633,11 +642,12 @@ export const listStuckEscrows = query({
 // 3) Open disputes — payments flagged as 'disputed'.
 export const listOpenDisputes = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         const cap = Math.min(args.limit ?? 100, 500);
@@ -655,11 +665,12 @@ export const listOpenDisputes = query({
 //    refunded in the last 7 days as a sanity bucket).
 export const listPendingRefunds = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         windowDays: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         const cutoff = new Date(
@@ -681,6 +692,7 @@ export const listPendingRefunds = query({
 // 5) Reconciliation flags — discrepancies surfaced by the daily cron.
 export const listReconciliationFlags = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         status: v.optional(
             v.union(
@@ -693,7 +705,7 @@ export const listReconciliationFlags = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         const cap = Math.min(args.limit ?? 100, 500);
@@ -712,6 +724,7 @@ export const listReconciliationFlags = query({
 // 6) Update reconciliation flag status (resolve / ignore / re-open).
 export const updateReconciliationFlag = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         flagId: v.id("reconciliationFlags"),
         status: v.union(
@@ -723,7 +736,7 @@ export const updateReconciliationFlag = mutation({
         notes: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         await ctx.db.patch(args.flagId, {

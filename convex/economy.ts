@@ -1,5 +1,6 @@
 import { mutation, query, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
+import { assertSelfOrAdmin, requireActor } from './authHelpers';
 
 // Define the default pet state
 const DEFAULT_PET_STATE = {
@@ -10,8 +11,11 @@ const DEFAULT_PET_STATE = {
 };
 
 export const getEconomyState = query({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const state = await ctx.db
             .query('economyState')
             .withIndex('by_user', (q: any) => q.eq('userId', args.userId))
@@ -26,8 +30,11 @@ export const getEconomyState = query({
 });
 
 export const initializeEconomy = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const state = await ctx.db
             .query('economyState')
             .withIndex('by_user', (q: any) => q.eq('userId', args.userId))
@@ -75,11 +82,14 @@ async function ensureEconomyState(ctx: any, args: { userId: string }) {
 }
 
 export const updatePetState = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         updates: v.any(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         return await internalUpdatePetState(ctx, args);
     },
 });
@@ -97,12 +107,15 @@ async function internalUpdatePetState(ctx: any, args: { userId: string; updates:
 }
 
 export const spendCoins = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         amount: v.number(),
         reason: v.string(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         return await internalSpendCoins(ctx, args);
     },
 });
@@ -139,12 +152,15 @@ async function internalSpendCoins(ctx: any, args: { userId: string; amount: numb
 }
 
 export const addCoins = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         amount: v.number(),
         reason: v.string(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         return await internalAddCoins(ctx, args);
     },
 });
@@ -177,8 +193,11 @@ async function internalAddCoins(ctx: any, args: { userId: string; amount: number
 
 // Mascota Specific Actions
 export const feedVirtualPet = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const cost = 5;
         const res = await internalSpendCoins(ctx, { userId: args.userId, amount: cost, reason: 'Alimentar mascota' });
         if (!res.success) return { status: 'error', message: res.message };
@@ -189,8 +208,11 @@ export const feedVirtualPet = mutation({
 });
 
 export const sleepVirtualPet = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const cost = 2;
         const res = await internalSpendCoins(ctx, { userId: args.userId, amount: cost, reason: 'Dormir mascota' });
         if (!res.success) return { status: 'error', message: res.message };
@@ -201,8 +223,11 @@ export const sleepVirtualPet = mutation({
 });
 
 export const cleanVirtualPet = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const cost = 3;
         const res = await internalSpendCoins(ctx, { userId: args.userId, amount: cost, reason: 'Baniar mascota' });
         if (!res.success) return { status: 'error', message: res.message };
@@ -213,8 +238,11 @@ export const cleanVirtualPet = mutation({
 });
 
 export const playVirtualPet = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const res = await internalUpdatePetState(ctx, { userId: args.userId, updates: {} });
         const energy = res.petStats.energy;
         if (energy < 15) return { status: 'error', message: 'La mascota esta muy cansada para jugar.' };
@@ -231,8 +259,11 @@ export const playVirtualPet = mutation({
 });
 
 export const unlockAccessory = mutation({
-    args: { userId: v.string(), type: v.string(), id: v.string(), cost: v.number() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string(), type: v.string(), id: v.string(), cost: v.number() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const res = await internalSpendCoins(ctx, { userId: args.userId, amount: args.cost, reason: `Comprar ropa ${args.id}` });
         if (!res.success) return false;
 
@@ -249,8 +280,11 @@ export const unlockAccessory = mutation({
 });
 
 export const equipAccessory = mutation({
-    args: { userId: v.string(), type: v.string(), id: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string(), type: v.string(), id: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         let doc = await ensureEconomyState(ctx, { userId: args.userId });
 
         if (!doc?.rewardsState) return;
@@ -260,8 +294,11 @@ export const equipAccessory = mutation({
 });
 
 export const convertCoinsToPoints = mutation({
-    args: { userId: v.string(), coinsToConvert: v.number() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string(), coinsToConvert: v.number() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         let doc = await ensureEconomyState(ctx, { userId: args.userId });
         if (!doc?.rewardsState) return { success: false, message: 'Usuario no encontrado' };
 
@@ -296,8 +333,11 @@ export const convertCoinsToPoints = mutation({
 
 // Award points (from purchases, challenges, etc.)
 export const addPoints = mutation({
-    args: { userId: v.string(), amount: v.number(), description: v.string(), source: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string(), amount: v.number(), description: v.string(), source: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         let doc = await ensureEconomyState(ctx, { userId: args.userId });
         if (!doc?.rewardsState) return { success: false };
 
@@ -325,8 +365,11 @@ export const addPoints = mutation({
 
 // Claim daily login reward
 export const claimDailyReward = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const todayKey = new Date().toISOString().slice(0, 10);
 
         const existing = await ctx.db
@@ -375,8 +418,11 @@ export const claimDailyReward = mutation({
 
 // Get points transactions history
 export const getPointsHistory = query({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         return await ctx.db
             .query('pointsLedger')
             .withIndex('by_user', (q: any) => q.eq('userId', args.userId))

@@ -4,10 +4,11 @@ import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 export const generateUploadUrl = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx, args.actorId);
+        await requireActor(ctx, (args as any).sessionToken);
         return await ctx.storage.generateUploadUrl();
     },
 });

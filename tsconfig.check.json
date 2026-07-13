@@ -1,12 +1,21 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "global.d.ts",
+    "nativewind-env.d.ts"
+  ],
   "exclude": [
     "**/__tests__/**",
     "**/*.test.ts",
     "**/*.test.tsx",
+    "jest.setup.ts",
     "dist",
     "android",
     "node_modules"
   ]
 }
-

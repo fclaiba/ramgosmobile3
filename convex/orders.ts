@@ -8,12 +8,13 @@ import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authH
 
 export const getMyOrders = query({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -43,12 +44,13 @@ export const getMyOrders = query({
 
 export const getOrdersBySeller = query({
     args: {
+        sessionToken: v.optional(v.string()),
         sellerId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -80,10 +82,11 @@ export const getOrdersBySeller = query({
 
 export const getOrderById = query({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) return null;
         const isBuyer = order.userId === actor.idString;
@@ -109,6 +112,7 @@ export const getOrderById = query({
 
 export const createOrder = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string()), // Buyer (optional, defaults to self)
         sellerId: v.string(),
         idempotencyKey: v.optional(v.string()),
@@ -133,7 +137,7 @@ export const createOrder = mutation({
         })),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const buyerId = args.userId ?? actor.idString;
         assertSelfOrAdmin(actor, buyerId);
 
@@ -224,12 +228,13 @@ export const internalUpdateOrderStatus = internalMutation({
 // 1. Mark as Shipped
 export const markAsShipped = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
         trackingNumber: v.string(),
         carrier: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -270,10 +275,11 @@ export const markAsShipped = mutation({
 // 2. Mark as Delivered
 export const markAsDelivered = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -309,11 +315,12 @@ export const markAsDelivered = mutation({
 // 3. Confirm Receipt (Releases Escrow)
 export const confirmReceipt = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -352,10 +359,11 @@ export const confirmReceipt = mutation({
 // 4. Cancel Order
 export const cancelOrder = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -394,12 +402,13 @@ export const cancelOrder = mutation({
 // 5. Open Dispute
 export const openDispute = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
         reason: v.string(),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
@@ -436,12 +445,13 @@ export const openDispute = mutation({
 
 export const escalateDispute = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
         role: v.union(v.literal('buyer'), v.literal('seller')),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 

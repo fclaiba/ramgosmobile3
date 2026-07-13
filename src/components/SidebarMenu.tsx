@@ -18,6 +18,9 @@ interface SidebarMenuProps {
     navigation?: any;
 }
 
+// Matches the bcrypt-backed development users created by the Convex seeds.
+const DEMO_PASSWORD = 'RamgosDemo1!';
+
 export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
     const navigation = useNavigation<any>();
     const { user, status, pendingVerification, logout, loginWithEmail, signUpWithEmail, verifyEmailCode, isProcessing, updateRole } = useAuth();
@@ -96,10 +99,10 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
             }
 
             const credentials = {
-                business: { email: 'business@test.com', pass: 'password123', name: 'Usuario Negocio' },
-                influencer: { email: 'influencer@test.com', pass: 'password123', name: 'Usuario Influencer' },
-                admin: { email: 'admin@test.com', pass: 'password123', name: 'Usuario Admin' },
-                consumer: { email: 'consumer@test.com', pass: 'password123', name: 'Usuario Consumidor' },
+                business: { email: 'business@test.com', pass: DEMO_PASSWORD, name: 'Usuario Negocio' },
+                influencer: { email: 'influencer@test.com', pass: DEMO_PASSWORD, name: 'Usuario Influencer' },
+                admin: { email: 'admin@test.com', pass: DEMO_PASSWORD, name: 'Usuario Admin' },
+                consumer: { email: 'consumer@test.com', pass: DEMO_PASSWORD, name: 'Usuario Consumidor' },
             };
 
             const creds = credentials[role as keyof typeof credentials];

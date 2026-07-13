@@ -4,11 +4,11 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 
 export function useOrderById(orderId?: string) {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     
     // We fetch both buyer and seller orders and find the right one.
     // In a real app, you would add an api.orders.getOrderById endpoint to Convex.
-    const rawOrders = useQuery(api.orders.getMyOrders, { userId: user?.id }) || [];
+    const rawOrders = useQuery(api.orders.getMyOrders, { sessionToken, userId: user?.id }) || [];
     const rawSales = useQuery(api.orders.getOrdersBySeller, { sellerId: user?.id }) || [];
     
     return useMemo(() => {

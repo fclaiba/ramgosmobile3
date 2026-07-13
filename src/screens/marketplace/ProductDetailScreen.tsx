@@ -37,15 +37,16 @@ export default function ProductDetailScreen({ route, navigation }: any) {
             id: product.id,
             name: product.title,
             price: product.price,
-            image: product.images?.[0]?.url,
+            image: product.images?.[0]?.url ?? '',
             type: 'product',
-            location: product.location?.name || '',
-            sellerId: product.seller?.id || '',
-            sellerName: product.seller?.name || '',
+            location: product.location?.name ?? '',
+            sellerId: product.seller?.id ?? '',
+            sellerName: product.seller?.name ?? '',
             condition: product.condition,
-            shippingWeightKg: product.shippingProfile?.weightKg || 0,
+            shippingWeightKg: product.shippingProfile?.weightKg ?? 0,
             shippingDimensionsCm: product.shippingProfile?.dimensionsCm,
-            distanceKm: product.location?.distanceKm
+            distanceKm: product.location?.distanceKm,
+            quantity: 1,
         });
         show('Producto agregado al carrito', 'success');
     };

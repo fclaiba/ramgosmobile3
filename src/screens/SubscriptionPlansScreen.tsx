@@ -31,7 +31,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { show } = useToast();
     const [busyTier, setBusyTier] = useState<null | 'pro' | 'business'>(null);
     const [restoring, setRestoring] = useState(false);
@@ -66,14 +66,14 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                 receiptData: purchase.transactionReceipt,
                 jwsRepresentation: purchase.jwsRepresentationIos,
                 productId: purchase.sku,
-                userId: user.id as any,
+                sessionToken, userId: user.id as any,
             });
         }
         if (Platform.OS === 'android') {
             return await validateGoogleReceiptAction({
                 productId: purchase.sku,
                 purchaseToken: purchase.purchaseToken ?? purchase.transactionId,
-                userId: user.id as any,
+                sessionToken, userId: user.id as any,
             });
         }
         throw new Error('Plataforma no soportada para IAP.');
@@ -116,7 +116,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
             }
             const result = await createSubscriptionCheckoutAction({
                 tier,
-                userId: user.id as any,
+                sessionToken, userId: user.id as any,
             });
             const url = (result as any)?.url;
             if (url && typeof url === 'string') {

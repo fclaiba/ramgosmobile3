@@ -116,7 +116,7 @@ const StorySlide = ({
             <SafeAreaView style={styles.safeArea}>
                 {/* Progress Bars */}
                 <View style={styles.progressContainer}>
-                    {story.items.map((item, index) => (
+                    {story.items.map((item: any, index: number) => (
                         <View key={item.id} style={styles.progressBarBg}>
                             {index === currentIndex ? (
                                 <Animated.View
@@ -303,7 +303,7 @@ export const StoryViewer = ({ storyId, onClose, onNavigateProfile }: { storyId: 
 const getStyles = (isDark: any) => StyleSheet.create({
     slideContainer: { flex: 1, backgroundColor: '#000', position: 'relative' },
     image: { width, height, position: 'absolute' },
-    gradient: { ...StyleSheet.absoluteFillObject },
+    gradient: { ...StyleSheet.absoluteFill },
     safeArea: { flex: 1, flexDirection: 'column' },
 
     progressContainer: { flexDirection: 'row', paddingHorizontal: 10, paddingTop: 10, gap: 4, height: 14 },
@@ -331,7 +331,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     input: { color: isDark ? '#1F2937' : '#fff', fontSize: 16 },
     actionBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
 
-    tapContainer: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', zIndex: -1 }, // Behind UI
+    tapContainer: { ...StyleSheet.absoluteFill, flexDirection: 'row', zIndex: -1 }, // Behind UI
     tapLeft: { width: width * 0.3, height: '100%' },
     tapRight: { width: width * 0.7, height: '100%' },
 });

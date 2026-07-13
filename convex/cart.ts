@@ -1,11 +1,17 @@
 import { mutation, query, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import { Id } from './_generated/dataModel';
-import { assertSelfOrAdmin, requireActor } from './authHelpers';
+import { requireActor } from './authHelpers';
+
+// FASE 3: convex/cart.ts es la ÚNICA fuente de verdad del carrito autenticado.
+// La identidad SIEMPRE se deriva de requireActor (sessionToken); el arg `userId`
+// se conserva solo por compatibilidad de firma y se IGNORA.
+const MAX_CART_ITEMS = 200;
 
 // Add to cart
 export const addToCart = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string()),
         listingId: v.string(),
         quantity: v.number(),
@@ -31,8 +37,31 @@ export const addToCart = mutation({
         })),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
+
+        const quantity = Math.floor(args.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error("Cantidad inválida.");
+        }
+
+        const isVirtual = args.listingId.startsWith("virtual:");
+        // Los listings reales se validan y snapshotean SIEMPRE server-side:
+        // nunca se confía en el precio enviado por el cliente.
+        let listing: any = null;
+        if (!isVirtual) {
+            const listingId = ctx.db.normalizeId("listings", args.listingId);
+            listing = listingId ? await ctx.db.get(listingId) : null;
+            if (!listing) {
+                throw new Error("Producto no encontrado");
+            }
+        }
+
+        const assertStock = (requested: number) => {
+            if (listing && listing.type === 'product' && typeof listing.stock === 'number' && requested > listing.stock) {
+                throw new Error("Stock insuficiente.");
+            }
+        };
 
         // Check if item already in cart
         const existing = await ctx.db
@@ -46,23 +75,28 @@ export const addToCart = mutation({
             if (args.mutationKey && existing.lastMutationKey === args.mutationKey) {
                 return existing._id;
             }
-            // Update quantity
+            const newQuantity = existing.quantity + quantity;
+            assertStock(newQuantity);
             await ctx.db.patch(existing._id, {
-                quantity: existing.quantity + args.quantity,
+                quantity: newQuantity,
                 lastMutationKey: args.mutationKey,
             });
             return existing._id;
         }
 
-        const isVirtual = args.listingId.startsWith("virtual:");
-        let snapshot = args.snapshot;
+        assertStock(quantity);
 
-        if (!isVirtual) {
-            const listing = await ctx.db.get(args.listingId as Id<"listings">);
-            if (!listing) {
-                throw new Error("Producto no encontrado");
-            }
-            const listingType = (listing as any).type as
+        const currentItems = await ctx.db
+            .query("cart")
+            .withIndex("by_user", q => q.eq("userId", userId))
+            .take(MAX_CART_ITEMS);
+        if (currentItems.length >= MAX_CART_ITEMS) {
+            throw new Error("El carrito alcanzó el máximo de ítems.");
+        }
+
+        let snapshot = args.snapshot;
+        if (listing) {
+            const listingType = listing.type as
                 | 'product'
                 | 'service'
                 | 'event'
@@ -74,12 +108,12 @@ export const addToCart = mutation({
                 image: listing.image,
                 sellerId: listing.sellerId,
                 type: listingType ?? 'product',
-                sellerName: (listing as any).sellerName,
-                condition: (listing as any).condition,
-                shippingWeightKg: (listing as any).shippingWeightKg,
-                shippingDimensionsCm: (listing as any).shippingDimensionsCm,
-                distanceKm: (listing as any).distanceKm,
-                referralCode: (listing as any).referralCode,
+                sellerName: listing.sellerName,
+                condition: listing.condition,
+                shippingWeightKg: listing.shippingWeightKg,
+                shippingDimensionsCm: listing.shippingDimensionsCm,
+                distanceKm: listing.location?.distanceKm ?? listing.distanceKm,
+                referralCode: listing.referralCode,
             };
         }
 
@@ -91,7 +125,7 @@ export const addToCart = mutation({
         return await ctx.db.insert("cart", {
             userId,
             listingId: args.listingId,
-            quantity: args.quantity,
+            quantity,
             lastMutationKey: args.mutationKey,
             addedAt: new Date().toISOString(),
             // Snapshot at time of adding (listing or virtual item)
@@ -103,12 +137,13 @@ export const addToCart = mutation({
 // Get user's cart
 export const getMyCart = query({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -117,15 +152,15 @@ export const getMyCart = query({
         const cartItems = await ctx.db
             .query("cart")
             .withIndex("by_user", q => q.eq("userId", userId))
-            .collect();
+            .take(MAX_CART_ITEMS);
 
         // Populate with current listing data
         return await Promise.all(
             cartItems.map(async item => {
-                if (item.listingId.startsWith("virtual:")) {
-                    return { ...item, listing: null };
-                }
-                const listing = await ctx.db.get(item.listingId as Id<"listings">);
+                const listingId = item.listingId.startsWith("virtual:")
+                    ? null
+                    : ctx.db.normalizeId("listings", item.listingId);
+                const listing = listingId ? await ctx.db.get(listingId) : null;
                 return { ...item, listing };
             })
         );
@@ -135,24 +170,34 @@ export const getMyCart = query({
 // Update cart item quantity
 export const updateCartQuantity = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string()),
         cartItemId: v.id("cart"),
         quantity: v.number(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         const current = await ctx.db.get(args.cartItemId);
         if (!current || current.userId !== userId) throw new Error("No autorizado.");
 
-        if (args.quantity <= 0) {
+        const quantity = Math.floor(args.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
             await ctx.db.delete(args.cartItemId);
             return;
         }
 
+        if (!current.listingId.startsWith("virtual:")) {
+            const listingId = ctx.db.normalizeId("listings", current.listingId);
+            const listing = listingId ? await ctx.db.get(listingId) : null;
+            if (listing && listing.type === 'product' && typeof listing.stock === 'number' && quantity > listing.stock) {
+                throw new Error("Stock insuficiente.");
+            }
+        }
+
         await ctx.db.patch(args.cartItemId, {
-            quantity: args.quantity,
+            quantity,
         });
     },
 });
@@ -160,11 +205,12 @@ export const updateCartQuantity = mutation({
 // Remove from cart
 export const removeFromCart = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string()),
         cartItemId: v.id("cart"),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         const current = await ctx.db.get(args.cartItemId);
@@ -176,16 +222,17 @@ export const removeFromCart = mutation({
 // Clear user's cart
 export const clearCart = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         const cartItems = await ctx.db
             .query("cart")
             .withIndex("by_user", q => q.eq("userId", userId))
-            .collect();
+            .take(MAX_CART_ITEMS);
 
         await Promise.all(
             cartItems.map(item => ctx.db.delete(item._id))
@@ -202,7 +249,7 @@ export const internalClearCart = internalMutation({
         const cartItems = await ctx.db
             .query("cart")
             .withIndex("by_user", q => q.eq("userId", args.userId))
-            .collect();
+            .take(MAX_CART_ITEMS);
 
         await Promise.all(
             cartItems.map(item => ctx.db.delete(item._id))

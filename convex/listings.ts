@@ -77,11 +77,12 @@ export const getListing = query({
 
 export const getMyListings = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const targetSellerId = args.sellerId ?? actor.idString;
         if (targetSellerId !== actor.idString) {
             assertAdminOrDeveloper(actor);
@@ -99,6 +100,7 @@ export const getMyListings = query({
 // Create a new listing
 export const createListing = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         title: v.string(),
         description: v.string(),
@@ -136,7 +138,7 @@ export const createListing = mutation({
         openCommissionRate: v.optional(v.number()), // 0–0.5
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const sellerId = args.sellerId ?? actor.idString;
         assertSelfOrAdmin(actor, sellerId);
         // Validation: Verify Seller Role
@@ -194,13 +196,14 @@ export const createListing = mutation({
 // This is critical for real-time inventory management.
 export const purchaseItem = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         listingId: v.id("listings"),
         quantity: v.number(),
         buyerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.buyerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const buyerId = args.buyerId ?? actor.idString;
         assertSelfOrAdmin(actor, buyerId);
         const listing = await ctx.db.get(args.listingId);
@@ -250,6 +253,7 @@ export const purchaseItem = mutation({
 
 export const updateListing = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         id: v.id("listings"),
         sellerId: v.optional(v.string()),
@@ -276,7 +280,7 @@ export const updateListing = mutation({
         })
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const listing = await ctx.db.get(args.id);
         if (!listing) {
             throw new Error("Producto no encontrado");
@@ -329,12 +333,13 @@ export const internalGetListingForAttribution = internalQuery({
 
 export const deleteListing = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         id: v.id("listings"),
         sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const listing = await ctx.db.get(args.id);
         if (!listing) {
             throw new Error("Producto no encontrado");
@@ -367,6 +372,7 @@ export const getListingBySlug = query({
 // Record a view on a listing
 export const recordView = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         listingId: v.string(),
         userId: v.optional(v.string()),
         sessionId: v.string(),

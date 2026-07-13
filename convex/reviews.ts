@@ -7,6 +7,7 @@ import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 export const addReview = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         listingId: v.string(),
         userId: v.optional(v.string()),
@@ -17,7 +18,7 @@ export const addReview = mutation({
         images: v.optional(v.array(v.string())),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const targetUserId = args.userId ?? actor.idString;
         assertSelfOrAdmin(actor, targetUserId);
         // Validate rating
@@ -136,10 +137,11 @@ export const getListingReviews = query({
 });
 
 export const canReviewListing = query({
-    args: { listingId: v.string(), actorId: v.optional(v.any()) },
+    args: {
+        sessionToken: v.optional(v.string()), listingId: v.string(), actorId: v.optional(v.any()) },
     handler: async (ctx, args) => {
         try {
-            const actor = await requireActor(ctx, args.actorId);
+            const actor = await requireActor(ctx, (args as any).sessionToken);
             const targetUserId = actor.idString;
 
             const userOrders = await ctx.db
@@ -180,11 +182,12 @@ export const canReviewListing = query({
 
 export const getUserReviews = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const targetUserId = args.userId ?? actor.idString;
         assertSelfOrAdmin(actor, targetUserId);
         return await ctx.db
@@ -209,13 +212,14 @@ export const markReviewHelpful = mutation({
 
 export const addSellerResponse = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         reviewId: v.id("reviews"),
         sellerId: v.optional(v.string()), // legacy fallback
         message: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const review = await ctx.db.get(args.reviewId);
         if (!review) throw new Error("Review no encontrado");
 
@@ -246,12 +250,13 @@ export const addSellerResponse = mutation({
 
 export const deleteReview = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         reviewId: v.id("reviews"),
         userId: v.optional(v.string()), // legacy fallback
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const review = await ctx.db.get(args.reviewId);
         if (!review) throw new Error("Review no encontrado");
 

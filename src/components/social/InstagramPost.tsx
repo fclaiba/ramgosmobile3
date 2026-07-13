@@ -27,7 +27,7 @@ export const InstagramPost = ({ post }: { post: IGPostType }) => {
     const handleLike = () => {
         likeInstagramPost(post.id);
         setLiked(!liked);
-        setLikes(prev => liked ? prev - 1 : prev + 1);
+        setLikes((prev: number) => liked ? prev - 1 : prev + 1);
     };
 
     return (

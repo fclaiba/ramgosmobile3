@@ -95,6 +95,7 @@ const assertInfluencerRole = async (ctx: any, influencerId: string) => {
  */
 export const proposeCampaign = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         influencerId: v.id("users"),
         businessId: v.id("users"),
@@ -102,7 +103,7 @@ export const proposeCampaign = mutation({
         notes: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<string> => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         // Only the influencer themselves (or admin) can propose on their behalf.
         assertSelfOrAdmin(actor, String(args.influencerId));
 
@@ -159,6 +160,7 @@ export const proposeCampaign = mutation({
  */
 export const inviteInfluencer = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         businessId: v.id("users"),
         influencerId: v.id("users"),
@@ -166,7 +168,7 @@ export const inviteInfluencer = mutation({
         notes: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<string> => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         // Only the business themselves (or admin) can invite.
         assertSelfOrAdmin(actor, String(args.businessId));
 
@@ -221,12 +223,13 @@ export const inviteInfluencer = mutation({
  */
 export const respondToCampaign = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
         decision: v.union(v.literal('accept'), v.literal('reject')),
     },
     handler: async (ctx, args): Promise<void> => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const campaign: any = await ctx.db.get(args.campaignId);
         if (!campaign) throw new Error('Campaña no encontrada.');
@@ -274,11 +277,12 @@ export const respondToCampaign = mutation({
  */
 export const pauseCampaign = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
     },
     handler: async (ctx, args): Promise<void> => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const campaign: any = await ctx.db.get(args.campaignId);
         if (!campaign) throw new Error('Campaña no encontrada.');
 
@@ -318,11 +322,12 @@ export const pauseCampaign = mutation({
  */
 export const resumeCampaign = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
     },
     handler: async (ctx, args): Promise<void> => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const campaign: any = await ctx.db.get(args.campaignId);
         if (!campaign) throw new Error('Campaña no encontrada.');
 
@@ -350,11 +355,12 @@ export const resumeCampaign = mutation({
  */
 export const endCampaign = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         campaignId: v.id('influencerCampaigns'),
     },
     handler: async (ctx, args): Promise<void> => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const campaign: any = await ctx.db.get(args.campaignId);
         if (!campaign) throw new Error('Campaña no encontrada.');
 
@@ -402,6 +408,7 @@ export const endCampaign = mutation({
  */
 export const getMyCampaigns = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         influencerId: v.id("users"),
         includeFinal: v.optional(v.boolean()),
@@ -409,7 +416,7 @@ export const getMyCampaigns = query({
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -447,6 +454,7 @@ export const getMyCampaigns = query({
  */
 export const getBusinessCampaigns = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         businessId: v.id("users"),
         includeFinal: v.optional(v.boolean()),
@@ -454,7 +462,7 @@ export const getBusinessCampaigns = query({
     handler: async (ctx, args) => {
         let actor;
         try {
-            actor = await requireActor(ctx, args.actorId);
+            actor = await requireActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
@@ -499,11 +507,12 @@ export const getBusinessCampaigns = query({
  */
 export const lookupInfluencer = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         emailOrCode: v.string(),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx, args.actorId);
+        await requireActor(ctx, (args as any).sessionToken);
         const term = args.emailOrCode.trim();
         if (!term) return null;
 
@@ -568,6 +577,7 @@ export const internalFindActiveCampaign = internalQuery({
 // Admin helper: list every campaign (for AdminFinanceScreen / debugging).
 export const listAllCampaigns = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         status: v.optional(
             v.union(
@@ -580,7 +590,7 @@ export const listAllCampaigns = query({
         ),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
         if (args.status) {

@@ -59,7 +59,7 @@ function formatTime(d?: string | number | Date): string {
 
 export default function DisputeChatScreen({ route, navigation }: any) {
     const { orderId } = route.params || {};
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { show } = useToast();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -131,7 +131,7 @@ export default function DisputeChatScreen({ route, navigation }: any) {
         if (!user?.id || !orderId) return;
         setEscalating(true);
         try {
-            await escalateDisputeMutation({ orderId: orderId as any, role: myRole, userId: user.id });
+            await escalateDisputeMutation({ orderId: orderId as any, role: myRole, sessionToken, userId: user.id });
             show('Caso escalado a soporte', 'success');
             setEscalateOpen(false);
         } catch (e: any) {

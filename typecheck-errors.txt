@@ -1,0 +1,283 @@
+﻿
+> ramgos-mobile@1.0.0 typecheck
+> tsc -p tsconfig.check.json --noEmit
+
+App.tsx(2,8): error TS2882: Cannot find module or type declarations for side-effect import of './global.css'.
+App.tsx(15,34): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+jest.setup.ts(1,1): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(5,1): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(10,21): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(11,23): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(12,17): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(12,26): error TS7006: Parameter 'val' implicitly has an 'any' type.
+jest.setup.ts(13,17): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(13,26): error TS7006: Parameter 'val' implicitly has an 'any' type.
+jest.setup.ts(14,19): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(14,28): error TS7006: Parameter 'val' implicitly has an 'any' type.
+jest.setup.ts(15,14): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(15,23): error TS7006: Parameter 'fn' implicitly has an 'any' type.
+jest.setup.ts(16,27): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(16,62): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(16,101): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(17,28): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(17,63): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(17,102): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(18,30): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(18,39): error TS7006: Parameter 'component' implicitly has an 'any' type.
+jest.setup.ts(22,1): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(27,1): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(28,12): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(29,12): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(30,23): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(30,32): error TS7006: Parameter 'v' implicitly has an 'any' type.
+jest.setup.ts(33,1): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(35,27): error TS7031: Binding element 'children' implicitly has an 'any' type.
+jest.setup.ts(37,31): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(38,34): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(39,29): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(44,1): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(46,26): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(47,28): error TS2708: Cannot use namespace 'jest' as a value.
+jest.setup.ts(48,25): error TS2708: Cannot use namespace 'jest' as a value.
+src/components/business/BusinessLocationSearch.tsx(45,52): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/business/BusinessLocationSearch.tsx(49,70): error TS2339: Property 'name' does not exist on type 'never'.
+src/components/business/BusinessLocationSearch.tsx(49,90): error TS2339: Property 'address' does not exist on type 'never'.
+src/components/business/BusinessLocationSearch.tsx(49,113): error TS2339: Property 'id' does not exist on type 'never'.
+src/components/business/BusinessLocationSearch.tsx(55,118): error TS2339: Property 'name' does not exist on type 'never'.
+src/components/business/BusinessLocationSearch.tsx(56,76): error TS2339: Property 'address' does not exist on type 'never'.
+src/components/DesktopSidebar.tsx(6,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/figma/ImageWithFallback.tsx(15,35): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/forms/UnifiedListingForm.tsx(8,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/games/DailyChallenges.tsx(83,34): error TS7006: Parameter 'challenge' implicitly has an 'any' type.
+src/components/games/DailyChallenges.tsx(83,45): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/ItemDetailView.tsx(15,15): error TS2305: Module '"../contexts/MarketplaceContext"' has no exported member 'Product'.
+src/components/ItemDetailView.tsx(92,40): error TS7006: Parameter 'img' implicitly has an 'any' type.
+src/components/ItemDetailView.tsx(162,47): error TS7006: Parameter 'url' implicitly has an 'any' type.
+src/components/ItemDetailView.tsx(162,52): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/KYCRequiredModal.tsx(6,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/LocationPickerModal.tsx(6,27): error TS7016: Could not find a declaration file for module 'expo-location'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/expo-location/build/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/expo-location` if it exists or add a new declaration (.d.ts) file containing `declare module 'expo-location';`
+src/components/marketplace/EscrowSheet.tsx(32,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/marketplace/LocationPickerModal.native.tsx(4,27): error TS7016: Could not find a declaration file for module 'expo-location'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/expo-location/build/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/expo-location` if it exists or add a new declaration (.d.ts) file containing `declare module 'expo-location';`
+src/components/marketplace/LocationPickerModal.native.tsx(7,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/marketplace/LocationPickerModal.tsx(11,27): error TS7016: Could not find a declaration file for module 'expo-location'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/expo-location/build/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/expo-location` if it exists or add a new declaration (.d.ts) file containing `declare module 'expo-location';`
+src/components/marketplace/LocationPickerModal.tsx(14,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/marketplace/MapView.native.tsx(13,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/marketplace/MapView.native.tsx(21,27): error TS7016: Could not find a declaration file for module 'expo-location'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/expo-location/build/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/expo-location` if it exists or add a new declaration (.d.ts) file containing `declare module 'expo-location';`
+src/components/MobileHeader.tsx(8,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/MobileNav.tsx(7,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/pet/MiMascotaView.tsx(13,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/PointsManager.tsx(6,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/SidebarMenu.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/social/CreateInstagramPost.tsx(16,26): error TS2339: Property 'createInstagramPost' does not exist on type 'SocialContextValue'.
+src/components/social/CreatePost.tsx(15,26): error TS2339: Property 'createPost' does not exist on type 'SocialContextValue'.
+src/components/social/CreateStory.tsx(13,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/components/social/CreateStory.tsx(16,13): error TS2339: Property 'createStory' does not exist on type 'SocialContextValue'.
+src/components/social/InstagramPost.tsx(19,13): error TS2339: Property 'likeInstagramPost' does not exist on type 'SocialContextValue'.
+src/components/social/InstagramPost.tsx(30,18): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/social/Post.tsx(17,13): error TS2339: Property 'addToWishlist' does not exist on type '{ listings: never[]; categories: never[]; searchListings: () => never[]; }'.
+src/components/social/Post.tsx(22,19): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/Post.tsx(22,19): error TS18048: 'isPostSaved' is possibly 'undefined'.
+src/components/social/Post.tsx(29,20): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/Post.tsx(30,14): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/Post.tsx(47,36): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/Post.tsx(126,41): error TS2353: Object literal may only specify known properties, and 'referralCode' does not exist in type 'CartItem'.
+src/components/social/PostCommentsModal.tsx(38,9): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/StoriesBar.tsx(37,18): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoriesBar.tsx(39,59): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/social/StoryViewer.tsx(52,13): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(52,41): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/StoryViewer.tsx(81,13): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(81,41): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/StoryViewer.tsx(119,39): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/social/StoryViewer.tsx(119,45): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/social/StoryViewer.tsx(219,26): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(225,13): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(228,9): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(245,27): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(263,9): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(277,61): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(279,22): error TS18048: 'stories' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(291,53): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(291,73): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/StoryViewer.tsx(292,54): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(292,75): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/StoryViewer.tsx(293,59): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(293,90): error TS2554: Expected 2 arguments, but got 3.
+src/components/social/StoryViewer.tsx(306,31): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/social/StoryViewer.tsx(334,35): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/social/UserListItem.tsx(3,21): error TS2305: Module '"../../contexts/SocialContext"' has no exported member 'User'.
+src/components/social/UserProfile.tsx(4,21): error TS2305: Module '"../../contexts/SocialContext"' has no exported member 'CommercialProduct'.
+src/components/social/UserProfile.tsx(23,13): error TS2339: Property 'getUserById' does not exist on type 'SocialContextValue'.
+src/components/social/UserProfile.tsx(23,26): error TS2339: Property 'getPostsByUser' does not exist on type 'SocialContextValue'.
+src/components/social/UserProfile.tsx(23,42): error TS2339: Property 'getInstagramPostsByUser' does not exist on type 'SocialContextValue'.
+src/components/social/UserProfile.tsx(23,67): error TS2339: Property 'getHighlightsByUser' does not exist on type 'SocialContextValue'.
+src/components/social/UserProfile.tsx(23,88): error TS2339: Property 'getCommercialItemsByUser' does not exist on type 'SocialContextValue'.
+src/components/social/UserProfile.tsx(75,44): error TS7006: Parameter 'post' implicitly has an 'any' type.
+src/components/social/UserProfile.tsx(91,49): error TS7006: Parameter 'post' implicitly has an 'any' type.
+src/components/social/UserProfile.tsx(107,50): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/components/social/UserProfile.tsx(232,50): error TS7006: Parameter 'h' implicitly has an 'any' type.
+src/components/social/UserProfile.tsx(290,36): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/ui/input.tsx(8,6): error TS2339: Property 'className' does not exist on type 'TextInputProps'.
+src/components/ui/separator.tsx(16,11): error TS2339: Property 'className' does not exist on type 'ViewProps & { orientation?: "horizontal" | "vertical" | undefined; decorative?: boolean | undefined; }'.
+src/components/ui/skeleton.tsx(6,5): error TS2339: Property 'className' does not exist on type 'ViewProps'.
+src/contexts/ToastContext.tsx(6,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/hooks/useCheckout.ts(7,10): error TS2305: Module '"../contexts/MarketplaceContext"' has no exported member 'ShippingMethod'.
+src/hooks/useCheckout.ts(7,26): error TS2305: Module '"../contexts/MarketplaceContext"' has no exported member 'ShippingQuote'.
+src/hooks/useCheckout.ts(7,41): error TS2305: Module '"../contexts/MarketplaceContext"' has no exported member 'Order'.
+src/hooks/useMarketplaceProducts.ts(7,21): error TS2304: Cannot find name 'Product'.
+src/hooks/useUserLocation.ts(2,27): error TS7016: Could not find a declaration file for module 'expo-location'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/expo-location/build/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/expo-location` if it exists or add a new declaration (.d.ts) file containing `declare module 'expo-location';`
+src/payments/components/AnimatedCreditCard.tsx(141,23): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/payments/PaymentProvider.tsx(7,13): error TS2322: Type 'ReactNode' is not assignable to type 'ReactElement<unknown, string | JSXElementConstructor<any>> | ReactElement<unknown, string | JSXElementConstructor<any>>[]'.
+  Type 'undefined' is not assignable to type 'ReactElement<unknown, string | JSXElementConstructor<any>> | ReactElement<unknown, string | JSXElementConstructor<any>>[]'.
+src/screens/admin/AdminFinanceScreen.tsx(24,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/AnalyticsDashboardScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/BannedUserScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/BonusQRScreen.tsx(22,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/business/BusinessKYCScreen.tsx(3,49): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/business/BusinessProfileScreen.tsx(18,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/business/BusinessQRScannerScreen.tsx(89,70): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+src/screens/BusinessCreateScreen.tsx(17,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/BusinessCreateScreen.tsx(131,21): error TS2322: Type 'BranchInput[]' is not assignable to type 'BranchOption[]'.
+  Type 'BranchInput' is not assignable to type 'BranchOption'.
+    Types of property 'id' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/screens/BusinessDashboardScreen.tsx(17,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/BusinessScannerScreen.tsx(5,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/CartScreen.tsx(10,26): error TS2305: Module '"../contexts/MarketplaceContext"' has no exported member 'ShippingMethod'.
+src/screens/CartScreen.tsx(10,42): error TS2305: Module '"../contexts/MarketplaceContext"' has no exported member 'ShippingQuote'.
+src/screens/CartScreen.tsx(24,13): error TS2339: Property 'getShippingOptions' does not exist on type '{ listings: never[]; categories: never[]; searchListings: () => never[]; }'.
+src/screens/CommercialProfileScreen.tsx(42,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/CreateListingScreen.tsx(35,13): error TS2339: Property 'createProduct' does not exist on type '{ listings: never[]; categories: never[]; searchListings: () => never[]; }'.
+src/screens/finance/WalletScreen.tsx(12,13): error TS2339: Property 'getWallet' does not exist on type '{ balance: number; transactions: never[]; deposit: () => void; withdraw: () => void; }'.
+src/screens/finance/WalletScreen.tsx(12,38): error TS2339: Property 'simulateTimePass' does not exist on type '{ balance: number; transactions: never[]; deposit: () => void; withdraw: () => void; }'.
+src/screens/finance/WalletScreen.tsx(26,57): error TS2339: Property 'relatedUserId' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(92,39): error TS2339: Property 'id' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(93,81): error TS2339: Property 'type' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(93,112): error TS2339: Property 'type' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(94,37): error TS2339: Property 'type' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(101,65): error TS2339: Property 'description' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(102,65): error TS2339: Property 'date' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(102,98): error TS2339: Property 'status' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(104,72): error TS2339: Property 'status' does not exist on type 'never'.
+src/screens/finance/WalletScreen.tsx(105,39): error TS2339: Property 'amount' does not exist on type 'never'.
+src/screens/ForgotPasswordScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/GamesScreen.tsx(10,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/HistoryScreen.tsx(39,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/HomeScreen.tsx(5,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/InfluencerDashboardScreen.tsx(21,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/InfluencerDashboardScreen.tsx(41,13): error TS2339: Property 'referralCode' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/InfluencerDashboardScreen.tsx(41,27): error TS2339: Property 'referralLink' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/InfluencerDashboardScreen.tsx(41,41): error TS2339: Property 'referralSummary' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/InfluencerDashboardScreen.tsx(194,29): error TS18048: 'wallet.transactions' is possibly 'undefined'.
+src/screens/InfluencerDashboardScreen.tsx(195,29): error TS2367: This comparison appears to be unintentional because the types '"escrow" | "payment" | "payout" | "deposit" | "withdrawal"' and '"credit"' have no overlap.
+src/screens/ItemDetailScreen.tsx(49,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/KYCScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/KYCScreen.tsx(98,21): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/screens/KYCScreen.tsx(100,21): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/screens/LoginScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/MapExplorerScreen.tsx(3,27): error TS7016: Could not find a declaration file for module 'expo-location'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/expo-location/build/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/expo-location` if it exists or add a new declaration (.d.ts) file containing `declare module 'expo-location';`
+src/screens/MapExplorerScreen.tsx(6,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/AddEditProductScreen.tsx(26,13): error TS2339: Property 'createProduct' does not exist on type '{ listings: never[]; categories: never[]; searchListings: () => never[]; }'.
+src/screens/marketplace/DisputeChatScreen.tsx(13,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/DisputeReasonScreen.tsx(14,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/DisputeScreen.tsx(13,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/OrderDetailScreen.tsx(14,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/ProductDetailScreen.tsx(18,13): error TS2339: Property 'getProductById' does not exist on type '{ listings: never[]; categories: never[]; searchListings: () => never[]; }'.
+src/screens/marketplace/ProductDetailScreen.tsx(36,17): error TS2345: Argument of type '{ id: any; name: any; price: any; image: any; type: string; location: any; sellerId: any; sellerName: any; condition: any; shippingWeightKg: any; shippingDimensionsCm: any; distanceKm: any; }' is not assignable to parameter of type 'CartItem'.
+  Property 'quantity' is missing in type '{ id: any; name: any; price: any; image: any; type: string; location: any; sellerId: any; sellerName: any; condition: any; shippingWeightKg: any; shippingDimensionsCm: any; distanceKm: any; }' but required in type 'CartItem'.
+src/screens/marketplace/ProductDetailScreen.tsx(78,43): error TS7006: Parameter 'img' implicitly has an 'any' type.
+src/screens/marketplace/QRScannerScreen.tsx(6,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/SellerWalletScreen.tsx(4,10): error TS2305: Module '"../../contexts/MarketplaceContext"' has no exported member 'MARKETPLACE_ESCROW_RELEASE_DAYS'.
+src/screens/marketplace/SellerWalletScreen.tsx(4,59): error TS2305: Module '"../../contexts/MarketplaceContext"' has no exported member 'Order'.
+src/screens/marketplace/SellerWalletScreen.tsx(9,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/marketplace/SellerWalletScreen.tsx(17,13): error TS2339: Property 'orders' does not exist on type '{ listings: never[]; categories: never[]; searchListings: () => never[]; }'.
+src/screens/marketplace/SellerWalletScreen.tsx(32,33): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/screens/marketplace/SellerWalletScreen.tsx(164,40): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/screens/MarketplaceScreen.tsx(10,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/MyListingsScreen.tsx(11,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/NotificationsScreen.tsx(32,55): error TS2339: Property 'clearAll' does not exist on type '{ notifications: never[]; unreadCount: number; markAsRead: () => void; markAllAsRead: () => void; deleteNotification: () => void; preferences: {}; updatePreferences: () => void; }'.
+src/screens/NotificationsScreen.tsx(41,39): error TS2554: Expected 0 arguments, but got 1.
+src/screens/NotificationsScreen.tsx(54,93): error TS2554: Expected 0 arguments, but got 1.
+src/screens/OnboardingScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/PrivacyScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/ReferralsScreen.tsx(3,35): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/ReferralsScreen.tsx(14,13): error TS2339: Property 'referralCode' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/ReferralsScreen.tsx(14,34): error TS2339: Property 'history' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/ReferralsScreen.tsx(14,43): error TS2339: Property 'shareReferral' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/ReferralsScreen.tsx(14,58): error TS2339: Property 'simulateReferral' does not exist on type '{ referrals: never[]; stats: {}; generateReferralLink: () => Promise<string>; }'.
+src/screens/ReferralsScreen.tsx(59,38): error TS2339: Property 'totalInvited' does not exist on type '{}'.
+src/screens/ReferralsScreen.tsx(65,43): error TS2339: Property 'totalEarned' does not exist on type '{}'.
+src/screens/ReferralsScreen.tsx(71,38): error TS2339: Property 'level' does not exist on type '{}'.
+src/screens/ReferralsScreen.tsx(95,38): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/screens/RegisterScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/RoleSelectionScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/SavedScreen.tsx(12,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/social/UserListScreen.tsx(18,13): error TS2339: Property 'getUserById' does not exist on type 'SocialContextValue'.
+src/screens/SubscriptionPlansScreen.tsx(5,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/TermsScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/VerificationScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/screens/WelcomeScreen.tsx(3,30): error TS7016: Could not find a declaration file for module 'react-native-safe-area-context'. 'C:/Users/Usuario/Documents/dev/ramgosmobile3/node_modules/react-native-safe-area-context/lib/commonjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/react-native-safe-area-context` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-native-safe-area-context';`
+src/services/raffles/RaffleService.ts(29,53): error TS2339: Property 'applyPointsEvent' does not exist on type '{ getEconomyState: FunctionReference<"query", "public", { sessionToken?: string | undefined; userId: string; }, any, string | undefined>; initializeEconomy: FunctionReference<...>; ... 12 more ...; getPointsHistory: FunctionReference<...>; }'.
+src/utils/formatters.ts(24,9): error TS2353: Object literal may only specify known properties, and 'scheduled' does not exist in type 'Record<"paused" | "active" | "expired", { background: string; color: string; label: string; }>'.

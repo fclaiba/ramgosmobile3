@@ -2,7 +2,6 @@
 // they can be unit-tested in isolation and imported by future split files
 // (e.g. `social/feed.ts`, `social/dm.ts`).
 
-import { Id } from "../_generated/dataModel";
 import { AuthActor, requireActor } from "../authHelpers";
 
 // Re-exports requireActor with a domain-specific name so future blocking
@@ -10,9 +9,9 @@ import { AuthActor, requireActor } from "../authHelpers";
 // without touching every social mutation/query.
 export const assertSocialActor = async (
     ctx: any,
-    fallbackActorId?: Id<"users"> | string,
+    sessionToken?: string,
 ): Promise<AuthActor> => {
-    const actor = await requireActor(ctx, fallbackActorId);
+    const actor = await requireActor(ctx, sessionToken);
     // Future: check `users.socialBanned` or moderation flags here.
     return actor;
 };

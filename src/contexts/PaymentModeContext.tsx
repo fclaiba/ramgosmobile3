@@ -12,10 +12,11 @@ interface PaymentModeContextValue {
     stripePublishableKey: string | undefined;
 }
 
+// Fase 5: la app opera SOLO en modo test hasta Bloque D (pagos live).
 const PaymentModeContext = createContext<PaymentModeContextValue>({
-    mode: 'live',
-    isTest: false,
-    isLive: true,
+    mode: 'test',
+    isTest: true,
+    isLive: false,
     toggle: () => {},
     setMode: () => {},
     stripePublishableKey: undefined,
@@ -24,13 +25,15 @@ const PaymentModeContext = createContext<PaymentModeContextValue>({
 const STORAGE_KEY = '@ramgos_payment_mode';
 
 export function PaymentModeProvider({ children }: { children: React.ReactNode }) {
-    const [mode, setModeState] = useState<PaymentMode>('live');
+    const [mode, setModeState] = useState<PaymentMode>('test');
 
     useEffect(() => {
         (async () => {
             try {
                 const stored = await AsyncStorage.getItem(STORAGE_KEY);
-                if (stored === 'test' || stored === 'live') {
+                // Fase 5: 'live' persistido de sesiones viejas se ignora hasta
+                // Bloque D — la app queda clavada en test.
+                if (stored === 'test') {
                     setModeState(stored);
                 }
             } catch {}
@@ -38,14 +41,16 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
     }, []);
 
     const setMode = useCallback((newMode: PaymentMode) => {
-        setModeState(newMode);
-        AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});
+        // Fase 5: pagos live deshabilitados hasta Bloque D.
+        const clamped: PaymentMode = newMode === 'live' ? 'test' : newMode;
+        setModeState(clamped);
+        AsyncStorage.setItem(STORAGE_KEY, clamped).catch(() => {});
     }, []);
 
     const toggle = useCallback(() => {
-        const newMode = mode === 'live' ? 'test' : 'live';
-        setMode(newMode);
-    }, [mode, setMode]);
+        // Fase 5: no hay modo live al que alternar; se mantiene test.
+        setMode('test');
+    }, [setMode]);
 
     const stripePublishableKey = mode === 'test'
         ? (process.env.EXPO_PUBLIC_STRIPE_KEY_TEST || process.env.EXPO_PUBLIC_STRIPE_KEY)

@@ -80,7 +80,7 @@ export function DailyChallenges() {
             {/* Challenges List */}
             <View style={styles.challengesList}>
                 <Text style={styles.sectionTitle}>Desafíos Disponibles</Text>
-                {challenges.map((challenge, index) => (
+                {challenges.map((challenge: any, index: number) => (
                     <Animated.View
                         key={challenge.id}
                         entering={FadeInDown.delay(index * 100).springify()}

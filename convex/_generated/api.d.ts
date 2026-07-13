@@ -15,7 +15,6 @@ import type * as authHelpers from "../authHelpers.js";
 import type * as bonos from "../bonos.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cart from "../cart.js";
-import type * as casino from "../casino.js";
 import type * as clearDatabase from "../clearDatabase.js";
 import type * as connect from "../connect.js";
 import type * as connectV2 from "../connectV2.js";
@@ -70,7 +69,6 @@ declare const fullApi: ApiFromModules<{
   bonos: typeof bonos;
   campaigns: typeof campaigns;
   cart: typeof cart;
-  casino: typeof casino;
   clearDatabase: typeof clearDatabase;
   connect: typeof connect;
   connectV2: typeof connectV2;

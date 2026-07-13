@@ -58,24 +58,59 @@ export const getActorFromAuth = async (ctx: any): Promise<AuthActor | null> => {
   return null;
 };
 
+// FASE 1: server-issued session tokens.
+// Sessions are created at login/register (see users.ts) and stored in the
+// `sessions` table. The client sends the opaque token back with each call.
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
+
+export const createSession = async (ctx: any, userId: Id<"users"> | string): Promise<string> => {
+  const token = `ses_${crypto.randomUUID()}${crypto.randomUUID().replace(/-/g, "")}`;
+  await ctx.db.insert("sessions", {
+    userId: String(userId),
+    token,
+    createdAt: new Date().toISOString(),
+    expiresAt: Date.now() + SESSION_TTL_MS,
+  });
+  return token;
+};
+
+const getActorFromSessionToken = async (ctx: any, token: string): Promise<AuthActor | null> => {
+  if (typeof token !== "string" || !token.startsWith("ses_")) return null;
+
+  const session = ctx.db
+    ? await ctx.db
+        .query("sessions")
+        .withIndex("by_token", (q: any) => q.eq("token", token))
+        .first()
+    : await ctx.runQuery(internal.users.internalGetSessionByToken, { token });
+
+  if (!session) return null;
+  if (session.revokedAt) return null;
+  if (session.expiresAt < Date.now()) return null;
+
+  const user = ctx.db
+    ? await (async () => {
+        const normalizedId = ctx.db.normalizeId("users", session.userId);
+        return normalizedId ? await ctx.db.get(normalizedId) : null;
+      })()
+    : await ctx.runQuery(internal.users.internalGetUserById, { id: session.userId });
+
+  return user ? mapToActor(user) : null;
+};
+
 export const requireActor = async (
   ctx: any,
-  _unsafeFallbackActorId?: Id<"users"> | string,
+  sessionToken?: string,
 ): Promise<AuthActor> => {
   const fromAuth = await getActorFromAuth(ctx);
   if (fromAuth) return fromAuth;
 
-  if (_unsafeFallbackActorId) {
-    if (ctx.db && typeof ctx.db.normalizeId === 'function') {
-      const normalizedId = ctx.db.normalizeId("users", _unsafeFallbackActorId);
-      if (normalizedId) {
-          const user = await ctx.db.get(normalizedId);
-          if (user) return mapToActor(user);
-      }
-    } else if (ctx.runQuery) {
-      const user = await ctx.runQuery(internal.users.internalGetUserById, { id: _unsafeFallbackActorId });
-      if (user) return mapToActor(user);
-    }
+  // SECURITY (Fase 1): the second argument is a server-issued session token.
+  // Raw user ids are NOT accepted anymore — identity can't be spoofed by
+  // sending someone else's id.
+  if (sessionToken) {
+    const fromSession = await getActorFromSessionToken(ctx, sessionToken);
+    if (fromSession) return fromSession;
   }
 
   throw new Error("Sesión no válida o expirada. Por favor, inicie sesión nuevamente.");

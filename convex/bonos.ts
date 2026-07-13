@@ -159,12 +159,13 @@ export const internalIssueBonosForOrder = internalMutation({
 // ---------------------------------------------------------------------------
 export const redeemBono = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()), // legacy fallback
         bonoCode: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const bono = await ctx.db
             .query("bonoRedemptions")
@@ -242,11 +243,12 @@ export const redeemBono = mutation({
 // ---------------------------------------------------------------------------
 export const getMyBonos = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = args.userId ?? actor.idString;
         if (userId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");
@@ -275,11 +277,12 @@ export const getMyBonos = query({
 // emitted vouchers — useful for the "Mis Bonos" tab in BusinessDashboard).
 export const getBonosBySeller = query({
     args: {
+        sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId ?? args.sellerId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const sellerId = args.sellerId ?? actor.idString;
         if (sellerId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");

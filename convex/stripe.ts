@@ -1,8 +1,24 @@
+// ---------------------------------------------------------------------------
+// FASE 5 — DECISIÓN DE CAMINO ÚNICO DE PAGOS (2026-07-13)
+//
+// Este módulo (convex/stripe.ts — Stripe REAL en modo TEST) es el ÚNICO camino
+// de pagos activo. El simulador convex/payments/actions.ts quedó DESCARTADO y
+// aislado (sin call sites activos desde UI ni webhook); se elimina en Fase 8d.
+//
+// Flujo E2E:
+//   PaymentForm → api.stripe.createPaymentIntent → confirm (SDK Stripe cliente)
+//   → webhook /stripe-webhook (convex/http.ts, payment_intent.succeeded)
+//   → internalProcessMultiVendorCart → sub-órdenes escrow "held"
+//   → internalMarkPaymentSucceeded (payments.status = succeeded_in_escrow)
+//
+// Claves: SOLO sk_test_ / pk_test_ hasta Bloque D (nunca sk_live_).
+// Referencia histórica del módulo previo: MÓDULO_PAGOS_RESPALDO.md.
+// ---------------------------------------------------------------------------
 import { v } from "convex/values";
 import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import Stripe from "stripe";
-import { requireActor } from "./authHelpers";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const isStripeMock =
@@ -19,6 +35,7 @@ const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
  */
 export const createPaymentIntent = action({
     args: {
+        sessionToken: v.optional(v.string()),
         amountInCents: v.optional(v.number()),
         lineItems: v.optional(v.array(v.object({
             listingId: v.string(),
@@ -37,9 +54,12 @@ export const createPaymentIntent = action({
         description: v.optional(v.string()),
         metadata: v.optional(v.any()),
         tokenId: v.optional(v.string()),
+        // Fase 5: transfer_group del carrito. Si viene, el webhook procesa el
+        // carrito multi-vendor (sub-órdenes con escrow "held") al confirmarse el pago.
+        cartId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         let totalAmountCents = args.amountInCents || 0;
@@ -85,7 +105,7 @@ export const createPaymentIntent = action({
                 // Simulated payment intent: no real Stripe calls.
                 paymentIntentId = `mock_pi_${Date.now()}`;
                 clientSecret = `mock_secret_${paymentIntentId}`;
-                status = args.tokenId ? "succeeded" : "requires_confirmation";
+                status = "succeeded";
             } else {
                 // 2. Crear y opcionalmente confirmar el PaymentIntent en Stripe
                 const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
@@ -94,6 +114,9 @@ export const createPaymentIntent = action({
                     metadata: {
                         userId,
                         lineItemsCount: args.lineItems?.length || 0,
+                        // El webhook usa cartId+userId para crear las sub-órdenes
+                        // multi-vendor con escrow "held" (convex/http.ts).
+                        ...(args.cartId ? { cartId: args.cartId } : {}),
                     },
                 };
 
@@ -137,10 +160,22 @@ export const createPaymentIntent = action({
                 description: args.description || args.lineItems?.[0]?.description || "Pago Ramgos",
             });
 
+            // Mock mode (sin STRIPE_SECRET_KEY real): no llega webhook, así que
+            // procesamos el carrito por el mismo camino interno que usa el webhook.
+            if (isStripeMock && args.cartId) {
+                await ctx.scheduler.runAfter(0, internal.stripe.internalProcessMultiVendorCart, {
+                    stripePaymentIntentId: paymentIntentId,
+                    userId,
+                    cartId: args.cartId,
+                    amount: totalAmountCents,
+                });
+            }
+
             return {
                 clientSecret,
                 paymentIntentId,
                 status,
+                isMock: isStripeMock,
             };
         } catch (error: any) {
             console.error("[Stripe] Error al crear/confirmar PaymentIntent:", error);
@@ -156,10 +191,11 @@ export const createPaymentIntent = action({
  */
 export const listPaymentMethods = action({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx, args.userId);
+        await requireActor(ctx, (args as any).sessionToken);
         
         // Obtener el usuario mediante internalQuery para acceder al stripeCustomerId
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: args.userId });
@@ -185,9 +221,11 @@ export const listPaymentMethods = action({
  * Inicia la configuración de un nuevo método de pago (tarjeta) guardado.
  */
 export const createSetupIntent = action({
-    args: {},
+    args: {
+        sessionToken: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
@@ -228,12 +266,20 @@ export const createSetupIntent = action({
  */
 export const detachPaymentMethod = action({
     args: {
+        sessionToken: v.optional(v.string()),
         paymentMethodId: v.string(),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx);
-        
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+
         try {
+            // IDOR guard: only detach payment methods that belong to the
+            // caller's own Stripe customer.
+            const user = await ctx.runQuery(internal.users.internalGetUserById, { id: actor.idString });
+            const pm = await stripe.paymentMethods.retrieve(args.paymentMethodId);
+            if (!user?.stripeCustomerId || pm.customer !== user.stripeCustomerId) {
+                throw new Error("No autorizado.");
+            }
             await stripe.paymentMethods.detach(args.paymentMethodId);
         } catch (error: any) {
             console.error("[Stripe] Error al eliminar método de pago:", error);
@@ -247,10 +293,11 @@ export const detachPaymentMethod = action({
  */
 export const setDefaultPaymentMethod = action({
     args: {
+        sessionToken: v.optional(v.string()),
         paymentMethodId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
         
@@ -308,9 +355,14 @@ export const internalNotifyPaymentEvent = internalAction({
  */
 export const createConnectAccountLink = action({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.id("users"),
     },
     handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
+        // SECURITY (Fase 1): identidad desde la sesión, nunca desde args.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, String(args.userId));
+
         // Obtenemos la cuenta de Connect del usuario
         const accountId: string | null = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: args.userId });
         
@@ -332,6 +384,7 @@ export const createConnectAccountLink = action({
  */
 export const executePayout = action({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.id("users"),
         amountInCents: v.number(),
     },
@@ -343,6 +396,11 @@ export const executePayout = action({
         arrivalDate: number | null;
         isMock: boolean;
     }> => {
+        // SECURITY (Fase 1): sin esto cualquiera podía disparar un payout
+        // hacia la cuenta Connect de cualquier usuario.
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, String(args.userId));
+
         // Delegamos a la accion de Connect V2 existente
         return await ctx.runAction(internal.connect.internalRequestInstantPayout, {
             actorId: args.userId,
@@ -681,11 +739,12 @@ export const internalCreateSubOrder = internalMutation({
 
 export const releaseEscrowFunds = action({
     args: {
+        sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.userId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         // Fetch order info via internal query
@@ -795,9 +854,12 @@ export const internalConfirmOrderEscrow = internalMutation({
 });
 
 export const adminForceReleaseEscrow = action({
-    args: { orderId: v.id("orders") },
+    args: {
+        sessionToken: v.optional(v.string()),
+        orderId: v.id("orders"),
+    },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== "admin" && actor.role !== "developer") {
             throw new Error("No autorizado");
         }
@@ -840,9 +902,12 @@ export const adminForceReleaseEscrow = action({
 });
 
 export const adminRefundEscrow = action({
-    args: { orderId: v.id("orders") },
+    args: {
+        sessionToken: v.optional(v.string()),
+        orderId: v.id("orders"),
+    },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== "admin" && actor.role !== "developer") {
             throw new Error("No autorizado");
         }

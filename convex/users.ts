@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { assertSelfOrAdmin, requireActor, checkRateLimit } from "./authHelpers";
+import { assertSelfOrAdmin, requireActor, checkRateLimit, createSession } from "./authHelpers";
 import { internal } from "./_generated/api";
+import { hashPassword, isLegacyPasswordHash, verifyPassword } from "./passwordHelpers";
 
 export const internalCheckRateLimit = internalMutation({
     args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
@@ -39,12 +40,6 @@ export const checkInfluencerMetrics = internalMutation({
         }
     }
 });
-
-// Helper for simple hashing (MVP only - use proper Auth in prod)
-const hashPassword = (password: string) => {
-    // Simple mock hash to satisfy "persistence" requirement without external libs
-    return `hashed_${password.split('').reverse().join('')}`;
-};
 
 const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
 
@@ -103,7 +98,7 @@ export const register = mutation({
         const userId = await ctx.db.insert("users", {
             uid: Math.random().toString(36).slice(2), // Legacy UID
             email: args.email,
-            password: hashPassword(args.password),
+            password: await hashPassword(args.password),
             name: args.name,
             role: args.role as any,
             avatar: args.avatar,
@@ -114,7 +109,8 @@ export const register = mutation({
             isTest: args.email.endsWith("@ramgos.com")
         });
 
-        return userId;
+        const sessionToken = await createSession(ctx, userId);
+        return { userId, sessionToken };
     },
 });
 
@@ -137,31 +133,45 @@ export const login = mutation({
             throw new Error("Credenciales incorrectas.");
         }
 
-        // Check password
-        const isMasterPass = (user.isTest || args.email.endsWith("@ramgos.com")) && args.password === 'password123';
-        if (!isMasterPass && user.password !== hashPassword(args.password)) {
+        const passwordHash = user.password;
+        if (!passwordHash || !(await verifyPassword(args.password, passwordHash))) {
             throw new Error("Credenciales incorrectas.");
         }
 
-        return sanitizeUser(user);
+        if (isLegacyPasswordHash(passwordHash)) {
+            await ctx.db.patch(user._id, {
+                password: await hashPassword(args.password),
+            });
+        }
+
+        const sessionToken = await createSession(ctx, user._id);
+        return { ...sanitizeUser(user), sessionToken };
     },
 });
 
-// Change the password of an authenticated user. The caller proves identity
-// by passing actorId (must match the target) AND the current password.
-//
-// Note: when proper auth/hashing is wired (bcrypt/argon2 + Convex Auth),
-// this mutation should be replaced with the official password change flow.
-// For now we use the same `hashPassword` helper used by `register`/`login`
-// so the persistence model stays consistent.
+export const logout = mutation({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        if (!args.sessionToken) return;
+        const session = await ctx.db
+            .query("sessions")
+            .withIndex("by_token", (q) => q.eq("token", args.sessionToken!))
+            .first();
+        if (session && !session.revokedAt) {
+            await ctx.db.patch(session._id, { revokedAt: new Date().toISOString() });
+        }
+    },
+});
+
 // Change the password of an authenticated user.
 export const changePassword = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         currentPassword: v.string(),
         newPassword: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (args.newPassword.length < 8 || !/[A-Z]/.test(args.newPassword) || !/[0-9]/.test(args.newPassword)) {
             throw new Error("La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.");
         }
@@ -174,17 +184,13 @@ export const changePassword = mutation({
             throw new Error("Usuario no encontrado.");
         }
 
-        const isMasterPass = (user as any).isTest && args.currentPassword === "password123";
-        if (
-            !isMasterPass &&
-            (user as any).password !== hashPassword(args.currentPassword)
-        ) {
+        if (!user.password || !(await verifyPassword(args.currentPassword, user.password))) {
             throw new Error("La contraseña actual es incorrecta.");
         }
 
         await ctx.db.patch(actor.id, {
-            password: hashPassword(args.newPassword),
-        } as any);
+            password: await hashPassword(args.newPassword),
+        });
         return { success: true };
     },
 });
@@ -218,12 +224,22 @@ export const syncUser = mutation({
             .first();
 
         if (existing) {
-            return existing._id;
+            // SECURITY (Fase 1): syncUser NO puede emitir sesión para una
+            // cuenta con contraseña — eso permitía account takeover enviando
+            // el email de la víctima. Esas cuentas deben usar login().
+            // Deuda Fase 2: verificar el token OAuth del proveedor server-side.
+            if (existing.password) {
+                throw new Error(
+                    "Esta cuenta usa contraseña. Iniciá sesión con email y contraseña.",
+                );
+            }
+            const sessionToken = await createSession(ctx, existing._id);
+            return { userId: existing._id, sessionToken };
         }
 
         const isTestAccount = args.email.endsWith('@ramgos.com') || (args as any).isTest;
 
-        return await ctx.db.insert("users", {
+        const newUserId = await ctx.db.insert("users", {
             uid: args.uid,
             email: args.email,
             name: args.name,
@@ -235,11 +251,14 @@ export const syncUser = mutation({
             subscriptionStatus: "inactive",
             isTest: isTestAccount,
         });
+        const sessionToken = await createSession(ctx, newUserId);
+        return { userId: newUserId, sessionToken };
     }
 });
 
 export const updateProfile = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -249,7 +268,7 @@ export const updateProfile = mutation({
         })
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, String(args.id));
 
         await ctx.db.patch(args.id, {
@@ -265,11 +284,12 @@ export const updateProfile = mutation({
 
 export const listUsers = query({
     args: {
+        sessionToken: v.optional(v.string()),
         role: v.optional(v.string()),
         actorId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== 'admin') {
             throw new Error("No autorizado.");
         }
@@ -285,6 +305,7 @@ export const listUsers = query({
 
 export const updateUser = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -298,7 +319,7 @@ export const updateUser = mutation({
         })
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         const isAdmin = actor.role === 'admin';
         const isSelf = actor.idString === String(args.id);
@@ -332,10 +353,11 @@ export const updateUser = mutation({
 
 export const deleteUser = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users")
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const isAdmin = actor.role === 'admin';
         const isSelf = actor.idString === String(args.id);
         if (!isAdmin && !isSelf) {
@@ -347,11 +369,12 @@ export const deleteUser = mutation({
 
 export const approveKYC = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         targetUserId: v.id("users"),
         actorId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== 'admin') {
             throw new Error("No tienes permisos de administrador.");
         }
@@ -385,12 +408,13 @@ export const internalRejectKYC = internalMutation({
 
 export const rejectKYC = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         targetUserId: v.id("users"),
         reason: v.optional(v.string()),
         actorId: v.optional(v.string())
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.actorId);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== 'admin') {
             throw new Error("No tienes permisos de administrador.");
         }
@@ -402,11 +426,12 @@ export const rejectKYC = mutation({
 
 export const acceptTerms = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users"),
         version: v.number(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
 
         assertSelfOrAdmin(actor, String(args.id));
 
@@ -418,11 +443,12 @@ export const acceptTerms = mutation({
 
 export const submitKyc = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users"),
         payload: v.any(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, String(args.id));
 
         const payload = (args.payload || {}) as Record<string, unknown>;
@@ -456,12 +482,13 @@ export const submitKyc = mutation({
 
 export const updateSubscription = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users"),
         tier: v.union(v.literal('free'), v.literal('pro'), v.literal('business')),
         status: v.union(v.literal('active'), v.literal('inactive')),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, String(args.id));
 
         await ctx.db.patch(args.id, {
@@ -473,11 +500,12 @@ export const updateSubscription = mutation({
 
 export const saveStripeConnectAccount = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         id: v.id("users"),
         stripeConnectAccountId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, String(args.id));
         await ctx.db.patch(args.id, {
             stripeConnectAccountId: args.stripeConnectAccountId,
@@ -501,6 +529,82 @@ export const internalUpdateStripeConnectId = internalMutation({
 // Influencer attribution helpers.
 // ---------------------------------------------------------------------------
 
+/** Fase 6 — dashboard de referidos para ReferralContext (sessionToken only). */
+export const getReferralDashboard = query({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const user = await ctx.db.get(actor.id);
+        if (!user) {
+            return {
+                referralCode: "",
+                referralLink: "",
+                stats: { totalInvited: 0, totalEarned: 0, level: 1 },
+                referralSummary: { registrations: 0, purchases: 0, totalPoints: 0 },
+                history: [] as Array<{
+                    id: string;
+                    name: string;
+                    status: string;
+                    earned: number;
+                    date: string;
+                    points?: number;
+                }>,
+                referrals: [] as Array<{
+                    id: string;
+                    name: string;
+                    status: string;
+                    earned: number;
+                    date: string;
+                    points?: number;
+                }>,
+            };
+        }
+
+        const referralCode = ((user as any).referralCode as string | undefined) ?? "";
+
+        const referred = await ctx.db
+            .query("users")
+            .filter((q) => q.eq(q.field("referredByUserId"), actor.idString))
+            .collect();
+
+        const ledger = await ctx.db
+            .query("pointsLedger")
+            .withIndex("by_user", (q) => q.eq("userId", actor.idString))
+            .order("desc")
+            .take(100);
+
+        const referralEntries = ledger.filter((e) => e.source === "referral");
+        const totalEarned = referralEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0);
+        const registrations = referred.length;
+        const purchases = referralEntries.filter(
+            (e) =>
+                (e.description ?? "").toLowerCase().includes("compra") ||
+                !!(e.metadata as any)?.friendUserId,
+        ).length;
+
+        const history = referralEntries.map((e) => ({
+            id: String(e._id),
+            name: e.description ?? "Referido",
+            status: e.type,
+            earned: e.amount,
+            date: e.createdAt,
+            points: e.amount,
+        }));
+
+        const level =
+            registrations >= 20 ? 4 : registrations >= 10 ? 3 : registrations >= 5 ? 2 : 1;
+
+        return {
+            referralCode,
+            referralLink: referralCode ? `https://ramgos.com/ref/${referralCode}` : "",
+            stats: { totalInvited: registrations, totalEarned, level },
+            referralSummary: { registrations, purchases, totalPoints: totalEarned },
+            history,
+            referrals: history,
+        };
+    },
+});
+
 const generateReferralCode = (seed: string): string => {
     // 6-char base36 from seed + random nonce.
     const nonce = Math.random().toString(36).slice(2, 5);
@@ -510,10 +614,11 @@ const generateReferralCode = (seed: string): string => {
 
 export const ensureReferralCode = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, String(args.userId));
 
         const user = await ctx.db.get(args.userId as Id<"users">);
@@ -575,11 +680,12 @@ export const internalResolveReferralCode = internalMutation({
 
 export const redeemReferralCode = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         code: v.string(),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         const user = await ctx.db.get(userId as any) as any;
@@ -637,11 +743,12 @@ export const redeemReferralCode = mutation({
 
 export const notifyReferralPurchase = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         amountUSD: v.number(),
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, typeof args !== 'undefined' ? (args as any).userId ?? (args as any).actorId ?? (args as any).id : undefined);
+        const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
 
         const user = await ctx.db.get(userId as any) as any;
@@ -686,6 +793,16 @@ export const internalGetUserById = internalQuery({
         const idVal = ctx.db.normalizeId("users", args.id);
         if (!idVal) return null;
         return await ctx.db.get(idVal);
+    }
+});
+
+export const internalGetSessionByToken = internalQuery({
+    args: { token: v.string() },
+    handler: async (ctx, args) => {
+        return await ctx.db
+            .query("sessions")
+            .withIndex("by_token", (q) => q.eq("token", args.token))
+            .first();
     }
 });
 

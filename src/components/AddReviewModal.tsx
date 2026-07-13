@@ -23,7 +23,7 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { show } = useToast();
 
     const addReview = useMutation(api.reviews.addReview);
@@ -42,7 +42,7 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
                 listingId,
                 rating,
                 comment,
-                userId: user.id as string,
+                sessionToken, userId: user.id as string,
             });
             setRating(0);
             setComment('');

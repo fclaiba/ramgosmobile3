@@ -24,7 +24,7 @@ import { api } from '../../../convex/_generated/api';
 
 export default function AddEditProductScreen({ navigation }: any) {
     const { createProduct } = useMarketplace();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { show } = useToast();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -77,7 +77,7 @@ export default function AddEditProductScreen({ navigation }: any) {
             const uri = result.assets[0].uri;
             const mime = result.assets[0].mimeType ?? 'image/jpeg';
             const uploadUrl = await generateUploadUrl({
-                actorId: user?.id as any,
+                sessionToken, actorId: user?.id as any,
             });
             const blob = await (await fetch(uri)).blob();
             const uploadRes = await fetch(uploadUrl, {

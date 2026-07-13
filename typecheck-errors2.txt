@@ -1,0 +1,298 @@
+﻿
+> ramgos-mobile@1.0.0 typecheck
+> tsc -p tsconfig.check.json --noEmit
+
+src/components/figma/ImageWithFallback.tsx(15,35): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/games/DailyChallenges.tsx(83,34): error TS7006: Parameter 'challenge' implicitly has an 'any' type.
+src/components/games/DailyChallenges.tsx(83,45): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/components/games/DinoGame.tsx(225,13): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/games/DuckHunt.tsx(142,9): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/games/FruitCatcher.tsx(285,9): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/games/MemoryGame.tsx(224,9): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/games/MemoryGame.tsx(272,17): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/games/MemoryGame.tsx(303,17): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/ItemDetailView.tsx(186,38): error TS18048: 'product.seller' is possibly 'undefined'.
+src/components/ItemDetailView.tsx(249,59): error TS2339: Property 'responseTimeHours' does not exist on type '{ id: string; name: string; type?: string | undefined; rating?: number | undefined; }'.
+src/components/ItemDetailView.tsx(250,112): error TS2339: Property 'responseTimeHours' does not exist on type '{ id: string; name: string; type?: string | undefined; rating?: number | undefined; }'.
+src/components/ItemDetailView.tsx(268,71): error TS18046: 'shippingProfile.weightKg' is of type 'unknown'.
+src/components/ItemDetailView.tsx(280,87): error TS2339: Property 'length' does not exist on type '{}'.
+src/components/ItemDetailView.tsx(280,128): error TS2339: Property 'width' does not exist on type '{}'.
+src/components/ItemDetailView.tsx(280,168): error TS2339: Property 'height' does not exist on type '{}'.
+src/components/marketplace/MapView.native.tsx(249,37): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/marketplace/MapView.native.tsx(276,37): error TS2322: Type 'number' is not assignable to type 'Timeout'.
+src/components/pet/MiMascotaView.tsx(70,92): error TS2339: Property 'petConfig' does not exist on type 'RewardsContextType'.
+src/components/pet/MiMascotaView.tsx(70,103): error TS2339: Property 'unlockAccessory' does not exist on type 'RewardsContextType'.
+src/components/pet/MiMascotaView.tsx(70,120): error TS2339: Property 'equipAccessory' does not exist on type 'RewardsContextType'.
+src/components/PointsManager.tsx(33,9): error TS2339: Property 'quarterlyMission' does not exist on type 'RewardsContextType'.
+src/components/social/CreateInstagramPost.tsx(79,39): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/CreateInstagramPost.tsx(103,54): error TS18046: 'currentUser.name' is of type 'unknown'.
+src/components/social/CreatePost.tsx(75,39): error TS2554: Expected 1 arguments, but got 3.
+src/components/social/CreatePost.tsx(77,33): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/CreatePost.tsx(105,46): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+src/components/social/CreatePost.tsx(107,55): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type '{}' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type '{}' is not assignable to type 'ReactNode'.
+src/components/social/CreateStory.tsx(109,21): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/components/social/InstagramPost.tsx(28,27): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/InstagramPost.tsx(30,18): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/components/social/InstagramPost.tsx(36,24): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ImageProps): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+  Overload 2 of 2, '(props: ImageProps, context: any): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+src/components/social/InstagramPost.tsx(47,32): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ImageProps): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+  Overload 2 of 2, '(props: ImageProps, context: any): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+src/components/social/InstagramPost.tsx(53,69): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/InstagramPost.tsx(57,70): error TS18046: 'post.comments' is of type 'unknown'.
+src/components/social/InstagramPost.tsx(63,58): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/InstagramPost.tsx(64,70): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'unknown' is not assignable to parameter of type 'string | number'.
+src/components/social/InstagramPost.tsx(71,17): error TS2322: Type 'unknown' is not assignable to type 'string'.
+src/components/social/InstagramPost.tsx(78,17): error TS2322: Type '{}' is not assignable to type 'string'.
+src/components/social/Post.tsx(22,31): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/Post.tsx(29,31): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/Post.tsx(30,23): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/Post.tsx(47,47): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/Post.tsx(66,10): error TS2769: No overload matches this call.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/Post.tsx(68,86): error TS18046: 'post.user' is of type 'unknown'.
+src/components/social/Post.tsx(70,43): error TS18046: 'post.user' is of type 'unknown'.
+src/components/social/Post.tsx(71,42): error TS18046: 'post.user' is of type 'unknown'.
+src/components/social/Post.tsx(74,56): error TS18046: 'post.user' is of type 'unknown'.
+src/components/social/Post.tsx(75,56): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/Post.tsx(83,42): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/Post.tsx(85,41): error TS2339: Property 'length' does not exist on type '{}'.
+src/components/social/Post.tsx(87,45): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+src/components/social/Post.tsx(94,72): error TS2339: Property 'image' does not exist on type '{}'.
+src/components/social/Post.tsx(99,57): error TS2339: Property 'name' does not exist on type '{}'.
+src/components/social/Post.tsx(102,57): error TS2339: Property 'type' does not exist on type '{}'.
+src/components/social/Post.tsx(107,58): error TS2339: Property 'price' does not exist on type '{}'.
+src/components/social/Post.tsx(112,90): error TS2339: Property 'id' does not exist on type '{}'.
+src/components/social/Post.tsx(112,94): error TS2554: Expected 1 arguments, but got 2.
+src/components/social/Post.tsx(112,118): error TS2339: Property 'referralLink' does not exist on type '{}'.
+src/components/social/Post.tsx(118,60): error TS2345: Argument of type '{ id: any; name: any; price: any; image: any; type: string; sellerId: any; sellerName: any; referralCode: any; }' is not assignable to parameter of type 'CartItem'.
+  Property 'quantity' is missing in type '{ id: any; name: any; price: any; image: any; type: string; sellerId: any; sellerName: any; referralCode: any; }' but required in type 'CartItem'.
+src/components/social/Post.tsx(119,69): error TS2339: Property 'id' does not exist on type '{}'.
+src/components/social/Post.tsx(120,71): error TS2339: Property 'name' does not exist on type '{}'.
+src/components/social/Post.tsx(121,72): error TS2339: Property 'price' does not exist on type '{}'.
+src/components/social/Post.tsx(122,72): error TS2339: Property 'image' does not exist on type '{}'.
+src/components/social/Post.tsx(124,51): error TS18046: 'post.user' is of type 'unknown'.
+src/components/social/Post.tsx(125,53): error TS18046: 'post.user' is of type 'unknown'.
+src/components/social/Post.tsx(126,79): error TS2339: Property 'referralLink' does not exist on type '{}'.
+src/components/social/Post.tsx(142,90): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/Post.tsx(146,58): error TS18046: 'post.comments' is of type 'unknown'.
+src/components/social/Post.tsx(159,17): error TS2322: Type 'unknown' is not assignable to type 'string'.
+src/components/social/Post.tsx(165,17): error TS2322: Type '{}' is not assignable to type 'string'.
+src/components/social/PostCommentsModal.tsx(106,46): error TS18046: 'currentUser.name' is of type 'unknown'.
+src/components/social/StoriesBar.tsx(38,38): error TS18048: 'story.items.length' is possibly 'undefined'.
+src/components/social/StoriesBar.tsx(39,73): error TS2339: Property 'viewed' does not exist on type '{ id: string; duration: number; url?: string | undefined; }'.
+src/components/social/StoriesBar.tsx(51,73): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoriesBar.tsx(52,72): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoriesBar.tsx(60,73): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoriesBar.tsx(61,72): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoriesBar.tsx(67,80): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoryViewer.tsx(50,20): error TS18048: 'story.items.length' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(52,41): error TS18048: 'story.items' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(119,22): error TS18048: 'story.items' is possibly 'undefined'.
+src/components/social/StoryViewer.tsx(144,53): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoryViewer.tsx(145,52): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoryViewer.tsx(147,62): error TS2339: Property 'user' does not exist on type 'Story'.
+src/components/social/StoryViewer.tsx(149,51): error TS2339: Property 'timestamp' does not exist on type '{ id: string; duration: number; url?: string | undefined; }'.
+src/components/social/StoryViewer.tsx(306,31): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/social/StoryViewer.tsx(334,35): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/social/UserListItem.tsx(18,36): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/UserListItem.tsx(23,26): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/UserListItem.tsx(25,24): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/UserListItem.tsx(31,20): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ImageProps): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+  Overload 2 of 2, '(props: ImageProps, context: any): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+src/components/social/UserListItem.tsx(34,47): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserListItem.tsx(35,21): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ViewProps): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserListItem.tsx(37,48): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(50,26): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/UserProfile.tsx(53,24): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/components/social/UserProfile.tsx(76,39): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ViewProps): View', gave the following error.
+    Type 'unknown' is not assignable to type 'Key | null | undefined'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/social/UserProfile.tsx(92,39): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ViewProps): View', gave the following error.
+    Type 'unknown' is not assignable to type 'Key | null | undefined'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/social/UserProfile.tsx(108,51): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/social/UserProfile.tsx(109,44): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ImageProps): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+  Overload 2 of 2, '(props: ImageProps, context: any): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+src/components/social/UserProfile.tsx(112,96): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(116,80): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(138,54): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(179,50): error TS18046: 'user.name' is of type 'unknown'.
+src/components/social/UserProfile.tsx(202,62): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(203,29): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ViewProps): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(205,56): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(206,50): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(214,64): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(222,64): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(233,55): error TS2322: Type 'unknown' is not assignable to type 'Key | null | undefined'.
+src/components/social/UserProfile.tsx(236,56): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ImageProps): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+  Overload 2 of 2, '(props: ImageProps, context: any): Image', gave the following error.
+    Type '{ uri: unknown; }' is not assignable to type 'ImageSourcePropType | undefined'.
+      Types of property 'uri' are incompatible.
+        Type 'unknown' is not assignable to type 'string | undefined'.
+src/components/social/UserProfile.tsx(239,95): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: TextProps): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: TextProps, context: any): Text', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(256,25): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ViewProps): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type 'unknown' is not assignable to type 'ReactNode'.
+src/components/social/UserProfile.tsx(290,36): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/components/ui/input.tsx(8,6): error TS2339: Property 'className' does not exist on type 'TextInputProps'.
+src/components/ui/separator.tsx(16,11): error TS2339: Property 'className' does not exist on type 'ViewProps & { orientation?: "horizontal" | "vertical" | undefined; decorative?: boolean | undefined; }'.
+src/components/ui/skeleton.tsx(6,5): error TS2339: Property 'className' does not exist on type 'ViewProps'.
+src/hooks/useUserLocation.ts(5,55): error TS2694: Namespace '"expo-location"' has no exported member 'LocationObject'.
+src/hooks/useUserLocation.ts(31,32): error TS2694: Namespace '"expo-location"' has no exported member 'LocationObject'.
+src/payments/components/AnimatedCreditCard.tsx(141,23): error TS2551: Property 'absoluteFillObject' does not exist on type 'typeof StyleSheet'. Did you mean 'absoluteFill'?
+src/screens/business/BusinessQRScannerScreen.tsx(89,70): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'SetStateAction<string>'.
+  Type 'undefined' is not assignable to type 'SetStateAction<string>'.
+src/screens/BusinessCreateScreen.tsx(131,21): error TS2322: Type 'BranchInput[]' is not assignable to type 'BranchOption[]'.
+  Type 'BranchInput' is not assignable to type 'BranchOption'.
+    Types of property 'id' are incompatible.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/screens/finance/WalletScreen.tsx(93,78): error TS2367: This comparison appears to be unintentional because the types '"credit" | "debit" | "escrow" | "payment" | "payout" | "deposit" | "withdrawal"' and '"PAYOUT_SELLER"' have no overlap.
+src/screens/finance/WalletScreen.tsx(93,109): error TS2367: This comparison appears to be unintentional because the types '"credit" | "debit" | "escrow" | "payment" | "payout" | "deposit" | "withdrawal"' and '"COMMISSION_INFLUENCER"' have no overlap.
+src/screens/finance/WalletScreen.tsx(94,34): error TS2367: This comparison appears to be unintentional because the types '"credit" | "debit" | "escrow" | "payment" | "payout" | "deposit" | "withdrawal"' and '"PAYMENT_IN"' have no overlap.
+src/screens/finance/WalletScreen.tsx(102,70): error TS2339: Property 'toLocaleDateString' does not exist on type 'string'.
+src/screens/finance/WalletScreen.tsx(102,95): error TS2367: This comparison appears to be unintentional because the types '"pending" | "completed" | "disputed" | "failed"' and '"PENDING"' have no overlap.
+src/screens/finance/WalletScreen.tsx(104,69): error TS2367: This comparison appears to be unintentional because the types '"pending" | "completed" | "disputed" | "failed"' and '"PENDING"' have no overlap.
+src/screens/InfluencerDashboardScreen.tsx(194,29): error TS18048: 'wallet.transactions' is possibly 'undefined'.
+src/screens/InfluencerDashboardScreen.tsx(195,29): error TS2367: This comparison appears to be unintentional because the types '"escrow" | "payment" | "payout" | "deposit" | "withdrawal"' and '"credit"' have no overlap.
+src/screens/KYCScreen.tsx(98,21): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/screens/KYCScreen.tsx(100,21): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/screens/marketplace/AddEditProductScreen.tsx(151,25): error TS2339: Property 'error' does not exist on type '{ success: boolean; productId?: string | undefined; }'.
+src/screens/marketplace/ProductDetailScreen.tsx(40,13): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/screens/marketplace/ProductDetailScreen.tsx(46,13): error TS2322: Type '{}' is not assignable to type 'number'.
+src/screens/marketplace/ProductDetailScreen.tsx(47,13): error TS2322: Type 'unknown' is not assignable to type '{ length: number; width: number; height: number; } | undefined'.
+src/screens/marketplace/ProductDetailScreen.tsx(110,62): error TS2339: Property 'damageDescription' does not exist on type 'Product'.
+src/screens/marketplace/ProductDetailScreen.tsx(116,71): error TS2339: Property 'damageDescription' does not exist on type 'Product'.
+src/screens/marketplace/ProductDetailScreen.tsx(131,63): error TS2339: Property 'avatar' does not exist on type '{ id: string; name: string; type?: string | undefined; rating?: number | undefined; }'.
+src/screens/marketplace/ProductDetailScreen.tsx(134,136): error TS2339: Property 'responseTimeHours' does not exist on type '{ id: string; name: string; type?: string | undefined; rating?: number | undefined; }'.
+src/screens/marketplace/SellerWalletScreen.tsx(164,45): error TS18048: 'o.escrow' is possibly 'undefined'.
+src/screens/ReferralsScreen.tsx(100,80): error TS2339: Property 'user' does not exist on type 'ReferralHistoryItem'.
+src/screens/ReferralsScreen.tsx(101,82): error TS2339: Property 'action' does not exist on type 'ReferralHistoryItem'.
+src/screens/ReferralsScreen.tsx(104,75): error TS2339: Property 'points' does not exist on type 'ReferralHistoryItem'.
+src/utils/formatters.ts(39,9): error TS2353: Object literal may only specify known properties, and 'draft' does not exist in type 'Record<"active" | "paused" | "expired" | "scheduled", { background: string; color: string; label: string; }>'.

@@ -26,13 +26,11 @@ export class RaffleService {
         
         try {
             // Apply a "challenge" or "game" points event in convex to represent the raffle entry
-            await convexClient.mutation(api.economy.applyPointsEvent, {
+            await convexClient.mutation(api.economy.addPoints, {
                 userId,
-                eventKey: `raffle_entry_${raffleId}_${Date.now()}`,
-                type: "challenge",
-                source: "game",
-                amount: finalEntries, // we log entries as points or simply track participation
+                amount: finalEntries,
                 description: `Entered raffle ${raffleId} with ${finalEntries} entries`,
+                source: 'game',
             });
             return { success: true, entries: finalEntries };
         } catch (error) {

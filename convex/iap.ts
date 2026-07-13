@@ -117,6 +117,7 @@ export const internalGetReceiptByPurchaseToken = internalQuery({
 // false on subsequent calls so the webhook handler can no-op.
 export const internalRecordIapNotification = internalMutation({
     args: {
+        sessionToken: v.optional(v.string()),
         platform: v.union(v.literal("ios"), v.literal("android")),
         notificationUUID: v.string(),
         notificationType: v.string(),

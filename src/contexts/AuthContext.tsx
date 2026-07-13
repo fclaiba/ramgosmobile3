@@ -11,6 +11,7 @@ import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { storage } from '../services/auth/storageAdapter';
+import { sessionTokenStore } from '../services/auth/sessionTokenStore';
 
 export const CURRENT_SESSION_KEY = '@ramgos/auth/current-session';
 
@@ -76,6 +77,8 @@ export interface SessionRecord {
     lastActiveAt: number;
     expiresAt: number;
     refreshExpiresAt: number;
+    /** FASE 1: token opaco emitido por el server (tabla sessions). */
+    sessionToken?: string;
 }
 
 export interface SignUpInput {
@@ -128,6 +131,8 @@ interface AuthContextType {
     isProcessing: boolean;
     user: PublicUser | null;
     session: SessionRecord | null;
+    /** FASE 1: token de sesión server-side para mutaciones sensibles. */
+    sessionToken?: string;
     deviceId?: string;
     pendingVerification?: PendingVerificationState;
     signUpWithEmail: (payload: SignUpInput) => Promise<SignUpResult>;
@@ -210,7 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const removePushTokenMutation = useMutation(api.notifications.removePushToken);
 
     // Helper to satisfy strict SessionRecord type
-    const createSessionMock = (userId: string): SessionRecord => ({
+    const createSessionMock = (userId: string, sessionToken?: string): SessionRecord => ({
         id: 'mock_session_' + Date.now(),
         userId,
         deviceId: 'backend-device',
@@ -220,10 +225,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastActiveAt: Date.now(),
         expiresAt: Date.now() + 86400000,
         refreshExpiresAt: Date.now() + 86400000 * 7,
+        sessionToken,
     });
 
     // Convex Mutations
     const loginMutation = useMutation(api.users.login);
+    const logoutMutation = useMutation(api.users.logout);
     const registerMutation = useMutation(api.users.register);
     const syncUserMutation = useMutation(api.users.syncUser);
     const submitKycMutation = useMutation(api.users.submitKyc);
@@ -341,19 +348,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [userData, state.session?.userId, state.user]);
 
+    // FASE 3: publicar el sessionToken para consumidores fuera del árbol de
+    // AuthProvider (CartContext envuelve a AuthProvider en App.tsx).
+    useEffect(() => {
+        sessionTokenStore.set(state.session?.sessionToken);
+    }, [state.session?.sessionToken]);
 
     const signUpWithEmail = async (payload: SignUpInput) => {
         setIsProcessing(true);
         try {
             const role = payload.role ?? 'consumer';
             
-            const userId = await registerMutation({
+            const registerResult: any = await registerMutation({
                 email: payload.email,
                 password: payload.password,
                 name: payload.name,
                 role: role,
                 avatar: payload.avatar
             });
+            const userId = registerResult?.userId ?? registerResult;
+            const registerSessionToken: string | undefined = registerResult?.sessionToken;
 
             const user: PublicUser = {
                 id: userId,
@@ -374,7 +388,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 subscriptionTier: 'free',
             };
 
-            const session = createSessionMock(user.id);
+            const session = createSessionMock(user.id, registerSessionToken);
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
 
             setState(prev => ({
@@ -436,7 +450,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 subscriptionTier: result.subscriptionTier || 'free',
             };
 
-            const session = createSessionMock(user.id);
+            const session = createSessionMock(user.id, (result as any).sessionToken);
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
 
             setState(prev => ({
@@ -522,6 +536,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = async (force = false) => {
         try {
+            // FASE 1: revoke server-side session (best-effort).
+            if (state.session?.sessionToken) {
+                logoutMutation({ sessionToken: state.session.sessionToken }).catch(() => { });
+            }
             // Attempt to unregister push token
             if (state.user?.id) {
                 try {
@@ -672,15 +690,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const role = (roleOverride || 'consumer') as UserRole;
             const uid = `${provider}_${profile?.providerUserId || Date.now()}`;
 
-            const userId = await syncUserMutation({
+            const syncResult: any = await syncUserMutation({
                 uid,
                 email,
                 name,
                 role,
                 avatar: profile?.avatar,
             });
+            const userId = syncResult?.userId ?? syncResult;
 
-            const session = createSessionMock(userId);
+            const session = createSessionMock(userId, syncResult?.sessionToken);
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
 
             const user: PublicUser = {
@@ -810,6 +829,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isProcessing,
             user: state.user,
             session: state.session,
+            sessionToken: state.session?.sessionToken,
             deviceId: 'backend-device',
             pendingVerification: undefined,
             signUpWithEmail,

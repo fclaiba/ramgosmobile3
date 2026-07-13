@@ -69,7 +69,7 @@ const EscrowContext = createContext<EscrowContextValue>({
 });
 
 export function EscrowProvider({ children }: { children: React.ReactNode }) {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { isTest } = usePaymentMode();
 
     const [isOpen, setIsOpen] = useState(false);
@@ -77,7 +77,7 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
     const [role, setRole] = useState<'buyer' | 'seller'>('buyer');
     const [phase, setPhase] = useState<EscrowPhase>('status');
 
-    const orders = useQuery(api.orders.getMyOrders, user?.id ? { userId: user.id } : "skip") ?? [];
+    const orders = useQuery(api.orders.getMyOrders, user?.id ? { sessionToken, userId: user.id } : "skip") ?? [];
     const sellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id ? { sellerId: user.id } : "skip") ?? [];
 
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
@@ -86,17 +86,17 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
 
     const confirmReceipt = async (orderId: string) => {
         if (!user?.id) throw new Error('Sesión no válida');
-        await confirmReceiptMutation({ orderId: orderId as any, userId: user.id });
+        await confirmReceiptMutation({ orderId: orderId as any, sessionToken, userId: user.id });
     };
 
     const openDispute = async (orderId: string, reason: string) => {
         if (!user?.id) throw new Error('Sesión no válida');
-        await openDisputeMutation({ orderId: orderId as any, reason, userId: user.id });
+        await openDisputeMutation({ orderId: orderId as any, reason, sessionToken, userId: user.id });
     };
 
     const releaseEscrow = async (orderId: string) => {
         if (!user?.id) throw new Error('Sesión no válida');
-        await releaseEscrowMutation({ orderId: orderId as any, userId: user.id });
+        await releaseEscrowMutation({ orderId: orderId as any, sessionToken, userId: user.id });
     };
 
     const openEscrow = (order?: any, r?: 'buyer' | 'seller') => {

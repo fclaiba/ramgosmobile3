@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import type { Product } from '../contexts/MarketplaceContext';
+
 export function useMarketplaceProducts(): any[] {
     const liveProducts = useQuery(api.listings.getFeed) ?? [];
 

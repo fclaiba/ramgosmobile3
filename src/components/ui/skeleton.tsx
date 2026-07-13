@@ -3,7 +3,6 @@ import { Animated, StyleSheet, View } from "react-native"
 import { useTheme } from '../../contexts/ThemeContext';
 
 function Skeleton({
-    className,
     ...props
 }: React.ComponentPropsWithoutRef<typeof View>) {
     const { colorScheme } = useTheme();

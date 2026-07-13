@@ -5,7 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 const Input = React.forwardRef<
     React.ElementRef<typeof TextInput>,
     React.ComponentPropsWithoutRef<typeof TextInput>
->(({ className, style, ...props }, ref) => {
+>(({ style, ...props }, ref) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);

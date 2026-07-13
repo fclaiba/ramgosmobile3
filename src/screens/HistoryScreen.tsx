@@ -159,7 +159,7 @@ export default function HistoryScreen({ navigation, route }: any) {
     const { width } = useWindowDimensions();
     const styles = getStyles(isDark, insets, width);
     const { show } = useToast();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { openEscrow } = useEscrow();
 
     const [activeTab, setActiveTab] = useState<HistoryTab>(route?.params?.tab || 'purchases');
@@ -175,10 +175,10 @@ export default function HistoryScreen({ navigation, route }: any) {
 
     const [isReleasingEscrow, setIsReleasingEscrow] = useState<Record<string, boolean>>({});
 
-    const orders = useQuery(api.orders.getMyOrders as any, user?.id ? { userId: user.id } : 'skip') || [];
+    const orders = useQuery(api.orders.getMyOrders as any, user?.id ? { sessionToken, userId: user.id } : 'skip') || [];
     const mySellerOrders = useQuery(api.orders.getOrdersBySeller as any, user?.id ? { sellerId: user.id } : 'skip') || [];
-    const payments = useQuery(api.finance.getPaymentsByUser as any, user?.id ? { userId: user.id } : 'skip') || [];
-    const myBonos = useQuery(api.bonos.getMyBonos as any, { userId: user?.id }) || [];
+    const payments = useQuery(api.finance.getPaymentsByUser as any, user?.id ? { sessionToken, userId: user.id } : 'skip') || [];
+    const myBonos = useQuery(api.bonos.getMyBonos as any, { sessionToken, userId: user?.id }) || [];
     const mySellerBonos = useQuery(api.bonos.getBonosBySeller as any, { sellerId: user?.id }) || [];
     const listings = useQuery(api.listings.getFeed) || [];
 
@@ -431,7 +431,7 @@ export default function HistoryScreen({ navigation, route }: any) {
         }
         setIsReleasingEscrow((prev) => ({ ...prev, [orderId]: true }));
         try {
-            await releaseEscrowFunds({ orderId: orderId as any, userId: user.id });
+            await releaseEscrowFunds({ orderId: orderId as any, sessionToken, userId: user.id });
             show('Pago liberado exitosamente al vendedor.', 'success');
         } catch (e: any) {
             show(e.message || 'Error al liberar el pago.', 'error');
@@ -449,7 +449,7 @@ export default function HistoryScreen({ navigation, route }: any) {
             show('Sesión no válida. Iniciá sesión nuevamente.', 'error');
             return;
         }
-        confirmReceiptMutation({ orderId: item.orderId as any, userId: user.id })
+        confirmReceiptMutation({ orderId: item.orderId as any, sessionToken, userId: user.id })
             .then(() => show('Entrega confirmada. El pago se liberará al vendedor', 'success'))
             .catch((err: any) => show(err.message ?? 'No pudimos confirmar la entrega', 'error'));
     };

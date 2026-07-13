@@ -161,7 +161,7 @@ export default function SellerWalletScreen({ navigation }: any) {
 
             {activeTab === 'sales' ? (
                 <FlatList
-                    data={sales.filter(o => o.escrow.state !== 'released')}
+                    data={sales.filter(o => o.escrow?.state !== 'released')}
                     renderItem={renderTransaction}
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 20) + 24 }}

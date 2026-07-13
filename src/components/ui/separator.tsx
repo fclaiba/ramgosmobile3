@@ -13,7 +13,7 @@ const Separator = React.forwardRef<
     }
 >(
     (
-        { className, orientation = "horizontal", decorative = true, ...props },
+        { orientation = "horizontal", decorative = true, ...props },
         ref
     ) => {
         const { colorScheme } = useTheme();

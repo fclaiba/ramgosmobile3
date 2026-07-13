@@ -1,11 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // PHASE 1: User Addresses Management
 
 export const addAddress = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         address: v.object({
             label: v.string(),
@@ -21,6 +22,9 @@ export const addAddress = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         // If this address is marked as default, unset other defaults
         if (args.address.isDefault) {
             const existingAddresses = await ctx.db
@@ -46,8 +50,11 @@ export const addAddress = mutation({
 });
 
 export const getMyAddresses = query({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         return await ctx.db
             .query("savedAddresses")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -56,7 +63,7 @@ export const getMyAddresses = query({
 });
 
 export const updateAddress = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         addressId: v.id("savedAddresses"),
         userId: v.string(), // For authorization
         updates: v.object({
@@ -73,6 +80,9 @@ export const updateAddress = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const address = await ctx.db.get(args.addressId);
         if (!address || address.userId !== args.userId) {
             throw new Error("No autorizado");
@@ -97,11 +107,14 @@ export const updateAddress = mutation({
 });
 
 export const deleteAddress = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         addressId: v.id("savedAddresses"),
         userId: v.string(),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const address = await ctx.db.get(args.addressId);
         if (!address || address.userId !== args.userId) {
             throw new Error("No autorizado");
@@ -115,6 +128,7 @@ export const deleteAddress = mutation({
 
 export const updatePreferences = mutation({
     args: {
+        sessionToken: v.optional(v.string()),
         userId: v.string(),
         preferences: v.object({
             language: v.optional(v.string()),
@@ -130,6 +144,9 @@ export const updatePreferences = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         // Check if preferences exist
         const existing = await ctx.db
             .query("userPreferences")
@@ -164,8 +181,11 @@ export const updatePreferences = mutation({
 });
 
 export const getPreferences = query({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const prefs = await ctx.db
             .query("userPreferences")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -196,12 +216,15 @@ export const getPreferences = query({
 // PHASE 1: Search History
 
 export const recordSearch = mutation({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         query: v.string(),
         filters: v.optional(v.any()),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         // Insert search
         await ctx.db.insert("searchHistory", {
             userId: args.userId,
@@ -227,11 +250,14 @@ export const recordSearch = mutation({
 });
 
 export const getSearchHistory = query({
-    args: {
+    args: { sessionToken: v.optional(v.string()),
         userId: v.string(),
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         return await ctx.db
             .query("searchHistory")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -241,8 +267,11 @@ export const getSearchHistory = query({
 });
 
 export const clearSearchHistory = mutation({
-    args: { userId: v.string() },
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
         const searches = await ctx.db
             .query("searchHistory")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))

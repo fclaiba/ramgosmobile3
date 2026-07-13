@@ -143,11 +143,12 @@ export default function SettingsScreen({ navigation }: any) {
                                     {isTest ? 'TEST (simulado)' : 'LIVE (real)'}
                                 </Text>
                             </View>
+                            {/* Fase 5: modo live deshabilitado hasta Bloque D — switch fijo en TEST. */}
                             <Switch
                                 value={isTest}
                                 onValueChange={() => {
                                     toggle();
-                                    show(isTest ? 'Pagos en modo LIVE (producción)' : 'Pagos en modo TEST (simulación)', 'info');
+                                    show('Pagos LIVE deshabilitados hasta el lanzamiento (solo modo TEST)', 'info');
                                 }}
                                 trackColor={{ false: '#10B981', true: '#F59E0B' }}
                                 thumbColor="#fff"

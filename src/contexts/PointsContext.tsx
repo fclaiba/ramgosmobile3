@@ -3,6 +3,8 @@ import { useAuth } from './AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
+// Opción A — puntos reales desde convex/economy.ts (parcialmente conectado en Fase 1b; completado Fase 6).
+
 export const DISCOUNT_TIERS = [
     { minPoints: 0,    label: 'Bronce', bonusMultiplier: 0, perks: ['Acceso básico'] },
     { minPoints: 100,  label: 'Plata',  bonusMultiplier: 0.05, perks: ['5% extra', 'Soporte prioritario'] },
@@ -61,16 +63,16 @@ const DEFAULT_CONTEXT = {
 const PointsContext = createContext<any>(null);
 
 export function PointsProvider({ children }: { children: React.ReactNode }) {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
 
     // Hooks SIEMPRE al mismo nivel — nunca después de un return condicional
     const economyState = useQuery(
         api.economy.getEconomyState,
-        user?.id ? { userId: user.id } : 'skip'
+        user?.id ? { sessionToken, userId: user.id } : 'skip'
     );
     const pointsHistory = useQuery(
         api.economy.getPointsHistory,
-        user?.id ? { userId: user.id } : 'skip'
+        user?.id ? { sessionToken, userId: user.id } : 'skip'
     );
     const initializeEconomy = useMutation(api.economy.initializeEconomy);
     const convertMutation = useMutation(api.economy.convertCoinsToPoints);
@@ -80,7 +82,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     // Initialize economy when user logs in and query returns null (no doc yet)
     React.useEffect(() => {
         if (user?.id && economyState === null) {
-            initializeEconomy({ userId: user.id }).catch(console.error);
+            initializeEconomy({ sessionToken, userId: user.id }).catch(console.error);
         }
     }, [user?.id, economyState, initializeEconomy]);
 
@@ -119,7 +121,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
 
     const convertCoinsToPoints = async (costInCoins: number) => {
         try {
-            await convertMutation({ userId: user.id, coinsToConvert: costInCoins });
+            await convertMutation({ sessionToken, userId: user.id, coinsToConvert: costInCoins });
         } catch (e) {
             console.error('Failed to convert coins:', e);
         }
@@ -127,7 +129,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
 
     const claimDailyReward = async (): Promise<boolean> => {
         try {
-            const result = await claimDailyMutation({ userId: user.id });
+            const result = await claimDailyMutation({ sessionToken, userId: user.id });
             return result?.success || false;
         } catch (e) {
             console.error('Failed to claim daily:', e);
@@ -143,7 +145,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
 
         try {
             await addPointsMutation({
-                userId: user.id,
+                sessionToken, userId: user.id,
                 amount: challenge.reward,
                 description: `Desafío: ${challenge.title}`,
                 source: 'bonus',

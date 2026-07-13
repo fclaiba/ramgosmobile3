@@ -17,8 +17,10 @@ export const BusinessLocationSearch = ({ onSelect }: Props) => {
     const styles = getStyles(isDark);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
-    const dbResults = useQuery(api.locations.search, { query: query.length > 2 ? query : "" });
-    const results = dbResults || [];
+    const dbResults = useQuery(api.locations.search, { query: query.length > 2 ? query : "" }) as
+        | Array<{ id: string; name: string; address: string }>
+        | undefined;
+    const results = dbResults ?? [];
 
     const handleSearch = (text: string) => {
         setQuery(text);
