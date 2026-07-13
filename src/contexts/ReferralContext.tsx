@@ -105,6 +105,7 @@ function useReferralsState(): ReferralContextValue {
             history: dashboard?.history ?? [],
             generateReferralLink,
             shareReferral,
+            // ponytail: dev-only button on ReferralsScreen — no backend simulate endpoint
             simulateReferral: () => {},
         };
     }, [

@@ -73,6 +73,19 @@ function useBusinessState() {
     ) ?? [];
 
     const updateProfileMutation = useMutation(api.users.updateProfile);
+    const createListingMutation = useMutation(api.listings.createListing);
+    const updateListingMutation = useMutation(api.listings.updateListing);
+
+    const mapCatalogStatus = (status?: string): CatalogItemInput['status'] =>
+        status === 'active' ? 'published' : status === 'paused' ? 'paused' : 'draft';
+
+    const mapUiStatusToListing = (
+        status?: CatalogItemInput['status'],
+    ): 'active' | 'paused' | undefined => {
+        if (status === 'published' || status === 'active') return 'active';
+        if (status === 'paused') return 'paused';
+        return undefined;
+    };
 
     const businessInfo = useMemo(
         () => ({
@@ -82,8 +95,8 @@ function useBusinessState() {
             description: businessUser?.bio || '',
             category: '',
             contactEmail: businessUser?.email || '',
-            phone: businessUser?.phoneNumber || '',
-            whatsapp: businessUser?.phoneNumber || '',
+            phone: '',
+            whatsapp: '',
             website: '',
             instagram: '',
             payout: {
@@ -144,7 +157,7 @@ function useBusinessState() {
                         category: l.category,
                         price: l.price,
                         stock: l.stock,
-                        status: l.status === 'active' ? 'active' : 'paused',
+                        status: mapCatalogStatus(l.status),
                         description: l.description,
                         image: l.image,
                     }),
@@ -176,8 +189,54 @@ function useBusinessState() {
         setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...branch } : b)));
     }, []);
 
-    const addCatalogItem = useCallback((_item: CatalogItemInput) => {}, []);
-    const updateCatalogItem = useCallback((_id: string | undefined, _item: Partial<CatalogItemInput>) => {}, []);
+    const addCatalogItem = useCallback(
+        (item: CatalogItemInput) => {
+            if (!sessionToken || !userId) return;
+            const listingStatus = mapUiStatusToListing(item.status);
+            createListingMutation({
+                sessionToken,
+                title: item.name,
+                description: item.description ?? '',
+                price: item.price,
+                type: 'product',
+                category: item.category,
+                stock: item.stock,
+                image: item.image,
+            })
+                .then((listingId) => {
+                    if (listingStatus === 'paused' && listingId) {
+                        return updateListingMutation({
+                            sessionToken,
+                            id: listingId as Id<'listings'>,
+                            updates: { status: 'paused' },
+                        });
+                    }
+                })
+                .catch(console.error);
+        },
+        [createListingMutation, sessionToken, updateListingMutation, userId],
+    );
+
+    const updateCatalogItem = useCallback(
+        (id: string | undefined, item: Partial<CatalogItemInput>) => {
+            if (!sessionToken || !id) return;
+            const updates: Record<string, unknown> = {};
+            if (item.name !== undefined) updates.title = item.name;
+            if (item.description !== undefined) updates.description = item.description;
+            if (item.price !== undefined) updates.price = item.price;
+            if (item.stock !== undefined) updates.stock = item.stock;
+            if (item.category !== undefined) updates.category = item.category;
+            if (item.image !== undefined) updates.image = item.image;
+            const listingStatus = mapUiStatusToListing(item.status);
+            if (listingStatus !== undefined) updates.status = listingStatus;
+            updateListingMutation({
+                sessionToken,
+                id: id as Id<'listings'>,
+                updates,
+            }).catch(console.error);
+        },
+        [sessionToken, updateListingMutation],
+    );
 
     return useMemo(
         () => ({
@@ -185,8 +244,8 @@ function useBusinessState() {
             businessInfo,
             stats: metrics.summary,
             metrics,
-            activeCampaigns: [],
-            transactions: [],
+            activeCampaigns: [], // ponytail: campaigns live in api.campaigns — not wired here yet
+            transactions: [], // ponytail: wallet tx via FintechContext / finance.ts
             coupons,
             reviews,
             branches,

@@ -1,7 +1,7 @@
 # Plan Estratégico Integral Maestro — Ramgos Mobile
 
-> **Versión:** 1.4 · **Última actualización plan:** 2026-07-13 · **Commit base grafo:** post-Fase-5-código  
-> **Fase activa:** Fase 6 — **Fases 1–2 cerradas** · **Fases 3–5 código listo, QA manual + push Convex diferidos (§12.4 / tarea final Fase 5)**  
+> **Versión:** 1.5 · **Última actualización plan:** 2026-07-13 · **Commit base grafo:** post-Fase-6-código  
+> **Fase activa:** Fase 7 — **Fases 1–2 y 6 cerradas** · **Fases 3–5 código listo, QA manual + push Convex diferidos (§12.4 / tarea final Fase 5)**  
 > **Objetivo:** Llevar Ramgos de MVP con deuda de seguridad → **production-ready** → pentest → launch NY (pagos live).
 
 ---
@@ -203,13 +203,13 @@ STRIPE (test) · RESEND · IAP · ZENDESK
 | `RewardsContext` | ✅ Completo | Mantener |
 | `EscrowContext` | ✅ Completo | Mantener |
 | `CartContext` | ⚠️ Local only | Fase 3 → sincronizar con `convex/cart.ts` |
-| `PointsContext` | ⚠️ Parcial | Fase 6 |
+| `PointsContext` | ✅ Convex (`economy.ts`) | Mantener |
 | `PaymentModeContext` | ✅ Completo | Mantener (modo test) |
-| `MarketplaceContext` | ❌ Stub vacío | Fase 6 → Convex o borrar |
-| `WalletContext` | ❌ Stub fake | Fase 6 → `convex/finance.ts` |
-| `FintechContext` | ❌ Stub vacío | Fase 6 → Convex o borrar |
-| `BusinessContext` | ❌ Stub vacío | Fase 6 |
-| `ReferralContext` | ❌ Stub vacío | Fase 6 |
+| `MarketplaceContext` | ✅ Convex (`listings.ts` + orders) | Mantener |
+| `WalletContext` | ✅ Convex (`finance.ts`) | Mantener |
+| `FintechContext` | ✅ Convex (`finance.ts` + `users.ts` KYC) | Mantener |
+| `BusinessContext` | ✅ Convex (dashboard + listings); branches local | Mantener |
+| `ReferralContext` | ✅ Convex (`users.ts` referidos) | Mantener |
 
 ---
 
@@ -664,8 +664,13 @@ Por cada stub, elegir **una** opción:
 
 **Criterio de aceptación:**
 
-- [ ] Ningún contexto devuelve datos hardcodeados fake.
-- [ ] Wallet muestra balance real del server.
+- [x] Ningún contexto devuelve datos hardcodeados fake (usuario autenticado).
+- [x] Wallet muestra balance real del server (`getWalletAccount` + `getPaymentsByUser`).
+- [x] `npm.cmd run typecheck` → exit 0
+- [x] `npm.cmd run test:constitution` → exit 0 (10/10)
+- [x] `py -m graphify update .` post-cambios
+
+**Diferidos ponytail (documentados en código):** shipping local estimate, challenges estáticos, branches local-only, withdraw/deposit no-op (Stripe Connect), simulateReferral/simulateTimePass dev-only.
 
 ---
 
@@ -1057,7 +1062,7 @@ Reglas:
   4. Ingresar tarjeta test Stripe `4242 4242 4242 4242` (cualquier CVC/fecha futura) → confirmar pago.
   5. Verificar en Convex dashboard: registro en `payments` (`succeeded_in_escrow`), evento en `paymentEvents` (idempotencia), sub-órdenes en `orders` (`paid_escrow` / `escrowState: held`), carrito vacío.
   6. (Opcional) Reenviar el mismo evento webhook → debe ignorarse (`alreadyProcessed`).
-- [ ] Fase 6 — Contextos stub: *(pendiente)*
+- [ ] Fase 6 — Contextos stub: 1) login → Wallet/Fintech muestran balance real (no hardcode); 2) Marketplace lista productos del feed Convex; 3) Referrals muestra código/link del dashboard; 4) Points reflejan `economy.getEconomyState`; 5) BusinessProfile agregar/pausar producto persiste vía listings.
 - [ ] Fase 7 — App.tsx cleanup: *(pendiente)*
 - [ ] Fase 8 — Admin ops: *(pendiente)*
 
@@ -1186,7 +1191,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **3** | Carrito unificado | 🟡 Código listo | 95% | QA manual diferida a §12.4 (no bloquea Fase 4+) | 2026-07-13 |
 | **4** | Guest checkout (CART-03) | 🟡 Código listo | 95% | QA manual diferida a §12.4 (no bloquea Fase 5+) | 2026-07-13 |
 | **5** | Pagos TEST un camino | 🟡 Código listo | 95% | Push Convex + secrets TEST (usuario) + QA manual §12.4 | 2026-07-13 |
-| **6** | Contextos stub → Convex | ⚪ Pendiente | 0% | — | — |
+| **6** | Contextos stub → Convex | ✅ Cerrada | 100% | — | 2026-07-13 |
 | **7** | Limpieza App.tsx | ⚪ Pendiente | 0% | — | — |
 | **8a** | Admin disputas (ADSP-02) | ⚪ Pendiente | 0% | — | — |
 | **8b** | Admin ban (AUSR-03) | ⚪ Pendiente | 0% | — | — |
@@ -1221,6 +1226,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | E-016 | 2026-07-13 | 1b | Cierre Fase 1 bloqueado por deuda transversal | Auth OK pero typecheck/constitution/stubs desconectados entre fases | Sprint **Fase 1b** ejecutado: typecheck + constitution verdes | ✅ Resuelto | §6 Fase 1b, §15 |
 | E-017 | 2026-07-13 | 3 | `CartContext` no podía leer `sessionToken` con `useAuth()` | En App.tsx `CartProvider` envuelve a `AuthProvider` (orden de providers); regla de fase prohíbe tocar App.tsx | Puente `src/services/auth/sessionTokenStore.ts`: AuthContext publica el token y CartContext lo lee con `useSyncExternalStore` | ✅ Resuelto | `sessionTokenStore.ts` |
 | E-018 | 2026-07-13 | 5 | Backend Convex sin deploy tras cambios Fase 5 | Usuario difiere push/deploy a tarea final | Código listo localmente; pendiente [Tarea final Fase 5](#tarea-final-fase-5--push-convex-y-secrets-test) + E2E §12.4 | 🟡 Abierto | §6 Fase 5, §15 |
+| E-019 | 2026-07-13 | 6 | `typecheck`: `phoneNumber` no existe en retorno de `getUser` | `sanitizeUser` no expone `phoneNumber` | BusinessContext usa `''` (como `hooks/useBusiness.ts`); catálogo cableado a `createListing`/`updateListing` | ✅ Resuelto | `BusinessContext.tsx` |
 
 **Plantilla para nuevas entradas:**
 

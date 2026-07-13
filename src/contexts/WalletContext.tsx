@@ -86,10 +86,12 @@ function useWalletState(): WalletContextValue {
         () => ({
             balance: snapshot.balanceAvailable,
             transactions,
+            // ponytail: no-op, callers: 0 (withdraw UI uses Stripe Connect / WithdrawalScreen)
             deposit: () => {},
             withdraw: () => {},
             getWallet: (targetUserId: string) =>
                 targetUserId === userId ? snapshot : emptyWallet,
+            // ponytail: dev-only; WalletScreen clock button — no escrow simulation backend
             simulateTimePass: () => {},
         }),
         [snapshot, transactions, userId],

@@ -230,7 +230,7 @@
     "semantic_hash": "2146bdac476e535256d98a9016c20c28"
   },
   "convex/http.ts": {
-    "mtime": 1783963226.4588294,
+    "mtime": 1783965206.1527925,
     "ast_hash": "c403c5f9736d95d81f407985568b841a",
     "semantic_hash": ""
   },
@@ -280,7 +280,7 @@
     "semantic_hash": ""
   },
   "convex/payments/actions.ts": {
-    "mtime": 1783963272.6639197,
+    "mtime": 1783965206.1527925,
     "ast_hash": "d8efd195c825f02ac9ba55ff74961997",
     "semantic_hash": ""
   },
@@ -335,7 +335,7 @@
     "semantic_hash": ""
   },
   "convex/stripe.ts": {
-    "mtime": 1783963189.7540576,
+    "mtime": 1783965205.7965574,
     "ast_hash": "f4c83bbaf4ea148aa0c0926f77b90ce5",
     "semantic_hash": ""
   },
@@ -360,8 +360,8 @@
     "semantic_hash": ""
   },
   "convex/users.ts": {
-    "mtime": 1783956658.948176,
-    "ast_hash": "511e245173935ba572c0081d8feb4ef4",
+    "mtime": 1783965206.1517944,
+    "ast_hash": "c5f06f76e3510b0c39bdfd0bb200e1ec",
     "semantic_hash": ""
   },
   "convex_fix.js": {
@@ -1170,8 +1170,8 @@
     "semantic_hash": ""
   },
   "src/contexts/BusinessContext.tsx": {
-    "mtime": 1783955260.7759492,
-    "ast_hash": "a2ca603f907c4874c84dda6d76e15dcd",
+    "mtime": 1783967876.5696678,
+    "ast_hash": "ed135ca5be1215e3e538125d7c99836c",
     "semantic_hash": ""
   },
   "src/contexts/CartContext.tsx": {
@@ -1190,13 +1190,13 @@
     "semantic_hash": ""
   },
   "src/contexts/FintechContext.tsx": {
-    "mtime": 1783955483.8629396,
-    "ast_hash": "2c79e4abe0cc8d77338e3bb136cd1f2b",
+    "mtime": 1783967858.6471517,
+    "ast_hash": "bcb429ab575bddc54850487df0e8ff7a",
     "semantic_hash": ""
   },
   "src/contexts/MarketplaceContext.tsx": {
-    "mtime": 1783955483.8569486,
-    "ast_hash": "bca92245c1314b40beeed60c337974ff",
+    "mtime": 1783967858.3798597,
+    "ast_hash": "5a8da0018e40dd70a13320c7675a4e7f",
     "semantic_hash": ""
   },
   "src/contexts/NotificationsContext.tsx": {
@@ -1205,13 +1205,13 @@
     "semantic_hash": ""
   },
   "src/contexts/PointsContext.tsx": {
-    "mtime": 1783950396.5828595,
-    "ast_hash": "3bb4ccf352b864bd565502b153bb603d",
+    "mtime": 1783967863.7315392,
+    "ast_hash": "c0e2b70a311d82cd0621c4d2d1118f13",
     "semantic_hash": ""
   },
   "src/contexts/ReferralContext.tsx": {
-    "mtime": 1783955279.1603723,
-    "ast_hash": "e8a36be05cd7ea23376f9835797dbb6a",
+    "mtime": 1783967858.962704,
+    "ast_hash": "c9d02f30ad147ac501ba5770d50d0c9d",
     "semantic_hash": ""
   },
   "src/contexts/RewardsContext.tsx": {
@@ -1235,8 +1235,8 @@
     "semantic_hash": "a0171c66db2dacbb9f52a1c043f70d7e"
   },
   "src/contexts/WalletContext.tsx": {
-    "mtime": 1783955278.968207,
-    "ast_hash": "97f2c35337988c7e0d93c277f44a8bb8",
+    "mtime": 1783967856.7820778,
+    "ast_hash": "d81194f2ff06c0049fcc0ae6b4401932",
     "semantic_hash": ""
   },
   "src/contexts/__tests__/RewardsContext.test.tsx": {
@@ -1315,12 +1315,12 @@
     "semantic_hash": ""
   },
   "src/payments/components/PaymentForm.tsx": {
-    "mtime": 1783963344.8450592,
+    "mtime": 1783965206.1527925,
     "ast_hash": "3852db251b33264ac5aeabfabd3b3b80",
     "semantic_hash": ""
   },
   "src/payments/components/PaymentForm.web.tsx": {
-    "mtime": 1783963369.313851,
+    "mtime": 1783965206.1527925,
     "ast_hash": "d4d74b882f867c48d4a67b6380d16b28",
     "semantic_hash": ""
   },
@@ -1495,7 +1495,7 @@
     "semantic_hash": "751f10828ee8c54554620fdaa86031c0"
   },
   "src/screens/PaymentScreen.tsx": {
-    "mtime": 1783963556.2091048,
+    "mtime": 1783965206.9470704,
     "ast_hash": "4abd6ccdfb63f20435061a2a43904b24",
     "semantic_hash": ""
   },
@@ -1530,7 +1530,7 @@
     "semantic_hash": "a4d21bd81cc652346d624c59bf46e7b0"
   },
   "src/screens/SettingsScreen.tsx": {
-    "mtime": 1783963584.287272,
+    "mtime": 1783965206.9470704,
     "ast_hash": "371173c13cc3aa5a7146058097ebe14d",
     "semantic_hash": ""
   },
@@ -2340,7 +2340,7 @@
     "semantic_hash": "988833bf34d92eba3d536029cd9e1bc6"
   },
   "src/contexts/PaymentModeContext.tsx": {
-    "mtime": 1783963475.0777295,
+    "mtime": 1783965206.1517944,
     "ast_hash": "7b05266d3d49235c5304b1ff6854df7e",
     "semantic_hash": ""
   },
@@ -2360,7 +2360,7 @@
     "semantic_hash": ""
   },
   "PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1783964039.0599253,
+    "mtime": 1783965206.1517944,
     "ast_hash": "29a69030eb5888a6d9d6def01451d013",
     "semantic_hash": ""
   },

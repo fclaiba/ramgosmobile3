@@ -39,6 +39,7 @@ export type DailyChallenge = {
     icon?: string;
 };
 
+// ponytail: static challenges until economy.challenges exists in backend
 const DEFAULT_CHALLENGES: DailyChallenge[] = [
     { id: 'daily_login', type: 'daily', title: 'Inicia sesión', description: 'Conéctate cada día para mantener tu racha.', reward: 10, target: 1, current: 1, claimed: false, icon: 'login' },
     { id: 'daily_browse', type: 'daily', title: 'Explora el marketplace', description: 'Visita 3 productos del marketplace.', reward: 5, target: 3, current: 0, claimed: false, icon: 'purchase' },
@@ -56,7 +57,7 @@ const DEFAULT_CONTEXT = {
     convertCoinsToPoints: (_coins: number) => Promise.resolve(),
     claimDailyReward: () => Promise.resolve(false),
     claimChallenge: (_id: string) => Promise.resolve(false),
-    redeemPoints: () => {},
+    redeemPoints: () => {}, // ponytail: no-op, callers: 0 — no redeemPoints mutation in economy.ts
     challenges: DEFAULT_CHALLENGES,
 };
 
@@ -68,11 +69,11 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     // Hooks SIEMPRE al mismo nivel — nunca después de un return condicional
     const economyState = useQuery(
         api.economy.getEconomyState,
-        user?.id ? { sessionToken, userId: user.id } : 'skip'
+        user?.id && sessionToken ? { sessionToken, userId: user.id } : 'skip'
     );
     const pointsHistory = useQuery(
         api.economy.getPointsHistory,
-        user?.id ? { sessionToken, userId: user.id } : 'skip'
+        user?.id && sessionToken ? { sessionToken, userId: user.id } : 'skip'
     );
     const initializeEconomy = useMutation(api.economy.initializeEconomy);
     const convertMutation = useMutation(api.economy.convertCoinsToPoints);
@@ -178,7 +179,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             convertCoinsToPoints,
             claimDailyReward,
             claimChallenge,
-            redeemPoints: () => {},
+            redeemPoints: () => {}, // ponytail: no-op, callers: 0 — no redeemPoints mutation in economy.ts
             challenges,
         }}>
             {children}

@@ -212,6 +212,7 @@ function useMarketplaceState(): MarketplaceContextValue {
         [listings],
     );
 
+    // ponytail: local estimate until shipping API exists in backend
     const getShippingOptions = useCallback(
         (_items: CartItem[], _destinationPostalCode?: string) => [
             defaultShippingQuote('standard'),

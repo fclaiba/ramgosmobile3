@@ -190,9 +190,12 @@ function useFintechState(): FintechContextValue {
             ensureWalletAccount,
             getWalletByOwner,
             getKycStatus,
+            // ponytail: no-op — use connect.requestInstantPayout from dashboard screens
             requestWithdrawal: () => {},
             submitKyc,
+            // ponytail: no-op — user.kycStatus refreshes via AuthContext Convex subscription
             refreshKyc: async () => {},
+            // ponytail: no-op, callers: 0
             deposit: () => {},
             withdraw: () => {},
         }),
