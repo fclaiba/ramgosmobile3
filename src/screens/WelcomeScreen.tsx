@@ -162,7 +162,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                     style={styles.mainIcon}
                                 >
                                     <Image
-                                        source={require('../../logo.jpeg')}
+                                        source={require('../../logo.png')}
                                         style={styles.logoImage}
                                         resizeMode="contain"
                                     />
