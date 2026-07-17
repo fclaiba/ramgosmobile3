@@ -4,11 +4,11 @@
     "slug": "ramgos-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./logo.jpeg",
+    "icon": "./logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./logo.jpeg",
+      "image": "./logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -21,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./logo.jpeg",
+        "foregroundImage": "./logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -34,7 +34,7 @@
       }
     },
     "web": {
-      "favicon": "./logo.jpeg"
+      "favicon": "./logo.png"
     },
     "plugins": [
       "@sentry/react-native/expo",
