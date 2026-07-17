@@ -43,3 +43,5 @@ yarn-error.*
 
 /oldBD.zip
 /backups/
+dist/
+dist
