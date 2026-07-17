@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+build/
+web-build/
+ref_tools/
+examples/
+scripts/
+audit.js
+metro.config.js

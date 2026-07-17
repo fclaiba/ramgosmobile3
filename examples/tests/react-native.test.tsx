@@ -2,6 +2,11 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 // Note: This is a generic example of a React Native test
 
+// Simple mock for React Native components
+const View = ({children}) => <>{children}</>;
+const Text = ({children}) => <>{children}</>;
+const Button = ({title, onPress, testID}) => <button testID={testID} onClick={onPress}>{title}</button>;
+
 // A mock component representing a Role Selector
 const RoleSelector = ({ onSelectRole }) => {
   return (
@@ -12,11 +17,6 @@ const RoleSelector = ({ onSelectRole }) => {
     </View>
   );
 };
-
-// Simple mock for React Native components
-const View = ({children}) => <>{children}</>;
-const Text = ({children}) => <>{children}</>;
-const Button = ({title, onPress, testID}) => <button data-testid={testID} onClick={onPress}>{title}</button>;
 
 describe('React Native Component Tests', () => {
   test('should call onSelectRole with "consumer" when consumer button is pressed', () => {
