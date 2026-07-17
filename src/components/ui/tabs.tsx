@@ -64,7 +64,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderRadius: 8,
     },
     triggerActive: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         shadowColor: isDark ? '#F9FAFB' : '#000',
         shadowOpacity: 0.1,
         shadowRadius: 2,

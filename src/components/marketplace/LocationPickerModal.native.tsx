@@ -80,9 +80,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
 
     return (
         <Modal visible={visible} animationType="slide" transparent={false}>
-            <View style={[styles.container, { backgroundColor: isDark ? '#111827' : '#fff' }]}>
+            <View style={[styles.container, { backgroundColor: isDark ? '#09090B' : '#FAFAFA' }]}>
                 {/* Header */}
-                <View style={[styles.header, { paddingTop: insets.top, backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
+                <View style={[styles.header, { paddingTop: insets.top, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
                     <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>Seleccionar Ubicación</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <X size={24} color={isDark ? '#fff' : '#000'} />
@@ -104,7 +104,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
                 </MapView>
 
                 {/* Bottom Sheet */}
-                <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: isDark ? '#1F2937' : '#fff' }]}>
+                <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
                     {selectedCoord ? (
                         <View>
                             <Text style={[styles.addressLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Ubicación seleccionada:</Text>

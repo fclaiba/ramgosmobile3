@@ -81,7 +81,7 @@ export default function RoleSelectionScreen({ navigation }: any) {
                             key={role.id}
                             style={[
                                 styles.card,
-                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: isDark ? '#1F2937' : '#fff' }
+                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }
                             ]}
                             onPress={() => setSelectedRole(role.id)}
                             activeOpacity={0.9}
@@ -138,7 +138,7 @@ export default function RoleSelectionScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     header: { padding: 24, paddingTop: 40 },
     headerTitle: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 },
     headerSubtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280' },
@@ -147,12 +147,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     card: {
         flexDirection: 'row',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 20,
         padding: 20,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         shadowColor: isDark ? '#000' : '#000',
         shadowOpacity: isDark ? 0.3 : 0.03,
         shadowRadius: 10,
@@ -190,12 +190,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     footer: {
         padding: 24,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopWidth: 1,
-        borderTopColor: isDark ? '#374151' : '#F3F4F6'
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
     },
     btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
-    btnDisabled: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
+    btnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

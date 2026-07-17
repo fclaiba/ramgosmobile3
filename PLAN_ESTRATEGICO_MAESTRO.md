@@ -691,8 +691,8 @@ Por cada stub, elegir **una** opción:
 
 **Criterio de aceptación:**
 
-- [ ] Sin logs de debug en prod path.
-- [ ] Árbol de providers coherente y documentado.
+- [x] Sin logs de debug en prod path.
+- [x] Árbol de providers coherente y documentado.
 
 ---
 
@@ -1192,11 +1192,11 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **4** | Guest checkout (CART-03) | 🟡 Código listo | 95% | QA manual diferida a §12.4 (no bloquea Fase 5+) | 2026-07-13 |
 | **5** | Pagos TEST un camino | 🟡 Código listo | 95% | Push Convex + secrets TEST (usuario) + QA manual §12.4 | 2026-07-13 |
 | **6** | Contextos stub → Convex | ✅ Cerrada | 100% | — | 2026-07-13 |
-| **7** | Limpieza App.tsx | ⚪ Pendiente | 0% | — | — |
-| **8a** | Admin disputas (ADSP-02) | ⚪ Pendiente | 0% | — | — |
-| **8b** | Admin ban (AUSR-03) | ⚪ Pendiente | 0% | — | — |
-| **8c** | Tests Jest (JEST-01) | ⚪ Pendiente | 0% | — | — |
-| **8d** | Limpiar respaldo pagos | ⚪ Pendiente | 0% | — | — |
+| **7** | Limpieza App.tsx | ✅ Cerrada | 100% | — | 2026-07-14 |
+| **8a** | Admin disputas (ADSP-02) | ✅ Cerrada | 100% | — | 2026-07-14 |
+| **8b** | Admin ban (AUSR-03) | ✅ Cerrada | 100% | — | 2026-07-14 |
+| **8c** | Tests Jest (JEST-01) | ✅ Cerrada | 100% | — | 2026-07-14 |
+| **8d** | Limpiar respaldo pagos | ✅ Cerrada | 100% | — | 2026-07-14 |
 
 **Leyenda:** ✅ Cerrada · 🟡 En curso · 🔴 Bloqueada · ⚪ Pendiente
 

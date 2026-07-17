@@ -186,7 +186,7 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     scrollContent: { padding: 24, paddingBottom: 100 },
 
     header: { alignItems: 'center', marginBottom: 32 },
@@ -194,7 +194,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     subtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
 
     avatarContainer: { alignSelf: 'center', marginBottom: 40, position: 'relative' },
-    avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: isDark ? '#374151' : '#E5E7EB' },
+    avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     cameraBtn: {
         position: 'absolute',
         bottom: 0,
@@ -206,7 +206,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 3,
-        borderColor: isDark ? '#111827' : '#FAFAFA'
+        borderColor: isDark ? '#09090B' : '#FAFAFA'
     },
 
     formContainer: { width: '100%' },
@@ -215,9 +215,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         borderRadius: 12,
         height: 56,
         paddingHorizontal: 16
@@ -228,9 +228,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     footer: {
         padding: 24,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopWidth: 1,
-        borderTopColor: isDark ? '#374151' : '#F3F4F6'
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
     },
     btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
     btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },

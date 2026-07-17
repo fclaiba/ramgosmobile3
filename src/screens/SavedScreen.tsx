@@ -273,12 +273,12 @@ export default function SavedScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#f9f9f9' },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', paddingHorizontal: 10, borderRadius: 12, height: 44, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#09090B' : '#FAFAFA', paddingHorizontal: 10, borderRadius: 12, height: 44, marginBottom: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     searchInput: { flex: 1, paddingHorizontal: 10, fontSize: 14, color: isDark ? '#fff' : '#000' },
 
     tabsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-    tabCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12, padding: 8, alignItems: 'center', borderWidth: 2, borderBottomWidth: 4 },
+    tabCard: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, padding: 8, alignItems: 'center', borderWidth: 2, borderBottomWidth: 4 },
     activeTabCard: {},
 
     itemCard: { overflow: 'hidden' }, // Card is now smart, no need to touch bg
@@ -289,11 +289,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     itemTitle: { fontWeight: 'bold', fontSize: 14, flex: 1, marginRight: 8, color: isDark ? '#fff' : '#000' },
     itemBusiness: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666' },
 
-    priceText: { fontWeight: 'bold', fontSize: 16, color: '#007AFF', marginBottom: 6 },
+    priceText: { fontWeight: 'bold', fontSize: 16, color: '#7C3AED', marginBottom: 6 },
 
     // Sheet Styles
     sheetContent: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },

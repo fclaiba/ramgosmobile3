@@ -135,7 +135,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         marginBottom: 16
     },
     primaryBtnText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: '600',
         fontSize: 16
     },

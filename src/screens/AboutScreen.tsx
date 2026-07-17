@@ -113,15 +113,15 @@ export default function AboutScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     content: { padding: 16 },
     heroCard: { borderRadius: 24, overflow: 'hidden', marginBottom: 24, borderWidth: 0 },
     heroGradient: { padding: 24, alignItems: 'center' },
     heroEmoji: { fontSize: 48, marginBottom: 16 },
-    heroTitle: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#1F2937' : '#fff', marginBottom: 8 },
+    heroTitle: { fontSize: 24, fontWeight: 'bold', color: isDark ? '#09090B' : '#FAFAFA', marginBottom: 8 },
     heroSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.9)', textAlign: 'center', marginBottom: 16 },
     versionBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-    versionText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: '600' },
+    versionText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 12, fontWeight: '600' },
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
     statCard: { width: '48%', borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOpacity: 0.05, elevation: 1 },
     statContent: { padding: 16, alignItems: 'center' },
@@ -140,5 +140,5 @@ const getStyles = (isDark: any) => StyleSheet.create({
     teamName: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#333' },
     teamRole: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666' },
     copyright: { fontSize: 12, color: isDark ? '#6B7280' : '#999' },
-    legalLink: { fontSize: 12, color: '#007AFF', fontWeight: '500' }
+    legalLink: { fontSize: 12, color: '#7C3AED', fontWeight: '500' }
 });

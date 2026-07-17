@@ -62,7 +62,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     title: { fontSize: 28, fontWeight: 'bold', color: '#EF4444', marginBottom: 16 },
 
     messageBox: {
-        backgroundColor: isDark ? '#374151' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         padding: 24,
         borderRadius: 16,
         width: '100%',

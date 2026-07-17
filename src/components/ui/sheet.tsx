@@ -3,13 +3,27 @@ import { View, Text, Modal, TouchableOpacity, StyleSheet, Dimensions, Platform }
 import { X } from "lucide-react-native"
 import { useTheme } from "../../contexts/ThemeContext"
 
-const Sheet = ({ open, onOpenChange, children }: any) => {
+const Sheet = ({ open, onOpenChange, children, animationType = 'slide' }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+
+    React.useEffect(() => {
+        if (!open || Platform.OS !== 'web') return;
+        // Avoid "aria-hidden on focused descendant" when a sheet opens over the page.
+        const active = document.activeElement as HTMLElement | null;
+        active?.blur?.();
+    }, [open]);
+
     if (!open) return null;
     return (
-        <Modal transparent visible={open} onRequestClose={() => onOpenChange(false)} animationType="fade">
+        <Modal
+            transparent
+            visible={open}
+            onRequestClose={() => onOpenChange(false)}
+            animationType={animationType}
+            accessibilityViewIsModal
+        >
             <View style={styles.overlay}>
                 <TouchableOpacity style={styles.backdrop} onPress={() => onOpenChange(false)} />
                 {children}
@@ -91,21 +105,29 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     backdrop: {
         position: 'absolute',
         top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.5)",
+        backgroundColor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,10,30,0.4)',
     },
     content: {
-        backgroundColor: isDark ? "#1F2937" : "#fff",
+        // Liquid glass sheet chrome — brand-soft, not flat gray
+        backgroundColor: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.92)',
         padding: 0,
         ...Platform.select({
-            web: { boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)' },
+            web: {
+                boxShadow: isDark
+                    ? '0 -8px 40px rgba(0,0,0,0.45)'
+                    : '0 -8px 40px rgba(124,58,237,0.12)',
+                backdropFilter: 'blur(18px)',
+                // @ts-expect-error web
+                WebkitBackdropFilter: 'blur(18px)',
+            } as any,
             default: {
-                shadowColor: isDark ? "#F9FAFB" : "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
+                shadowColor: isDark ? '#000' : '#7C3AED',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: isDark ? 0.35 : 0.14,
+                shadowRadius: 20,
             },
         }),
-        elevation: 5,
+        elevation: 8,
         position: 'absolute',
     },
     left: {
@@ -114,8 +136,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         bottom: 0,
         width: "75%",
         maxWidth: 400,
-        borderRightWidth: 1,
-        borderColor: isDark ? "#374151" : "#E5E7EB",
+        borderRightWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
     },
     right: {
         right: 0,
@@ -123,8 +145,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         bottom: 0,
         width: "75%",
         maxWidth: 400,
-        borderLeftWidth: 1,
-        borderColor: isDark ? "#374151" : "#E5E7EB",
+        borderLeftWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
     },
     top: {
         top: 0,
@@ -135,24 +157,24 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         maxWidth: 600,
         height: '85%',
         maxHeight: '90%',
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        borderWidth: 1,
-        borderColor: isDark ? "#374151" : "#E5E7EB",
+        borderBottomLeftRadius: 28,
+        borderBottomRightRadius: 28,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.9)',
     },
     bottom: {
         bottom: 0,
         left: 0,
         right: 0,
-        marginHorizontal: 'auto', // Centers horizontally on large screens
+        marginHorizontal: 'auto',
         width: '100%',
-        maxWidth: 600, // Max width for desktop
+        maxWidth: 600,
         height: '85%',
         maxHeight: '90%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        borderWidth: 1,
-        borderColor: isDark ? "#374151" : "#E5E7EB",
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.9)',
     },
     header: {
         flexDirection: "column",

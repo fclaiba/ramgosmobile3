@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
+import { usePoints } from '../contexts/PointsContext';
 import { CartItem } from '../contexts/CartContext';
 import { ShippingMethod, ShippingQuote, Order } from '../contexts/MarketplaceContext'; // We'll move these types eventually, but for now they can stay in a types file or we just use them.
 // Actually, let's copy the types here to decouple from MarketplaceContext completely.
@@ -47,6 +48,8 @@ export interface PlaceOrderPayload {
         discountApplied: number;
         finalAmount: number;
     };
+    /** Points to burn at checkout (1 pt = $0.01). Persisted via Convex redeemPoints. */
+    pointsToRedeem?: number;
     stripePaymentIntentId?: string;
 }
 
@@ -72,6 +75,7 @@ export const getShippingOptions = (items: CartItem[], destinationPostalCode?: st
 
 export const useCheckout = () => {
     const { user, sessionToken } = useAuth();
+    const { progressChallenge, redeemPoints } = usePoints();
     const createOrderMutation = useMutation(api.orders.createOrder);
 
     const placeOrder = async (payload: PlaceOrderPayload): Promise<{ success: boolean; orders?: any[]; error?: string }> => {
@@ -186,6 +190,21 @@ export const useCheckout = () => {
                     updatedAt: new Date().toISOString(),
                 });
             }
+
+            // Burn points after orders succeed (Convex ledger)
+            const pointsToRedeem = Math.floor(payload.pointsToRedeem || 0);
+            if (pointsToRedeem > 0) {
+                const redeem = await redeemPoints(
+                    pointsToRedeem,
+                    String(createdOrders[0]?.id || payload.requestId || ''),
+                );
+                if (!redeem.success) {
+                    console.warn('[Checkout] points redeem failed:', redeem.message);
+                }
+            }
+
+            // ponytail: weekly purchase challenge
+            void progressChallenge('weekly_purchase', 1);
 
             return { success: true, orders: createdOrders };
 

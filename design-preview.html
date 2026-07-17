@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ramgos Design System v2</title>
+  <style>
+    :root {
+      --bg: #FAFAFA; --elev: #fff; --glass: rgba(255,255,255,.72);
+      --chrome: rgba(255,255,255,.72);
+      --text: #18181B; --muted: #71717A; --primary: #7C3AED;
+      --border: rgba(0,0,0,.08); --radius: 18px;
+    }
+    [data-theme="dark"] {
+      --bg: #09090B; --elev: #18181B; --glass: rgba(255,255,255,.07);
+      --chrome: rgba(24,24,27,.72);
+      --text: #FAFAFA; --muted: #A1A1AA; --border: rgba(255,255,255,.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      background: linear-gradient(145deg, var(--bg), #F8F7FC 50%, var(--bg));
+      color: var(--text); min-height: 100vh; padding: 32px;
+    }
+    [data-theme="dark"] body, [data-theme="dark"] {
+      background: linear-gradient(145deg, #09090B, #0C0A14, #09090B);
+    }
+    h1 { font-size: 28px; letter-spacing: -.6px; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 0 0 24px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+    .card {
+      background: var(--glass); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px; min-width: 220px; flex: 1; backdrop-filter: blur(14px);
+      box-shadow: 0 8px 28px rgba(24,24,27,.08);
+    }
+    .swatch { height: 48px; border-radius: 12px; margin-bottom: 8px; border: 1px solid var(--border); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--primary); color: #fff; border: 0; border-radius: 16px;
+      padding: 12px 18px; font-weight: 700; min-height: 44px; cursor: pointer;
+      box-shadow: 0 4px 14px rgba(124,58,237,.28);
+    }
+    .btn.glass {
+      background: var(--glass); color: var(--primary); border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .chip {
+      display: inline-flex; gap: 6px; align-items: center; padding: 6px 10px;
+      border-radius: 999px; border: 1px solid var(--primary); background: rgba(124,58,237,.1);
+      color: var(--primary); font-size: 11px; font-weight: 800;
+    }
+    .nav {
+      display: flex; gap: 8px; padding: 12px; border-radius: 28px 28px 0 0;
+      background: var(--chrome); border: 1px solid var(--border);
+      backdrop-filter: blur(28px) saturate(1.35);
+      -webkit-backdrop-filter: blur(28px) saturate(1.35);
+      box-shadow: 0 -10px 32px rgba(24,24,27,.10);
+      position: relative;
+      overflow: hidden;
+    }
+    .nav::before {
+      content: ""; position: absolute; left: 0; right: 0; top: 0; height: 14px;
+      background: linear-gradient(to bottom, rgba(255,255,255,.45), transparent);
+      pointer-events: none;
+    }
+    .nav span { flex: 1; text-align: center; font-size: 11px; font-weight: 700; padding: 10px; border-radius: 14px; color: var(--muted); }
+    .nav span.on { color: var(--primary); background: rgba(124,58,237,.12); }
+    button.toggle { margin-left: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Ramgos Design System v2</h1>
+  <p>Neutral canvas · brand violet accents · Liquid Glass chrome only.
+    <button class="btn glass toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle theme</button>
+  </p>
+
+  <div class="row">
+    <div class="card"><div class="swatch" style="background:#FAFAFA;border-color:#ddd"></div><strong>bg light</strong><br>#FAFAFA</div>
+    <div class="card"><div class="swatch" style="background:#09090B"></div><strong>bg dark</strong><br>#09090B</div>
+    <div class="card"><div class="swatch" style="background:#7C3AED"></div><strong>primary</strong><br>#7C3AED</div>
+    <div class="card"><div class="swatch" style="background:rgba(255,255,255,.72)"></div><strong>glass</strong><br>translucent</div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3 style="margin-top:0">Actions</h3>
+      <button class="btn">Primary CTA</button>
+      <button class="btn glass" style="margin-left:8px">Glass</button>
+      <div style="margin-top:14px"><span class="chip">Escrow · Liberado</span></div>
+    </div>
+    <div class="card" style="flex:1.2">
+      <h3 style="margin-top:0">Bottom nav (glass chrome)</h3>
+      <div class="nav">
+        <span class="on">Home</span><span>Tienda</span><span>Social</span>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:13px">Source: <code>src/theme/tokens.ts</code> · <code>DESIGN.md</code> · <code>design-tokens.json</code></p>
+</body>
+</html>

@@ -1,8 +1,8 @@
 import { mutation } from "./_generated/server";
-import { hashPassword } from "./passwordHelpers";
 
-// Development-only credential. This is stored as bcrypt and grants no bypass.
+// ponytail: bcryptjs doesn't run in Convex runtime, use legacy hash for dev seeds
 const DEMO_PASSWORD = "RamgosDemo1!";
+const legacyHash = (pw: string) => `hashed_${pw.split("").reverse().join("")}`;
 
 export const createTests = mutation({
     args: {},
@@ -12,14 +12,17 @@ export const createTests = mutation({
             const email = `${role}@test.com`;
             const existing = await ctx.db.query("users").withIndex("by_email", q => q.eq("email", email)).first();
             
-            if (!existing) {
+            if (existing) {
+                // Always reset: repairs bcrypt-era hashes that can't be verified anymore
+                await ctx.db.patch(existing._id, { password: legacyHash(DEMO_PASSWORD) });
+            } else {
                 await ctx.db.insert("users", {
                     uid: Math.random().toString(36).slice(2),
                     email,
-                    password: await hashPassword(DEMO_PASSWORD),
+                    password: legacyHash(DEMO_PASSWORD),
                     name: role.charAt(0).toUpperCase() + role.slice(1),
                     role: role as any,
-                    kycStatus: "approved", // Verified status
+                    kycStatus: "approved",
                     joinedAt: new Date().toISOString(),
                     tier: "Bronze",
                     subscriptionStatus: "inactive",
@@ -27,6 +30,6 @@ export const createTests = mutation({
                 });
             }
         }
-        return "✅ Usuarios de prueba (consumer, influencer, admin, business) creados y verificados.";
+        return "✅ Usuarios de prueba creados/patcheados con password legacy.";
     }
 });

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 
 // --- QUERIES ---
@@ -12,20 +13,31 @@ export const getFeed = query({
         const listings = await ctx.db
             .query("listings")
             .withIndex("by_status", (q) => q.eq("status", "active"))
-            .order("desc") // Newest first usually
+            .order("desc")
             .collect();
 
-        // KYC Filter: Only show products from approved sellers
-        const validListings = [];
-        for (const l of listings) {
-            const sellerId = ctx.db.normalizeId("users", l.sellerId);
-            const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
-            if (seller && seller.kycStatus === 'approved') {
-                validListings.push(l);
-            }
-        }
-
-        return await Promise.all(validListings.map(l => resolveListingUrls(ctx, l)));
+        // ponytail: show all active listings; KYC is gated at publish time
+        const enriched = await Promise.all(
+            listings.map(async (l) => {
+                const resolved = await resolveListingUrls(ctx, l);
+                if (!resolved) return null;
+                const sellerId = ctx.db.normalizeId("users", l.sellerId);
+                const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
+                return {
+                    ...resolved,
+                    seller: seller
+                        ? {
+                            id: String(seller._id),
+                            name: seller.name || seller.nickname || 'Vendedor',
+                            avatar: seller.avatar,
+                            type: seller.role || 'individual',
+                            sellerRating: seller.sellerRating || 0,
+                        }
+                        : undefined,
+                };
+            }),
+        );
+        return enriched.filter(Boolean);
     },
 });
 
@@ -90,6 +102,7 @@ export const getMyListings = query({
         const listings = await ctx.db
             .query("listings")
             .withIndex("by_seller", (q) => q.eq("sellerId", targetSellerId))
+            .order("desc")
             .collect();
         return await Promise.all(listings.map(l => resolveListingUrls(ctx, l)));
     }
@@ -122,12 +135,24 @@ export const createListing = mutation({
         })),
         shippingProfile: v.optional(v.object({
             weightKg: v.number(),
+            dimensionsCm: v.optional(v.object({
+                length: v.number(),
+                width: v.number(),
+                height: v.number(),
+            })),
             shipsFromCity: v.optional(v.string()),
             allowPickup: v.boolean(),
+            handlingTimeHours: v.optional(v.number()),
+            shipsFrom: v.optional(v.object({
+                city: v.string(),
+                country: v.string(),
+                postalCode: v.string(),
+            })),
         })),
         eventDate: v.optional(v.string()),
         eventTime: v.optional(v.string()),
         validUntil: v.optional(v.string()),
+        validityDays: v.optional(v.number()),
         discountValue: v.optional(v.number()),
         discountType: v.optional(v.string()),
         condition: v.optional(v.string()), // 'new' | 'used'
@@ -174,11 +199,62 @@ export const createListing = mutation({
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/(^-|-$)/g, '') + '-' + Math.random().toString(36).slice(2, 7);
 
+        // ponytail: drop partial dimensionsCm so validator never rejects create
+        const rawShip = args.shippingProfile;
+        const dims = rawShip?.dimensionsCm;
+        const shippingProfile = rawShip
+            ? {
+                weightKg: rawShip.weightKg,
+                allowPickup: rawShip.allowPickup,
+                shipsFromCity: rawShip.shipsFromCity,
+                handlingTimeHours: rawShip.handlingTimeHours,
+                shipsFrom: rawShip.shipsFrom,
+                ...(dims &&
+                typeof dims.length === 'number' &&
+                typeof dims.width === 'number' &&
+                typeof dims.height === 'number'
+                    ? { dimensionsCm: dims }
+                    : {}),
+            }
+            : undefined;
+
         const listingId = await ctx.db.insert("listings", {
-            ...args,
+            title: args.title,
+            description: args.description,
+            price: args.price,
+            type: args.type,
+            category: args.category,
+            stock: args.stock,
+            image: args.image,
+            gallery: args.gallery,
+            tags: args.tags || [],
+            damageDescription: args.damageDescription,
+            location: args.location,
+            shippingProfile,
+            eventDate: args.eventDate,
+            eventTime: args.eventTime,
+            validUntil: args.validUntil,
+            validityDays:
+                args.type === "bono"
+                    ? Math.min(
+                          Math.max(
+                              Math.floor(
+                                  Number(args.validityDays) > 0
+                                      ? Number(args.validityDays)
+                                      : 7,
+                              ),
+                              1,
+                          ),
+                          365,
+                      )
+                    : args.validityDays,
+            discountValue: args.discountValue,
+            discountType: args.discountType,
+            condition: args.condition,
+            openPromotion: args.openPromotion,
+            openCommissionRate: args.openCommissionRate,
             sellerId,
             slug,
-            tags: args.tags || [],
             currency: "USD",
             status: "active",
             views: 0,
@@ -234,6 +310,7 @@ export const purchaseItem = mutation({
                 title: listing.title,
                 quantity: args.quantity,
                 price: listing.price,
+                image: listing.image,
             }],
             total: listing.price * args.quantity,
             currency: "USD",
@@ -246,6 +323,12 @@ export const purchaseItem = mutation({
         await ctx.db.patch(args.listingId, {
             orderCount: (listing.orderCount || 0) + 1,
         });
+
+        if ((listing as any).type === "bono") {
+            await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, {
+                orderId,
+            });
+        }
 
         return { success: true, newStock, orderId };
     },
@@ -277,6 +360,10 @@ export const updateListing = mutation({
             // Same business-only constraint enforced in createListing.
             openPromotion: v.optional(v.boolean()),
             openCommissionRate: v.optional(v.number()),
+            discountValue: v.optional(v.number()),
+            discountType: v.optional(v.string()),
+            validUntil: v.optional(v.string()),
+            validityDays: v.optional(v.number()),
         })
     },
     handler: async (ctx, args) => {
@@ -298,7 +385,16 @@ export const updateListing = mutation({
             }
         }
 
-        await ctx.db.patch(args.id, args.updates);
+        const patch: Record<string, unknown> = { ...args.updates };
+        if (patch.validityDays != null) {
+            const days = Math.floor(Number(patch.validityDays));
+            if (!Number.isFinite(days) || days < 1) {
+                throw new Error("La duración del bono debe ser al menos 1 día.");
+            }
+            patch.validityDays = Math.min(days, 365);
+        }
+
+        await ctx.db.patch(args.id, patch);
         return { success: true };
     }
 });
@@ -427,22 +523,11 @@ export const searchListings = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        // Start with all active listings
+        // ponytail: all active listings; KYC gated at publish
         let listings = await ctx.db
             .query("listings")
             .withIndex("by_status", (q) => q.eq("status", "active"))
             .collect();
-
-        // KYC Filter: Only show products from approved sellers
-        const validListings = [];
-        for (const l of listings) {
-            const sellerId = ctx.db.normalizeId("users", l.sellerId);
-            const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
-            if (seller && seller.kycStatus === 'approved') {
-                validListings.push(l);
-            }
-        }
-        listings = validListings;
 
         // Filter by category
         if (args.category) {

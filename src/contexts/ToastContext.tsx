@@ -5,6 +5,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, w
 import { CheckCircle, AlertCircle, Info, X, AlertTriangle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from './ThemeContext';
+import { toUserMessage } from '../utils/errors';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -37,7 +38,9 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const translateY = useSharedValue(-100);
 
     const show = useCallback((msg: string, t: ToastType = 'success', duration = 3000) => {
-        setMessage(msg);
+        // Never leak Convex/server stack wrappers into toasts.
+        const safe = t === 'error' || t === 'warning' ? toUserMessage(msg) : msg;
+        setMessage(safe);
         setType(t);
         setVisible(true);
 

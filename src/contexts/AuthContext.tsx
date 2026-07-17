@@ -87,6 +87,11 @@ export interface SignUpInput {
     name: string;
     role?: AuthUserRole;
     avatar?: string;
+    businessName?: string;
+    businessCategory?: string;
+    businessAddress?: string;
+    phone?: string;
+    referralCode?: string;
 }
 
 export interface SignUpResult {
@@ -199,6 +204,10 @@ const resolveNextRoute = (user: PublicUser): AuthFlowDecision['nextRoute'] => {
     return { screen: 'Home' };
 };
 
+/** Destino post-login/registro según estado del usuario (KYC, términos, etc.) */
+export const getAuthDestination = (user: PublicUser): AuthFlowDecision['nextRoute'] =>
+    resolveNextRoute(user);
+
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {
@@ -277,6 +286,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         return;
                     }
 
+                    // ponytail: sessions without server token can't auth Convex calls
+                    if (!storedSession?.sessionToken?.startsWith('ses_')) {
+                        await storage.removeItem(CURRENT_SESSION_KEY);
+                        setState(prev => ({ ...prev, status: 'anonymous' }));
+                        return;
+                    }
+
                     if (storedSession && storedSession.userId) {
                         setState(prev => ({
                             ...prev,
@@ -314,7 +330,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
-        if (userData && state.session?.userId === userData._id) {
+        if (userData && String(state.session?.userId) === String(userData._id)) {
             const serverUser: PublicUser = {
                 id: userData._id as string,
                 email: userData.email,
@@ -358,23 +374,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsProcessing(true);
         try {
             const role = payload.role ?? 'consumer';
-            
+            const email = payload.email.trim().toLowerCase();
+
             const registerResult: any = await registerMutation({
-                email: payload.email,
+                email,
                 password: payload.password,
-                name: payload.name,
-                role: role,
-                avatar: payload.avatar
+                name: payload.name.trim(),
+                role,
+                avatar: payload.avatar,
+                termsVersion: CURRENT_TERMS_VERSION,
+                nickname: role === 'business'
+                    ? payload.businessName?.trim()
+                    : role === 'influencer'
+                        ? payload.businessName?.trim()
+                        : undefined,
+                phoneNumber: payload.phone?.trim() || undefined,
+                bio: payload.businessAddress?.trim() || undefined,
             });
-            const userId = registerResult?.userId ?? registerResult;
+
+            const userId = String(registerResult?.userId ?? '');
             const registerSessionToken: string | undefined = registerResult?.sessionToken;
+            if (!userId || !registerSessionToken?.startsWith('ses_')) {
+                throw new Error('El servidor no confirmó el registro. Revisá que Convex esté corriendo.');
+            }
 
             const user: PublicUser = {
                 id: userId,
-                email: payload.email,
-                name: payload.name,
+                email,
+                name: payload.name.trim(),
+                nickname: payload.businessName?.trim(),
                 role: role,
-                isTest: false,
+                isTest: email.endsWith('@ramgos.com'),
                 avatar: payload.avatar,
                 status: 'active',
                 emailVerified: true,
@@ -382,19 +412,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 termsAcceptedVersion: CURRENT_TERMS_VERSION,
                 createdAt: new Date().toISOString(),
                 providers: ['password'],
-                kycStatus: 'unverified',
+                kycStatus: 'pending',
                 tier: 'Bronze',
                 subscriptionStatus: 'inactive',
                 subscriptionTier: 'free',
             };
 
-            const session = createSessionMock(user.id, registerSessionToken);
+            const session = createSessionMock(userId, registerSessionToken);
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
 
             setState(prev => ({
                 ...prev,
                 status: 'authenticated',
-                session,
+                session: { ...session, userId },
                 user,
             }));
 
@@ -697,10 +727,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 role,
                 avatar: profile?.avatar,
             });
-            const userId = syncResult?.userId ?? syncResult;
+            const userId = String(syncResult?.userId ?? '');
+            const sessionToken = syncResult?.sessionToken;
+            if (!userId || !sessionToken?.startsWith('ses_')) {
+                throw new Error('El servidor no confirmó la cuenta social.');
+            }
 
-            const session = createSessionMock(userId, syncResult?.sessionToken);
-            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
+            const session = createSessionMock(userId, sessionToken);
+            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, userId }));
 
             const user: PublicUser = {
                 id: userId,
@@ -724,7 +758,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...prev,
                 status: 'authenticated',
                 user,
-                session,
+                session: { ...session, userId },
                 originalUser: null,
             }));
 
@@ -768,6 +802,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) throw new Error("No hay usuario autenticado.");
 
         await submitKycMutation({
+            sessionToken: state.session?.sessionToken,
             id: state.user.id as any,
             payload: data,
         });
@@ -797,6 +832,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!state.user) return;
         try {
             await acceptTermsMutation({
+                sessionToken: state.session?.sessionToken,
                 id: state.user.id as any,
                 version: CURRENT_TERMS_VERSION
             });

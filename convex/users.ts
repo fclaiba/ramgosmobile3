@@ -3,7 +3,7 @@ import { mutation, query, internalMutation, internalQuery } from "./_generated/s
 import { Id } from "./_generated/dataModel";
 import { assertSelfOrAdmin, requireActor, checkRateLimit, createSession } from "./authHelpers";
 import { internal } from "./_generated/api";
-import { hashPassword, isLegacyPasswordHash, verifyPassword } from "./passwordHelpers";
+import { hashPassword, verifyPassword } from "./passwordHelpers";
 
 export const internalCheckRateLimit = internalMutation({
     args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
@@ -64,6 +64,7 @@ const sanitizeUser = (user: any) => ({
     sellerReviewCount: user.sellerReviewCount,
     sellerTotalSales: user.sellerTotalSales,
     sellerResponseTimeHours: user.sellerResponseTimeHours,
+    isBanned: user.isBanned,
 });
 
 export const register = mutation({
@@ -72,11 +73,21 @@ export const register = mutation({
         password: v.string(),
         name: v.string(),
         role: v.string(),
-        avatar: v.optional(v.string())
+        avatar: v.optional(v.string()),
+        termsVersion: v.optional(v.number()),
+        nickname: v.optional(v.string()),
+        phoneNumber: v.optional(v.string()),
+        bio: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         if (!ALLOWED_ROLES.has(args.role)) {
             throw new Error("Rol inválido.");
+        }
+
+        const email = args.email.trim().toLowerCase();
+        const name = args.name.trim();
+        if (!email || !name) {
+            throw new Error("Email y nombre son obligatorios.");
         }
 
         // Password complexity validation
@@ -87,30 +98,33 @@ export const register = mutation({
 
         const existing = await ctx.db
             .query("users")
-            .withIndex("by_email", (q) => q.eq("email", args.email))
+            .withIndex("by_email", (q) => q.eq("email", email))
             .first();
 
         if (existing) {
-            // Anti-enumeration: Generic error message
             throw new Error("No se pudo registrar la cuenta. Si ya tienes una cuenta, intenta iniciar sesión.");
         }
 
         const userId = await ctx.db.insert("users", {
-            uid: Math.random().toString(36).slice(2), // Legacy UID
-            email: args.email,
-            password: await hashPassword(args.password),
-            name: args.name,
+            uid: Math.random().toString(36).slice(2),
+            email,
+            password: hashPassword(args.password),
+            name,
             role: args.role as any,
             avatar: args.avatar,
+            nickname: args.nickname?.trim() || undefined,
+            phoneNumber: args.phoneNumber?.trim() || undefined,
+            bio: args.bio?.trim() || undefined,
             kycStatus: "pending",
             joinedAt: new Date().toISOString(),
             tier: "Bronze",
             subscriptionStatus: "inactive",
-            isTest: args.email.endsWith("@ramgos.com")
+            isTest: email.endsWith("@ramgos.com"),
+            ...(args.termsVersion ? { termsAcceptedVersion: args.termsVersion } : {}),
         });
 
         const sessionToken = await createSession(ctx, userId);
-        return { userId, sessionToken };
+        return { userId: String(userId), sessionToken };
     },
 });
 
@@ -120,12 +134,12 @@ export const login = mutation({
         password: v.string(),
     },
     handler: async (ctx, args) => {
-        // Rate Limiting: max 5 attempts per 15 minutes (900000 ms)
-        await checkRateLimit(ctx, `login_${args.email}`, 5, 900000);
+        const email = args.email.trim().toLowerCase();
+        await checkRateLimit(ctx, `login_${email}`, 5, 900000);
 
         const user = await ctx.db
             .query("users")
-            .withIndex("by_email", (q) => q.eq("email", args.email))
+            .withIndex("by_email", (q) => q.eq("email", email))
             .first();
 
         if (!user) {
@@ -133,15 +147,13 @@ export const login = mutation({
             throw new Error("Credenciales incorrectas.");
         }
 
-        const passwordHash = user.password;
-        if (!passwordHash || !(await verifyPassword(args.password, passwordHash))) {
-            throw new Error("Credenciales incorrectas.");
+        if ((user as any).isBanned) {
+            throw new Error("ACCOUNT_BANNED");
         }
 
-        if (isLegacyPasswordHash(passwordHash)) {
-            await ctx.db.patch(user._id, {
-                password: await hashPassword(args.password),
-            });
+        const passwordHash = user.password;
+        if (!passwordHash || !verifyPassword(args.password, passwordHash)) {
+            throw new Error("Credenciales incorrectas.");
         }
 
         const sessionToken = await createSession(ctx, user._id);
@@ -184,12 +196,12 @@ export const changePassword = mutation({
             throw new Error("Usuario no encontrado.");
         }
 
-        if (!user.password || !(await verifyPassword(args.currentPassword, user.password))) {
+        if (!user.password || !verifyPassword(args.currentPassword, user.password)) {
             throw new Error("La contraseña actual es incorrecta.");
         }
 
         await ctx.db.patch(actor.id, {
-            password: await hashPassword(args.newPassword),
+            password: hashPassword(args.newPassword),
         });
         return { success: true };
     },
@@ -218,9 +230,10 @@ export const syncUser = mutation({
     handler: async (ctx, args) => {
         // Legacy sync for Social Auth (if we keep it)
         // For now reuse logic
+        const email = args.email.trim().toLowerCase();
         const existing = await ctx.db
             .query("users")
-            .withIndex("by_email", (q) => q.eq("email", args.email))
+            .withIndex("by_email", (q) => q.eq("email", email))
             .first();
 
         if (existing) {
@@ -234,15 +247,15 @@ export const syncUser = mutation({
                 );
             }
             const sessionToken = await createSession(ctx, existing._id);
-            return { userId: existing._id, sessionToken };
+            return { userId: String(existing._id), sessionToken };
         }
 
-        const isTestAccount = args.email.endsWith('@ramgos.com') || (args as any).isTest;
+        const isTestAccount = email.endsWith('@ramgos.com') || (args as any).isTest;
 
         const newUserId = await ctx.db.insert("users", {
             uid: args.uid,
-            email: args.email,
-            name: args.name,
+            email,
+            name: args.name.trim(),
             role: args.role as any,
             avatar: args.avatar,
             kycStatus: "pending",
@@ -252,7 +265,7 @@ export const syncUser = mutation({
             isTest: isTestAccount,
         });
         const sessionToken = await createSession(ctx, newUserId);
-        return { userId: newUserId, sessionToken };
+        return { userId: String(newUserId), sessionToken };
     }
 });
 
@@ -290,12 +303,14 @@ export const listUsers = query({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin') {
+        if (actor.role !== 'admin' && actor.role !== 'developer') {
             throw new Error("No autorizado.");
         }
         let q = ctx.db.query("users");
         const users = await q.collect();
-        const sanitized = users.map(sanitizeUser);
+        const sanitized = users
+            .map(sanitizeUser)
+            .sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
         if (args.role) {
             return sanitized.filter(u => u.role === args.role);
         }
@@ -367,6 +382,61 @@ export const deleteUser = mutation({
     },
 });
 
+export const unbanUser = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        userId: v.id("users"),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        if (actor.role !== 'admin') throw new Error("No autorizado.");
+        await ctx.db.patch(args.userId, { isBanned: false });
+        await ctx.db.insert("audit_logs", {
+            actorUserId: actor.idString,
+            targetUserId: String(args.userId),
+            action: "USER_UNBANNED",
+            timestamp: new Date().toISOString(),
+        });
+        return { success: true };
+    },
+});
+
+export const banUser = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        userId: v.id("users"),
+        reason: v.optional(v.string())
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        if (actor.role !== 'admin') throw new Error("No autorizado.");
+        
+        await ctx.db.patch(args.userId, {
+            isBanned: true
+        });
+        
+        // Revoke active sessions
+        const sessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", q => q.eq("userId", args.userId))
+            .collect();
+        const now = new Date().toISOString();
+        for (const session of sessions) {
+            if (!session.revokedAt) {
+                await ctx.db.patch(session._id, { revokedAt: now });
+            }
+        }
+
+        await ctx.db.insert("audit_logs", {
+            actorUserId: actor.idString,
+            targetUserId: String(args.userId),
+            action: "USER_BANNED",
+            timestamp: now,
+            metadata: args.reason ? { reason: args.reason } : undefined,
+        });
+    }
+});
+
 export const approveKYC = mutation({
     args: {
         sessionToken: v.optional(v.string()),
@@ -375,11 +445,26 @@ export const approveKYC = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin') {
+        if (actor.role !== 'admin' && actor.role !== 'developer') {
             throw new Error("No tienes permisos de administrador.");
         }
+        const user = await ctx.db.get(args.targetUserId);
+        if (!user) throw new Error("Usuario no encontrado.");
+        const now = new Date().toISOString();
+        const docs = (user.verificationDocuments ?? []).map((d) => ({
+            ...d,
+            status: 'approved' as const,
+            reviewedAt: now,
+        }));
         await ctx.db.patch(args.targetUserId, {
-            kycStatus: 'approved'
+            kycStatus: 'approved',
+            verificationDocuments: docs.length ? docs : undefined,
+        });
+        await ctx.db.insert("audit_logs", {
+            actorUserId: actor.idString,
+            targetUserId: String(args.targetUserId),
+            action: "KYC_APPROVED",
+            timestamp: now,
         });
     }
 });
@@ -415,11 +500,27 @@ export const rejectKYC = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin') {
+        if (actor.role !== 'admin' && actor.role !== 'developer') {
             throw new Error("No tienes permisos de administrador.");
         }
+        const user = await ctx.db.get(args.targetUserId);
+        if (!user) throw new Error("Usuario no encontrado.");
+        const now = new Date().toISOString();
+        const docs = (user.verificationDocuments ?? []).map((d) => ({
+            ...d,
+            status: 'rejected' as const,
+            reviewedAt: now,
+        }));
         await ctx.db.patch(args.targetUserId, {
-            kycStatus: 'rejected'
+            kycStatus: 'rejected',
+            verificationDocuments: docs.length ? docs : undefined,
+        });
+        await ctx.db.insert("audit_logs", {
+            actorUserId: actor.idString,
+            targetUserId: String(args.targetUserId),
+            action: "KYC_REJECTED",
+            timestamp: now,
+            metadata: args.reason ? { reason: args.reason } : undefined,
         });
     }
 });
@@ -452,31 +553,37 @@ export const submitKyc = mutation({
         assertSelfOrAdmin(actor, String(args.id));
 
         const payload = (args.payload || {}) as Record<string, unknown>;
+        const now = new Date().toISOString();
         const docs: Array<{ type: string; url: string; status: 'pending' | 'approved' | 'rejected'; uploadedAt: string; reviewedAt?: string }> = [];
-        const documentFront = typeof payload.documentFront === 'string' ? payload.documentFront : undefined;
-        const documentBack = typeof payload.documentBack === 'string' ? payload.documentBack : undefined;
 
-        if (documentFront) {
-            docs.push({
-                type: 'id_front',
-                url: documentFront,
-                status: 'pending',
-                uploadedAt: new Date().toISOString(),
-            });
-        }
-        if (documentBack) {
-            docs.push({
-                type: 'id_back',
-                url: documentBack,
-                status: 'pending',
-                uploadedAt: new Date().toISOString(),
-            });
-        }
+        const pushDoc = (type: string, url: unknown) => {
+            if (typeof url === 'string' && url.trim()) {
+                docs.push({ type, url: url.trim(), status: 'pending', uploadedAt: now });
+            }
+        };
 
-        await ctx.db.patch(args.id, {
+        pushDoc('id_front', payload.documentFront);
+        pushDoc('id_back', payload.documentBack);
+        pushDoc('business_license', payload.incorporationDoc);
+        pushDoc('address_proof', payload.premisesPhoto);
+
+        const patch: Record<string, unknown> = {
             kycStatus: 'pending',
             verificationDocuments: docs.length > 0 ? docs : undefined,
-        });
+        };
+
+        if (typeof payload.businessAddress === 'string' && payload.businessAddress.trim()) {
+            patch.bio = payload.businessAddress.trim();
+        }
+        if (typeof payload.socialLink === 'string' && payload.socialLink.trim()) {
+            patch.bio = payload.socialLink.trim();
+        }
+        if (typeof payload.ein === 'string' && payload.ein.trim()) {
+            const prevBio = typeof patch.bio === 'string' ? `${patch.bio} | ` : '';
+            patch.bio = `${prevBio}EIN: ${payload.ein.trim()}`;
+        }
+
+        await ctx.db.patch(args.id, patch);
     }
 });
 

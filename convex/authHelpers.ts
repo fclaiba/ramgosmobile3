@@ -98,20 +98,27 @@ const getActorFromSessionToken = async (ctx: any, token: string): Promise<AuthAc
   return user ? mapToActor(user) : null;
 };
 
-export const requireActor = async (
+export const getActorOrNull = async (
   ctx: any,
   sessionToken?: string,
-): Promise<AuthActor> => {
+): Promise<AuthActor | null> => {
   const fromAuth = await getActorFromAuth(ctx);
   if (fromAuth) return fromAuth;
 
-  // SECURITY (Fase 1): the second argument is a server-issued session token.
-  // Raw user ids are NOT accepted anymore — identity can't be spoofed by
-  // sending someone else's id.
   if (sessionToken) {
     const fromSession = await getActorFromSessionToken(ctx, sessionToken);
     if (fromSession) return fromSession;
   }
+
+  return null;
+};
+
+export const requireActor = async (
+  ctx: any,
+  sessionToken?: string,
+): Promise<AuthActor> => {
+  const actor = await getActorOrNull(ctx, sessionToken);
+  if (actor) return actor;
 
   throw new Error("Sesión no válida o expirada. Por favor, inicie sesión nuevamente.");
 };

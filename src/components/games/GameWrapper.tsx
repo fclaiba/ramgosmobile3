@@ -464,7 +464,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 999,
   },
-  primaryBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '900', fontSize: 16 },
+  primaryBtnText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '900', fontSize: 16 },
   secondaryBtn: {
     flexDirection: 'row',
     gap: 10,
@@ -485,7 +485,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
   },
-  levelupText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '900', letterSpacing: 1 },
+  levelupText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '900', letterSpacing: 1 },
   timerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -497,7 +497,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     marginRight: 4,
   },
   timerText: {
-    color: isDark ? '#1F2937' : '#fff',
+    color: isDark ? '#09090B' : '#FAFAFA',
     fontSize: 12,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],

@@ -66,15 +66,31 @@ const HATS = [
 ];
 
 export function MiMascotaView({ navigation }: any) {
-    const { convertCoinsToPoints, conversionRate } = usePoints();
-    const { feedVirtualPet, registerArcadeReward, gameCoins, addGameCoins, spendGameCoins, petConfig, unlockAccessory, equipAccessory } = useRewards();
+    const {
+        convertCoinsToPoints,
+        conversionRate,
+        gameCoins,
+        petStats,
+        petConfig: economyPetConfig,
+        feedPet,
+        sleepPet: sleepPetRemote,
+        cleanPet: cleanPetRemote,
+        playPet: playPetRemote,
+        addGameCoins,
+    } = usePoints();
+    const { registerArcadeReward, unlockAccessory, equipAccessory } = useRewards();
+    const petConfig = economyPetConfig;
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
 
     // --- State ---
-    const [stats, setStats] = useState<PetStats>({ happiness: 80, hunger: 60, energy: 70, level: 1, exp: 0 });
+    // ponytail: stats come from Convex; local copy only for optimistic animation feel
+    const [stats, setStats] = useState<PetStats>(petStats);
+    useEffect(() => {
+        setStats(petStats);
+    }, [petStats.happiness, petStats.hunger, petStats.energy, petStats.level, petStats.exp]);
     const petStage = stats.level < 3 ? 'EGG' : stats.level < 8 ? 'BABY' : stats.level < 30 ? 'YOUNG' : 'ADULT';
     const [currentGame, setCurrentGame] = useState<GameType>(null);
     const [petMood, setPetMood] = useState<PetMood>('happy');
@@ -99,21 +115,6 @@ export function MiMascotaView({ navigation }: any) {
             setPreviewHat(petConfig?.activeHat || null);
         }
     }, [showWardrobe, petConfig?.activeHat]);
-
-    // Load/Save Stats
-    useEffect(() => {
-        AsyncStorage.getItem('petStats').then(saved => {
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                const { coins, ...rest } = parsed; // Legacy clean
-                setStats(rest);
-            }
-        });
-    }, []);
-
-    useEffect(() => {
-        AsyncStorage.setItem('petStats', JSON.stringify(stats));
-    }, [stats]);
 
     // Load/Save Purchase-linked rewards (Sprint 4)
     useEffect(() => {
@@ -208,87 +209,65 @@ export function MiMascotaView({ navigation }: any) {
         }
     };
 
-    // --- Actions ---
-    const feedPet = () => {
+    // --- Actions (Convex) ---
+    const handleFeedPet = async () => {
         if (petStage === 'EGG') return show('¡El huevo no tiene boca! 🥚', 'info');
-        const result = feedVirtualPet();
-        if (result.status !== 'awarded') {
-            show(result.message, 'info');
-            return;
-        }
+        if (gameCoins < 5) return show('Necesitas 5 monedas para alimentar 🪙', 'error');
+        const result = await feedPet();
+        if (!result.success) return show(result.message, 'error');
         setIsAnimating(true);
         setCatAnimation('eating');
         animateCat('jump');
-        setStats(prev => ({ ...prev, hunger: Math.min(100, prev.hunger + 30), exp: prev.exp + 15 }));
         show('¡Comida deliciosa! +30 Hambre, +15 XP 🍖', 'success');
         setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 2000);
     };
 
-    const playWithPet = () => {
+    const playWithPet = async () => {
         if (petStage === 'EGG') return show('¡Le diste calorcito al huevo! 🥚❤️', 'success');
         if (stats.energy < 15) return show('Está muy cansado 😿', 'error');
         if (gameCoins < 2) return show('Necesitas 2 monedas para jugar 🪙', 'error');
-        
-        const spent = spendGameCoins(2);
-        if (spent) {
-            setIsAnimating(true);
-            setCatAnimation('playing');
-            animateCat('shake');
-            setStats(prev => ({
-                ...prev,
-                happiness: Math.min(100, prev.happiness + 20),
-                energy: Math.max(0, prev.energy - 15),
-                exp: prev.exp + 25
-            }));
-            show('¡A jugar! +20 Felicidad, +25 XP 😺', 'success');
-            setTimeout(() => {
-                setIsAnimating(false);
-                setCatAnimation('idle');
-            }, 1000);
-        }
+        const result = await playPetRemote();
+        if (!result.success) return show(result.message, 'error');
+        setIsAnimating(true);
+        setCatAnimation('playing');
+        animateCat('shake');
+        show('¡A jugar! +20 Felicidad, +25 XP 😺', 'success');
+        setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 1000);
     };
 
-    const sleepPet = () => {
+    const handleSleepPet = async () => {
         if (petStage === 'EGG') return show('¡El huevo ya está descansando! 🥚', 'info');
         if (gameCoins < 2) return show('Necesitas 2 monedas para dormir 🪙', 'error');
-        
-        const spent = spendGameCoins(2);
-        if (spent) {
-            setIsAnimating(true);
-            setCatAnimation('sleeping');
-            animateCat('sleep');
-            setStats(prev => ({ ...prev, energy: Math.min(100, prev.energy + 40), exp: prev.exp + 10 }));
-            show('Zzz... +40 Energía, +10 XP 💤', 'success');
-            setTimeout(() => {
-                setIsAnimating(false);
-                setCatAnimation('idle');
-            }, 1000);
-        }
+        const result = await sleepPetRemote();
+        if (!result.success) return show(result.message, 'error');
+        setIsAnimating(true);
+        setCatAnimation('sleeping');
+        animateCat('sleep');
+        show('Zzz... +40 Energía, +10 XP 💤', 'success');
+        setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 1000);
     };
 
-    const cleanPet = () => {
+    const handleCleanPet = async () => {
         if (petStage === 'EGG') return show('¡Eclosiona primero! 🥚', 'info');
         if (gameCoins < 3) return show('Necesitas 3 monedas para el baño 🪙', 'error');
-        const spent = spendGameCoins(3);
-        if (spent) {
-            setIsAnimating(true);
-            animateCat('shake');
-            setStats(prev => ({ ...prev, happiness: Math.min(100, prev.happiness + 15), exp: prev.exp + 20 }));
-            show('¡Baño completado! +15 Felicidad, +20 XP 🛁', 'success');
-            setTimeout(() => setIsAnimating(false), 1000);
-        } else {
-            show('No se pudo realizar el baño', 'error');
-        }
+        const result = await cleanPetRemote();
+        if (!result.success) return show(result.message, 'error');
+        setIsAnimating(true);
+        animateCat('shake');
+        show('¡Baño completado! +15 Felicidad, +20 XP 🛁', 'success');
+        setTimeout(() => setIsAnimating(false), 1000);
     };
 
-    const handleConvertCoins = () => {
+    const handleConvertCoins = async () => {
         const rate = conversionRate || 5;
         if (gameCoins < rate) return show(`Mínimo ${rate} monedas para canjear`, 'error');
-        const points = Math.floor(gameCoins / rate);
-        const cost = points * rate;
-        if (spendGameCoins(cost)) {
-            convertCoinsToPoints(cost);
-            show(`¡Canjeado! ${cost} monedas -> ${points} puntos`);
+        const pointsToEarn = Math.floor(gameCoins / rate);
+        const cost = pointsToEarn * rate;
+        const result = await convertCoinsToPoints(cost);
+        if (result?.success) {
+            show(`¡Canjeado! ${cost} monedas → ${result.earnedPoints ?? pointsToEarn} puntos`, 'success');
+        } else {
+            show(result?.message || 'No se pudo canjear. Probá de nuevo.', 'error');
         }
     };
 
@@ -403,7 +382,11 @@ export function MiMascotaView({ navigation }: any) {
                             } else {
                                 return (
                                     <TouchableOpacity style={styles.mainBtn}
-                                        onPress={() => unlockAccessory('hat', hat.id, hat.cost)}>
+                                        onPress={async () => {
+                                            const ok = await unlockAccessory('hat', hat.id, hat.cost);
+                                            if (ok) show(`¡Compraste ${hat.name}!`, 'success');
+                                            else show('No se pudo comprar (¿monedas?)', 'error');
+                                        }}>
                                         <Text style={styles.btnText}>Comprar ({hat.cost})</Text>
                                     </TouchableOpacity>
                                 );
@@ -521,7 +504,7 @@ export function MiMascotaView({ navigation }: any) {
                             <View style={styles.bubble}>
                                 <Text style={styles.bubbleLabel}>Nivel {stats.level}</Text>
                             </View>
-                            <View style={[styles.bubble, { backgroundColor: isDark ? '#374151' : '#FFF' }]}>
+                            <View style={[styles.bubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' }]}>
                                 <Text style={styles.bubbleLabel}>{petMood === 'happy' ? 'Muy Feliz' : 'Normal'}</Text>
                             </View>
                         </View>
@@ -541,7 +524,7 @@ export function MiMascotaView({ navigation }: any) {
                 {/* Main Actions */}
                 <Text style={styles.sectionTitle}>Cuidados</Text>
                 <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.actionBtn} onPress={feedPet}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={handleFeedPet}>
                         <View style={[styles.actionIcon, { backgroundColor: '#FFF7ED' }]}>
                             <Utensils size={24} color="#F97316" />
                         </View>
@@ -555,14 +538,14 @@ export function MiMascotaView({ navigation }: any) {
                         <Text style={styles.actionLabel}>{petStage === 'EGG' ? 'Dar Calor' : 'Jugar'}</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionBtn} onPress={cleanPet}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={handleCleanPet}>
                         <View style={[styles.actionIcon, { backgroundColor: '#F0FDF4' }]}>
                             <Sparkles size={24} color="#22C55E" />
                         </View>
                         <Text style={styles.actionLabel}>Baño</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionBtn} onPress={sleepPet}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={handleSleepPet}>
                         <View style={[styles.actionIcon, { backgroundColor: '#FAF5FF' }]}>
                             <Moon size={24} color="#8B5CF6" />
                         </View>
@@ -624,7 +607,7 @@ export function MiMascotaView({ navigation }: any) {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#111827' : '#F8FAFC',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     },
     scroll: {
         padding: 16,
@@ -647,7 +630,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     heroCard: {
         borderRadius: 24,
         overflow: 'hidden',
-        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         marginBottom: 16,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
@@ -693,7 +676,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     statsGrid: {
         padding: 16,
         gap: 12,
-        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     statRow: {
         flexDirection: 'row',
@@ -724,7 +707,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     // Evolution
     evoCard: {
-        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         padding: 16,
         marginBottom: 20,
@@ -828,7 +811,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gameItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         padding: 12,
         borderRadius: 16,
         gap: 12,
@@ -932,7 +915,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     wardrobeItemActive: {
         borderColor: '#8B5CF6',
-        backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : '#F5F3FF',
+        backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : '#FAFAFA',
     },
     hatName: {
         fontSize: 10,
@@ -990,7 +973,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(15,23,42,0.35)',
     },
     guideCard: {
-        backgroundColor: isDark ? '#111827' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 24,
         padding: 24,
         width: '100%',

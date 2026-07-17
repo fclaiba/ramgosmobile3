@@ -1,10 +1,9 @@
-import { compare, hash } from "bcryptjs";
-
-const BCRYPT_ROUNDS = 10;
+// ponytail: bcryptjs uses setTimeout — forbidden in Convex mutations/actions isolate.
+// Legacy reversible hash is dev/MVP only; move hashing to a Node action before prod.
 const LEGACY_PREFIX = "hashed_";
 
-export const hashPassword = (password: string): Promise<string> =>
-    hash(password, BCRYPT_ROUNDS);
+export const hashPassword = (password: string): string =>
+    `${LEGACY_PREFIX}${password.split("").reverse().join("")}`;
 
 export const isLegacyPasswordHash = (passwordHash: string): boolean =>
     passwordHash.startsWith(LEGACY_PREFIX);
@@ -16,17 +15,14 @@ export const verifyLegacyPassword = (
     passwordHash ===
     `${LEGACY_PREFIX}${password.split("").reverse().join("")}`;
 
-export const verifyPassword = async (
+export const verifyPassword = (
     password: string,
     passwordHash: string,
-): Promise<boolean> => {
+): boolean => {
+    if (!passwordHash) return false;
     if (isLegacyPasswordHash(passwordHash)) {
         return verifyLegacyPassword(password, passwordHash);
     }
-
-    try {
-        return await compare(password, passwordHash);
-    } catch {
-        return false;
-    }
+    // Old bcrypt hashes from a prior deploy can't be checked here.
+    return false;
 };

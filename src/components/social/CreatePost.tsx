@@ -144,16 +144,16 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         height: '90%'
     },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     closeBtn: { padding: 4 },
     title: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     postBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    postBtnDisabled: { backgroundColor: isDark ? '#374151' : '#E5E7EB' },
+    postBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     postBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
     postBtnTextDisabled: { color: '#9CA3AF' },
 
@@ -162,8 +162,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     userName: { fontWeight: 'bold', fontSize: 15, color: isDark ? '#F9FAFB' : '#111827' },
     input: { fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', minHeight: 120, flex: 1 },
 
-    footer: { padding: 16, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#F3F4F6', marginBottom: 20 },
-    mediaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#F9FAFB' },
+    footer: { padding: 16, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', marginBottom: 20 },
+    mediaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
     mediaText: { color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '500' },
     imagePreview: { marginTop: 16, position: 'relative' },
     preview: { width: '100%', height: 200, borderRadius: 12 },

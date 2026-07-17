@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { assertSelfOrAdmin, getActorOrNull, requireActor } from "./authHelpers";
 
 // PHASE 3: Favorites/Wishlist Management
 
@@ -96,7 +96,9 @@ export const removeFavorite = mutation({
 export const getMyFavorites = query({
     args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
+        // ponytail: stale client session → empty list, not a crash
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (!actor) return [];
         assertSelfOrAdmin(actor, args.userId);
 
         const favorites = await ctx.db

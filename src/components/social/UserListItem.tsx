@@ -56,7 +56,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         marginBottom: 1,
     },
     avatar: {
@@ -91,7 +91,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     btnFollowing: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: isDark ? '#4B5563' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     btnText: {
         fontSize: 14,

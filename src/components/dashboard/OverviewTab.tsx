@@ -182,7 +182,7 @@ export function OverviewTab({
                             padding: 16,
                             marginBottom: 0,
                             borderBottomWidth: 1,
-                            borderBottomColor: isDark ? "#374151" : "#F3F4F6",
+                            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
                         },
                     ]}
                 >

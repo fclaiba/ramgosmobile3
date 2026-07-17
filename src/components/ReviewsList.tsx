@@ -89,22 +89,22 @@ export const ReviewsList: React.FC<ReviewsListProps> = ({ listingId, onWriteRevi
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { gap: 16, paddingTop: 8 },
     noReviews: { color: isDark ? '#9CA3AF' : '#6B7280', fontStyle: 'italic', textAlign: 'center', marginTop: 8 },
-    writeReviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 12, marginBottom: 8 },
+    writeReviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, marginBottom: 8 },
     writeReviewText: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     reviewCard: {
         padding: 12,
-        backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
-        borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB'
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
     },
     header: { flexDirection: 'row', gap: 12, marginBottom: 8 },
-    avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#E5E7EB' },
+    avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     userName: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     date: { fontSize: 11, color: '#9CA3AF' },
     ratingRow: { flexDirection: 'row', marginTop: 2, gap: 2 },
     title: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 2 },
     comment: { fontSize: 13, color: isDark ? '#D1D5DB' : '#4B5563', lineHeight: 18 },
     response: {
-        marginTop: 10, padding: 10, backgroundColor: isDark ? '#111827' : '#FFFFFF',
+        marginTop: 10, padding: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#2563EB'
     },
     responseTitle: { fontSize: 11, fontWeight: '600', color: '#2563EB', marginBottom: 2 },

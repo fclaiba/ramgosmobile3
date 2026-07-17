@@ -88,9 +88,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         width: 250,
         height: '100%',
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderRightWidth: 1,
-        borderRightColor: isDark ? '#374151' : '#E5E7EB',
+        borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         paddingHorizontal: 16,
         paddingBottom: 24,
     },
@@ -134,7 +134,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     bottomContent: {
         borderTopWidth: 1,
-        borderTopColor: isDark ? '#374151' : '#E5E7EB',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         paddingTop: 16,
     },
     actionItem: {

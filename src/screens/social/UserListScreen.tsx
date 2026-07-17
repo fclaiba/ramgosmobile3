@@ -110,7 +110,7 @@ export default function UserListScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     },
     list: {
         paddingTop: 8,

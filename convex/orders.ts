@@ -4,6 +4,63 @@ import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 
+const isStorageId = (url?: string | null) =>
+    !!url &&
+    !url.startsWith("http") &&
+    !url.startsWith("blob:") &&
+    !url.startsWith("data:") &&
+    url.length < 64;
+
+async function resolveMaybeStorageUrl(ctx: any, url?: string | null): Promise<string | undefined> {
+    if (!url) return undefined;
+    if (!isStorageId(url)) return url;
+    try {
+        const resolved = await ctx.storage.getUrl(url);
+        return resolved || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/** Attach a usable product image URL to each order line (snapshot or listing). */
+async function enrichOrderItems(ctx: any, items: any[]) {
+    return Promise.all(
+        (items || []).map(async (item: any) => {
+            let image = await resolveMaybeStorageUrl(ctx, item?.image);
+            if (!image && item?.listingId) {
+                const listingId = ctx.db.normalizeId("listings", item.listingId);
+                if (listingId) {
+                    const listing: any = await ctx.db.get(listingId);
+                    if (listing) {
+                        image =
+                            (await resolveMaybeStorageUrl(ctx, listing.image)) ||
+                            (await resolveMaybeStorageUrl(ctx, listing.gallery?.[0])) ||
+                            (await resolveMaybeStorageUrl(ctx, listing.images?.[0]?.url));
+                    }
+                }
+            }
+            return image ? { ...item, image } : item;
+        }),
+    );
+}
+
+async function presentOrder(ctx: any, order: any) {
+    const items = await enrichOrderItems(ctx, order.items);
+    const base = { ...order, items };
+    if (order.escrowState) {
+        return {
+            ...base,
+            escrow: {
+                state: order.escrowState,
+                releaseScheduledAt: new Date(
+                    new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000,
+                ).toISOString(),
+            },
+        };
+    }
+    return base;
+}
+
 // --- QUERIES ---
 
 export const getMyOrders = query({
@@ -27,18 +84,7 @@ export const getMyOrders = query({
             .withIndex("by_user", (q) => q.eq("userId", targetUserId))
             .order("desc")
             .collect();
-        return orders.map(order => {
-            if (order.escrowState) {
-                return {
-                    ...order,
-                    escrow: {
-                        state: order.escrowState,
-                        releaseScheduledAt: new Date(new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-                    }
-                };
-            }
-            return order;
-        });
+        return Promise.all(orders.map((order) => presentOrder(ctx, order)));
     },
 });
 
@@ -65,18 +111,7 @@ export const getOrdersBySeller = query({
             .withIndex("by_seller", (q) => q.eq("sellerId", targetSellerId))
             .order("desc")
             .collect();
-        return orders.map(order => {
-            if (order.escrowState) {
-                return {
-                    ...order,
-                    escrow: {
-                        state: order.escrowState,
-                        releaseScheduledAt: new Date(new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-                    }
-                };
-            }
-            return order;
-        });
+        return Promise.all(orders.map((order) => presentOrder(ctx, order)));
     },
 });
 
@@ -95,16 +130,7 @@ export const getOrderById = query({
         if (!isBuyer && !isSeller && !isAdmin) {
             throw new Error("No autorizado para ver esta orden.");
         }
-        if (order.escrowState) {
-            return {
-                ...order,
-                escrow: {
-                    state: order.escrowState,
-                    releaseScheduledAt: new Date(new Date(order.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                },
-            };
-        }
-        return order;
+        return presentOrder(ctx, order);
     },
 });
 
@@ -121,6 +147,7 @@ export const createOrder = mutation({
             title: v.string(),
             quantity: v.number(),
             price: v.number(),
+            image: v.optional(v.string()),
         })),
         total: v.number(),
         currency: v.literal('USD'),
@@ -329,8 +356,9 @@ export const confirmReceipt = mutation({
             throw new Error("No autorizado. Solo el comprador puede confirmar recepción.");
         }
 
-        // Validate State
-        if (order.status !== 'delivered' && order.status !== 'payment_received') {
+        // Validate State — paid_escrow is the marketplace held state
+        const releasable = ['delivered', 'payment_received', 'paid_escrow'];
+        if (!releasable.includes(order.status)) {
             throw new Error("Estado inválido. La orden debe estar entregada o lista para liberar.");
         }
 

@@ -4,7 +4,7 @@ import { Id } from "./_generated/dataModel";
 import { assertAdminOrDeveloper, requireActor } from "./authHelpers";
 import { hashPassword } from "./passwordHelpers";
 
-// Development-only credential. This is stored as bcrypt and grants no bypass.
+// ponytail: sync legacy hash — bcryptjs can't run in Convex mutations (uses setTimeout).
 const DEMO_PASSWORD = "RamgosDemo1!";
 
 // Helper to check dev permissions
@@ -72,7 +72,7 @@ export const seedTestUsers = mutation({
                 // Ensure flags
                 await ctx.db.patch(existing._id, {
                     isTest: true,
-                    password: await hashPassword(DEMO_PASSWORD),
+                    password: hashPassword(DEMO_PASSWORD),
                     kycStatus: u.kycStatus // Also ensure KYC status matches expectations
                 });
                 results.push({ ...sanitizeDevUser(existing), status: 'updated' });
@@ -89,7 +89,7 @@ export const seedTestUsers = mutation({
                     isTest: true,
                     joinedAt: new Date().toISOString(),
                     subscriptionStatus: 'active',
-                    password: await hashPassword(DEMO_PASSWORD)
+                    password: hashPassword(DEMO_PASSWORD)
                 });
                 results.push({ _id: newId, status: 'created' });
             }
@@ -288,13 +288,16 @@ export const seed5Bonos = mutation({
         if (!bonoListing) {
             const listingId = await ctx.db.insert("listings", {
                 sellerId: business._id,
-                title: "Bono Premium 50% Off",
-                description: "Bono premium para pruebas",
+                title: "Bono $100 (pagás $50)",
+                description: "Pagás $50 y tenés $100 de crédito en el negocio.",
                 price: 50,
+                discountValue: 100,
+                discountType: "fixed",
+                validityDays: 7,
                 currency: "USD",
                 category: "bonos",
                 tags: ["premium", "test"],
-                slug: "bono-premium-50-off",
+                slug: "bono-premium-50-por-100",
                 stock: 100,
                 status: "active",
                 type: "bono",
@@ -304,6 +307,14 @@ export const seed5Bonos = mutation({
                 validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             });
             bonoListing = await ctx.db.get(listingId);
+        } else {
+            await ctx.db.patch(bonoListing._id, {
+                price: 50,
+                discountValue: 100,
+                discountType: "fixed",
+                validityDays: (bonoListing as any).validityDays ?? 7,
+                updatedAt: new Date().toISOString(),
+            });
         }
 
         for (let i = 0; i < 5; i++) {
@@ -317,6 +328,11 @@ export const seed5Bonos = mutation({
                 ownerUserId: consumer._id,
                 sellerId: business._id,
                 validUntil: (bonoListing as any).validUntil,
+                paidAmount: 50,
+                creditTotal: 100,
+                creditRemaining: 100,
+                usesTotal: 1,
+                usesRemaining: 1,
                 status: "issued",
                 createdAt: new Date().toISOString(),
             });

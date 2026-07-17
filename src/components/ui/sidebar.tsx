@@ -212,12 +212,12 @@ function SidebarMenuButton({ asChild, isActive, variant = "default", size = "def
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     provider: { flex: 1, flexDirection: 'row' },
-    sidebarNone: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' },
+    sidebarNone: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     sidebarDesktop: {
         height: '100%',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRightWidth: 1,
-        borderRightColor: isDark ? '#374151' : '#E5E7EB',
+        borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         overflow: 'hidden',
     },
     sidebarInner: { flex: 1 },
@@ -236,7 +236,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderRadius: 8,
         gap: 8,
     },
-    menuButtonActive: { backgroundColor: isDark ? '#374151' : '#F3F4F6' },
+    menuButtonActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     sizeSm: { paddingVertical: 4, paddingHorizontal: 8 }
 });
 

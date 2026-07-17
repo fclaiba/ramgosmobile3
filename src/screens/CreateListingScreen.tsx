@@ -20,7 +20,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useActionGate } from '../utils/useActionGate';
-import { useFocusEffect } from '@react-navigation/native';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ImageUploadField } from '../components/ui/ImageUploadField';
@@ -53,6 +52,10 @@ export default function CreateListingScreen({ navigation, route }: any) {
         price: initialData?.price?.toString() || '',
         stock: initialData?.stock?.toString() || '',
         discountValue: initialData?.discountValue?.toString() || '',
+        validityDays:
+            initialData?.validityDays != null
+                ? String(initialData.validityDays)
+                : '7',
         description: initialData?.description || '',
         type: initialData?.type || null,
         category: initialData?.category || '',
@@ -93,6 +96,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
     const [photoUrl, setPhotoUrl] = useState('');
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
+    const [showLocationModal, setShowLocationModal] = useState(false);
 
     // Reset form when type selection changes (cancels) or when needed
     React.useEffect(() => {
@@ -169,12 +173,11 @@ export default function CreateListingScreen({ navigation, route }: any) {
     const shippingCosts = calculateShipping();
 
     const parseDimensions = (value: string) => {
-        const [lengthRaw, widthRaw, heightRaw] = value.split('x').map((part) => parseFloat(part));
-        return {
-            length: !Number.isNaN(lengthRaw) ? lengthRaw : 25,
-            width: !Number.isNaN(widthRaw) ? widthRaw : 20,
-            height: !Number.isNaN(heightRaw) ? heightRaw : 10,
-        };
+        const parts = value.split(/[xX×]/).map((part) => parseFloat(part.trim()));
+        const length = Number.isFinite(parts[0]) ? parts[0] : 25;
+        const width = Number.isFinite(parts[1]) ? parts[1] : 20;
+        const height = Number.isFinite(parts[2]) ? parts[2] : 10;
+        return { length, width, height };
     };
 
     const handleAddPhoto = () => {
@@ -249,6 +252,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
             const finalCategory = form.category;
             
             let discountValueFloat: number | undefined = undefined;
+            let validityDaysValue: number | undefined = undefined;
             if (listingType === 'bono') {
                 discountValueFloat = parseFloat((form.discountValue || '').replace(',', '.')) || 0;
                 if (discountValueFloat <= priceValue) {
@@ -256,6 +260,10 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     show('El monto a consumir debe ser mayor al precio de venta.', 'error');
                     return;
                 }
+                validityDaysValue = Math.min(
+                    Math.max(parseInt(form.validityDays || '7', 10) || 7, 1),
+                    365,
+                );
             }
 
             const extraLines: string[] = [];
@@ -305,13 +313,14 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         openCommissionRate: openCommissionRateValue,
                         discountValue: listingType === 'bono' ? discountValueFloat : undefined,
                         discountType: listingType === 'bono' ? 'fixed' : undefined,
+                        validityDays: listingType === 'bono' ? validityDaysValue : undefined,
                     } as any
                 });
                 show('Publicación actualizada exitosamente!', 'success');
                 navigation.goBack();
             } else {
                 // CREATE LOGIC
-                await createProduct({
+                const result = await createProduct({
                     title: form.title,
                     description: fullDescription || 'Sin descripción',
                     listingType,
@@ -324,8 +333,10 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     images: uploadedImages.map((url, index) => ({ url, isPrimary: index === 0 })),
                     shippingProfile: {
                         weightKg: listingType === 'product' ? weightValue : 0.1,
-                        dimensionsCm: parseDimensions(form.dimensions),
-                        shipsFromPostalCode: 'C1000',
+                        dimensionsCm: form.dimensions.trim()
+                            ? parseDimensions(form.dimensions)
+                            : { length: 25, width: 20, height: 10 },
+                        shipsFromCity: 'Buenos Aires',
                         allowPickup: true,
                     },
                     location: locationData,
@@ -333,7 +344,11 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     openCommissionRate: openCommissionRateValue,
                     discountValue: listingType === 'bono' ? discountValueFloat : undefined,
                     discountType: listingType === 'bono' ? 'fixed' : undefined,
+                    validityDays: listingType === 'bono' ? validityDaysValue : undefined,
                 });
+                if (!result.success) {
+                    throw new Error(result.error || 'No se pudo crear la publicación.');
+                }
                 show('¡Publicado con éxito!', 'success');
                 navigation.navigate('Marketplace');
             }
@@ -376,7 +391,20 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         <TouchableOpacity
                             key={type.id}
                             style={styles.typeCard}
-                            onPress={() => setSelectedType(type.id)}
+                            onPress={() => {
+                                setSelectedType(type.id);
+                                if (type.id === 'bono') {
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        discountValue: prev.discountValue || '100',
+                                        price: prev.price || '50',
+                                        validityDays: prev.validityDays || '7',
+                                        description:
+                                            prev.description ||
+                                            'Pagás $50 y tenés $100 de crédito para consumir en el negocio. Válido 7 días desde la compra.',
+                                    }));
+                                }
+                            }}
                         >
                             <LinearGradient
                                 colors={type.color}
@@ -395,16 +423,13 @@ export default function CreateListingScreen({ navigation, route }: any) {
         );
     };
 
-    // Location State
-    const [showLocationModal, setShowLocationModal] = useState(false);
-
     // Categories imported from central config
     const CATEGORIES = UNIFIED_CATEGORIES;
 
     // Validation Helpers
     const validateName = (text: string) => {
-        // Allow letters (including accents) and spaces only. Min length 3.
-        return /^[A-Za-z\s\u00C0-\u017F]+$/.test(text) && text.trim().length >= 3;
+        // ponytail: allow numbers (BMW 320, iPhone 15) — min 3 chars
+        return text.trim().length >= 3;
     };
 
     const validatePrice = (text: string) => {
@@ -467,7 +492,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                                 width: 22,
                                 height: 22,
                                 borderRadius: 11,
-                                backgroundColor: '#fff',
+                                backgroundColor: 'rgba(255,255,255,0.62)',
                                 alignSelf: form.openPromotion ? 'flex-end' : 'flex-start',
                             }}
                         />
@@ -545,13 +570,16 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 />
                 {renderCategoryPicker(form.category, (val) => setForm(prev => ({ ...prev, category: val })), CATEGORIES.bono)}
 
+                <Text style={{ fontSize: 13, color: isDark ? '#A1A1AA' : '#6B7280', marginBottom: 12, lineHeight: 18 }}>
+                    Modelo Ramgos: el cliente paga la mitad y recibe el doble de crédito. Ej. pagá $50 → $100 de descuento en tu negocio.
+                </Text>
                 <View style={styles.formRow}>
                     <View style={styles.formColumn}>
                         <View style={{ gap: 8 }}>
-                            <Text style={styles.label}>Monto a Consumir ($)</Text>
+                            <Text style={styles.label}>Crédito en el negocio ($)</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Ej. 200"
+                                placeholder="Ej. 100"
                                 placeholderTextColor="#9CA3AF"
                                 keyboardType="decimal-pad"
                                 value={form.discountValue}
@@ -569,24 +597,46 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     </View>
                     <View style={styles.formColumn}>
                         <View style={{ gap: 8 }}>
-                            <Text style={styles.label}>Precio de Venta (50%)</Text>
-                            <View style={[styles.input, { backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center' }]}>
+                            <Text style={styles.label}>Precio de venta (50%)</Text>
+                            <View style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center' }]}>
                                 <Text style={{ color: isDark ? '#D1D5DB' : '#6B7280' }}>
-                                    ${form.price || '0.00'}
+                                    ${form.price || '50.00'}
                                 </Text>
                             </View>
                         </View>
                     </View>
                 </View>
 
-                <FormInput
-                    label="Cantidad de Bonos Disponibles"
-                    placeholder="Ej. 50"
-                    keyboardType="numeric"
-                    value={form.stock}
-                    onChange={(t: string) => setForm({ ...form, stock: t })}
-                    styles={styles}
-                />
+                <View style={styles.formRow}>
+                    <View style={styles.formColumn}>
+                        <FormInput
+                            label="Cantidad disponibles"
+                            placeholder="Ej. 50"
+                            keyboardType="numeric"
+                            value={form.stock}
+                            onChange={(t: string) => setForm({ ...form, stock: t })}
+                            styles={styles}
+                        />
+                    </View>
+                    <View style={styles.formColumn}>
+                        <FormInput
+                            label="Duración (días)"
+                            placeholder="7"
+                            keyboardType="numeric"
+                            value={form.validityDays}
+                            onChange={(t: string) =>
+                                setForm({
+                                    ...form,
+                                    validityDays: t.replace(/[^0-9]/g, ''),
+                                })
+                            }
+                            styles={styles}
+                        />
+                    </View>
+                </View>
+                <Text style={{ fontSize: 12, color: isDark ? '#A1A1AA' : '#6B7280', marginBottom: 12, marginTop: -4 }}>
+                    Estándar: 7 días desde la compra. Podés cambiarlo (1–365).
+                </Text>
 
                 {renderLocationPicker()}
 
@@ -897,7 +947,7 @@ const getStyles = (isDark: boolean, width: number) => {
     const isWide = width >= 900;
     const maxWidth = isWide ? 920 : 560;
 
-    const bg = isDark ? '#0B1220' : '#F9FAFB';
+    const bg = isDark ? '#09090B' : '#FAFAFA';
     const text = isDark ? '#F9FAFB' : '#111827';
     const muted = isDark ? '#9CA3AF' : '#6B7280';
     const inputBg = isDark ? 'rgba(31, 41, 55, 0.9)' : '#F3F4F6';
@@ -917,7 +967,7 @@ const getStyles = (isDark: boolean, width: number) => {
         cardDesc: { marginTop: 4, fontSize: 12, color: 'rgba(255,255,255,0.9)', textAlign: 'center' },
 
         formWrapper: { gap: 16 },
-        formCard: { padding: 16, borderRadius: 16, backgroundColor: isDark ? '#1F2937' : '#fff', gap: 16, borderWidth: 1, borderColor: border },
+        formCard: { padding: 16, borderRadius: 16, backgroundColor: isDark ? '#09090B' : '#FAFAFA', gap: 16, borderWidth: 1, borderColor: border },
         formGroup: { gap: 8 },
         formRow: { flexDirection: 'row', gap: 12 },
         formColumn: { flex: 1, gap: 6 },
@@ -1014,7 +1064,7 @@ const getStyles = (isDark: boolean, width: number) => {
             padding: 12,
             borderRadius: 8,
             borderWidth: 1,
-            borderColor: isDark ? '#374151' : '#D1D5DB',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
             marginBottom: 16,
             gap: 8,
             backgroundColor: inputBg,

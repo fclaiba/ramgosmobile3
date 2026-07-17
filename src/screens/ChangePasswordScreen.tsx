@@ -215,7 +215,7 @@ const getStyles = (isDark: boolean) =>
     StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? '#111827' : '#F9FAFB',
+            backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         },
         content: {
             padding: 20,
@@ -232,8 +232,8 @@ const getStyles = (isDark: boolean) =>
         inputRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? '#1F2937' : '#fff',
-            borderColor: isDark ? '#374151' : '#E5E7EB',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
             borderWidth: 1,
             borderRadius: 12,
             paddingHorizontal: 14,

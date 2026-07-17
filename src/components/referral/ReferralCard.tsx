@@ -87,7 +87,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     title: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
     },
     description: {
         color: 'rgba(255,255,255,0.9)',
@@ -108,7 +108,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     code: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         letterSpacing: 2,
         paddingHorizontal: 24,
         paddingVertical: 12,
@@ -133,7 +133,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         elevation: 4,
     },
     shareButtonText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
         fontSize: 16,
     }

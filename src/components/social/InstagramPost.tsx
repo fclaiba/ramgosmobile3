@@ -87,7 +87,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         width: itemSize,
         height: itemSize,
-        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         marginBottom: 2
     },
     image: { width: '100%', height: '100%' },

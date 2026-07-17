@@ -65,11 +65,11 @@ export const DinoGame = (props: DinoGameProps) => {
 
     // Game Logic
     const obstacles = useRef<Obstacle[]>([]);
-    const gameLoopRef = useRef<number | null>(null);
+    const gameLoopRef = useRef<any>(null);
     const scoreRef = useRef(0);
     const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'>('IDLE');
     const gameSpeed = useRef(GAME_SPEED_START);
-    const crouchTimer = useRef<number | null>(null);
+    const crouchTimer = useRef<any>(null);
     const isCrouchingRef = useRef(false);
 
     const GRAVITY = 0.8;

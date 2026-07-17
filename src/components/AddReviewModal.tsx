@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { X, Star, Upload } from 'lucide-react-native';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -27,6 +27,11 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
     const { show } = useToast();
 
     const addReview = useMutation(api.reviews.addReview);
+
+    useEffect(() => {
+        if (!visible || Platform.OS !== 'web') return;
+        (document.activeElement as HTMLElement | null)?.blur?.();
+    }, [visible]);
 
     const handleSubmit = async () => {
         if (rating === 0) return;
@@ -68,6 +73,7 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
             animationType="slide"
             transparent={true}
             onRequestClose={onClose}
+            accessibilityViewIsModal
         >
             <View style={styles.overlay}>
                 <View style={styles.container}>
@@ -132,15 +138,15 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    container: { backgroundColor: isDark ? '#1F2937' : '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32, maxHeight: '80%' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    container: { backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32, maxHeight: '80%' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     title: { fontSize: 18, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
     closeBtn: { padding: 4 },
     content: { padding: 20 },
     label: { fontSize: 14, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12, marginTop: 12 },
     starsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-    input: { backgroundColor: isDark ? '#111827' : '#F9FAFB', borderRadius: 12, padding: 16, color: isDark ? '#F9FAFB' : '#111827', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', minHeight: 120 },
-    uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 12, borderStyle: 'dashed', marginTop: 20, justifyContent: 'center' },
+    input: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, padding: 16, color: isDark ? '#F9FAFB' : '#111827', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', minHeight: 120 },
+    uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderRadius: 12, borderStyle: 'dashed', marginTop: 20, justifyContent: 'center' },
     uploadText: { color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '500' },
     footer: { padding: 20, paddingTop: 0 },
     submitBtn: { width: '100%', backgroundColor: isDark ? '#374151' : '#111827', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },

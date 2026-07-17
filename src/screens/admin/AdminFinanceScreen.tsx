@@ -39,7 +39,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { ListPager, paginate } from '../../components/ui/ListPager';
 
 type Tab = 'failed' | 'escrows' | 'disputes' | 'refunds' | 'recon';
 
@@ -56,35 +56,37 @@ export default function AdminFinanceScreen() {
     const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const { user } = useAuth();
+    const { sessionToken } = useAuth();
     const { show } = useToast();
 
     const [activeTab, setActiveTab] = useState<Tab>('failed');
+    const [listPage, setListPage] = useState<Partial<Record<Tab, number>>>({});
+    const pageOf = (tab: Tab) => listPage[tab] ?? 1;
+    const setPageOf = (tab: Tab, p: number) => setListPage((prev) => ({ ...prev, [tab]: p }));
 
     const styles = useMemo(() => getStyles(isDark, insets), [isDark, insets]);
 
-    const actorId = user?.id as Id<'users'> | undefined;
-    const skipQuery = !actorId ? 'skip' : undefined;
+    const queryArgs = sessionToken ? { sessionToken } : 'skip';
 
     const failed = useQuery(
         api.finance.listFailedTransfers,
-        actorId ? { actorId, limit: 100 } : 'skip',
+        queryArgs === 'skip' ? 'skip' : { sessionToken, limit: 100 },
     ) as any[] | undefined;
     const escrows = useQuery(
         api.finance.listStuckEscrows,
-        actorId ? { actorId, olderThanDays: 30 } : 'skip',
+        queryArgs === 'skip' ? 'skip' : { sessionToken, olderThanDays: 30 },
     ) as any[] | undefined;
     const disputes = useQuery(
         api.finance.listOpenDisputes,
-        actorId ? { actorId, limit: 100 } : 'skip',
+        queryArgs === 'skip' ? 'skip' : { sessionToken, limit: 100 },
     ) as any[] | undefined;
     const refunds = useQuery(
         api.finance.listPendingRefunds,
-        actorId ? { actorId, windowDays: 7 } : 'skip',
+        queryArgs === 'skip' ? 'skip' : { sessionToken, windowDays: 7 },
     ) as any[] | undefined;
     const recon = useQuery(
         api.finance.listReconciliationFlags,
-        actorId ? { actorId, status: 'open' as const, limit: 100 } : 'skip',
+        queryArgs === 'skip' ? 'skip' : { sessionToken, status: 'open' as const, limit: 100 },
     ) as any[] | undefined;
 
     const updateFlag = useMutation(api.finance.updateReconciliationFlag);
@@ -96,10 +98,10 @@ export default function AdminFinanceScreen() {
         id: string,
         status: 'resolved' | 'ignored',
     ) => {
-        if (!actorId) return;
+        if (!sessionToken) return;
         try {
             await updateFlag({
-                actorId,
+                sessionToken,
                 flagId: id as any,
                 status,
             });
@@ -127,7 +129,10 @@ export default function AdminFinanceScreen() {
     const renderFailedTransfers = () => {
         if (failed === undefined) return renderLoading();
         if (failed.length === 0) return renderEmpty('Ningún transfer en estado failed.');
-        return failed.map((p: any) => (
+        const page = paginate(failed, pageOf('failed'));
+        return (
+            <>
+                {page.items.map((p: any) => (
             <View key={p._id} style={styles.row}>
                 <View style={styles.rowIcon}>
                     <XCircle size={18} color="#DC2626" />
@@ -146,13 +151,19 @@ export default function AdminFinanceScreen() {
                     )}
                 </View>
             </View>
-        ));
+        ))}
+                <ListPager isDark={isDark} page={page.page} totalPages={page.totalPages} total={page.total} onPage={(p) => setPageOf('failed', p)} />
+            </>
+        );
     };
 
     const renderEscrows = () => {
         if (escrows === undefined) return renderLoading();
         if (escrows.length === 0) return renderEmpty('Ningún escrow lleva > 30 días.');
-        return escrows.map((o: any) => {
+        const page = paginate(escrows, pageOf('escrows'));
+        return (
+            <>
+                {page.items.map((o: any) => {
             const ageDays = Math.floor(
                 (Date.now() - (o._creationTime ?? 0)) / 86_400_000,
             );
@@ -171,13 +182,19 @@ export default function AdminFinanceScreen() {
                     </View>
                 </View>
             );
-        });
+        })}
+                <ListPager isDark={isDark} page={page.page} totalPages={page.totalPages} total={page.total} onPage={(p) => setPageOf('escrows', p)} />
+            </>
+        );
     };
 
     const renderDisputes = () => {
         if (disputes === undefined) return renderLoading();
         if (disputes.length === 0) return renderEmpty('Sin disputas abiertas.');
-        return disputes.map((p: any) => (
+        const page = paginate(disputes, pageOf('disputes'));
+        return (
+            <>
+                {page.items.map((p: any) => (
             <View key={p._id} style={styles.row}>
                 <View style={styles.rowIcon}>
                     <AlertTriangle size={18} color="#B91C1C" />
@@ -196,13 +213,19 @@ export default function AdminFinanceScreen() {
                     )}
                 </View>
             </View>
-        ));
+        ))}
+                <ListPager isDark={isDark} page={page.page} totalPages={page.totalPages} total={page.total} onPage={(p) => setPageOf('disputes', p)} />
+            </>
+        );
     };
 
     const renderRefunds = () => {
         if (refunds === undefined) return renderLoading();
         if (refunds.length === 0) return renderEmpty('Ningún refund en los últimos 7 días.');
-        return refunds.map((p: any) => (
+        const page = paginate(refunds, pageOf('refunds'));
+        return (
+            <>
+                {page.items.map((p: any) => (
             <View key={p._id} style={styles.row}>
                 <View style={styles.rowIcon}>
                     <RotateCcw size={18} color="#7C3AED" />
@@ -216,13 +239,19 @@ export default function AdminFinanceScreen() {
                     </Text>
                 </View>
             </View>
-        ));
+        ))}
+                <ListPager isDark={isDark} page={page.page} totalPages={page.totalPages} total={page.total} onPage={(p) => setPageOf('refunds', p)} />
+            </>
+        );
     };
 
     const renderRecon = () => {
         if (recon === undefined) return renderLoading();
         if (recon.length === 0) return renderEmpty('No hay discrepancias abiertas.');
-        return recon.map((f: any) => (
+        const page = paginate(recon, pageOf('recon'));
+        return (
+            <>
+                {page.items.map((f: any) => (
             <View key={f._id} style={styles.row}>
                 <View style={styles.rowIcon}>
                     <Shield size={18} color="#1D4ED8" />
@@ -250,7 +279,10 @@ export default function AdminFinanceScreen() {
                     </View>
                 </View>
             </View>
-        ));
+        ))}
+                <ListPager isDark={isDark} page={page.page} totalPages={page.totalPages} total={page.total} onPage={(p) => setPageOf('recon', p)} />
+            </>
+        );
     };
 
     const tabBody = useMemo(() => {
@@ -261,7 +293,7 @@ export default function AdminFinanceScreen() {
             case 'refunds': return renderRefunds();
             case 'recon': return renderRecon();
         }
-    }, [activeTab, failed, escrows, disputes, refunds, recon]);
+    }, [activeTab, failed, escrows, disputes, refunds, recon, listPage]);
 
     const counts = {
         failed: failed?.length ?? 0,
@@ -287,6 +319,12 @@ export default function AdminFinanceScreen() {
                 }
             />
 
+            {!sessionToken ? (
+                <View style={styles.emptyState}>
+                    <Text style={styles.emptyTitle}>Sesión inválida</Text>
+                    <Text style={styles.emptyDesc}>Cerrá sesión e iniciá sesión de nuevo.</Text>
+                </View>
+            ) : (
             <ScrollView
                 contentContainerStyle={styles.content}
                 stickyHeaderIndices={[0]}
@@ -323,12 +361,13 @@ export default function AdminFinanceScreen() {
 
                 <View style={styles.section}>{tabBody}</View>
             </ScrollView>
+            )}
         </View>
     );
 }
 
 const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#0F172A' : '#F9FAFB' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     content: { paddingBottom: insets.bottom + 32 },
     refreshBtn: {
         width: 36,
@@ -342,7 +381,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
 
     tabsBar: {
-        backgroundColor: isDark ? '#0F172A' : '#F9FAFB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderBottomWidth: 1,
         borderBottomColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#E5E7EB',
     },
@@ -354,7 +393,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 999,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
         borderColor: isDark ? 'rgba(148, 163, 184, 0.18)' : '#E5E7EB',
     },
@@ -384,7 +423,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         gap: 12,
         padding: 14,
         borderRadius: 14,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
         borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#E5E7EB',
         alignItems: 'flex-start',

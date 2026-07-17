@@ -70,8 +70,8 @@ export const DuckHunt = (props: DuckHuntProps) => {
     const lastLevelReported = useRef(1);
 
     // Refs
-    const gameLoopRef = useRef<number | null>(null);
-    const timerRef = useRef<number | null>(null);
+    const gameLoopRef = useRef<any>(null);
+    const timerRef = useRef<any>(null);
 
     // Sync Refs
     useEffect(() => { scoreRef.current = score; }, [score]);
@@ -523,7 +523,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         }),
     },
     btnText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
         fontSize: 16
     },

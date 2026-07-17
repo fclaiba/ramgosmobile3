@@ -109,7 +109,7 @@ export const SocialAuthCompleteScreen = ({ route }: SocialAuthCompleteScreenProp
 
 const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-    card: { width: '100%', maxWidth: 340, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
+    card: { width: '100%', maxWidth: 340, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 24, padding: 32, alignItems: 'center', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
     loadingContainer: { alignItems: 'center' },
     spinner: { marginBottom: 20 },
     successContainer: { alignItems: 'center', width: '100%' },
@@ -118,5 +118,5 @@ const getStyles = (isDark: any) => StyleSheet.create({
     subtitle: { fontSize: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginBottom: 24, textAlign: 'center' },
     button: { width: '100%', borderRadius: 16, overflow: 'hidden' },
     gradientButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
-    buttonText: { color: isDark ? '#1F2937' : '#fff', fontSize: 16, fontWeight: '600' },
+    buttonText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 16, fontWeight: '600' },
 });

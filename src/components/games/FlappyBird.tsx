@@ -460,7 +460,7 @@ const s = StyleSheet.create({
         top: 8,
         width: 8,
         height: 8,
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(255,255,255,0.62)',
         borderRadius: 4,
         borderWidth: 2,
         borderColor: '#333',

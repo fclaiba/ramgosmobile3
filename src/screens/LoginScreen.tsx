@@ -5,7 +5,7 @@ import { AuthBackground } from '../components/auth/AuthBackground';
 import { Mail, Lock, Eye, EyeOff, LogIn, ArrowLeft, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
-import { useAuth, type AuthFlowDecision } from '../contexts/AuthContext';
+import { useAuth, getAuthDestination, type AuthFlowDecision } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -65,8 +65,12 @@ export default function LoginScreen({ navigation }: any) {
 
     useEffect(() => {
         if (status === 'authenticated' && user) {
+            const destination = getAuthDestination(user) ?? { screen: 'Home' as const };
             const timer = setTimeout(() => {
-                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: destination.screen, params: destination.params }],
+                });
             }, 100);
             return () => clearTimeout(timer);
         }
@@ -118,6 +122,10 @@ export default function LoginScreen({ navigation }: any) {
             if (error instanceof Error && error.message === 'EMAIL_VERIFICATION_REQUIRED') {
                 const accountType = mapRoleToAccountType(pendingVerification?.user?.role);
                 navigation.navigate('Verification', { email: email.trim(), accountType });
+                return;
+            }
+            if (error instanceof Error && error.message.includes('ACCOUNT_BANNED')) {
+                navigation.navigate('BannedUser');
                 return;
             }
             const cleanMsg = getCleanErrorMessage(error, 'Credenciales inválidas. Por favor, intenta de nuevo.');
@@ -244,36 +252,7 @@ export default function LoginScreen({ navigation }: any) {
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Social Login */}
-                            <View style={styles.divider}>
-                                <View style={styles.line} />
-                                <Text style={styles.orText}>O continúa con</Text>
-                                <View style={styles.line} />
-                            </View>
 
-                            <View style={styles.socialRow}>
-                                <TouchableOpacity
-                                    style={styles.socialBtn}
-                                    onPress={() => handleSocialLogin('google')}
-                                    disabled={busy}
-                                >
-                                    <GoogleIcon />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.socialBtn}
-                                    onPress={() => handleSocialLogin('facebook')}
-                                    disabled={busy}
-                                >
-                                    <FacebookIcon />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.socialBtn}
-                                    onPress={() => handleSocialLogin('apple')}
-                                    disabled={busy}
-                                >
-                                    <AppleIcon isDark={isDark} />
-                                </TouchableOpacity>
-                            </View>
 
                             {/* Footer */}
                             <View style={styles.footer}>
@@ -327,7 +306,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     form: { gap: 20 },
     inputContainer: { gap: 8 },
     label: { fontSize: 14, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginLeft: 4 },
-    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#fff', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', height: 48, paddingHorizontal: 12 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', height: 48, paddingHorizontal: 12 },
     icon: { marginRight: 12 },
     input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827' },
 
@@ -336,7 +315,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Checkbox
     rememberContainer: { flexDirection: 'row', alignItems: 'center', marginTop: -4 },
-    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: isDark ? '#374151' : '#fff' },
+    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
     checkboxChecked: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
     rememberText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#4B5563' },
 
@@ -345,11 +324,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
     divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
-    line: { flex: 1, height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
+    line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
     orText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 12 },
 
     socialRow: { flexDirection: 'row', gap: 12, marginBottom: 24, justifyContent: 'center' },
-    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
+    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', justifyContent: 'center', alignItems: 'center' },
 
     footer: { flexDirection: 'row', justifyContent: 'center', marginBottom: 16 },
     footerText: { color: isDark ? '#9CA3AF' : '#6B7280' },

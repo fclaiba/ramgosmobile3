@@ -71,7 +71,7 @@ const createMarketplaceMarkerIcon = (item: any, isActive: boolean, isDark: boole
                     height: ${size}px;
                     border-radius: 50%;
                     border: ${borderWidth}px solid ${color};
-                    background: ${isDark ? '#1F2937' : '#FFFFFF'};
+                    background: ${isDark ? '#09090B' : '#FAFAFA'};
                     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                     overflow: hidden;
                     display: flex;
@@ -313,7 +313,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 12 }}>
                             <TouchableOpacity
-                                style={[s.zoomBtnCompact, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}
+                                style={[s.zoomBtnCompact, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                 onPress={() => onRadiusChange && onRadiusChange(Math.max(1, radius - 1))}
                             >
                                 <Minus size={12} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -332,7 +332,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                             />
 
                             <TouchableOpacity
-                                style={[s.zoomBtnCompact, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}
+                                style={[s.zoomBtnCompact, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                 onPress={() => onRadiusChange && onRadiusChange(Math.min(50, radius + 1))}
                             >
                                 <Plus size={12} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -357,7 +357,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                     </TouchableOpacity>
                     
                     {notificationsEnabled && (
-                        <View style={[s.notifDivider, { backgroundColor: isDark ? '#4B5563' : '#D1D5DB' }]} />
+                        <View style={[s.notifDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' }]} />
                     )}
 
                     {notificationsEnabled && (
@@ -424,7 +424,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         <View style={s.detailActions}>
                             {/* Save */}
                             <TouchableOpacity
-                                style={[s.actionBtn, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}
+                                style={[s.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                 onPress={() => toggleFavorite(activeItem)}
                             >
                                 <Heart
@@ -463,7 +463,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
                             {/* Detail */}
                             <TouchableOpacity
-                                style={[s.actionBtn, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}
+                                style={[s.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                 onPress={() => onItemClick(activeItem)}
                             >
                                 <ArrowRight size={18} color={isDark ? '#D1D5DB' : '#6B7280'} />

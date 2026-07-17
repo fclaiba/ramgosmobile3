@@ -176,7 +176,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         categoryId: 'recompensas',
         title: '¿Cómo gano puntos Ramgos?',
         summary: 'Por cada compra, review y referido.',
-        body: `Ganás puntos automáticamente cuando:\n\n- **Comprás:** 1 punto por cada $10 gastados (después de impuestos).\n- **Dejás reviews:** 50 puntos por cada review verificada.\n- **Referís usuarios:** 500 puntos cuando un amigo se registra y hace su primera compra con tu link.\n- **Completás misiones:** revisá el feed de **Mascota** para ver desafíos disponibles.\n\nLos puntos se reflejan en tu perfil casi en tiempo real (puede haber un retraso de hasta 1 hora).`,
+        body: `Ganás puntos automáticamente cuando:\n\n- **Comprás:** 1 punto por cada **$1** pagado en efectivo (si usás puntos para pagar, solo sumás sobre el saldo restante en tarjeta).\n- **Bonus de nivel:** Plata/Oro/Élite suman % extra sobre esa compra.\n- **Referís usuarios:** puntos cuando un amigo se registra y hace su primera compra con tu link.\n- **Completás misiones:** revisá el feed de **Mascota** para ver desafíos disponibles.\n\nLos puntos se acreditan en el backend al confirmar el pago (casi en tiempo real).`,
     },
     {
         id: 'recompensas-2-niveles',

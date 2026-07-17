@@ -233,20 +233,72 @@ function useMarketplaceState(): MarketplaceContextValue {
                 return { success: false, error: 'Debes iniciar sesión.' };
             }
             try {
+                const images = input.images as Array<{ url: string; isPrimary?: boolean }> | undefined;
+                const galleryFromImages = images?.map((img) => img.url).filter(Boolean);
+                const gallery = (input.gallery as string[] | undefined) ?? galleryFromImages;
+                const primaryImage =
+                    images?.find((img) => img.isPrimary)?.url ??
+                    gallery?.[0] ??
+                    (input.image as string | undefined);
+
+                // ponytail: only fields the Convex validator accepts; skip partial dimensionsCm
+                const rawShipping = input.shippingProfile as Record<string, unknown> | undefined;
+                const dims = rawShipping?.dimensionsCm as
+                    | { length?: number; width?: number; height?: number }
+                    | undefined;
+                const hasFullDims =
+                    !!dims &&
+                    Number.isFinite(Number(dims.length)) &&
+                    Number.isFinite(Number(dims.width)) &&
+                    Number.isFinite(Number(dims.height));
+                const shippingProfile = rawShipping
+                    ? {
+                          weightKg: Number(rawShipping.weightKg ?? 1) || 1,
+                          allowPickup: Boolean(rawShipping.allowPickup ?? true),
+                          shipsFromCity:
+                              (rawShipping.shipsFromCity as string | undefined) ||
+                              (rawShipping.shipsFromPostalCode ? 'Buenos Aires' : undefined),
+                          ...(hasFullDims
+                              ? {
+                                    dimensionsCm: {
+                                        length: Number(dims!.length),
+                                        width: Number(dims!.width),
+                                        height: Number(dims!.height),
+                                    },
+                                }
+                              : {}),
+                      }
+                    : undefined;
+
+                const listingType =
+                    (input.listingType as string | undefined) ??
+                    (input.type as string | undefined) ??
+                    'product';
+
                 const productId = await createListingMutation({
                     sessionToken,
+                    sellerId: user.id,
                     title: String(input.title ?? ''),
                     description: String(input.description ?? ''),
                     price: Number(input.price ?? 0),
-                    type: (input.type as any) ?? 'product',
+                    type: listingType as 'product' | 'service' | 'event' | 'bono',
                     category: String(input.category ?? 'General'),
                     stock: Number(input.stock ?? 1),
-                    image: input.image as string | undefined,
-                    gallery: input.gallery as string[] | undefined,
+                    image: primaryImage,
+                    gallery,
+                    tags: (input.tags as string[] | undefined) ?? [listingType],
                     damageDescription: input.damageDescription as string | undefined,
                     condition: input.condition as string | undefined,
                     location: input.location as any,
-                    shippingProfile: input.shippingProfile as any,
+                    shippingProfile,
+                    discountValue: input.discountValue as number | undefined,
+                    discountType: input.discountType as string | undefined,
+                    openPromotion: input.openPromotion as boolean | undefined,
+                    openCommissionRate: input.openCommissionRate as number | undefined,
+                    eventDate: input.eventDate as string | undefined,
+                    eventTime: input.eventTime as string | undefined,
+                    validUntil: input.validUntil as string | undefined,
+                    validityDays: input.validityDays as number | undefined,
                 });
                 return { success: true, productId: String(productId) };
             } catch (e: any) {

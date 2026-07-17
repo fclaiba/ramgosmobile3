@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { UserPlus, LogIn, UserCircle, Sparkles } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { AuthBackground } from '../components/auth/AuthBackground';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, getAuthDestination } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 
@@ -43,8 +43,12 @@ export default function WelcomeScreen({ navigation }: any) {
 
     useEffect(() => {
         if (status === 'authenticated' && user) {
+            const destination = getAuthDestination(user) ?? { screen: 'Home' as const };
             const timer = setTimeout(() => {
-                navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: destination.screen, params: destination.params }],
+                });
             }, 100);
             return () => clearTimeout(timer);
         }
@@ -224,35 +228,6 @@ export default function WelcomeScreen({ navigation }: any) {
 
                             {/* Footer & Socials */}
                             <Animated.View style={{ opacity: footerOpacity, width: '100%', alignItems: 'center' }}>
-                                <View style={styles.divider}>
-                                    <View style={styles.line} />
-                                    <Text style={styles.orText}>O continúa con</Text>
-                                    <View style={styles.line} />
-                                </View>
-
-                                <View style={styles.socialRow}>
-                                    <TouchableOpacity
-                                        style={styles.socialBtn}
-                                        onPress={() => handleSocialLogin('google')}
-                                        disabled={busy}
-                                    >
-                                        <GoogleIcon />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.socialBtn}
-                                        onPress={() => handleSocialLogin('facebook')}
-                                        disabled={busy}
-                                    >
-                                        <FacebookIcon />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={styles.socialBtn}
-                                        onPress={() => handleSocialLogin('apple')}
-                                        disabled={busy}
-                                    >
-                                        <AppleIcon isDark={isDark} />
-                                    </TouchableOpacity>
-                                </View>
 
                                 <Text style={styles.footerText}>
                                     Al continuar, aceptas nuestros{' '}
@@ -336,7 +311,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gradientBtn: { flexDirection: 'row', height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
     primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: isDark ? '#374151' : '#fff', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
+    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
     secondaryBtnText: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 16, fontWeight: '600' },
 
     ghostBtn: { flexDirection: 'row', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -344,11 +319,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Footer
     divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 24 },
-    line: { flex: 1, height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
+    line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
     orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
 
     socialRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
-    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
+    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', justifyContent: 'center', alignItems: 'center' },
 
     footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', textAlign: 'center' },
     link: { color: '#7C3AED', fontWeight: '500' },

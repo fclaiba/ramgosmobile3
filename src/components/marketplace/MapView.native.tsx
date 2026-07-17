@@ -71,7 +71,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     onViewModeChange
 }) => {
     const mapRef = useRef<MapView>(null);
-    const intervalRef = useRef<number | null>(null);
+    const intervalRef = useRef<any>(null);
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -316,7 +316,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
                 {/* Item Detail Card (Bottom Sheet Style) */}
                 {activeItem && (
-                    <Animated.View style={[styles.detailCard, { backgroundColor: isDark ? '#1F2937' : '#fff', bottom: bottomOffset + 16 }]}>
+                    <Animated.View style={[styles.detailCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', bottom: bottomOffset + 16 }]}>
                         <View style={styles.detailHeader}>
                             <TouchableOpacity
                                 style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
@@ -339,7 +339,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                             {/* Actions */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <TouchableOpacity
-                                    style={[styles.actionBtn, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}
+                                    style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                     onPress={() => toggleFavorite(activeItem)}
                                 >
                                     <Heart
@@ -376,7 +376,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                 )}
 
                                 <TouchableOpacity
-                                    style={[styles.actionBtn, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}
+                                    style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                     onPress={() => onItemClick(activeItem)}
                                 >
                                     <ArrowRight size={18} color={isDark ? '#D1D5DB' : '#6B7280'} />
@@ -400,7 +400,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     loadingContainer: {
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#FAFAFA',
     },
     loadingText: {
         marginTop: 12,
@@ -411,7 +411,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#FAFAFA',
     },
     errorIconContainer: {
         width: 72,
@@ -438,7 +438,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         borderRadius: 12,
     },
     retryButtonText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: '600',
         fontSize: 14,
     },
@@ -449,12 +449,12 @@ const getStyles = (isDark: any) => StyleSheet.create({
     searchInput: { flex: 1, paddingHorizontal: 16, height: 48, fontSize: 14 },
     filterBtn: { borderRadius: 16, overflow: 'hidden', width: 48, height: 48 },
     blurBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
-    activeFilterBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED', borderWidth: 1, borderColor: isDark ? '#1F2937' : '#fff' },
+    activeFilterBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED', borderWidth: 1, borderColor: isDark ? '#09090B' : '#FAFAFA' },
 
     secondRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     viewToggles: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 4, height: 40, alignItems: 'center' },
     viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
-    viewToggleBtnActive: { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
+    viewToggleBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
 
     catsRow: { gap: 8 },
     catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
@@ -487,7 +487,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     detailTitle: { fontSize: 16, fontWeight: 'bold' },
     detailSub: { fontSize: 13 },
     priceTag: { backgroundColor: '#10B981', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
-    priceText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: 'bold' },
+    priceText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 12, fontWeight: 'bold' },
     actionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center' }
 });
 

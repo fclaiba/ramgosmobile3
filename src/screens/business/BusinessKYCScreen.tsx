@@ -11,6 +11,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { BusinessLocationSearch } from '../../components/business/BusinessLocationSearch';
 import { useAction, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { LIMITS, MIN, clamp, formatTaxId } from '../../utils/inputLimits';
 
 
 export default function BusinessKYCScreen({ navigation }: any) {
@@ -37,8 +38,12 @@ export default function BusinessKYCScreen({ navigation }: any) {
 
     const handleNext = () => {
         if (step === 1) {
-            if (!formData.businessName || !formData.address) {
-                show('Completa los campos obligatorios', 'error');
+            if (!formData.businessName.trim() || formData.businessName.trim().length < MIN.businessName) {
+                show('Nombre comercial: mínimo 2 caracteres', 'error');
+                return;
+            }
+            if (!formData.address.trim() || formData.address.trim().length < MIN.businessAddress) {
+                show(`Dirección: mínimo ${MIN.businessAddress} caracteres`, 'error');
                 return;
             }
             setStep(2);
@@ -140,28 +145,31 @@ export default function BusinessKYCScreen({ navigation }: any) {
                                         placeholder="Ej. Restaurante S.A."
                                         placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                                         value={formData.businessName}
-                                        onChangeText={t => setFormData({ ...formData, businessName: t })}
+                                        onChangeText={t => setFormData({ ...formData, businessName: clamp(t, LIMITS.businessName) })}
+                                        maxLength={LIMITS.businessName}
                                     />
                                 </View>
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.label}>Dirección Completa</Text>
                                     <TextInput
                                         style={[styles.input, { height: 'auto', minHeight: 48, paddingVertical: 12 }]}
-                                        placeholder="Calle Principal 123"
+                                        placeholder="Calle Principal 123, Brooklyn, NY"
                                         placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                                         value={formData.address}
-                                        onChangeText={t => setFormData({ ...formData, address: t })}
+                                        onChangeText={t => setFormData({ ...formData, address: clamp(t, LIMITS.businessAddress) })}
                                         multiline
+                                        maxLength={LIMITS.businessAddress}
                                     />
                                 </View>
                                 <View style={styles.inputGroup}>
-                                    <Text style={styles.label}>ID Fiscal (Opcional por ahora)</Text>
+                                    <Text style={styles.label}>ID Fiscal (Opcional)</Text>
                                     <TextInput
                                         style={styles.input}
-                                        placeholder="00-00000000-0"
+                                        placeholder="XX-XXXXXXX"
                                         placeholderTextColor={isDark ? "#9CA3AF" : "#9CA3AF"}
                                         value={formData.taxId}
-                                        onChangeText={t => setFormData({ ...formData, taxId: t })}
+                                        onChangeText={t => setFormData({ ...formData, taxId: formatTaxId(t) })}
+                                        maxLength={LIMITS.taxId}
                                     />
                                 </View>
 
@@ -267,10 +275,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
 
     progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    stepDot: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+    stepDot: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
     stepActive: { backgroundColor: '#7C3AED' },
     stepNum: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#9CA3AF' : '#9CA3AF' },
-    stepLine: { width: 40, height: 2, backgroundColor: isDark ? '#374151' : '#F3F4F6', marginHorizontal: 4 },
+    stepLine: { width: 40, height: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginHorizontal: 4 },
 
     stepContent: { alignItems: 'stretch' },
     stepTitle: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', textAlign: 'center', marginBottom: 8 },
@@ -278,17 +286,17 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     inputGroup: { marginBottom: 16 },
     label: { fontSize: 13, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 6 },
-    input: { backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 12, height: 48, paddingHorizontal: 16, fontSize: 15, color: isDark ? '#F9FAFB' : '#111827' },
+    input: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderRadius: 12, height: 48, paddingHorizontal: 16, fontSize: 15, color: isDark ? '#F9FAFB' : '#111827' },
 
     btn: { backgroundColor: '#7C3AED', height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
-    btnDisabled: { backgroundColor: isDark ? '#4B5563' : '#D1D5DB' },
+    btnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginRight: 8 },
 
-    uploadBox: { height: 160, borderWidth: 2, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F9FAFB', marginBottom: 24 },
+    uploadBox: { height: 160, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginBottom: 24 },
     uploadText: { marginTop: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
 
     iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    summaryBox: { backgroundColor: isDark ? '#1F2937' : '#F3F4F6', padding: 16, borderRadius: 12, marginBottom: 24 },
+    summaryBox: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 16, borderRadius: 12, marginBottom: 24 },
     summaryLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 12, marginBottom: 2 },
     summaryVal: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 16, fontWeight: '600', marginBottom: 12 }
 });

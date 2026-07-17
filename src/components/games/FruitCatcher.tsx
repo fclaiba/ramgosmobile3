@@ -130,14 +130,14 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
     // Powerup Refs
     const magnetActive = useRef(false);
     const speedEffect = useRef(1); // 1 = normal, >1 fast, <1 slow
-    const powerupTimer = useRef<number | null>(null);
+    const powerupTimer = useRef<any>(null);
 
     // Basket Position
     const basketX = useRef(new Animated.Value(width / 2 - BASKET_WIDTH / 2)).current;
     const basketXVal = useRef(width / 2 - BASKET_WIDTH / 2);
 
     // Refs
-    const gameLoopRef = useRef<number | null>(null);
+    const gameLoopRef = useRef<any>(null);
     const lastTimeRef = useRef<number>(0);
 
     // Load High Score
@@ -454,7 +454,7 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
 const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     },
     header: {
         flexDirection: 'row',
@@ -534,7 +534,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         shadowRadius: 8,
     },
     playText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
         fontSize: 16,
     },
@@ -551,12 +551,12 @@ const getStyles = (isDark: any) => StyleSheet.create({
     gameOverText: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         marginBottom: 8,
     },
     finalScore: {
         fontSize: 18,
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         marginBottom: 20
     },
     startBtn: {
@@ -569,7 +569,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 8,
     },
     btnText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
         fontSize: 14,
     },

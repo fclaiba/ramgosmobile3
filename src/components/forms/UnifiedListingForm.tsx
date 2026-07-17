@@ -124,7 +124,7 @@ export const UnifiedListingForm = ({ type, initialData, onSubmit, onCancel, isLo
                                     {/* For Bono, price is automatically 50% of value */}
                                     <View style={styles.inputGroup}>
                                         <Text style={styles.label}>Precio a Cobrar (50%)</Text>
-                                        <View style={[styles.input, { backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center' }]}>
+                                        <View style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center' }]}>
                                             <Text style={{ color: isDark ? '#D1D5DB' : '#6B7280' }}>
                                                 ${formData.price || '0.00'}
                                             </Text>
@@ -253,10 +253,10 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
     },
     card: {
         padding: 24,
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
@@ -299,9 +299,9 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         marginBottom: 8,
     },
     input: {
-        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#D1D5DB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         borderRadius: 12,
         padding: 12,
         color: isDark ? '#FFFFFF' : '#111827',
@@ -327,7 +327,7 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         textAlign: 'center',
     },
     cancelBtn: {
-        borderColor: isDark ? '#374151' : '#D1D5DB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     cancelText: {
         color: isDark ? '#9CA3AF' : '#4B5563',
@@ -346,7 +346,7 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         borderRadius: 6,
     },
     toggleBtnActive: {
-        backgroundColor: isDark ? '#374151' : '#FFFFFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         shadowColor: "#000",
         shadowOpacity: 0.1,
         shadowRadius: 2,
@@ -366,7 +366,7 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
-        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     chipActive: {
         backgroundColor: '#7C3AED',

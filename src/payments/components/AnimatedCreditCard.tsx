@@ -244,7 +244,7 @@ const s = StyleSheet.create({
         borderRadius: 4,
     },
     cvvBadge: {
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(255,255,255,0.62)',
         paddingHorizontal: 14,
         paddingVertical: 8,
         borderRadius: 4,

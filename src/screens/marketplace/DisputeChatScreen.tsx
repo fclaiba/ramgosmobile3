@@ -336,7 +336,7 @@ import { StyleSheet } from 'react-native';
 
 function getStyles(isDark: boolean, insets: any) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
-    const surface = isDark ? '#18181B' : '#FFFFFF';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
@@ -421,7 +421,7 @@ function getStyles(isDark: boolean, insets: any) {
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderRadius: 10,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#FAFAFA',
             borderWidth: 1,
             borderColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#DDD6FE',
         },
@@ -486,7 +486,7 @@ function getStyles(isDark: boolean, insets: any) {
             borderRadius: 22,
             borderWidth: 1,
             borderColor: border,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             color: text,
             paddingHorizontal: 16,
             paddingVertical: 12,
@@ -510,7 +510,7 @@ function getStyles(isDark: boolean, insets: any) {
             width: 80,
             height: 80,
             borderRadius: 40,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
@@ -523,7 +523,7 @@ function getStyles(isDark: boolean, insets: any) {
         escalateSheet: {
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
-            backgroundColor: isDark ? '#18181B' : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         },
         escalateHandle: {
             width: 40,
@@ -550,7 +550,7 @@ function getStyles(isDark: boolean, insets: any) {
             flex: 1,
             paddingVertical: 14,
             borderRadius: 14,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             alignItems: 'center',
             borderWidth: 1,
             borderColor: border,

@@ -133,8 +133,8 @@ export default function AnalyticsDashboardScreen() {
 }
 
 const getStyles = (isDark: boolean) => {
-    const bg = isDark ? '#111827' : '#F9FAFB';
-    const cardBg = isDark ? '#1F2937' : '#FFFFFF';
+    const bg = isDark ? '#09090B' : '#FAFAFA';
+    const cardBg = isDark ? '#09090B' : '#FAFAFA';
     const text = isDark ? '#F9FAFB' : '#111827';
     const muted = isDark ? '#9CA3AF' : '#6B7280';
     const border = isDark ? '#374151' : '#E5E7EB';

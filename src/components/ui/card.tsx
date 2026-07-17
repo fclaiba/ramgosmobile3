@@ -1,70 +1,40 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
-
 import { useTheme } from '../../contexts/ThemeContext';
+import { GlassSurface } from './GlassSurface';
 
 export const Card = ({ children, style }: any) => {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
     return (
-        <View style={[styles.card, style]}>
+        <GlassSurface intensity="regular" style={[styles.card, style]}>
             {children}
-        </View>
+        </GlassSurface>
     );
 };
 
 export const CardContent = ({ children, style }: any) => {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
     return <View style={[styles.content, style]}>{children}</View>;
 };
 
-const getStyles = (isDark: any) => StyleSheet.create({
-    card: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 4,
-        overflow: 'hidden'
-    },
-    content: {
-        padding: 16
-    },
-    header: {
-        padding: 16,
-        paddingBottom: 0
-    },
-    title: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        // color handled dynamically
-    },
-    footer: {
-        padding: 16,
-        paddingTop: 0
-    }
-});
-
 export const CardHeader = ({ children, style }: any) => {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
     return <View style={[styles.header, style]}>{children}</View>;
 };
+
 export const CardTitle = ({ children, style }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
-    return <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#1a1a1a' }, style]}>{children}</Text>;
+    return (
+        <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#111827' }, style]}>{children}</Text>
+    );
 };
+
 export const CardFooter = ({ children, style }: any) => {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
     return <View style={[styles.footer, style]}>{children}</View>;
 };
+
+const styles = StyleSheet.create({
+    card: { width: '100%' },
+    content: { padding: 16 },
+    header: { padding: 16, paddingBottom: 0 },
+    title: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+    footer: { padding: 16, paddingTop: 0 },
+});

@@ -189,7 +189,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     form: { width: '100%', gap: 16 },
     inputContainer: { gap: 8 },
     label: { fontSize: 14, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginLeft: 4 },
-    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#fff', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', height: 48, paddingHorizontal: 12 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', height: 48, paddingHorizontal: 12 },
     icon: { marginRight: 12 },
     input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827' },
 
@@ -197,14 +197,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gradientBtn: { flexDirection: 'row', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-    divider: { width: '100%', height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginVertical: 24 },
+    divider: { width: '100%', height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', marginVertical: 24 },
     footer: { flexDirection: 'row', justifyContent: 'center' },
 
     // Success State
     successIconContainer: { marginBottom: 24 },
     successIconBg: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', shadowColor: '#10B981', shadowOpacity: 0.3, shadowRadius: 12, elevation: 5 },
-    ghostBtn: { width: '100%', height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#6D28D9' : '#DDD6FE', backgroundColor: isDark ? '#374151' : '#F5F3FF' },
+    ghostBtn: { width: '100%', height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#6D28D9' : '#DDD6FE', backgroundColor: isDark ? '#374151' : '#FAFAFA' },
     ghostBtnText: { color: '#7C3AED', fontSize: 14, fontWeight: '600' },
-    hintBox: { marginTop: 24, padding: 12, backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : '#F5F3FF', borderRadius: 12, width: '100%' },
+    hintBox: { marginTop: 24, padding: 12, backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : '#FAFAFA', borderRadius: 12, width: '100%' },
     hintText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center' },
 });

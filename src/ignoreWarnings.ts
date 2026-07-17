@@ -9,12 +9,15 @@ if (__DEV__) {
         'SafeAreaView has been deprecated',
         'Support for defaultProps will be removed',
         '"shadow*" style props are deprecated',
+        '"textShadow*" style props are deprecated',
         '[Reanimated] Reduced motion setting is enabled',
         '[expo-notifications] Listening to push token changes is not yet fully supported on web',
         'Animated: `useNativeDriver` is not supported',
         'Blocked aria-hidden on an element because its descendant retained focus',
         'live Stripe.js integrations must use HTTPS',
-        'You may test your Stripe.js integration over HTTP'
+        'You may test your Stripe.js integration over HTTP',
+        'props.pointerEvents is deprecated',
+        '"textShadow*" style props are deprecated'
     ];
 
     console.warn = (...args) => {

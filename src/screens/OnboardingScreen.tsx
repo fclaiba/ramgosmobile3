@@ -80,7 +80,7 @@ export default function OnboardingScreen() {
     };
 
     if (isChecking) {
-        return <View style={{ flex: 1, backgroundColor: isDark ? '#111827' : '#fff' }} />;
+        return <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }} />;
     }
 
     const renderItem = ({ item }: { item: typeof SLIDES[0] }) => {
@@ -107,7 +107,7 @@ export default function OnboardingScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#111827' : '#fff' }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#09090B' : '#FAFAFA' }]}>
             <View style={{ flex: 3 }}>
                 <FlatList
                     data={SLIDES}

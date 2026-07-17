@@ -79,16 +79,16 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     storyItem: { alignItems: 'center', gap: 6, width: 68 },
 
     // Add Story Style
-    addStoryContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: isDark ? '#374151' : '#F3F4F6', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
+    addStoryContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     addStoryIcon: { opacity: 0.5 },
     absolutePlus: { position: 'absolute', bottom: 0, right: 0 },
-    plusBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#1F2937' : '#fff' },
+    plusBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
 
     // Story Avatar Style
     avatarWrapper: { width: 68, height: 68, justifyContent: 'center', alignItems: 'center' },
     gradientRing: { width: 68, height: 68, borderRadius: 34, justifyContent: 'center', alignItems: 'center' },
-    noStoryRing: { backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
-    imageBorder: { width: 62, height: 62, borderRadius: 31, backgroundColor: isDark ? '#1F2937' : '#fff', justifyContent: 'center', alignItems: 'center' },
+    noStoryRing: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
+    imageBorder: { width: 62, height: 62, borderRadius: 31, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
     avatar: { width: 56, height: 56, borderRadius: 28 },
 
     name: { fontSize: 11, textAlign: 'center', color: isDark ? '#D1D5DB' : '#374151', width: '100%' }

@@ -80,7 +80,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     iconContainer: { width: 28, height: 28, borderRadius: 14, backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
     title: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
-    badge: { backgroundColor: isDark ? '#374151' : '#F3F4F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    badge: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     badgeText: { fontSize: 11, fontWeight: '600', color: isDark ? '#D1D5DB' : '#4B5563' },
 
     sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
@@ -88,7 +88,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     slider: { flex: 1, height: 40 },
 
     actions: { flexDirection: 'row' },
-    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#1F2937' : '#fff', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', gap: 8 },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', gap: 8 },
     actionBtnActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
     actionBtnText: { fontSize: 12, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
     actionBtnTextActive: { color: '#fff' },

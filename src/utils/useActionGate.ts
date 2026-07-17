@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { confirmAction } from './confirm';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -204,12 +205,11 @@ export function useActionGate() {
   }, [navigation, status]);
 
   const promptBlocked = useCallback(
-    (block: GateBlock, extraButtons?: Array<{ text: string; onPress: () => void; style?: 'cancel' | 'default' | 'destructive' }>) => {
-      const buttons = [
-        ...(extraButtons ?? []),
-        { text: block.ctaLabel, onPress: block.onCta },
-      ];
-      Alert.alert(block.title, block.message, buttons);
+    (block: GateBlock, _extraButtons?: Array<{ text: string; onPress: () => void; style?: 'cancel' | 'default' | 'destructive' }>) => {
+      // Styled confirm (works on web too, unlike Alert.alert with buttons).
+      confirmAction(block.title, block.message).then((ok) => {
+        if (ok) block.onCta();
+      });
     },
     [],
   );

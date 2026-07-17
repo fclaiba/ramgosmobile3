@@ -210,7 +210,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                 <View style={[
                     styles.card,
                     {
-                        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
                         borderColor: recommended ? color : (isDark ? '#374151' : '#E5E7EB'),
                         borderWidth: recommended ? 2 : 1
                     }

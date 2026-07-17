@@ -232,7 +232,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                             {displayEmail}
                                         </Text>
                                         <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                                            <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}>
+                                            <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
                                                 <Text style={styles.roleText}>
                                                     {isPending ? 'PENDING_VERIFICATION' : effectiveUser?.role?.toUpperCase() || 'MODO INVITADO'}
                                                 </Text>
@@ -351,33 +351,6 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                             </View>
                         )}
 
-                        {__DEV__ && (
-                            <View style={styles.section}>
-                                <Text style={styles.sectionHeader}>Developer Mode</Text>
-                                <View style={styles.roleSelector}>
-                                    {(['guest', 'consumer', 'business', 'influencer', 'admin'] as const).map((role) => (
-                                        <TouchableOpacity
-                                            key={role}
-                                            style={[styles.roleChip, user?.role === role && styles.roleChipActive, (role === 'guest' && !user) && styles.roleChipActive, isChangingRole && { opacity: 0.5 }]}
-                                            onPress={() => handleRoleChange(role)}
-                                            disabled={isChangingRole}
-                                            accessible={true}
-                                            accessibilityLabel={`Cambiar a rol ${role}`}
-                                            accessibilityRole="button"
-                                            accessibilityState={{ selected: user?.role === role, disabled: isChangingRole }}
-                                        >
-                                            {isChangingRole && (user?.role === role || (role === 'guest' && isLoggingOut)) ? (
-                                                <ActivityIndicator size="small" color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                            ) : (
-                                                <Text style={[styles.roleChipText, user?.role === role && styles.roleChipTextActive, (role === 'guest' && !user) && styles.roleChipTextActive]}>
-                                                    {role.charAt(0).toUpperCase()}
-                                                </Text>
-                                            )}
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
 
                         {isAuthenticated && (
                             <View style={[styles.section, { borderBottomWidth: 0, marginBottom: 40 }]}>
@@ -401,7 +374,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         width: '85%',
         maxWidth: 380,
     },
@@ -409,7 +382,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 24,
         paddingTop: Platform.OS === 'android' ? 20 : 20,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? '#374151' : '#F3F4F6'
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
     },
     closeButton: {
         position: 'absolute',
@@ -448,7 +421,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderRadius: 7,
         backgroundColor: '#10B981',
         borderWidth: 2,
-        borderColor: isDark ? '#1F2937' : '#fff'
+        borderColor: isDark ? '#09090B' : '#FAFAFA'
     },
     userInfo: {
         flex: 1,
@@ -466,7 +439,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     roleBadge: {
         alignSelf: 'flex-start',
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 99,
@@ -507,7 +480,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: isDark ? '#374151' : '#F9FAFB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -539,11 +512,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: isDark ? '#4B5563' : '#E5E7EB'
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
     },
     roleChipActive: {
         backgroundColor: isDark ? '#F9FAFB' : '#111827',
@@ -555,6 +528,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         color: isDark ? '#9CA3AF' : '#6B7280'
     },
     roleChipTextActive: {
-        color: isDark ? '#111827' : '#fff'
+        color: isDark ? '#09090B' : '#FAFAFA'
     }
 });

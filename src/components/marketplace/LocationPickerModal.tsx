@@ -14,8 +14,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import DarkMapView, { Marker, Region } from '../map/DarkMapView';
+import { MAP_DEFAULTS } from '../../constants/darkMapStyle';
 import { useUserLocation } from '../../hooks/useUserLocation';
-import MapView from 'react-native-maps';
 
 interface LocationPickerModalProps {
     visible: boolean;
@@ -24,12 +24,7 @@ interface LocationPickerModalProps {
     initialLocation?: { lat: number; lng: number };
 }
 
-const DEFAULT_REGION: Region = {
-    latitude: 40.7549,
-    longitude: -73.9840,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-};
+const DEFAULT_REGION: Region = MAP_DEFAULTS.INITIAL_REGION;
 
 export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     visible,
@@ -41,7 +36,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
-    const mapRef = useRef<MapView>(null);
+    const mapRef = useRef<any>(null);
 
     const [selectedCoord, setSelectedCoord] = useState<{ latitude: number; longitude: number } | null>(
         initialLocation
@@ -67,20 +62,30 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     const reverseGeocode = useCallback(async (lat: number, lng: number) => {
         setLoadingAddress(true);
         try {
-            const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-            const first = results[0];
-            if (first) {
-                const street = [first.street, first.streetNumber].filter(Boolean).join(' ') || '';
-                const city = first.city || first.subregion || '';
-                const regionName = first.region || '';
-                const composed = [street, city, regionName]
-                    .filter((p) => p && p.length > 0)
-                    .join(', ');
-                setAddress(composed || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+            if (Platform.OS === 'web') {
+                // ponytail: Nominatim on web — expo-location reverseGeocode doesn't work in browser
+                const res = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+                    { headers: { 'Accept-Language': 'es' } },
+                );
+                const data = await res.json();
+                setAddress(data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
             } else {
-                setAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+                const first = results[0];
+                if (first) {
+                    const street = [first.street, first.streetNumber].filter(Boolean).join(' ') || '';
+                    const city = first.city || first.subregion || '';
+                    const regionName = first.region || '';
+                    const composed = [street, city, regionName]
+                        .filter((p) => p && p.length > 0)
+                        .join(', ');
+                    setAddress(composed || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                } else {
+                    setAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                }
             }
-        } catch (err) {
+        } catch {
             setAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         } finally {
             setLoadingAddress(false);
@@ -112,11 +117,20 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     const handleGetCurrentLocation = async () => {
         setGettingLocation(true);
         try {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.LocationAccuracy.Balanced });
-            centerOnCoordinate(loc.coords.latitude, loc.coords.longitude);
+            if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
+                const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                    }),
+                );
+                centerOnCoordinate(pos.coords.latitude, pos.coords.longitude);
+            } else {
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.LocationAccuracy.Balanced });
+                centerOnCoordinate(loc.coords.latitude, loc.coords.longitude);
+            }
         } catch (e) {
             console.log('Error getting location', e);
-            // Fallback to hook location if available
             if (hookLocation) {
                 centerOnCoordinate(hookLocation.coords.latitude, hookLocation.coords.longitude);
             }
@@ -235,7 +249,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#111827' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     },
     header: {
         position: 'absolute',

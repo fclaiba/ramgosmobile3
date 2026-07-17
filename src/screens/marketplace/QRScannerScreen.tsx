@@ -201,7 +201,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     errorModal: { backgroundColor: '#EF4444' },
     resultTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 16 },
     resultSub: { color: 'rgba(255,255,255,0.9)', fontSize: 14, textAlign: 'center', marginVertical: 8 },
-    confirmBtn: { backgroundColor: '#fff', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 16, minWidth: 150, alignItems: 'center' },
-    errorBtn: { backgroundColor: '#fff' },
+    confirmBtn: { backgroundColor: 'rgba(255,255,255,0.62)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 16, minWidth: 150, alignItems: 'center' },
+    errorBtn: { backgroundColor: 'rgba(255,255,255,0.62)' },
     confirmBtnText: { color: '#10B981', fontWeight: 'bold', fontSize: 16 },
 });

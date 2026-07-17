@@ -23,10 +23,15 @@
  *       the bono's listing can redeem it).
  */
 
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireActor } from "./authHelpers";
+import { getActorOrNull, requireActor } from "./authHelpers";
+
+/** User-facing errors — ConvexError so the client gets a clean `.data` string. */
+function bonoUserError(message: string): never {
+    throw new ConvexError(message);
+}
 
 // Generates an opaque, sufficiently-unique code for a bono. We don't need
 // cryptographic randomness here — Convex queries / mutations execute in V8
@@ -37,6 +42,52 @@ const generateBonoCode = (): string => {
     const rand2 = Math.random().toString(36).slice(2, 6);
     return `BNO-${ts}-${rand}${rand2}`.toUpperCase();
 };
+
+/** Default economics: pay $50 → $100 credit at the business. */
+export const DEFAULT_BONO_PAID = 50;
+export const DEFAULT_BONO_CREDIT = 100;
+/** Standard redemption window when the store doesn't set one. */
+export const DEFAULT_BONO_VALIDITY_DAYS = 7;
+
+function resolveBonoEconomics(listing: any) {
+    const paidRaw = Number(listing?.price);
+    const creditRaw = Number(listing?.discountValue);
+    const paidAmount =
+        Number.isFinite(paidRaw) && paidRaw > 0 ? paidRaw : DEFAULT_BONO_PAID;
+    let creditTotal =
+        Number.isFinite(creditRaw) && creditRaw > 0 ? creditRaw : paidAmount * 2;
+    if (creditTotal <= paidAmount) creditTotal = DEFAULT_BONO_CREDIT;
+    return {
+        paidAmount,
+        creditTotal,
+        creditRemaining: creditTotal,
+        usesTotal: 1,
+        usesRemaining: 1,
+    };
+}
+
+/**
+ * Redemption expiry for a newly issued bono.
+ * Prefer store-configured `validityDays` (relative from purchase).
+ * Fall back to listing.validUntil if still in the future (legacy absolute).
+ * Otherwise standard = 7 days.
+ */
+function resolveBonoValidUntil(listing: any, fromMs: number = Date.now()): string {
+    const daysRaw = Number(listing?.validityDays);
+    if (Number.isFinite(daysRaw) && daysRaw > 0) {
+        const days = Math.min(Math.floor(daysRaw), 365);
+        return new Date(fromMs + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    if (listing?.validUntil) {
+        const abs = new Date(listing.validUntil).getTime();
+        if (Number.isFinite(abs) && abs > fromMs) {
+            return new Date(abs).toISOString();
+        }
+    }
+    return new Date(
+        fromMs + DEFAULT_BONO_VALIDITY_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+}
 
 // ---------------------------------------------------------------------------
 // internalIssueBonosForPayment — called from the Stripe webhook handler
@@ -85,6 +136,8 @@ export const internalIssueBonosForPayment = internalMutation({
         // each unit becomes its own redeemable code.
         const quantity = Number((meta.quantity as number) ?? 1) || 1;
 
+        const economics = resolveBonoEconomics(listing);
+        const validUntil = resolveBonoValidUntil(listing);
         for (let i = 0; i < quantity; i++) {
             const code = generateBonoCode();
             await ctx.db.insert("bonoRedemptions", {
@@ -94,7 +147,8 @@ export const internalIssueBonosForPayment = internalMutation({
                 sellerId: payment.sellerId,
                 paymentId: String(args.paymentId),
                 orderId: payment.orderId ?? undefined,
-                validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+                validUntil,
+                ...economics,
                 status: "issued",
                 createdAt: new Date().toISOString(),
             });
@@ -137,6 +191,8 @@ export const internalIssueBonosForOrder = internalMutation({
                 continue;
             }
 
+            const economics = resolveBonoEconomics(listing);
+            const validUntil = resolveBonoValidUntil(listing);
             for (let i = 0; i < item.quantity; i++) {
                 const code = generateBonoCode();
                 await ctx.db.insert("bonoRedemptions", {
@@ -145,7 +201,8 @@ export const internalIssueBonosForOrder = internalMutation({
                     ownerUserId: order.userId,
                     sellerId: order.sellerId,
                     orderId: String(args.orderId),
-                    validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+                    validUntil,
+                    ...economics,
                     status: "issued",
                     createdAt: new Date().toISOString(),
                 });
@@ -171,20 +228,24 @@ export const redeemBono = mutation({
             .query("bonoRedemptions")
             .withIndex("by_code", (q) => q.eq("bonoCode", args.bonoCode))
             .first();
-        if (!bono) throw new Error("Código de bono inválido.");
+        if (!bono) {
+            bonoUserError("No encontramos ese código. Revisalo e intentá de nuevo.");
+        }
 
         // Auth: only the seller (or admin) of THIS bono can redeem it.
         const isSeller = bono.sellerId === actor.idString;
         const isAdmin = actor.role === "admin" || actor.role === "developer";
         if (!isSeller && !isAdmin) {
-            throw new Error("No autorizado. Este bono pertenece a otro negocio.");
+            bonoUserError(
+                "Este bono es de otro negocio. Pedile al cliente el QR correcto.",
+            );
         }
 
         if (bono.status === "redeemed") {
-            throw new Error("Este bono ya fue canjeado.");
+            bonoUserError("Este bono ya fue canjeado.");
         }
         if (bono.status === "cancelled") {
-            throw new Error("Este bono fue cancelado.");
+            bonoUserError("Este bono fue cancelado.");
         }
 
         // Expiration check
@@ -194,13 +255,15 @@ export const redeemBono = mutation({
                 await ctx.db.patch(bono._id, {
                     status: "expired",
                 });
-                throw new Error("Este bono está vencido.");
+                bonoUserError("Este bono está vencido.");
             }
         }
 
-        // Mark as redeemed
+        // Mark as redeemed — consume remaining credit/uses in one POS scan.
         await ctx.db.patch(bono._id, {
             status: "redeemed",
+            creditRemaining: 0,
+            usesRemaining: 0,
             redeemedByBusinessUserId: actor.idString,
             redeemedAt: new Date().toISOString(),
         });
@@ -215,17 +278,24 @@ export const redeemBono = mutation({
                 if (
                     order &&
                     (order.status === "payment_received" ||
-                        order.status === "delivered")
+                        order.status === "delivered" ||
+                        order.status === "paid_escrow" ||
+                        order.escrowState === "held")
                 ) {
                     await ctx.db.patch(orderNormId, {
                         status: "completed",
                         escrowState: "released",
                         updatedAt: new Date().toISOString(),
                     });
-                    await ctx.runMutation(
-                        internal.stripe.internalReleasePayment,
-                        { orderId: orderNormId },
-                    );
+                    try {
+                        await ctx.runMutation(
+                            internal.stripe.internalReleasePayment,
+                            { orderId: orderNormId },
+                        );
+                    } catch (err) {
+                        // Escrow release is best-effort after redeem; bono stays redeemed.
+                        console.warn("[Bonos] Escrow release after redeem failed:", err);
+                    }
                 }
             }
         }
@@ -248,7 +318,9 @@ export const getMyBonos = query({
         userId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
+        // ponytail: empty on missing session — don't crash HistoryScreen
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (!actor) return [];
         const userId = args.userId ?? actor.idString;
         if (userId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");
@@ -266,11 +338,124 @@ export const getMyBonos = query({
                 
                 const sellerNormId = ctx.db.normalizeId("users", bono.sellerId);
                 const seller = sellerNormId ? await ctx.db.get(sellerNormId) : null;
+
+                // Backfill economics for older rows that predate credit fields.
+                const eco = resolveBonoEconomics(listing);
+                const paidAmount = bono.paidAmount ?? eco.paidAmount;
+                const creditTotal = bono.creditTotal ?? eco.creditTotal;
+                const usesTotal = bono.usesTotal ?? 1;
+                const isOpen = bono.status === "issued";
+                const creditRemaining =
+                    bono.creditRemaining ?? (isOpen ? creditTotal : 0);
+                const usesRemaining =
+                    bono.usesRemaining ?? (isOpen ? usesTotal : 0);
                 
-                return { ...bono, listing, seller };
+                return {
+                    ...bono,
+                    listing,
+                    seller,
+                    paidAmount,
+                    creditTotal,
+                    creditRemaining,
+                    usesTotal,
+                    usesRemaining,
+                };
             })
         );
     },
+});
+
+async function applyBonoEconomicsNormalization(
+    ctx: any,
+    opts?: { sellerIdFilter?: string },
+) {
+    const listings = await ctx.db
+        .query("listings")
+        .withIndex("by_type", (q: any) => q.eq("type", "bono"))
+        .collect();
+
+    let listingsPatched = 0;
+    for (const listing of listings) {
+        if (opts?.sellerIdFilter && listing.sellerId !== opts.sellerIdFilter) continue;
+        const nextPrice = DEFAULT_BONO_PAID;
+        const nextCredit = DEFAULT_BONO_CREDIT;
+        const needsPatch =
+            listing.price !== nextPrice ||
+            listing.discountValue !== nextCredit ||
+            listing.discountType !== "fixed" ||
+            listing.validityDays == null;
+        if (!needsPatch) continue;
+        await ctx.db.patch(listing._id, {
+            price: nextPrice,
+            discountValue: nextCredit,
+            discountType: "fixed",
+            validityDays: listing.validityDays ?? DEFAULT_BONO_VALIDITY_DAYS,
+            description:
+                listing.description ||
+                `Pagás $${nextPrice} y tenés $${nextCredit} de crédito para consumir en el negocio. Válido ${DEFAULT_BONO_VALIDITY_DAYS} días desde la compra.`,
+            updatedAt: new Date().toISOString(),
+        });
+        listingsPatched++;
+    }
+
+    const redemptions = await ctx.db.query("bonoRedemptions").collect();
+    let redemptionsPatched = 0;
+    for (const bono of redemptions) {
+        if (opts?.sellerIdFilter && bono.sellerId !== opts.sellerIdFilter) continue;
+        if (
+            bono.paidAmount != null &&
+            bono.creditTotal != null &&
+            bono.creditRemaining != null &&
+            bono.usesTotal != null &&
+            bono.usesRemaining != null
+        ) {
+            continue;
+        }
+        const listingNormId = ctx.db.normalizeId("listings", bono.listingId);
+        const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
+        const eco = resolveBonoEconomics(listing);
+        const isOpen = bono.status === "issued";
+        await ctx.db.patch(bono._id, {
+            paidAmount: bono.paidAmount ?? eco.paidAmount,
+            creditTotal: bono.creditTotal ?? eco.creditTotal,
+            creditRemaining:
+                bono.creditRemaining ?? (isOpen ? eco.creditTotal : 0),
+            usesTotal: bono.usesTotal ?? 1,
+            usesRemaining: bono.usesRemaining ?? (isOpen ? 1 : 0),
+        });
+        redemptionsPatched++;
+    }
+
+    return { success: true as const, listingsPatched, redemptionsPatched };
+}
+
+/**
+ * Normalize all active bono listings to pay $50 → $100 credit (fixed).
+ * Also backfills issued redemptions missing credit fields.
+ */
+export const normalizeBonoEconomics = mutation({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        if (
+            actor.role !== "admin" &&
+            actor.role !== "developer" &&
+            actor.role !== "business"
+        ) {
+            throw new Error("No autorizado para normalizar bonos");
+        }
+
+        return await applyBonoEconomicsNormalization(
+            ctx,
+            actor.role === "business" ? { sellerIdFilter: actor.idString } : undefined,
+        );
+    },
+});
+
+/** One-shot migration (CLI): npx convex run bonos:internalNormalizeBonoEconomics */
+export const internalNormalizeBonoEconomics = internalMutation({
+    args: {},
+    handler: async (ctx) => applyBonoEconomicsNormalization(ctx),
 });
 
 // Seller-facing query: list bonos issued by a seller (history of all
@@ -282,7 +467,9 @@ export const getBonosBySeller = query({
         sellerId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
+        // ponytail: empty on missing session — don't crash HistoryScreen
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (!actor) return [];
         const sellerId = args.sellerId ?? actor.idString;
         if (sellerId !== actor.idString && actor.role !== "admin") {
             throw new Error("No autorizado.");
@@ -363,22 +550,36 @@ export const seedMockBonos = mutation({
         if (!bonoListing) {
             const listingId = await ctx.db.insert("listings", {
                 sellerId: mockSeller._id,
-                title: "Bono de Descuento 50% (Mock)",
-                description: "Bono para pruebas",
-                price: 10,
+                title: `Bono $${DEFAULT_BONO_CREDIT} (pagás $${DEFAULT_BONO_PAID})`,
+                description: `Pagás $${DEFAULT_BONO_PAID} y tenés $${DEFAULT_BONO_CREDIT} de crédito en el negocio.`,
+                price: DEFAULT_BONO_PAID,
+                discountValue: DEFAULT_BONO_CREDIT,
+                discountType: "fixed",
                 currency: "USD",
                 category: "bonos",
                 tags: ["mock", "test"],
-                slug: "bono-descuento-50-mock",
+                slug: "bono-50-por-100-mock",
                 stock: 9999,
                 status: "active",
                 type: "bono",
                 condition: "new",
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                validityDays: DEFAULT_BONO_VALIDITY_DAYS,
+                validUntil: resolveBonoValidUntil({
+                    validityDays: DEFAULT_BONO_VALIDITY_DAYS,
+                }),
             });
             bonoListing = await ctx.db.get(listingId);
+        } else {
+            await ctx.db.patch(bonoListing._id, {
+                price: DEFAULT_BONO_PAID,
+                discountValue: DEFAULT_BONO_CREDIT,
+                discountType: "fixed",
+                validityDays: bonoListing.validityDays ?? DEFAULT_BONO_VALIDITY_DAYS,
+                updatedAt: new Date().toISOString(),
+            });
+            bonoListing = await ctx.db.get(bonoListing._id);
         }
 
         // Give a bono to ALL users
@@ -398,12 +599,14 @@ export const seedMockBonos = mutation({
                 const rand = Math.random().toString(36).slice(2, 6);
                 const code = `MOCK-${ts}-${rand}`.toUpperCase();
                 
+                const eco = resolveBonoEconomics(bonoListing);
                 await ctx.db.insert("bonoRedemptions", {
                     bonoCode: code,
                     listingId: String(bonoListing!._id),
                     ownerUserId: user._id,
                     sellerId: mockSeller._id,
                     validUntil: (bonoListing as any).validUntil,
+                    ...eco,
                     status: "issued",
                     createdAt: new Date().toISOString(),
                 });

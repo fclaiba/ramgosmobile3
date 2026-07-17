@@ -194,7 +194,9 @@ export function InfluencersTab({
                                 <View style={styles.couponHeader}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.couponTitle}>{w.name}</Text>
-                                        <Text style={styles.couponCode}>{w.email}</Text>
+                                        <Text style={styles.couponCode}>
+                                            {w.username ? `@${w.username}` : "Sin @"}
+                                        </Text>
                                     </View>
                                     <View
                                         style={[

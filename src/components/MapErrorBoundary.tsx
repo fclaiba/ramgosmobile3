@@ -194,7 +194,7 @@ function getErrorMessage(error: Error | null): string {
 const getStyles = (isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDark ? '#1F2937' : '#F9FAFB',
+    backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -203,7 +203,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: isDark ? '#374151' : '#E5E7EB',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,

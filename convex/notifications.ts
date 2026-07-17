@@ -1,8 +1,35 @@
 import { v } from "convex/values";
-import { mutation, action, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { mutation, query, action, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { assertAdminOrDeveloper, requireActor } from "./authHelpers";
 import { Resend } from "resend";
+
+/** Inbox del usuario: últimas entregas de push (auditoría + UI de Notificaciones). */
+export const listMyNotifications = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const limit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+        const rows = await ctx.db
+            .query("pushDeliveries")
+            .withIndex("by_user", (q) => q.eq("userId", actor.idString))
+            .order("desc")
+            .take(limit);
+
+        return rows.map((row) => ({
+            id: row._id,
+            title: row.title,
+            body: row.body,
+            type: row.category || "system",
+            date: row.sentAt,
+            status: row.status,
+            data: row.data,
+        }));
+    },
+});
 
 // ---------------------------------------------------------------------------
 // PUBLIC mutations — manage push tokens per user.

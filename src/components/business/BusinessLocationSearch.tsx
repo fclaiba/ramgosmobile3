@@ -28,7 +28,7 @@ export const BusinessLocationSearch = ({ onSelect }: Props) => {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.searchBox, { backgroundColor: isDark ? '#374151' : '#F9FAFB', borderColor: isDark ? '#4B5563' : '#E5E7EB' }]}>
+            <View style={[styles.searchBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }]}>
                 <Search size={20} color={isDark ? '#9CA3AF' : '#6B7280'} style={{ marginRight: 8 }} />
                 <TextInput
                     style={[styles.input, { color: isDark ? '#F9FAFB' : '#111827' }]}
@@ -41,16 +41,16 @@ export const BusinessLocationSearch = ({ onSelect }: Props) => {
             </View>
 
             {results.length > 0 && (
-                <View style={[styles.resultsList, { backgroundColor: isDark ? '#1F2937' : '#FFFFFF', borderColor: isDark ? '#374151' : '#E5E7EB' }]}>
+                <View style={[styles.resultsList, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }]}>
                     <FlatList
                         data={results}
                         keyExtractor={item => item.id}
                         renderItem={({ item }) => (
                             <TouchableOpacity
-                                style={[styles.item, { borderBottomColor: isDark ? '#374151' : '#F3F4F6' }]}
+                                style={[styles.item, { borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }]}
                                 onPress={() => onSelect({ name: item.name, address: item.address, placeId: item.id })}
                             >
-                                <View style={[styles.iconBox, { backgroundColor: isDark ? '#374151' : '#F3F4F6' }]}>
+                                <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
                                     <MapPin size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
                                 </View>
                                 <View>

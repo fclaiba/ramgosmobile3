@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { confirmAction } from '../../utils/confirm';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, ShoppingBag } from 'lucide-react-native';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -35,38 +36,24 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
         setLikes((prev: number) => liked ? prev - 1 : prev + 1);
     };
 
-    const handleDelete = () => {
-        Alert.alert(
+    const handleDelete = async () => {
+        const ok = await confirmAction(
             "Eliminar publicación",
             "¿Estás seguro de que quieres eliminar esta publicación?",
-            [
-                { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Eliminar", 
-                    style: "destructive",
-                    onPress: () => deletePost(post.id)
-                }
-            ]
         );
+        if (ok) deletePost(post.id);
     };
 
     const handleMoreOptions = () => {
-        const options: any[] = [{ text: "Cancelar", style: "cancel" }];
-        
-        if (currentUser.id === post.userId) {
-            options.push({ text: "Eliminar", style: "destructive", onPress: handleDelete });
-        }
-        
-        if (options.length > 1) {
-            Alert.alert("Opciones", "¿Qué deseas hacer?", options);
-        }
+        // Only owner action today is delete; go straight to the styled confirm.
+        if (currentUser.id === post.userId) handleDelete();
     };
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity style={styles.userInfo} onPress={() => onUserClick(post.user.id)}>
-                    <Avatar style={{ width: 44, height: 44, borderWidth: 2, borderColor: isDark ? '#374151' : '#F3F4F6' }}>
+                    <Avatar style={{ width: 44, height: 44, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }}>
                         <AvatarImage src={post.user.avatar} />
                         <AvatarFallback>{post.user.name[0]}</AvatarFallback>
                     </Avatar>
@@ -108,7 +95,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                             </Text>
                             <View style={styles.commercialActions}>
                                 <TouchableOpacity
-                                    style={[styles.commercialButton, { backgroundColor: isDark ? '#374151' : '#E5E7EB' }]}
+                                    style={[styles.commercialButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
                                     onPress={() => addToWishlist(post.commercialProduct!.id, post.commercialProduct!.referralLink)}
                                 >
                                     <Bookmark size={16} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -173,7 +160,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         marginBottom: 8,
         paddingHorizontal: 16,
         paddingVertical: 16,
@@ -187,7 +174,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     content: { fontSize: 16, color: isDark ? '#D1D5DB' : '#1F2937', marginBottom: 12, lineHeight: 24, fontWeight: '400' },
 
-    imageContainer: { width: '100%', aspectRatio: 16 / 9, borderRadius: 24, overflow: 'hidden', marginBottom: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
+    imageContainer: { width: '100%', aspectRatio: 16 / 9, borderRadius: 24, overflow: 'hidden', marginBottom: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     postImage: { width: '100%', height: '100%' },
 
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 },
@@ -204,7 +191,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
     },
     commercialContainerLight: {
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#FAFAFA',
         borderColor: '#E5E7EB',
     },
     commercialContainerDark: {

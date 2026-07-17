@@ -72,19 +72,26 @@ export const getWhitelist = query({
             .filter(q => q.eq(q.field("status"), "active"))
             .collect();
             
-        // Fetch user details for each influencer
+        // Fetch user details for each influencer — cite @username, never email
         const influencers = await Promise.all(
             whitelistItems.map(async (item) => {
-                const userObj = await ctx.db
-                    .query("users")
-                    .filter(q => q.eq(q.field("_id"), ctx.db.normalizeId("users", item.influencerId) || ""))
+                const userNorm = ctx.db.normalizeId("users", item.influencerId);
+                const userObj = userNorm ? await ctx.db.get(userNorm) : null;
+                const social = await ctx.db
+                    .query("socialUsers")
+                    .withIndex("by_user", (q) => q.eq("userId", item.influencerId))
                     .first();
+                const username =
+                    social?.username ||
+                    (userObj?.nickname
+                        ? String(userObj.nickname).toLowerCase().replace(/^@+/, "")
+                        : null);
                 return {
                     whitelistId: item._id,
                     influencerId: item.influencerId,
-                    name: userObj?.name || 'Usuario',
-                    email: userObj?.email || '',
-                    avatar: userObj?.avatar || '',
+                    name: userObj?.name || "Usuario",
+                    username: username || "",
+                    avatar: userObj?.avatar || social?.avatar || "",
                     addedAt: item.createdAt,
                 };
             })
@@ -94,26 +101,64 @@ export const getWhitelist = query({
     }
 });
 
-// 4. Buscar influencer para añadir a Whitelist
+// 4. Buscar influencer para añadir a Whitelist (por @ / nombre — no email)
 export const searchInfluencers = query({
     args: { searchTerm: v.string() },
     handler: async (ctx, args) => {
-        const term = args.searchTerm.toLowerCase().trim();
-        if (term.length < 3) return [];
-        
+        const term = args.searchTerm.toLowerCase().trim().replace(/^@+/, "");
+        if (term.length < 2) return [];
+
+        const socialHits = await ctx.db
+            .query("socialUsers")
+            .withSearchIndex("search_username", (q) => q.search("username", term))
+            .take(20);
+
+        const results: Array<{
+            id: string;
+            name: string;
+            username: string;
+            avatar?: string;
+        }> = [];
+
+        for (const social of socialHits) {
+            const userNorm = ctx.db.normalizeId("users", social.userId);
+            const user = userNorm ? await ctx.db.get(userNorm) : null;
+            if (!user || user.role !== "influencer") continue;
+            results.push({
+                id: String(user._id),
+                name: user.name,
+                username: social.username,
+                avatar: user.avatar || social.avatar,
+            });
+            if (results.length >= 10) break;
+        }
+
+        if (results.length > 0) return results;
+
+        // Fallback: nickname / display name among influencers
         const influencers = await ctx.db
             .query("users")
             .filter((q) => q.eq(q.field("role"), "influencer"))
-            .collect();
-            
-        return influencers.filter(u => 
-            u.name.toLowerCase().includes(term) || 
-            (u.email && u.email.toLowerCase().includes(term))
-        ).slice(0, 10).map(u => ({
-            id: String(u._id),
-            name: u.name,
-            email: u.email,
-            avatar: u.avatar
-        }));
+            .take(200);
+
+        return influencers
+            .filter(
+                (u) =>
+                    u.name.toLowerCase().includes(term) ||
+                    (u.nickname &&
+                        String(u.nickname)
+                            .toLowerCase()
+                            .replace(/^@+/, "")
+                            .includes(term)),
+            )
+            .slice(0, 10)
+            .map((u) => ({
+                id: String(u._id),
+                name: u.name,
+                username: u.nickname
+                    ? String(u.nickname).toLowerCase().replace(/^@+/, "")
+                    : "",
+                avatar: u.avatar,
+            }));
     }
 });

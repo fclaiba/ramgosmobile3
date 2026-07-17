@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "lint": "eslint . --fix || true",
     "test": "jest",
-    "test:constitution": "jest src/contexts/__tests__/constitution.test.tsx src/contexts/__tests__/marketplace-escrow.test.tsx src/contexts/__tests__/RewardsContext.test.tsx src/contexts/__tests__/endtoend-logic.test.tsx",
+    "test:constitution": "jest src/contexts/__tests__/constitution.test.tsx src/contexts/__tests__/RewardsContext.test.tsx",
     "check-readiness": "node scripts/check-readiness.js",
     "db:seed": "npx convex run seed:seedE2E"
   },
@@ -19,7 +19,7 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/slider": "5.2.0",
     "@react-navigation/native": "^7.3.8",
-    "@react-navigation/native-stack": "^7.9.0",
+    "@react-navigation/native-stack": "^7.17.10",
     "@sentry/react-native": "~7.11.0",
     "@stripe/react-stripe-js": "^6.6.0",
     "@stripe/stripe-js": "^9.8.0",
@@ -72,6 +72,7 @@
   "devDependencies": {
     "@react-native/jest-preset": "^0.86.0",
     "@testing-library/react-native": "^13.3.3",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jest": "29.5.14",
     "@types/leaflet": "^1.9.21",
     "@types/react": "~19.2.14",

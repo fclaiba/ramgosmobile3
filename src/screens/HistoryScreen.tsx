@@ -32,7 +32,6 @@ import {
     MessageSquare,
     ChevronLeft,
     RotateCcw,
-    Copy,
 } from 'lucide-react-native';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -74,6 +73,14 @@ interface HistoryItem {
     quantity?: number;
     source: HistorySource;
     escrowState?: string;
+    /** Bono economics (Mis compras) */
+    bonoCode?: string;
+    paidAmount?: number;
+    creditTotal?: number;
+    creditRemaining?: number;
+    usesTotal?: number;
+    usesRemaining?: number;
+    validUntil?: string;
 }
 
 type PurchaseKindFilter = 'all' | HistoryKind;
@@ -126,8 +133,40 @@ function formatShortDate(dateString: string | number | Date): string {
 }
 
 function formatCurrency(n?: number): string {
-    if (n === undefined || n === null || Number.isNaN(n)) return '$0.00';
-    return `$${Number(n).toFixed(2)}`;
+    if (n === undefined || n === null || Number.isNaN(n)) return '$0,00';
+    try {
+        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD' }).format(Number(n));
+    } catch {
+        return `$${Number(n).toFixed(2)}`;
+    }
+}
+
+function SummaryField({
+    label,
+    value,
+    styles,
+    valueColor,
+    leading,
+    last,
+}: {
+    label: string;
+    value: string;
+    styles: any;
+    valueColor?: string;
+    leading?: React.ReactNode;
+    last?: boolean;
+}) {
+    return (
+        <View style={[styles.summaryField, last && styles.summaryFieldLast]}>
+            <Text style={styles.summaryLabel}>{label}</Text>
+            <View style={styles.summaryValueRow}>
+                {leading}
+                <Text style={[styles.summaryValue, valueColor ? { color: valueColor } : null]}>
+                    {value}
+                </Text>
+            </View>
+        </View>
+    );
 }
 
 function parseDateInput(value: string): Date | null {
@@ -175,11 +214,13 @@ export default function HistoryScreen({ navigation, route }: any) {
 
     const [isReleasingEscrow, setIsReleasingEscrow] = useState<Record<string, boolean>>({});
 
-    const orders = useQuery(api.orders.getMyOrders as any, user?.id ? { sessionToken, userId: user.id } : 'skip') || [];
-    const mySellerOrders = useQuery(api.orders.getOrdersBySeller as any, user?.id ? { sellerId: user.id } : 'skip') || [];
-    const payments = useQuery(api.finance.getPaymentsByUser as any, user?.id ? { sessionToken, userId: user.id } : 'skip') || [];
-    const myBonos = useQuery(api.bonos.getMyBonos as any, { sessionToken, userId: user?.id }) || [];
-    const mySellerBonos = useQuery(api.bonos.getBonosBySeller as any, { sellerId: user?.id }) || [];
+    const authArgs = user?.id && sessionToken ? { sessionToken, userId: user.id } : 'skip';
+    const sellerArgs = user?.id && sessionToken ? { sessionToken, sellerId: user.id } : 'skip';
+    const orders = useQuery(api.orders.getMyOrders as any, authArgs) || [];
+    const mySellerOrders = useQuery(api.orders.getOrdersBySeller as any, sellerArgs) || [];
+    const payments = useQuery(api.finance.getPaymentsByUser as any, authArgs) || [];
+    const myBonos = useQuery(api.bonos.getMyBonos as any, authArgs) || [];
+    const mySellerBonos = useQuery(api.bonos.getBonosBySeller as any, sellerArgs) || [];
     const listings = useQuery(api.listings.getFeed) || [];
 
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
@@ -205,9 +246,16 @@ export default function HistoryScreen({ navigation, route }: any) {
         return 'pending';
     };
 
-    const getListingImage = (listingId?: string, fallback?: string) => {
+    const getListingImage = (listingId?: string, itemImage?: string, fallback?: string) => {
+        if (itemImage && String(itemImage).startsWith('http')) return itemImage;
         const listing = findListing(listingId);
-        return listing?.image || listing?.images?.[0]?.url || listing?.gallery?.[0] || fallback;
+        return (
+            listing?.image ||
+            listing?.images?.[0]?.url ||
+            (typeof listing?.gallery?.[0] === 'string' ? listing.gallery[0] : undefined) ||
+            (itemImage && String(itemImage).length > 0 ? itemImage : undefined) ||
+            fallback
+        );
     };
 
     const purchaseOrderItems: HistoryItem[] = useMemo(() => {
@@ -224,7 +272,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 title: firstItem?.title ?? 'Compra Marketplace',
                 business: listing?.seller?.name || `Vendedor ${String(order.sellerId).slice(-6).toUpperCase()}`,
                 businessId: order.sellerId,
-                image: getListingImage(firstItem?.listingId, fallbackImage),
+                image: getListingImage(firstItem?.listingId, firstItem?.image, fallbackImage),
                 price: order.total || 0,
                 location: order.shipping?.address?.city ?? order.shipping?.address?.country ?? 'A coordinar',
                 date: order.createdAt,
@@ -262,7 +310,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                     title: firstItem?.title ?? 'Venta Marketplace',
                     business: `Cliente ${String(order.userId).slice(-6).toUpperCase()}`,
                     businessId: order.userId,
-                    image: getListingImage(firstItem?.listingId, fallbackImage),
+                    image: getListingImage(firstItem?.listingId, firstItem?.image, fallbackImage),
                     price: order.total || 0,
                     location: order.shipping?.address?.city ?? order.shipping?.address?.country ?? 'A coordinar',
                     date: order.createdAt,
@@ -311,22 +359,38 @@ export default function HistoryScreen({ navigation, route }: any) {
             const isExpired = bono.status === 'expired';
             const status: HistoryStatus = isRedeemed ? 'completed' : isExpired ? 'cancelled' : 'pending';
             const businessName = bono.seller?.name || bono.seller?.nickname || 'Negocio Asociado';
+            const paidAmount = Number(bono.paidAmount ?? bono.listing?.price ?? 50);
+            const creditTotal = Number(bono.creditTotal ?? bono.listing?.discountValue ?? 100);
+            const creditRemaining = Number(
+                bono.creditRemaining ?? (status === 'pending' ? creditTotal : 0)
+            );
+            const usesTotal = Number(bono.usesTotal ?? 1);
+            const usesRemaining = Number(
+                bono.usesRemaining ?? (status === 'pending' ? usesTotal : 0)
+            );
             return {
                 id: `bono-${bono._id}`,
-                type: 'bonus',
-                kind: 'bonos',
+                type: 'bonus' as const,
+                kind: 'bonos' as const,
                 title: bono.listing?.title || 'Bono Digital',
                 business: businessName,
                 businessId: bono.sellerId,
                 image: bono.listing?.image || fallbackImage,
-                price: bono.listing?.price ?? 0,
+                price: paidAmount,
                 location: 'Bono Digital',
                 date: bono.createdAt,
                 status,
                 orderId: bono.bonoCode,
-                paymentMethod: 'Digital Voucher',
+                paymentMethod: 'Bono digital',
                 quantity: 1,
-                source: 'marketplace_order',
+                source: 'marketplace_order' as const,
+                bonoCode: bono.bonoCode,
+                paidAmount,
+                creditTotal,
+                creditRemaining,
+                usesTotal,
+                usesRemaining,
+                validUntil: bono.validUntil,
             };
         });
     }, [myBonos]);
@@ -456,16 +520,34 @@ export default function HistoryScreen({ navigation, route }: any) {
 
     const handleDispute = (item: HistoryItem) => {
         setSelectedItem(null);
-        navigation.navigate('Dispute', { orderId: item.orderId });
+        const role = activeTab === 'sales' ? 'seller' : 'buyer';
+        const alreadyDisputed =
+            item.escrowState === 'disputed' ||
+            item.backendStatus === 'disputed';
+        // Si ya hay disputa → detalles; si no → formulario. Chat siempre con ← volver.
+        openEscrow(item.orderId, role, { phase: alreadyDisputed ? 'status' : 'dispute_init' });
     };
 
     const handleUseBono = (item: HistoryItem) => {
-        navigation.navigate('BonusQR', { bonusId: item.orderId, businessName: item.business });
+        navigation.navigate('BonusQR', {
+            bonusId: item.orderId,
+            businessName: item.business,
+            bonoCode: item.bonoCode || item.orderId,
+            paidAmount: item.paidAmount ?? item.price ?? 50,
+            creditTotal: item.creditTotal ?? 100,
+            creditRemaining: item.creditRemaining ?? item.creditTotal ?? 100,
+            usesTotal: item.usesTotal ?? 1,
+            usesRemaining: item.usesRemaining ?? 1,
+            bonoTitle: item.title,
+            validUntil: item.validUntil,
+        });
     };
 
     const handleOpenEscrow = (item: HistoryItem) => {
         setSelectedItem(null);
-        openEscrow(item.orderId, activeTab === 'sales' ? 'seller' : 'buyer');
+        const role = activeTab === 'sales' ? 'seller' : 'buyer';
+        // Detalles de compra primero; el chat se abre desde el sheet
+        openEscrow(item.orderId, role, { phase: 'status' });
     };
 
     const onRefresh = useCallback(() => {
@@ -532,7 +614,7 @@ export default function HistoryScreen({ navigation, route }: any) {
             </View>
 
             {/* Sticky header backdrop */}
-            <Animated.View style={[styles.stickyHeader, headerOpacity]}>
+            <Animated.View style={[styles.stickyHeader, headerOpacity]} pointerEvents="none">
                 <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
                 <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
                     <Text style={styles.stickyTitle}>Mis compras</Text>
@@ -550,7 +632,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 <Text style={[styles.statValue, { color: '#10B981' }]}>{formatCurrency(stats.total)}</Text>
                 <Text style={styles.statLabel}>{activeTab === 'sales' ? 'Total vendido' : 'Total gastado'}</Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.12)' : '#F5F3FF' }]}>
+            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.12)' : '#FAFAFA' }]}>
                 <View style={[styles.statIconWrap, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE' }]}>
                     <History size={18} color="#7C3AED" />
                 </View>
@@ -617,13 +699,90 @@ export default function HistoryScreen({ navigation, route }: any) {
         const isBono = item.kind === 'bonos' && item.type === 'bonus';
         const canUseBono = isBono && activeTab === 'purchases' && item.status === 'pending';
         const canConfirm = activeTab === 'purchases' && item.backendStatus === 'paid_escrow';
+        const creditRemaining = item.creditRemaining ?? 0;
+        const creditTotal = item.creditTotal ?? 100;
+        const usesRemaining = item.usesRemaining ?? 0;
+        const usesTotal = item.usesTotal ?? 1;
+        const codeLabel = item.bonoCode || item.orderId;
+
+        // Dedicated bono purchase card — code + credit + Ver QR
+        if (isBono && activeTab === 'purchases') {
+            return (
+                <View key={item.id || `history-${index}`} style={[styles.itemCard, styles.bonoCard]}>
+                    <View style={styles.itemRow}>
+                        <View style={[styles.imageWrap, styles.bonoThumb]}>
+                            <Ticket size={28} color="#7C3AED" />
+                        </View>
+                        <View style={styles.itemBody}>
+                            <View style={styles.itemTopRow}>
+                                <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                                <View style={[styles.statusBadge, { backgroundColor: isDark ? `${meta.color}30` : meta.bg }]}>
+                                    <StatusIcon size={10} color={isDark ? meta.color : meta.text} />
+                                    <Text style={[styles.statusText, { color: isDark ? meta.color : meta.text }]}>
+                                        {item.status === 'completed' ? 'Canjeado' : item.status === 'pending' ? 'Disponible' : 'Vencido'}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Text style={styles.itemBusiness}>{item.business}</Text>
+                            <Text style={styles.itemMeta}>
+                                Pagaste {formatCurrency(item.paidAmount ?? item.price)} · Crédito {formatCurrency(creditTotal)}
+                                {item.validUntil ? ` · Vence ${formatShortDate(item.validUntil)}` : ''}
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.bonoStatsRow}>
+                        <View style={styles.bonoStat}>
+                            <Text style={styles.bonoStatLabel}>Crédito disponible</Text>
+                            <Text style={styles.bonoStatValue}>
+                                {formatCurrency(creditRemaining)}
+                                <Text style={styles.bonoStatHint}> / {formatCurrency(creditTotal)}</Text>
+                            </Text>
+                        </View>
+                        <View style={styles.bonoStatDivider} />
+                        <View style={styles.bonoStat}>
+                            <Text style={styles.bonoStatLabel}>Usos</Text>
+                            <Text style={styles.bonoStatValue}>
+                                {usesRemaining}
+                                <Text style={styles.bonoStatHint}> / {usesTotal}</Text>
+                            </Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.bonoCodeBlock}>
+                        <Text style={styles.bonoCodeLabel}>Código</Text>
+                        <Text style={styles.bonoCodeText} selectable numberOfLines={1}>
+                            {codeLabel}
+                        </Text>
+                    </View>
+
+                    {canUseBono ? (
+                        <TouchableOpacity
+                            style={styles.bonoQrBtn}
+                            onPress={() => handleUseBono(item)}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel="Ver código QR del bono"
+                        >
+                            <Ticket size={16} color="#fff" />
+                            <Text style={styles.bonoQrBtnText}>Ver QR</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity style={styles.detailBtn} onPress={() => setSelectedItem(item)} activeOpacity={0.8}>
+                            <Text style={styles.detailBtnText}>Ver detalle</Text>
+                            <ChevronDown size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            );
+        }
 
         return (
             <TouchableOpacity
                 key={item.id || `history-${index}`}
                 style={styles.itemCard}
-                activeOpacity={canUseBono ? 0.8 : 1}
-                onPress={() => canUseBono ? handleUseBono(item) : setSelectedItem(item)}
+                activeOpacity={1}
+                onPress={() => setSelectedItem(item)}
             >
                 <View style={styles.itemRow}>
                     <View style={styles.imageWrap}>
@@ -639,7 +798,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                             <View style={[styles.statusBadge, { backgroundColor: isDark ? `${meta.color}30` : meta.bg }]}>
                                 <StatusIcon size={10} color={isDark ? meta.color : meta.text} />
                                 <Text style={[styles.statusText, { color: isDark ? meta.color : meta.text }]}>
-                                    {item.status === 'completed' ? (isBono ? 'Canjeado' : 'Exitoso') : item.status === 'pending' ? (isBono ? 'Disponible' : 'Pendiente') : 'Cancelado'}
+                                    {item.status === 'completed' ? 'Exitoso' : item.status === 'pending' ? 'Pendiente' : 'Cancelado'}
                                 </Text>
                             </View>
                         </View>
@@ -647,9 +806,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                         <Text style={styles.itemMeta}>{formatShortDate(item.date)} • {item.paymentMethod}</Text>
 
                         <View style={styles.itemFooter}>
-                            <Text style={styles.itemPrice}>
-                                {isBono && item.price === 0 ? 'GRATIS' : formatCurrency(item.price)}
-                            </Text>
+                            <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
                             {canConfirm && (
                                 <TouchableOpacity
                                     style={styles.confirmBtn}
@@ -667,17 +824,11 @@ export default function HistoryScreen({ navigation, route }: any) {
                     </View>
                 </View>
 
-                {!canConfirm && !canUseBono && (
+                {!canConfirm && (
                     <TouchableOpacity style={styles.detailBtn} onPress={() => setSelectedItem(item)} activeOpacity={0.8}>
                         <Text style={styles.detailBtnText}>Ver detalle</Text>
                         <ChevronDown size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
                     </TouchableOpacity>
-                )}
-
-                {canUseBono && (
-                    <View style={styles.bonoHint}>
-                        <Text style={styles.bonoHintText}>Tocá para escanear el QR</Text>
-                    </View>
                 )}
             </TouchableOpacity>
         );
@@ -693,7 +844,7 @@ export default function HistoryScreen({ navigation, route }: any) {
 
         return (
             <Sheet open={!!selectedItem} onOpenChange={(open: boolean) => { if (!open) setSelectedItem(null); }}>
-                <SheetContent side="bottom" style={[styles.detailSheet, { backgroundColor: isDark ? '#18181B' : '#fff' }]}>
+                <SheetContent side="bottom" style={[styles.detailSheet, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
                     <View style={styles.detailHandle} />
                     <View style={styles.detailHeader}>
                         <View>
@@ -733,53 +884,83 @@ export default function HistoryScreen({ navigation, route }: any) {
                             </View>
                         </View>
 
-                        {/* Summary */}
-                        <View style={styles.detailCard}>
-                            <Text style={styles.detailSectionTitle}>Resumen</Text>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Producto/Servicio</Text>
-                                <Text style={styles.detailValue}>{selectedItem.title}</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>{selectedItem.type === 'sale' ? 'Comprador' : 'Vendedor / Negocio'}</Text>
-                                <Text style={styles.detailValue}>{selectedItem.business}</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Fecha</Text>
-                                <Text style={styles.detailValue}>{formatDate(selectedItem.date)}</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Cantidad</Text>
-                                <Text style={styles.detailValue}>{selectedItem.quantity ?? 1}</Text>
-                            </View>
-                            <View style={styles.detailRow}>
-                                <Text style={styles.detailLabel}>Método de pago</Text>
-                                <Text style={styles.detailValue}>{selectedItem.paymentMethod}</Text>
-                            </View>
-                            {selectedItem.location && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Ubicación</Text>
-                                    <View style={styles.detailValueRow}>
-                                        <MapPin size={12} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                        <Text style={styles.detailValue}>{selectedItem.location}</Text>
-                                    </View>
-                                </View>
+                        {/* Summary — always stacked (no letter-break from horizontal flex) */}
+                        <View style={styles.summaryCard}>
+                            {Platform.OS !== 'web' ? (
+                                <BlurView
+                                    intensity={isDark ? 40 : 60}
+                                    tint={isDark ? 'dark' : 'light'}
+                                    style={StyleSheet.absoluteFillObject}
+                                />
+                            ) : (
+                                <View style={[StyleSheet.absoluteFillObject, styles.summaryCardWebBg]} />
                             )}
-                            {escrowMeta && (
-                                <View style={styles.detailRow}>
-                                    <Text style={styles.detailLabel}>Escrow</Text>
-                                    <Text style={[styles.detailValue, { color: escrowMeta.color }]}>{escrowMeta.label}</Text>
+                            <View style={styles.summaryCardInner}>
+                                <View style={styles.summaryHeader}>
+                                    <Text style={styles.summaryTitle}>Resumen</Text>
+                                    {escrowMeta ? (
+                                        <View style={[styles.summaryChip, { borderColor: escrowMeta.color, backgroundColor: `${escrowMeta.color}22` }]}>
+                                            <ShieldCheck size={12} color={escrowMeta.color} />
+                                            <Text style={[styles.summaryChipText, { color: escrowMeta.color }]} numberOfLines={1}>
+                                                {escrowMeta.label}
+                                            </Text>
+                                        </View>
+                                    ) : null}
                                 </View>
-                            )}
-                            <View style={[styles.detailRow, styles.detailTotalRow]}>
-                                <Text style={styles.detailTotalLabel}>Total</Text>
-                                <Text style={styles.detailTotalValue}>{formatCurrency(selectedItem.price)}</Text>
+
+                                <SummaryField label="Producto / servicio" value={selectedItem.title} styles={styles} />
+                                <SummaryField
+                                    label={selectedItem.type === 'sale' ? 'Comprador' : 'Vendedor'}
+                                    value={selectedItem.business}
+                                    styles={styles}
+                                />
+                                <SummaryField label="Fecha" value={formatDate(selectedItem.date)} styles={styles} />
+                                <SummaryField label="Cantidad" value={String(selectedItem.quantity ?? 1)} styles={styles} />
+                                <SummaryField label="Método de pago" value={selectedItem.paymentMethod} styles={styles} />
+                                {isBono && !!selectedItem.bonoCode && (
+                                    <SummaryField
+                                        label="Código del bono"
+                                        value={selectedItem.bonoCode}
+                                        styles={styles}
+                                    />
+                                )}
+                                {isBono && (
+                                    <SummaryField
+                                        label="Crédito disponible"
+                                        value={`${formatCurrency(selectedItem.creditRemaining ?? 0)} de ${formatCurrency(selectedItem.creditTotal ?? 100)}`}
+                                        styles={styles}
+                                        valueColor="#10B981"
+                                    />
+                                )}
+                                {isBono && (
+                                    <SummaryField
+                                        label="Usos restantes"
+                                        value={`${selectedItem.usesRemaining ?? 0} / ${selectedItem.usesTotal ?? 1}`}
+                                        styles={styles}
+                                    />
+                                )}
+                                {!!selectedItem.location && !isBono && (
+                                    <SummaryField
+                                        label="Ubicación"
+                                        value={selectedItem.location}
+                                        styles={styles}
+                                        leading={<MapPin size={14} color={isDark ? '#A1A1AA' : '#6B7280'} />}
+                                        last={!escrowMeta}
+                                    />
+                                )}
+
+                                <View style={styles.summaryTotalBar}>
+                                    <Text style={styles.summaryTotalLabel}>{isBono ? 'Pagaste' : 'Total'}</Text>
+                                    <Text style={styles.summaryTotalValue}>
+                                        {isBono && selectedItem.price === 0 ? 'GRATIS' : formatCurrency(selectedItem.price)}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
 
                         {/* Actions */}
                         <View style={styles.detailCard}>
-                            <Text style={styles.detailSectionTitle}>Acciones</Text>
+                            <Text style={[styles.detailSectionTitle, { marginBottom: 14 }]}>Acciones</Text>
                             <View style={styles.detailActions}>
                                 {canConfirm && (
                                     <TouchableOpacity
@@ -821,7 +1002,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                                         onPress={() => { setSelectedItem(null); handleUseBono(selectedItem); }}
                                     >
                                         <Ticket size={16} color="#fff" />
-                                        <Text style={styles.detailActionPrimaryText}>Usar bono</Text>
+                                        <Text style={styles.detailActionPrimaryText}>Ver QR y código</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -834,7 +1015,7 @@ export default function HistoryScreen({ navigation, route }: any) {
 
     const renderFiltersSheet = () => (
         <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <SheetContent side="bottom" style={[styles.filterSheet, { backgroundColor: isDark ? '#18181B' : '#fff' }]}>
+            <SheetContent side="bottom" style={[styles.filterSheet, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
                 <SheetHeader>
                     <SheetTitle style={{ color: isDark ? '#F9FAFB' : '#111827' }}>Filtros</SheetTitle>
                 </SheetHeader>
@@ -957,11 +1138,13 @@ export default function HistoryScreen({ navigation, route }: any) {
 
 function getStyles(isDark: boolean, insets: any, width: number) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
-    const surface = isDark ? '#18181B' : '#FFFFFF';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
     const primary = '#7C3AED';
+    const isNarrow = width < 390;
+    const sheetPad = width < 360 ? 12 : width < 768 ? 16 : 24;
 
     return StyleSheet.create({
         container: { flex: 1, backgroundColor: bg },
@@ -970,7 +1153,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
 
         headerWrapper: { zIndex: 50 },
         hero: {
-            backgroundColor: isDark ? '#18181B' : '#FFFFFF',
+            backgroundColor: isDark ? '#09090B' : '#FAFAFA',
             paddingHorizontal: 16,
             paddingTop: insets.top + 12,
             paddingBottom: 16,
@@ -984,7 +1167,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             borderRadius: 21,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         },
         headerTitles: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
         headerTitle: { fontSize: 18, fontWeight: '800', color: text },
@@ -998,7 +1181,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             borderRadius: 4,
             backgroundColor: primary,
             borderWidth: 1,
-            borderColor: isDark ? '#18181B' : '#fff',
+            borderColor: isDark ? '#09090B' : '#FAFAFA',
         },
 
         stickyHeader: {
@@ -1020,7 +1203,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         searchBar: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderRadius: 14,
             paddingHorizontal: 14,
             height: 48,
@@ -1062,7 +1245,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         controlsBar: { paddingHorizontal: 16, marginBottom: 12 },
         tabPill: {
             flexDirection: 'row',
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderRadius: 18,
             padding: 4,
             borderWidth: 1,
@@ -1162,14 +1345,84 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 4,
         },
         detailBtnText: { fontSize: 13, color: muted, fontWeight: '600' },
-        bonoHint: {
-            marginTop: 12,
-            paddingTop: 12,
-            borderTopWidth: 1,
-            borderTopColor: border,
-            alignItems: 'center',
+        bonoCard: {
+            borderColor: isDark ? 'rgba(124,58,237,0.35)' : 'rgba(124,58,237,0.18)',
         },
-        bonoHintText: { color: '#3B82F6', fontWeight: '700', fontSize: 13 },
+        bonoThumb: {
+            backgroundColor: isDark ? 'rgba(124,58,237,0.18)' : 'rgba(124,58,237,0.08)',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        bonoStatsRow: {
+            flexDirection: 'row',
+            alignItems: 'stretch',
+            marginTop: 14,
+            paddingVertical: 12,
+            paddingHorizontal: 4,
+            borderRadius: 14,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(9,9,11,0.03)',
+        },
+        bonoStat: { flex: 1, paddingHorizontal: 12 },
+        bonoStatDivider: {
+            width: StyleSheet.hairlineWidth,
+            backgroundColor: border,
+        },
+        bonoStatLabel: {
+            fontSize: 11,
+            fontWeight: '600',
+            color: muted,
+            marginBottom: 4,
+            letterSpacing: 0.2,
+        },
+        bonoStatValue: {
+            fontSize: 16,
+            fontWeight: '800',
+            color: text,
+        },
+        bonoStatHint: {
+            fontSize: 12,
+            fontWeight: '600',
+            color: muted,
+        },
+        bonoCodeBlock: {
+            marginTop: 12,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: border,
+            borderStyle: 'dashed',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.7)',
+        },
+        bonoCodeLabel: {
+            fontSize: 10,
+            fontWeight: '800',
+            color: muted,
+            letterSpacing: 1.2,
+            marginBottom: 4,
+        },
+        bonoCodeText: {
+            fontSize: 15,
+            fontWeight: '800',
+            color: text,
+            letterSpacing: 1,
+        },
+        bonoQrBtn: {
+            marginTop: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backgroundColor: primary,
+            paddingVertical: 13,
+            borderRadius: 14,
+        },
+        bonoQrBtnText: {
+            color: '#fff',
+            fontWeight: '800',
+            fontSize: 14,
+            letterSpacing: 0.2,
+        },
 
         detailSheet: {
             borderTopLeftRadius: 28,
@@ -1202,7 +1455,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -1222,7 +1475,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             borderWidth: 2,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? '#18181B' : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         },
         detailHeroTitle: { fontSize: 17, fontWeight: '800', color: text },
         detailHeroSubtitle: { fontSize: 12, color: muted, marginTop: 2 },
@@ -1255,28 +1508,149 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         detailImagePrice: { fontSize: 18, fontWeight: '800', color: '#34D399', marginTop: 2 },
 
         detailCard: {
-            backgroundColor: isDark ? '#27272A' : '#F9FAFB',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
             borderRadius: 20,
-            padding: 16,
-            marginHorizontal: 16,
+            padding: sheetPad,
+            marginHorizontal: sheetPad,
             marginBottom: 16,
             borderWidth: 1,
             borderColor: border,
         },
-        detailSectionTitle: { fontSize: 16, fontWeight: '800', color: text, marginBottom: 14 },
+        detailSectionTitle: {
+            fontSize: isNarrow ? 15 : 16,
+            fontWeight: '800',
+            color: text,
+            marginBottom: 0,
+            letterSpacing: -0.2,
+        },
         detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-        detailLabel: { fontSize: 13, color: muted, fontWeight: '600', flex: 0.45 },
-        detailValue: { fontSize: 13, color: text, fontWeight: '700', flex: 0.55, textAlign: 'right' },
-        detailValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+        detailLabel: { fontSize: 13, color: muted, fontWeight: '600', flex: 0.42, paddingRight: 8 },
+        detailValue: { fontSize: 13, color: text, fontWeight: '700', flex: 0.58, textAlign: 'right', flexShrink: 1 },
+        detailValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flex: 0.58 },
         detailTotalRow: {
             marginTop: 10,
             paddingTop: 12,
-            borderTopWidth: 1,
-            borderTopColor: border,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
             marginBottom: 0,
         },
-        detailTotalLabel: { fontSize: 15, fontWeight: '800', color: text },
-        detailTotalValue: { fontSize: 18, fontWeight: '800', color: '#10B981' },
+        detailTotalLabel: { fontSize: isNarrow ? 14 : 15, fontWeight: '800', color: text },
+        detailTotalValue: {
+            fontSize: isNarrow ? 18 : 22,
+            fontWeight: '800',
+            color: '#10B981',
+            letterSpacing: -0.5,
+        },
+
+        summaryCard: {
+            marginHorizontal: sheetPad,
+            marginBottom: 16,
+            borderRadius: 22,
+            overflow: 'hidden',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.9)',
+            backgroundColor: 'transparent',
+            alignSelf: 'stretch',
+        },
+        summaryCardWebBg: {
+            backgroundColor: isDark ? 'rgba(39,39,42,0.88)' : 'rgba(255,255,255,0.88)',
+        },
+        summaryCardInner: {
+            paddingHorizontal: sheetPad,
+            paddingTop: sheetPad,
+            paddingBottom: sheetPad - 2,
+            backgroundColor: isDark ? 'rgba(24,24,27,0.45)' : 'rgba(255,255,255,0.35)',
+        },
+        summaryHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 4,
+            paddingBottom: 12,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+        },
+        summaryTitle: {
+            flex: 1,
+            minWidth: 0,
+            fontSize: isNarrow ? 16 : 17,
+            fontWeight: '800',
+            color: text,
+            letterSpacing: -0.3,
+        },
+        summaryChip: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 999,
+            borderWidth: StyleSheet.hairlineWidth,
+            flexShrink: 0,
+            maxWidth: '46%',
+        },
+        summaryChipText: { fontSize: 11, fontWeight: '800', flexShrink: 1 },
+        summaryField: {
+            width: '100%',
+            paddingVertical: isNarrow ? 10 : 12,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+        },
+        summaryFieldLast: { borderBottomWidth: 0 },
+        summaryLabel: {
+            width: '100%',
+            fontSize: 11,
+            color: muted,
+            fontWeight: '600',
+            letterSpacing: 0.2,
+            textTransform: 'uppercase',
+            marginBottom: 4,
+        },
+        summaryValueRow: {
+            width: '100%',
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 6,
+        },
+        summaryValue: {
+            flexGrow: 1,
+            flexShrink: 1,
+            minWidth: 0,
+            fontSize: isNarrow ? 14 : 15,
+            lineHeight: isNarrow ? 20 : 22,
+            color: text,
+            fontWeight: '700',
+            ...(Platform.OS === 'web'
+                ? ({ wordBreak: 'break-word', overflowWrap: 'anywhere' } as any)
+                : null),
+        },
+        summaryTotalBar: {
+            marginTop: 12,
+            paddingVertical: 14,
+            paddingHorizontal: 14,
+            borderRadius: 16,
+            backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.1)',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: isDark ? 'rgba(16,185,129,0.35)' : 'rgba(16,185,129,0.28)',
+            gap: 6,
+        },
+        summaryTotalLabel: {
+            fontSize: 11,
+            fontWeight: '700',
+            color: muted,
+            textTransform: 'uppercase',
+            letterSpacing: 0.3,
+        },
+        summaryTotalValue: {
+            width: '100%',
+            fontSize: isNarrow ? 22 : 26,
+            lineHeight: isNarrow ? 28 : 32,
+            fontWeight: '800',
+            color: '#059669',
+            letterSpacing: -0.6,
+            ...(Platform.OS === 'web' ? ({ wordBreak: 'break-word' } as any) : null),
+        },
 
         detailActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
         detailActionBtn: {
@@ -1293,7 +1667,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         detailActionPrimary: { backgroundColor: primary },
         detailActionPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
         detailActionSecondary: {
-            backgroundColor: isDark ? '#3F3F46' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderWidth: 1,
             borderColor: border,
         },
@@ -1310,7 +1684,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             paddingHorizontal: 14,
             paddingVertical: 10,
             borderRadius: 20,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderWidth: 1,
             borderColor: border,
             marginRight: 6,
@@ -1322,7 +1696,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         dateInput: {
             borderColor: border,
             color: text,
-            backgroundColor: isDark ? '#18181B' : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderRadius: 12,
         },
         dateError: { fontSize: 12, color: '#EF4444' },
@@ -1335,7 +1709,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 6,
             paddingVertical: 14,
             borderRadius: 14,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderWidth: 1,
             borderColor: border,
         },

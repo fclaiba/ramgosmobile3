@@ -119,15 +119,15 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? '#111827' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         height: '70%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     title: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111' },
     closeBtn: { position: 'absolute', right: 16, top: 16 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#F3F4F6', margin: 16, borderRadius: 12, paddingHorizontal: 12, height: 44 },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', margin: 16, borderRadius: 12, paddingHorizontal: 12, height: 44 },
     searchIcon: { marginRight: 8 },
     input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
     list: { paddingHorizontal: 16 },
@@ -137,7 +137,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     userName: { fontWeight: '600', fontSize: 14, color: isDark ? '#F9FAFB' : '#111' },
     userHandle: { fontSize: 12, color: '#6B7280' },
     sendBtn: { backgroundColor: '#0095F6', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8 },
-    sentBtn: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#DBDBDB' },
+    sentBtn: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#DBDBDB' },
     sendText: { color: '#fff', fontWeight: '600', fontSize: 13 },
     sentText: { color: isDark ? '#F9FAFB' : '#111', fontWeight: '600', fontSize: 13 },
     empty: { alignItems: 'center', marginTop: 40 },

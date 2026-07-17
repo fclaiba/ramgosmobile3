@@ -9,6 +9,7 @@ import { CodeVerificationCard } from '../../components/business/CodeVerification
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { toUserErrorTitle, toUserMessage } from '../../utils/errors';
 
 export default function BusinessQRScannerScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -59,10 +60,14 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
                 message: `El bono ${lookupResult.listing?.title || searchCode} fue canjeado.`
             });
         } catch (error: any) {
+            const payload = error?.data ?? error?.message ?? error;
             setResult({
                 status: 'error',
-                title: 'No se pudo canjear',
-                message: error.message || 'Error desconocido'
+                title: toUserErrorTitle(payload, 'No se pudo canjear'),
+                message: toUserMessage(
+                    payload,
+                    'No se pudo validar el bono. Revisá el código e intentá de nuevo.',
+                ),
             });
         } finally {
             setIsProcessing(false);
@@ -174,10 +179,10 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#0f172a' : '#f8fafc' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     body: { flex: 1, padding: 16, gap: 16 },
     branchSelector: {
-        backgroundColor: isDark ? '#111827' : '#ffffff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         padding: 16,
         borderWidth: 1,
@@ -198,7 +203,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     branchChipTextActive: { color: '#fff' },
     cameraPlaceholder: {
         flex: 1,
-        backgroundColor: isDark ? '#1F2937' : '#ffffff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 24,
         borderWidth: 1,
         borderColor: isDark ? '#334155' : '#e2e8f0',
@@ -231,7 +236,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     input: {
         width: '100%',
-        backgroundColor: isDark ? '#111827' : '#f8fafc',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 2,
         borderColor: isDark ? '#374151' : '#E2E8F0',
         borderRadius: 16,

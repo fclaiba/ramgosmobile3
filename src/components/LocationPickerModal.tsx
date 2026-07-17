@@ -164,7 +164,7 @@ export default function LocationPickerModal({ visible, onClose, onSelect, initia
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     containerDark: { backgroundColor: '#111827' },
     header: {
         paddingTop: 50,
@@ -173,13 +173,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         zIndex: 10
     },
     headerDark: { backgroundColor: '#111827' },
     closeBtn: { padding: 8 },
     headerTitle: { fontSize: 18, fontWeight: 'bold' },
-    headerTitleDark: { color: isDark ? '#1F2937' : '#fff' },
+    headerTitleDark: { color: isDark ? '#09090B' : '#FAFAFA' },
 
     mapContainer: { flex: 1, position: 'relative' },
     centerMarkerContainer: {
@@ -193,7 +193,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     footer: {
         padding: 24,
         paddingBottom: 40,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         marginTop: -20,
@@ -203,7 +203,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         shadowRadius: 10,
         elevation: 10
     },
-    footerDark: { backgroundColor: '#1F2937' },
+    footerDark: { backgroundColor: 'rgba(31,41,55,0.72)' },
     addressLabel: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', textTransform: 'uppercase', marginBottom: 4 },
     addressLabelDark: { color: isDark ? '#6B7280' : '#9CA3AF' },
     addressText: { fontSize: 16, fontWeight: 'bold', color: '#111827', minHeight: 40 },

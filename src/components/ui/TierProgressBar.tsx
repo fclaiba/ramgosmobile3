@@ -34,9 +34,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         paddingHorizontal: 20,
         paddingVertical: 12,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? '#374151' : '#e5e7eb',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     containerDark: {
         backgroundColor: '#111827',
@@ -65,7 +65,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     track: {
         height: 6,
-        backgroundColor: isDark ? '#374151' : '#e5e7eb',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 3,
         overflow: 'hidden',
     },

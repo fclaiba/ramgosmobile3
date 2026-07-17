@@ -115,8 +115,8 @@ export const MemoryGame = (props: MemoryGameProps) => {
 
     // Logic refs
     const processingRef = useRef(false);
-    const previewTimerRef = useRef<number | null>(null);
-    const matchTimerRef = useRef<number | null>(null);
+    const previewTimerRef = useRef<any>(null);
+    const matchTimerRef = useRef<any>(null);
     const lastActionNonce = useRef(0);
     const lastLevelReported = useRef(1);
     const nextLifeLevelRef = useRef<number>(1 + getRandomLifeInterval());
@@ -385,7 +385,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
         width: '100%',
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     header: {
         flexDirection: 'row',
@@ -396,7 +396,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     statBox: {
         alignItems: 'center',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         paddingHorizontal: 12,
         paddingVertical: 4,
         borderRadius: 8,
@@ -446,9 +446,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         borderColor: '#7C3AED'
     },
     cardFront: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 2,
-        borderColor: isDark ? '#374151' : '#e5e7eb'
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
     },
     emoji: {
         fontSize: 28
@@ -478,7 +478,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         elevation: 5
     },
     btnText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
         fontSize: 16
     },

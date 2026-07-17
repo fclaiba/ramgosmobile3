@@ -1,6 +1,7 @@
-import * as React from "react"
-import { TextInput, StyleSheet } from "react-native"
+import * as React from 'react';
+import { TextInput, StyleSheet } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { colors, Radius, Type, Touch } from '../../theme/tokens';
 
 const Input = React.forwardRef<
     React.ElementRef<typeof TextInput>,
@@ -8,32 +9,37 @@ const Input = React.forwardRef<
 >(({ style, ...props }, ref) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const c = colors(isDark);
 
     return (
         <TextInput
-            style={[styles.input, style]}
+            style={[
+                styles.input,
+                {
+                    borderColor: c.border,
+                    backgroundColor: c.glass,
+                    color: c.text,
+                    minHeight: Touch.min,
+                },
+                style,
+            ]}
             ref={ref}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={c.textSubtle}
             {...props}
         />
-    )
-})
-Input.displayName = "Input"
+    );
+});
+Input.displayName = 'Input';
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
+const styles = StyleSheet.create({
     input: {
-        height: 40,
-        width: "100%",
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#e5e7eb', // input border
-        backgroundColor: "transparent",
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        fontSize: 14,
-        color: isDark ? "#fff" : "#111",
-    }
-})
+        width: '100%',
+        borderRadius: Radius.md,
+        borderWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        ...Type.body,
+    },
+});
 
-export { Input }
+export { Input };

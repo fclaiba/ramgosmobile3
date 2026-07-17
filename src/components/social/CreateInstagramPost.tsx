@@ -143,13 +143,13 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? '#111827' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         height: '92%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, height: 56, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     cancelText: { fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
     headerTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#000' },
     postButton: { fontSize: 16, color: '#3B82F6', fontWeight: '600' },
@@ -160,9 +160,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     avatar: { marginRight: 12 },
     captionInput: { flex: 1, fontSize: 16, marginTop: 8, minHeight: 60, textAlignVertical: 'top', color: isDark ? '#F9FAFB' : '#000' },
 
-    urlInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderRadius: 12, paddingHorizontal: 12, height: 48, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    urlInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 12, paddingHorizontal: 12, height: 48, marginBottom: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     urlInput: { flex: 1, fontSize: 15, color: isDark ? '#F9FAFB' : '#000' },
 
-    previewContainer: { borderRadius: 12, overflow: 'hidden', aspectRatio: 1, backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
+    previewContainer: { borderRadius: 12, overflow: 'hidden', aspectRatio: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     previewImage: { width: '100%', height: '100%' }
 });

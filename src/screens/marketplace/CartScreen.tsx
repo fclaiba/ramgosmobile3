@@ -218,7 +218,7 @@ export default function CartScreen({ navigation }: any) {
 
             <TouchableOpacity
                 style={styles.exploreCTA}
-                onPress={() => navigation.navigate('Home')}
+                onPress={() => navigation.navigate('Marketplace')}
                 activeOpacity={0.8}
             >
                 <LinearGradient
@@ -330,7 +330,7 @@ export default function CartScreen({ navigation }: any) {
                             {items.length} {items.length === 1 ? 'artículo' : 'artículos'} en tu carrito
                         </Text>
                         <TouchableOpacity
-                            onPress={() => navigation.navigate('Home')}
+                            onPress={() => navigation.navigate('Marketplace')}
                             style={styles.addMoreBtn}
                         >
                             <Plus size={14} color={isDark ? '#A78BFA' : '#7C3AED'} />
@@ -358,7 +358,7 @@ const getStyles = (isDark: boolean) =>
     StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+            backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         },
         scrollView: {
             flex: 1,

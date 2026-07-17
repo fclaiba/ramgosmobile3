@@ -171,7 +171,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: {
         position: 'absolute',
@@ -198,7 +198,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     carousel: { height: 350 },
     productImage: { height: 350, resizeMode: 'contain' },
-    content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: isDark ? '#1F2937' : '#fff' },
+    content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     title: { fontSize: 24, fontWeight: '400', color: '#1F2937', marginBottom: 12 },
     price: { fontSize: 32, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
 
@@ -209,14 +209,14 @@ const getStyles = (isDark: any) => StyleSheet.create({
     badgeText: { fontSize: 12, fontWeight: 'bold' },
     textNew: { color: '#059669' },
     textUsed: { color: '#C2410C' },
-    verificationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, backgroundColor: isDark ? '#1F2937' : '#F3F4F6', borderRadius: 12 },
+    verificationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12 },
     verificationText: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
 
     warningBox: { backgroundColor: '#FFFBEB', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FCD34D', marginBottom: 16 },
     warningTitle: { fontSize: 14, fontWeight: 'bold', color: '#92400E', marginBottom: 4 },
     warningText: { fontSize: 14, color: '#B45309' },
 
-    separator: { height: 1, backgroundColor: isDark ? '#374151' : '#e5e7eb', marginVertical: 20 },
+    separator: { height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginVertical: 20 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
     description: { fontSize: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', lineHeight: 24 },
 
@@ -225,7 +225,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     sellerName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
     sellerRating: { fontSize: 14, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
 
-    safetyBox: { flexDirection: 'row', gap: 12, backgroundColor: '#F5F3FF', padding: 16, borderRadius: 12, alignItems: 'flex-start' },
+    safetyBox: { flexDirection: 'row', gap: 12, backgroundColor: '#FAFAFA', padding: 16, borderRadius: 12, alignItems: 'flex-start' },
     shippingBox: { flexDirection: 'row', gap: 12, backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12, marginTop: 12, alignItems: 'flex-start' },
     safetyTitle: { fontSize: 14, fontWeight: 'bold', color: '#1F2937' },
     safetyDesc: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', marginTop: 2 },
@@ -237,14 +237,14 @@ const getStyles = (isDark: any) => StyleSheet.create({
         right: 0,
         flexDirection: 'row',
         padding: 16,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopWidth: 1,
-        borderTopColor: isDark ? '#374151' : '#e5e7eb',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         gap: 12
     },
     cartBtn: {
         flex: 1,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         padding: 16,
         borderRadius: 12,
         justifyContent: 'center',
@@ -259,5 +259,5 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center'
     },
-    buyBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: 'bold', fontSize: 16 }
+    buyBtnText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: 'bold', fontSize: 16 }
 });

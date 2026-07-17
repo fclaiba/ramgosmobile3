@@ -87,16 +87,16 @@ export default function MapExplorerScreen() {
     const userLng = location?.coords.longitude ?? INITIAL_REGION.longitude;
 
     const filteredProducts = useMemo(() => {
+        // ponytail: don't hide far listings (BMW NYC vanished with BA GPS + 10km)
         return products.filter(p => {
-            if (!p.location) return false;
-            if (activeFilter !== 'all' && p.listingType !== activeFilter) return false;
+            if (!p.location?.lat || !p.location?.lng) return false;
+            const type = p.listingType || p.type;
+            if (activeFilter !== 'all' && type !== activeFilter) return false;
             if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            
-            const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
-            return dist <= radius;
+            return true;
         }).map(p => {
             const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
-            return { ...p, calculatedDistance: dist };
+            return { ...p, listingType: p.listingType || p.type, calculatedDistance: dist };
         }).sort((a, b) => a.calculatedDistance - b.calculatedDistance);
     }, [products, activeFilter, searchQuery, userLat, userLng, radius]);
 
@@ -381,7 +381,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 10,
@@ -392,14 +392,14 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 8
     },
     searchBarDark: {
-        backgroundColor: '#1F2937',
+        backgroundColor: 'rgba(31,41,55,0.72)',
         shadowColor: isDark ? '#F9FAFB' : '#000',
     },
     backButton: { padding: 4 },
     searchInput: { flex: 1, fontSize: 16, color: '#111827' },
     radiusScroll: { marginTop: 12, gap: 8, paddingBottom: 4 },
     radiusChip: {
-        backgroundColor: isDark ? '#374151' : '#e5e7eb',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 16,
@@ -408,11 +408,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
     radiusChipDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
     activeRadiusChip: { backgroundColor: '#7C3AED' },
     radiusText: { fontSize: 12, fontWeight: '600', color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
-    activeRadiusText: { color: isDark ? '#1F2937' : '#fff' },
+    activeRadiusText: { color: isDark ? '#09090B' : '#FAFAFA' },
 
     filtersScroll: { marginTop: 8, gap: 8, paddingBottom: 4 },
     filterChip: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 20,
@@ -425,13 +425,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
     filterChipDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
     activeFilterChip: { backgroundColor: '#111827' },
     filterText: { fontSize: 13, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
-    activeFilterText: { color: isDark ? '#1F2937' : '#fff' },
+    activeFilterText: { color: isDark ? '#09090B' : '#FAFAFA' },
 
     // Custom marker styles removed — now handled by <CustomMapMarker> component
 
     cardContainer: { position: 'absolute', left: 16, right: 16, zIndex: 10 },
     card: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderRadius: 20,
         flexDirection: 'row',
         padding: 12,
@@ -441,8 +441,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
         shadowRadius: 12,
         elevation: 8
     },
-    cardDark: { backgroundColor: '#1F2937' },
-    cardImage: { width: 80, height: 80, borderRadius: 16, backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
+    cardDark: { backgroundColor: 'rgba(31,41,55,0.72)' },
+    cardImage: { width: 80, height: 80, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     cardContent: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 12 },
     cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
     cardCategory: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginBottom: 4 },
@@ -471,7 +471,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         zIndex: 10
     },
     controlBtn: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         width: 48,
         height: 48,
         borderRadius: 24,
@@ -483,7 +483,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         elevation: 5
     },
     controlBtnDark: {
-        backgroundColor: '#1F2937'
+        backgroundColor: 'rgba(31,41,55,0.72)'
     },
 
     // View Toggle
@@ -497,7 +497,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     viewToggleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 24,
@@ -508,7 +508,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         elevation: 8,
     },
     viewToggleBtnDark: {
-        backgroundColor: '#1F2937',
+        backgroundColor: 'rgba(31,41,55,0.72)',
     },
     viewToggleText: {
         fontSize: 15,
@@ -519,7 +519,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     // List View
     listView: {
         flex: 1,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     listViewDark: {
         backgroundColor: '#111827',
@@ -538,7 +538,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     listItem: {
         flexDirection: 'row',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         padding: 12,
         marginBottom: 12,
@@ -548,13 +548,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
         elevation: 2,
     },
     listItemDark: {
-        backgroundColor: '#1F2937',
+        backgroundColor: 'rgba(31,41,55,0.72)',
     },
     listItemImage: {
         width: 70,
         height: 70,
         borderRadius: 12,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     listItemContent: {
         flex: 1,

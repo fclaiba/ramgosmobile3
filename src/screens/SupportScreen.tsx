@@ -192,7 +192,7 @@ export default function SupportScreen({ navigation }: any) {
     const renderTicketForm = () => (
         <View>
             <TouchableOpacity onPress={() => setView('contact')} style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#007AFF' }}>← Volver a opciones de contacto</Text>
+                <Text style={{ color: '#7C3AED' }}>← Volver a opciones de contacto</Text>
             </TouchableOpacity>
 
             <Text style={styles.sectionTitle}>Nuevo Ticket</Text>
@@ -300,10 +300,10 @@ export default function SupportScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     content: { padding: 16 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: isDark ? '#F9FAFB' : '#111' },
-    card: { borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : "#000", shadowOpacity: 0.1, elevation: 2, marginBottom: 8, backgroundColor: isDark ? '#1F2937' : '#fff' },
+    card: { borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : "#000", shadowOpacity: 0.1, elevation: 2, marginBottom: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     cardContentRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     iconContainer: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
     methodTitle: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#333' },
@@ -312,9 +312,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     ticketButton: { marginTop: 24, backgroundColor: isDark ? '#F9FAFB' : '#111' },
     label: { fontSize: 14, fontWeight: '500', marginBottom: 6, color: isDark ? '#D1D5DB' : '#333' },
     formGroup: { marginBottom: 16 },
-    textArea: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e2e8f0', borderRadius: 12, padding: 12, minHeight: 120, fontSize: 14, color: isDark ? '#F9FAFB' : '#1f2937' },
+    textArea: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#e2e8f0', borderRadius: 12, padding: 12, minHeight: 120, fontSize: 14, color: isDark ? '#F9FAFB' : '#1f2937' },
     categoryRow: { flexDirection: 'row', flexWrap: 'wrap' },
-    categoryPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? '#374151' : '#f3f4f6', marginRight: 8, marginBottom: 8 },
+    categoryPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginRight: 8, marginBottom: 8 },
     categoryPillActive: { backgroundColor: isDark ? '#F9FAFB' : '#111', transform: [{ scale: 1.02 }] },
     categoryText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#4b5563', fontWeight: '500' },
     categoryTextActive: { color: isDark ? '#000' : '#fff' },

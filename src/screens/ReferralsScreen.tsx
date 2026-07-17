@@ -125,14 +125,14 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: isDark ? '#111827' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? '#374151' : '#E5E7EB',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     backButton: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     headerTitle: {
         fontSize: 18,
@@ -171,7 +171,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
     statCard: {
         flex: 1,
-        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         padding: 16,
         borderRadius: 20,
         shadowColor: "#000",
@@ -199,7 +199,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         color: isDark ? '#9CA3AF' : '#6B7280',
     },
     historySection: {
-        backgroundColor: isDark ? '#1F2937' : '#FFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 24,
         padding: 20,
         shadowColor: "#000",
@@ -220,7 +220,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? '#374151' : '#F3F4F6',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     historyLeft: {
         flexDirection: 'row',

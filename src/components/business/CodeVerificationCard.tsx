@@ -155,7 +155,7 @@ export const CodeVerificationCard = ({
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderRadius: 24,
         padding: 24,
         shadowColor: '#000',
@@ -166,14 +166,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         maxWidth: 400,
         alignSelf: 'center',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#F3F4F6',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         overflow: 'hidden',
     },
     // Success Styles
     successContainer: {
         alignItems: 'center',
         borderColor: isDark ? '#065F46' : '#DCFCE7',
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     },
     iconCircleSuccess: {
         width: 80,
@@ -308,7 +308,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'center',
         gap: 8,
         marginBottom: 24,
-        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         paddingVertical: 8,
         paddingHorizontal: 16,
         borderRadius: 999,
@@ -317,7 +317,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     userIconContainer: {
         padding: 4,
         borderRadius: 999,
-        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     username: {
         fontSize: 15,
@@ -361,9 +361,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
-        borderColor: isDark ? '#4B5563' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     cancelText: {
         color: isDark ? '#D1D5DB' : '#4B5563',

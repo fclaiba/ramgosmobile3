@@ -503,52 +503,82 @@ export const getBusinessCampaigns = query({
 
 /**
  * Lookup helper used by the BusinessDashboard "invite influencer" modal:
- * resolve an email or referralCode to a user id (with role guard).
+ * resolve an @username (social handle), nickname, or referralCode.
+ * Never by email — the UI must cite the user's @.
  */
 export const lookupInfluencer = query({
     args: {
         sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
-        emailOrCode: v.string(),
+        /** @deprecated use `handleOrCode` — kept for older clients */
+        emailOrCode: v.optional(v.string()),
+        handleOrCode: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         await requireActor(ctx, (args as any).sessionToken);
-        const term = args.emailOrCode.trim();
-        if (!term) return null;
+        const raw = (args.handleOrCode ?? args.emailOrCode ?? '').trim();
+        if (!raw) return null;
 
-        // Try referral code first (case-insensitive — codes are uppercase
-        // by convention).
-        const upper = term.toUpperCase();
+        const handle = raw.replace(/^@+/, '').toLowerCase();
+        if (!handle) return null;
+
+        const present = async (user: any, username?: string | null) => {
+            if (!user || user.role !== 'influencer') return null;
+            let resolvedUsername = username ?? null;
+            if (!resolvedUsername) {
+                const social = await ctx.db
+                    .query('socialUsers')
+                    .withIndex('by_user', (q) => q.eq('userId', String(user._id)))
+                    .first();
+                resolvedUsername =
+                    social?.username ??
+                    (user.nickname ? String(user.nickname).toLowerCase() : null);
+            }
+            if (!resolvedUsername) return null;
+            return {
+                _id: user._id,
+                name: user.name,
+                username: resolvedUsername,
+                nickname: user.nickname ?? null,
+                referralCode: user.referralCode ?? null,
+            };
+        };
+
+        // 1) Social @username (canonical handle)
+        const social = await ctx.db
+            .query('socialUsers')
+            .withIndex('by_username', (q) => q.eq('username', handle))
+            .first();
+        if (social) {
+            const userNorm = ctx.db.normalizeId('users', social.userId);
+            const user = userNorm ? await ctx.db.get(userNorm) : null;
+            const hit = await present(user, social.username);
+            if (hit) return hit;
+        }
+
+        // 2) Referral code (uppercase convention)
         const byCode = await ctx.db
             .query('users')
             .withIndex('by_referral_code', (q) =>
-                q.eq('referralCode', upper),
+                q.eq('referralCode', raw.toUpperCase()),
             )
             .first();
-        if (byCode && (byCode as any).role === 'influencer') {
-            return {
-                _id: byCode._id,
-                name: (byCode as any).name,
-                email: (byCode as any).email,
-                referralCode: (byCode as any).referralCode,
-            };
+        {
+            const hit = await present(byCode);
+            if (hit) return hit;
         }
 
-        // Then email.
-        const byEmail = await ctx.db
+        // 3) Nickname fallback among influencers (no email)
+        const influencers = await ctx.db
             .query('users')
-            .withIndex('by_email', (q) => q.eq('email', term.toLowerCase()))
-            .first();
-        if (byEmail && (byEmail as any).role === 'influencer') {
-            return {
-                _id: byEmail._id,
-                name: (byEmail as any).name,
-                email: (byEmail as any).email,
-                referralCode: (byEmail as any).referralCode,
-            };
-        }
-
-        return null;
+            .filter((q) => q.eq(q.field('role'), 'influencer'))
+            .take(200);
+        const byNick = influencers.find(
+            (u) =>
+                u.nickname &&
+                String(u.nickname).toLowerCase().replace(/^@+/, '') === handle,
+        );
+        return (await present(byNick)) ?? null;
     },
 });
 

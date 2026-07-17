@@ -36,10 +36,11 @@ export const wipeAndSeedBonos = mutation({
 
             await ctx.db.insert("listings", {
                 title: `Bono ${tematica} - ${business.name || 'Local'}`,
-                description: `Pagas $100 y consumes $200 en todo el menú. Descuento del 50%.`,
-                price: 100, // Precio de venta
-                discountValue: 100, // Descuento de 50%
-                discountType: "percentage",
+                description: `Pagás $50 y tenés $100 de crédito para consumir en el negocio.`,
+                price: 50,
+                discountValue: 100,
+                discountType: "fixed",
+                validityDays: 7,
                 currency: "USD",
                 type: "bono",
                 category: "Gastronomía",
@@ -52,7 +53,7 @@ export const wipeAndSeedBonos = mutation({
                 
                 // Lógica de Influencers
                 openPromotion: isOpenPromotion,
-                openCommissionRate: 0.10, // 10% para el influencer ($10 por venta)
+                openCommissionRate: 0.10, // 10% para el influencer
             });
             count++;
         }

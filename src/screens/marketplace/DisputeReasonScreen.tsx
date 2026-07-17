@@ -276,7 +276,7 @@ import { StyleSheet } from 'react-native';
 
 function getStyles(isDark: boolean, insets: any) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
-    const surface = isDark ? '#18181B' : '#FFFFFF';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
@@ -369,7 +369,7 @@ function getStyles(isDark: boolean, insets: any) {
             width: 44,
             height: 44,
             borderRadius: 14,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -382,7 +382,7 @@ function getStyles(isDark: boolean, insets: any) {
             borderWidth: 2,
             borderStyle: 'dashed',
             borderColor: border,
-            backgroundColor: isDark ? '#27272A' : '#F9FAFB',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
             justifyContent: 'center',
             alignItems: 'center',
             gap: 8,
@@ -443,7 +443,7 @@ function getStyles(isDark: boolean, insets: any) {
             paddingVertical: 16,
             alignItems: 'center',
         },
-        footerBtnDisabled: { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+        footerBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
         footerBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
         footerBtnTextDisabled: { color: muted },
     });

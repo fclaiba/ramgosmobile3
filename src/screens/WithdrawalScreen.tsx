@@ -290,7 +290,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
+    container: { flex: 1, backgroundColor: '#FAFAFA' },
     scrollContent: { padding: 20, paddingBottom: 40 },
 
     balanceCard: {
@@ -306,8 +306,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
     balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     balanceLabel: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
     usdBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    usdText: { color: isDark ? '#1F2937' : '#fff', fontSize: 12, fontWeight: 'bold' },
-    balanceValue: { fontSize: 42, fontWeight: '800', color: isDark ? '#1F2937' : '#fff', marginBottom: 8 },
+    usdText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 12, fontWeight: 'bold' },
+    balanceValue: { fontSize: 42, fontWeight: '800', color: isDark ? '#09090B' : '#FAFAFA', marginBottom: 8 },
     balanceHint: { color: '#94a3b8', fontSize: 13 },
 
     warningCard: {
@@ -333,9 +333,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 12,
         padding: 14,
         borderRadius: 12,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#e5e7eb',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     scheduleRowActive: { borderColor: '#1D4ED8', backgroundColor: '#EFF6FF' },
     scheduleLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
@@ -344,9 +344,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
     amountInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#e5e7eb',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -371,6 +371,6 @@ const getStyles = (isDark: any) => StyleSheet.create({
         shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
     },
     disabledButton: { opacity: 0.6, backgroundColor: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
-    withdrawButtonText: { color: isDark ? '#1F2937' : '#fff', fontSize: 16, fontWeight: 'bold' },
+    withdrawButtonText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 16, fontWeight: 'bold' },
     securityNote: { textAlign: 'center', fontSize: 11, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 12 },
 });

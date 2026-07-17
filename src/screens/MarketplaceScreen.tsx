@@ -14,6 +14,7 @@ import { useCart } from '../contexts/CartContext';
 import { useMarketplace } from '../contexts/MarketplaceContext';
 import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
 import { useFavorites } from '../contexts/FavoritesContext';
+import { usePoints } from '../contexts/PointsContext';
 import { useTheme } from '../contexts/ThemeContext'; // Import useTheme
 
 import { MobileHeader } from '../components/MobileHeader';
@@ -79,36 +80,33 @@ type MarketplaceFeedItem = {
 
 // Mock definitions removed.
 
-// ─── NYC default location helpers ─────────────────────────────────────────
-const NYC_DEFAULT_CENTER = { lat: 40.7549, lng: -73.9840 };
-const NYC_RADIUS_KM = 18; // Spread listings around NYC within this radius
+// ponytail: same default as LocationPicker / MAP_DEFAULTS (CABA)
+const DEFAULT_MAP_CENTER = { lat: -34.6037, lng: -58.3816 };
+const FALLBACK_RADIUS_KM = 18;
 
-/** Simple numeric hash for a string id. */
 const hashId = (id: string | number) => {
     const str = String(id);
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash = hash & hash;
     }
     return Math.abs(hash);
 };
 
-/**
- * Returns a stable pseudo-random coordinate around NYC for listings that have
- * no real location. Keeps the marker position consistent across renders.
- */
-const getStableNycLocation = (id: string | number, name: string = '') => {
+/** Stable coords near CABA when a listing has no location. */
+const getStableFallbackLocation = (id: string | number, name: string = '') => {
     const seed = hashId(id) + hashId(name);
-    const r = NYC_RADIUS_KM * Math.sqrt((seed % 10000) / 10000);
+    const r = FALLBACK_RADIUS_KM * Math.sqrt((seed % 10000) / 10000);
     const theta = (seed * 0.61803398875) % (2 * Math.PI);
-    const latOffset = r * Math.cos(theta) / 111.32;
-    const lngOffset = r * Math.sin(theta) / (111.32 * Math.cos(NYC_DEFAULT_CENTER.lat * (Math.PI / 180)));
+    const latOffset = (r * Math.cos(theta)) / 111.32;
+    const lngOffset =
+        (r * Math.sin(theta)) /
+        (111.32 * Math.cos(DEFAULT_MAP_CENTER.lat * (Math.PI / 180)));
     return {
-        lat: NYC_DEFAULT_CENTER.lat + latOffset,
-        lng: NYC_DEFAULT_CENTER.lng + lngOffset,
-        name: 'Nueva York, NY',
+        lat: DEFAULT_MAP_CENTER.lat + latOffset,
+        lng: DEFAULT_MAP_CENTER.lng + lngOffset,
+        name: 'Buenos Aires, AR',
         address: 'Ubicación aproximada',
     };
 };
@@ -122,6 +120,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const { isFavorite, toggleFavorite } = useFavorites();
     const { } = useMarketplace();
     const products = useMarketplaceProducts();
+    const { progressChallenge } = usePoints();
     const { theme, colorScheme } = useTheme(); // Use theme
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -135,6 +134,14 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const activeParams = initialParams || route?.params;
 
     const lastNonServiceSearchLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+    const browseProgressedRef = useRef(false);
+
+    // ponytail: +1 browse challenge when opening marketplace
+    useEffect(() => {
+        if (!user?.id || browseProgressedRef.current) return;
+        browseProgressedRef.current = true;
+        void progressChallenge('daily_browse', 1);
+    }, [user?.id, progressChallenge]);
 
     // State
     const [viewMode, setViewMode] = useState<ViewMode>(activeParams?.viewMode || 'grid');
@@ -196,30 +203,35 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [advancedFilters, setAdvancedFilters] = useState<FilterState>({
-        priceRange: [0, 2000],
+        // ponytail: cars/events can be >> $2k — don't hide them by default
+        priceRange: [0, 1_000_000],
         minRating: null,
         minDiscount: null,
         categories: [],
         sortBy: 'relevancia',
-        searchLocation: NYC_DEFAULT_CENTER, // Default to NYC marketplace center
+        searchLocation: DEFAULT_MAP_CENTER,
     });
-    const [currentMapCenter, setCurrentMapCenter] = useState<{ lat: number; lng: number } | null>(NYC_DEFAULT_CENTER);
+    const [currentMapCenter, setCurrentMapCenter] = useState<{ lat: number; lng: number } | null>(DEFAULT_MAP_CENTER);
 
-    // Keep the marketplace centered on NYC by default. We no longer override
-    // the map center with the user's live location so that every published item
-    // remains visible in the NYC/alrededores area.
+    // Center on GPS when available; focusLocation from create-listing wins
     useEffect(() => {
         if (activeParams?.focusLocation) {
-            setAdvancedFilters(prev => ({ ...prev, searchLocation: activeParams.focusLocation }));
+            setAdvancedFilters((prev) => ({ ...prev, searchLocation: activeParams.focusLocation }));
             setCurrentMapCenter(activeParams.focusLocation);
+            return;
         }
-    }, [activeParams?.focusLocation]);
+        if (userLocation?.coords) {
+            const loc = { lat: userLocation.coords.latitude, lng: userLocation.coords.longitude };
+            setAdvancedFilters((prev) => ({ ...prev, searchLocation: loc }));
+            setCurrentMapCenter(loc);
+        }
+    }, [activeParams?.focusLocation, userLocation?.coords?.latitude, userLocation?.coords?.longitude]);
 
     // (keep param handling only via activeParams to avoid ReferenceError / duplication)
 
     // Derived Logic
     const activeFiltersCount =
-        (advancedFilters.priceRange[0] > 0 || advancedFilters.priceRange[1] < 2000 ? 1 : 0) +
+        (advancedFilters.priceRange[0] > 0 || advancedFilters.priceRange[1] < 1_000_000 ? 1 : 0) +
         (advancedFilters.minRating ? 1 : 0) +
         (advancedFilters.minDiscount ? 1 : 0) +
         advancedFilters.categories.length +
@@ -252,12 +264,12 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
         const hasValidLocation =
             item.location?.lat && item.location?.lng &&
             !(item.location.lat === 0 && item.location.lng === 0);
-        const fallbackLocation = getStableNycLocation(item._id || item.id, item.title);
+        const fallbackLocation = getStableFallbackLocation(item._id || item.id, item.title);
         const location = hasValidLocation
             ? {
                 lat: item.location.lat,
                 lng: item.location.lng,
-                name: item.location.name || 'Nueva York, NY',
+                name: item.location.name || 'Buenos Aires, AR',
                 address: item.location.address || '',
             }
             : fallbackLocation;
@@ -328,6 +340,8 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             return true;
         });
 
+        // ponytail: compute distance for UI/sort, but never hide listings by radius
+        // (BMW in NYC vanished when center was BA + 50km). Radius circle stays visual on map.
         const center = advancedFilters.searchLocation;
         if (center) {
             const toRad = (value: number) => (value * Math.PI) / 180;
@@ -342,12 +356,10 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
                 return 2 * R * Math.asin(Math.sqrt(h));
             };
-            result = result
-                .map((item) => ({
-                    ...item,
-                    distance: Number(haversineKm(center, item.location).toFixed(2)),
-                }))
-                .filter((item) => item.distance <= radius);
+            result = result.map((item) => ({
+                ...item,
+                distance: Number(haversineKm(center, item.location).toFixed(2)),
+            }));
         }
 
         switch (advancedFilters.sortBy) {
@@ -837,7 +849,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#F9FAFB' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     headerControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
     mapHeaderControls: {
         marginHorizontal: 12,
@@ -854,19 +866,19 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         shadowRadius: 12,
         elevation: 6,
     },
-    cartBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? '#374151' : '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+    cartBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
     cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
 
     // Favorites
-    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
+    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     favBtnActive: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
 
     // Search
     searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'center' },
-    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 26, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#1F2937' : '#FFFFFF', height: 52, overflow: 'hidden' },
+    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 26, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', height: 52, overflow: 'hidden' },
     searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, color: isDark ? '#F9FAFB' : '#1F2937', height: '100%', outlineStyle: 'none' } as any,
-    filterBtn: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#1F2937' : '#FFFFFF' },
-    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#1F2937' : '#fff' },
+    filterBtn: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
     activeFilterText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
 
     // Compact Controls (View mode + Categories)
@@ -876,12 +888,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         padding: 4,
         borderRadius: 18,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     viewModeBtn: { width: 34, height: 34, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    viewModeBtnActive: { backgroundColor: isDark ? '#374151' : '#fff' },
+    viewModeBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
     categoryChipsScroll: { flex: 1 },
     categoryChipsContent: { flexDirection: 'row', alignItems: 'center', paddingRight: 4 },
     categoryChip: {
@@ -891,18 +903,18 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 8,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
-    categoryChipActive: { backgroundColor: isDark ? '#374151' : '#fff', borderColor: '#7C3AED' },
+    categoryChipActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: '#7C3AED' },
     categoryChipText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '600' },
     categoryChipTextActive: { color: '#7C3AED' },
 
     // Toggles
-    viewToggleContainer: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#F3F4F6', borderRadius: 24, padding: 4, marginBottom: 16 },
+    viewToggleContainer: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 24, padding: 4, marginBottom: 16 },
     toggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 20 },
-    toggleBtnActive: { backgroundColor: isDark ? '#374151' : '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    toggleBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
     toggleBtnText: { fontSize: 13, marginLeft: 8, color: '#6B7280', fontWeight: '500' },
     toggleBtnTextActive: { color: '#7C3AED', fontWeight: 'bold' },
     categoryToggleText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
@@ -910,15 +922,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Tabs
     tabsContainer: { flexDirection: 'row', gap: 8, paddingHorizontal: 4 },
-    tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 24, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB' },
+    tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: '#E5E7EB' },
     tabActive: { backgroundColor: '#111827', borderColor: '#111827' },
     tabText: { fontSize: 13, color: '#4B5563', fontWeight: '500' },
     tabTextActive: { color: '#fff' },
 
     // Grid Card
     gridCardWrapper: { marginBottom: 4 },
-    gridCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-    gridImgContainer: { aspectRatio: 1, backgroundColor: isDark ? '#374151' : '#F3F4F6', position: 'relative' },
+    gridCard: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
+    gridImgContainer: { aspectRatio: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', position: 'relative' },
     cardImg: { width: '100%', height: '100%' },
     discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
     discountText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
@@ -935,8 +947,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     btnSmText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
     // List Card
-    listCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 12, gap: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-    listImgContainer: { width: 96, height: 96, borderRadius: 12, overflow: 'hidden', backgroundColor: isDark ? '#374151' : '#F3F4F6' },
+    listCard: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16, padding: 12, gap: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    listImgContainer: { width: 96, height: 96, borderRadius: 12, overflow: 'hidden', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     listContent: { flex: 1 },
     listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
@@ -951,8 +963,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     mapFloatBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 
     // Map List Overlay
-    mapListOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: MAP_LIST_HEIGHT, backgroundColor: isDark ? '#1F2937' : '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 30 },
-    mapListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    mapListOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: MAP_LIST_HEIGHT, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 30 },
+    mapListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     mapListHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB' },
     closeListBtn: { position: 'absolute', right: 16, top: 16, padding: 4 },
     mapListTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', margin: 16 },

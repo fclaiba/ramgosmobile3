@@ -24,13 +24,22 @@ const triggerImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedba
 export function PointsManager() {
     // --- STATE & CONTEXT ---
     const insets = useSafeAreaInsets(); // NEW
-    const { points, lifetimePoints, transactions, currentTier, nextTier, challengeProgress, claimDailyReward, conversionRate } = usePoints();
+    const {
+        points,
+        lifetimePoints,
+        transactions,
+        currentTier,
+        nextTier,
+        challengeProgress,
+        claimDailyReward,
+        conversionRate,
+        spinLuckyWheel,
+        wheelClaimDate,
+        quarterlyMission, // Now injected from PointsContext
+    } = usePoints();
     const { show } = useToast();
     const {
         getArcadeStatus,
-        spinLuckyWheel,
-        getLuckyWheelStatus,
-        quarterlyMission, // Injected
     } = useRewards();
     const referralCode = "RAMGOS-2025";
     const referralLink = "https://ramgos.com/inv/RAMGOS-2025";
@@ -58,10 +67,9 @@ export function PointsManager() {
     const progress = Math.min(Math.max(rawProgress, 0), 100);
     const pointsToNext = membershipTarget ? Math.max(pointsCap - lifetimePoints, 0) : 0;
 
-    // Rewards status
-    const wheelStatus = getLuckyWheelStatus();
-    const wheelAvailable = wheelStatus.available;
+    // Rewards status — Convex is source of truth for wheel availability
     const todayKey = new Date().toISOString().slice(0, 10);
+    const wheelAvailable = wheelClaimDate !== todayKey;
     const alreadyClaimedDaily = challengeProgress.dailyClaimDate === todayKey;
 
     useEffect(() => {
@@ -74,20 +82,28 @@ export function PointsManager() {
 
 
     // --- ACTIONS ---
-    const handleClaimStreak = () => {
+    const handleClaimStreak = async () => {
         triggerImpact(Haptics.ImpactFeedbackStyle.Medium);
         if (alreadyClaimedDaily) {
             show('Ya reclamaste tu racha de hoy.', 'info');
             return;
         }
-        claimDailyReward();
-        show('¡Racha reclamada!', 'success');
+        const ok = await claimDailyReward();
+        show(ok ? '¡Racha reclamada! +10 puntos' : 'No se pudo reclamar la racha.', ok ? 'success' : 'error');
     };
 
-    const handleSpinWheel = () => {
+    const handleSpinWheel = async () => {
         triggerImpact(Haptics.ImpactFeedbackStyle.Heavy);
-        const result = spinLuckyWheel();
-        show(result.message, result.status === 'awarded' ? 'success' : 'info');
+        if (!wheelAvailable) {
+            show('Ya giraste la rueda hoy. Vuelve mañana.', 'info');
+            return;
+        }
+        const result = await spinLuckyWheel();
+        if (result.success) {
+            show(result.message || `¡Ganaste ${result.pointsAwarded} puntos!`, 'success');
+        } else {
+            show(result.message || 'No se pudo girar la rueda.', result.alreadyClaimed ? 'info' : 'error');
+        }
     };
 
     const handleShowReferralLink = () => {
@@ -474,7 +490,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
     return StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? '#0F172A' : '#F8FAFC', // Slate 900 vs Slate 50
+            backgroundColor: isDark ? '#09090B' : '#FAFAFA', // Slate 900 vs Slate 50
         },
         contentPadding: {
             paddingHorizontal: 24,
@@ -602,7 +618,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             borderRadius: nodeRadius,
             backgroundColor: isDark ? '#1E293B' : '#FFF',
             borderWidth: 4,
-            borderColor: isDark ? '#0F172A' : '#F8FAFC',
+            borderColor: isDark ? '#09090B' : '#FAFAFA',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
@@ -676,7 +692,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             gap: 8,
             paddingHorizontal: 16,
             paddingVertical: 12,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#FAFAFA',
             borderRadius: 100,
             borderWidth: 1,
             borderColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
@@ -735,7 +751,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         // --- HOW IT WORKS ---
         howItWorksCard: {
             marginTop: 0,
-            backgroundColor: isDark ? '#111827' : '#FFFFFF',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderRadius: 20,
             padding: 16,
             borderWidth: 1,
@@ -766,7 +782,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             justifyContent: 'space-around',
             alignItems: 'center',
             paddingVertical: 12,
-            backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : '#FAFAFA',
             borderRadius: 12,
             marginBottom: 8,
         },

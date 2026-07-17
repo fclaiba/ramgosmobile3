@@ -7,7 +7,7 @@ export const useUserPreferences = () => {
 
     const preferences = useQuery(
         api.userProfile.getPreferences,
-        user ? { sessionToken, userId: user.id } : "skip"
+        user && sessionToken ? { sessionToken, userId: user.id } : "skip"
     );
 
     const updatePrefsMutation = useMutation(api.userProfile.updatePreferences);

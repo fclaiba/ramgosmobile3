@@ -272,7 +272,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
 };
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     errorText: { color: isDark ? '#9CA3AF' : '#6B7280' },
 
@@ -290,16 +290,16 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     coverGradient: { ...StyleSheet.absoluteFill },
 
     // Body
-    profileBody: { flex: 1, backgroundColor: isDark ? '#111827' : '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30, paddingBottom: 40 },
+    profileBody: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30, paddingBottom: 40 },
 
     profileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, marginTop: -45 },
-    avatarContainer: { borderWidth: 4, borderColor: isDark ? '#111827' : '#fff', borderRadius: 50, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+    avatarContainer: { borderWidth: 4, borderColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 50, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
     avatar: { width: 90, height: 90, borderRadius: 45 },
 
     actionsContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6 },
-    messageButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#374151' : '#F3F4F6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
+    messageButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     followButton: { backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 24, shadowColor: '#7C3AED', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-    followingButton: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', shadowOpacity: 0 },
+    followingButton: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', shadowOpacity: 0 },
     followButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
     followingButtonText: { color: isDark ? '#F9FAFB' : '#374151', fontWeight: '600' },
 
@@ -310,25 +310,25 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     username: { fontSize: 15, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2, fontWeight: '500' },
     bio: { fontSize: 15, color: isDark ? '#D1D5DB' : '#374151', marginTop: 12, lineHeight: 22 },
 
-    statsRow: { flexDirection: 'row', marginTop: 20, paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
+    statsRow: { flexDirection: 'row', marginTop: 20, paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     statItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     statValue: { fontWeight: '800', fontSize: 16, color: isDark ? '#F9FAFB' : '#111827' },
     statLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14, fontWeight: '500' },
-    statDivider: { width: 1, height: '60%', backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginHorizontal: 20, alignSelf: 'center' },
+    statDivider: { width: 1, height: '60%', backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', marginHorizontal: 20, alignSelf: 'center' },
 
     // Highlights
     highlightsSection: { marginTop: 20 },
     highlightsContent: { paddingHorizontal: 20 },
     highlightItem: { marginRight: 20, alignItems: 'center', width: 72 },
-    highlightCircle: { width: 68, height: 68, borderRadius: 34, padding: 2, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', marginBottom: 6 },
-    highlightInnerParams: { flex: 1, borderRadius: 32, overflow: 'hidden', padding: 2, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
+    highlightCircle: { width: 68, height: 68, borderRadius: 34, padding: 2, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', marginBottom: 6 },
+    highlightInnerParams: { flex: 1, borderRadius: 32, overflow: 'hidden', padding: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     highlightImage: { width: '100%', height: '100%', borderRadius: 32 },
     highlightTitle: { fontSize: 11, color: isDark ? '#D1D5DB' : '#374151', fontWeight: '500', textAlign: 'center' },
 
     // Tabs
-    tabsContainer: { flexDirection: 'row', marginHorizontal: 20, marginTop: 24, backgroundColor: isDark ? '#1F2937' : '#F9FAFB', borderRadius: 16, padding: 4, marginBottom: 16 },
+    tabsContainer: { flexDirection: 'row', marginHorizontal: 20, marginTop: 24, backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 16, padding: 4, marginBottom: 16 },
     tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, gap: 6 },
-    activeTab: { backgroundColor: isDark ? '#374151' : '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    activeTab: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
     tabText: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600' },
     activeTabText: { color: '#7C3AED' },
 
@@ -344,13 +344,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gridItemWrapper: { padding: 1 },
 
     commercialContainer: { padding: 16, gap: 12 },
-    productCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, padding: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6' },
-    productImage: { width: 100, height: 100, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6' },
+    productCard: { flexDirection: 'row', backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 20, padding: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    productImage: { width: 100, height: 100, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     productInfo: { flex: 1, marginLeft: 16, justifyContent: 'space-between', paddingVertical: 4 },
     productName: { fontWeight: '700', fontSize: 15, color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 4 },
     productCategory: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
     productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
     productPrice: { color: '#7C3AED', fontWeight: '800', fontSize: 18 },
-    addButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 12 },
+    addButton: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12 },
     addButtonText: { fontSize: 12, fontWeight: '700', color: isDark ? '#F9FAFB' : '#374151' },
 });

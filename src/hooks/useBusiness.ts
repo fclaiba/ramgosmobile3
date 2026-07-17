@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import { useAuth } from "../contexts/AuthContext";
 
 export type BusinessInfo = {
   id: string;
@@ -46,6 +47,8 @@ const defaultMetrics: BusinessMetrics = {
 };
 
 export function useBusiness(userId?: string) {
+  const { sessionToken } = useAuth();
+
   const businessUser = useQuery(
     api.users.getUser,
     userId ? ({ id: userId } as { id: Id<"users"> }) : "skip",
@@ -58,7 +61,7 @@ export function useBusiness(userId?: string) {
 
   const listings = useQuery(
     api.listings.getMyListings,
-    userId ? { sellerId: userId } : "skip",
+    userId && sessionToken ? { sellerId: userId, sessionToken } : "skip",
   ) || [];
 
   const reviews = useQuery(

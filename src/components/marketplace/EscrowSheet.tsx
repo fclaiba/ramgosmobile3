@@ -11,6 +11,7 @@ import {
     KeyboardAvoidingView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import {
     ShieldCheck,
     Lock,
@@ -30,10 +31,10 @@ import {
     Send,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 
 import { Sheet, SheetContent } from '../ui/sheet';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useEscrow } from '../../contexts/EscrowContext';
 import type { EscrowPhase, EscrowState, EscrowOrder as Order } from '../../contexts/EscrowContext';
@@ -230,10 +231,12 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
     const [chatInput, setChatInput] = useState<string>('');
     const scrollViewRef = useRef<ScrollView>(null);
 
-    // Live dispute messages from Convex
+    // Live coordination / dispute messages from Convex
     const liveMessages = useQuery(
         api.disputes.getDisputeMessages,
-        order?.id && user?.id ? { orderId: order.id as any } : 'skip',
+        order?.id && user?.id && sessionToken
+            ? { orderId: String(order.id), sessionToken }
+            : 'skip',
     ) ?? [];
 
     // Reset state when opening/closing
@@ -287,16 +290,27 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
 
     // Actions
     const canConfirmDelivery = !!order && role === 'buyer' && order.paymentStatus === 'paid' && order.escrow.state === 'held' && !order.deliveryConfirmedAt;
-    const canDispute = !!order && role === 'buyer' && order.paymentStatus === 'paid' && order.escrow.state !== 'released' && order.escrow.state !== 'refunded';
-    const hasActiveDispute = !!order && !!order.dispute;
+    const canDispute =
+        !!order &&
+        role === 'buyer' &&
+        order.paymentStatus === 'paid' &&
+        order.escrow.state !== 'released' &&
+        order.escrow.state !== 'refunded' &&
+        order.escrow.state !== 'disputed' &&
+        order.status !== 'disputed';
+    const hasActiveDispute =
+        !!order &&
+        (!!order.dispute || order.escrow.state === 'disputed' || order.status === 'disputed');
 
     const handleConfirmDelivery = async () => {
         if (!order || !user) return;
         try {
             await confirmReceiptMutation({
                 orderId: order.id as any,
-                sessionToken, userId: user.id,
+                sessionToken,
+                userId: user.id,
             });
+            if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             show('Recepción confirmada. Fondos liberados.', 'success');
         } catch (e: any) {
             show(e.message || 'Error al confirmar', 'error');
@@ -319,12 +333,26 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
             await openDisputeMutation({
                 orderId: order.id as any,
                 reason: selectedReason.code,
+                sessionToken,
+                userId: user.id,
             });
 
+            // Primer mensaje con el detalle del reclamo
+            try {
+                await addDisputeMessageMutation({
+                    orderId: String(order.id),
+                    sender: role === 'buyer' ? 'buyer' : 'seller',
+                    body: `${selectedReason.label}: ${description.trim()}`,
+                    sessionToken,
+                });
+            } catch {
+                // no bloquea el flujo si el mensaje falla
+            }
+
+            if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             show('Disputa iniciada', 'success');
             setPhase('chat');
             if (typeof props.onOpenDisputeChat === 'function') props.onOpenDisputeChat();
-
         } catch (e: any) {
             show(e.message || 'Error al iniciar disputa', 'error');
         }
@@ -336,10 +364,12 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         setChatInput('');
         try {
             await addDisputeMessageMutation({
-                orderId: order.id as any,
+                orderId: String(order.id),
                 sender: role === 'buyer' ? 'buyer' : 'seller',
                 body,
+                sessionToken,
             });
+            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } catch (e: any) {
             show(e.message || 'Error al enviar mensaje', 'error');
             setChatInput(body);
@@ -356,7 +386,12 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
 
     // === VIEWS ===
     const renderStatusView = () => (
-        <ScrollView ref={scrollViewRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+        <ScrollView
+            ref={scrollViewRef}
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 28, flexGrow: 1 }}
+        >
             {stateMeta && (
                 <LinearGradient colors={isDark ? stateMeta.gradientDark : stateMeta.gradientLight} style={styles.heroCard}>
                     <View style={[styles.heroIconContainer, { borderColor: colors.icon }]}>
@@ -367,13 +402,53 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                             {stateMeta.label ?? order?.escrow.state}
                         </Text>
                         <Text style={[styles.heroSubtitle, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
-                            #{order?.id.slice(-6).toUpperCase()} • {role === 'buyer' ? 'Compraste' : 'Vendiste'}
+                            #{String(order?.id ?? '').slice(-6).toUpperCase()} • {role === 'buyer' ? 'Compraste' : 'Vendiste'}
                         </Text>
                     </View>
                     <View style={[styles.heroBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
                         <Text style={[styles.heroBadgeText, { color: colors.text }]}>{stateMeta.shortLabel}</Text>
                     </View>
                 </LinearGradient>
+            )}
+
+            {/* Detalles de la compra — siempre visibles */}
+            {order && (
+                <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>Detalle de la compra</Text>
+                    {(order.items?.length ? order.items : [{ title: 'Pedido marketplace', quantity: 1, price: order.totals.grandTotal, listingId: '' }]).map((item, idx) => (
+                        <View
+                            key={`${item.listingId || 'item'}-${idx}`}
+                            style={[
+                                styles.purchaseRow,
+                                idx < (order.items?.length || 1) - 1 && styles.purchaseRowDivider,
+                            ]}
+                        >
+                            <View style={styles.purchaseIcon}>
+                                <Package size={16} color={isDark ? '#93C5FD' : '#2563EB'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.purchaseTitle} numberOfLines={2}>{item.title}</Text>
+                                <Text style={styles.purchaseMeta}>
+                                    Cant. {item.quantity} · {formatMoney(item.price * item.quantity, order.totals.currency)}
+                                </Text>
+                            </View>
+                        </View>
+                    ))}
+                    <View style={styles.purchaseTotalRow}>
+                        <Text style={styles.amountLabel}>Total protegido</Text>
+                        <Text style={[styles.amountValue, { fontSize: 22 }]}>
+                            {formatMoney(order.totals.grandTotal, order.totals.currency)}
+                        </Text>
+                    </View>
+                    <View style={styles.purchaseMetaRow}>
+                        <Text style={{ fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                            Estado: {order.status}
+                        </Text>
+                        <Text style={{ fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                            Liberación: {formatShortDate(order.escrow.releaseScheduledAt) ?? '—'}
+                        </Text>
+                    </View>
+                </View>
             )}
 
             {!hasActiveDispute && (
@@ -399,50 +474,32 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                 </View>
             )}
 
-            {order && !hasActiveDispute && (
-                <View style={[styles.card, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-                    <View>
-                        <Text style={styles.amountLabel}>Total Protegido</Text>
-                        <Text style={styles.amountValue}>{formatMoney(order.totals.grandTotal, order.totals.currency)}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280' }}>Liberación</Text>
-                        <Text style={{ fontSize: fontSize.sm, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' }}>
-                            {formatShortDate(order.escrow.releaseScheduledAt) ?? '-'}
-                        </Text>
-                    </View>
-                </View>
-            )}
-
             {/* Actions */}
-            {(canConfirmDelivery || canDispute || hasActiveDispute) && (
-                <View style={styles.card}>
-                    <Text style={styles.sectionTitle}>Acciones</Text>
-                    <View style={styles.actionsContainer}>
-                        {canConfirmDelivery && (
-                            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={handleConfirmDelivery} activeOpacity={0.8}>
-                                <CheckCircle2 size={18} color="#fff" />
-                                <Text style={styles.actionBtnPrimaryText}>{terms.confirmBtn}</Text>
-                            </TouchableOpacity>
-                        )}
-                        {canDispute && !hasActiveDispute && (
-                            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnDanger]} onPress={() => setPhase('dispute_init')} activeOpacity={0.8}>
-                                <AlertTriangle size={18} color="#DC2626" />
-                                <Text style={styles.actionBtnDangerText}>Iniciar reclamo</Text>
-                            </TouchableOpacity>
-                        )}
-                        {hasActiveDispute && (
-                            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnInfo]} onPress={() => setPhase('chat')} activeOpacity={0.8}>
-                                <MessageSquare size={18} color="#2563EB" />
-                                <Text style={styles.actionBtnInfoText}>Ver Disputa & Chat</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
+            <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Acciones</Text>
+                <View style={styles.actionsContainer}>
+                    <TouchableOpacity style={[styles.actionBtn, styles.actionBtnInfo]} onPress={() => setPhase('chat')} activeOpacity={0.8}>
+                        <MessageSquare size={18} color="#2563EB" />
+                        <Text style={styles.actionBtnInfoText}>
+                            {hasActiveDispute ? 'Abrir chat de disputa' : 'Coordinar en el chat'}
+                        </Text>
+                    </TouchableOpacity>
+                    {canConfirmDelivery && (
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={handleConfirmDelivery} activeOpacity={0.8}>
+                            <CheckCircle2 size={18} color="#fff" />
+                            <Text style={styles.actionBtnPrimaryText}>{terms.confirmBtn}</Text>
+                        </TouchableOpacity>
+                    )}
+                    {canDispute && !hasActiveDispute && (
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnDanger]} onPress={() => setPhase('dispute_init')} activeOpacity={0.8}>
+                            <AlertTriangle size={18} color="#DC2626" />
+                            <Text style={styles.actionBtnDangerText}>Iniciar reclamo</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
-            )}
+            </View>
 
-            {/* Explanation */}
-            {order && !hasActiveDispute && (
+            {order && (
                 <View style={[styles.card, { backgroundColor: colors.bg, borderColor: colors.border }]}>
                     <View style={styles.explanationHeader}>
                         <StateIcon size={18} color={colors.icon} />
@@ -507,102 +564,187 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         </KeyboardAvoidingView>
     );
 
-    const renderChatView = () => (
-        <View style={{ flex: 1 }}>
-            <View style={[styles.card, { marginTop: 8, padding: 0, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column' }]}>
-                {/* Header Info */}
-                <View style={{ padding: cardPadding, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2', borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: isDark ? '#FCA5A5' : '#991B1B' }}>Disputa: {order?.dispute?.reason ?? 'En curso'}</Text>
-                        <Text style={{ fontSize: fontSize.xs, color: isDark ? '#FCA5A5' : '#991B1B' }}>{order?.status}</Text>
-                    </View>
-                    <Text style={{ fontSize: fontSize.xs, color: isDark ? '#FCA5A5' : '#991B1B', marginTop: 4 }}>{order?.dispute?.description}</Text>
-                </View>
-                {/* Messages from Convex */}
-                <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ padding: cardPadding, gap: 12 }}>
-                    {liveMessages.length === 0 && (
-                        <Text style={{ textAlign: 'center', color: isDark ? '#6B7280' : '#9CA3AF', fontSize: fontSize.sm, marginTop: 24 }}>
-                            No hay mensajes aún. Enviá el primero.
+    const renderChatView = () => {
+        const accent = hasActiveDispute
+            ? { bg: isDark ? 'rgba(239, 68, 68, 0.14)' : 'rgba(254, 226, 226, 0.9)', border: isDark ? 'rgba(239, 68, 68, 0.28)' : '#FECACA', text: isDark ? '#FCA5A5' : '#991B1B' }
+            : { bg: isDark ? 'rgba(59, 130, 246, 0.14)' : 'rgba(219, 234, 254, 0.9)', border: isDark ? 'rgba(59, 130, 246, 0.28)' : '#BFDBFE', text: isDark ? '#93C5FD' : '#1E40AF' };
+
+        return (
+            <View style={{ flex: 1 }}>
+                {/* Compact escrow strip */}
+                {order && (
+                    <View style={[styles.glassChip, { marginBottom: 10 }]}>
+                        <ShieldCheck size={14} color={colors.icon} />
+                        <Text style={[styles.glassChipText, { color: isDark ? '#E5E7EB' : '#111827' }]} numberOfLines={1}>
+                            {formatMoney(order.totals.grandTotal, order.totals.currency)} · {stateMeta?.shortLabel ?? order.escrow.state}
                         </Text>
-                    )}
-                    {liveMessages.map((msg: any) => {
-                        const isMe = msg.senderUserId === user?.id;
-                        return (
-                            <View key={msg._id ?? msg.sentAt} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
-                                <View style={{ backgroundColor: isMe ? '#3B82F6' : (isDark ? '#374151' : '#F3F4F6'), borderRadius: 16, borderBottomRightRadius: isMe ? 4 : 16, borderBottomLeftRadius: isMe ? 16 : 4, paddingHorizontal: 16, paddingVertical: 10 }}>
-                                    <Text style={{ color: isMe ? '#fff' : (isDark ? '#F9FAFB' : '#111827'), fontSize: fontSize.sm }}>{msg.body}</Text>
-                                </View>
-                                <Text style={{ fontSize: 10, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 2, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
-                                    {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {!hasActiveDispute && canDispute && (
+                            <TouchableOpacity onPress={() => setPhase('dispute_init')} hitSlop={8}>
+                                <Text style={{ fontSize: fontSize.xs, fontWeight: '700', color: '#EF4444' }}>Disputa</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+
+                <View style={[styles.glassCard, { flex: 1, padding: 0, overflow: 'hidden' }]}>
+                    <View style={{ padding: cardPadding, backgroundColor: accent.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: accent.border }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontSize: fontSize.sm, fontWeight: '700', color: accent.text }}>
+                                {hasActiveDispute
+                                    ? `Disputa: ${order?.dispute?.reason ?? 'En curso'}`
+                                    : 'Coordiná entrega y detalles'}
+                            </Text>
+                            <Text style={{ fontSize: fontSize.xs, color: accent.text, textTransform: 'capitalize' }}>
+                                {order?.escrow.state?.replace('_', ' ')}
+                            </Text>
+                        </View>
+                        {!!order?.dispute?.description && (
+                            <Text style={{ fontSize: fontSize.xs, color: accent.text, marginTop: 4 }}>{order.dispute.description}</Text>
+                        )}
+                    </View>
+
+                    <ScrollView ref={scrollViewRef} style={{ flex: 1 }} contentContainerStyle={{ padding: cardPadding, gap: 12, flexGrow: 1 }}>
+                        {liveMessages.length === 0 && (
+                            <View style={{ alignItems: 'center', marginTop: 28, paddingHorizontal: 16 }}>
+                                <MessageSquare size={28} color={isDark ? '#4B5563' : '#9CA3AF'} />
+                                <Text style={{ textAlign: 'center', color: isDark ? '#9CA3AF' : '#6B7280', fontSize: fontSize.sm, marginTop: 10, lineHeight: 20 }}>
+                                    {hasActiveDispute
+                                        ? 'Todavía no hay mensajes. Escribí para coordinar la resolución.'
+                                        : 'Chat privado para coordinar entrega, horarios y detalles del pedido.'}
                                 </Text>
                             </View>
-                        );
-                    })}
-                </ScrollView>
-                {/* Input */}
-                <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#E5E7EB', flexDirection: 'row', gap: 8 }}>
-                    <TextInput
-                        placeholder="Mensaje..."
-                        placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-                        value={chatInput}
-                        onChangeText={setChatInput}
-                        style={{ flex: 1, height: 40, borderRadius: 20, paddingHorizontal: 16, backgroundColor: isDark ? '#1F2937' : '#F3F4F6', color: isDark ? '#F9FAFB' : '#111827' }}
-                    />
-                    <TouchableOpacity onPress={handleSendMessage} disabled={!chatInput.trim()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: chatInput.trim() ? '#3B82F6' : (isDark ? '#374151' : '#E5E7EB'), alignItems: 'center', justifyContent: 'center' }}>
-                        <Send size={18} color={chatInput.trim() ? '#fff' : '#9CA3AF'} />
-                    </TouchableOpacity>
+                        )}
+                        {liveMessages.map((msg: any) => {
+                            const isMe = msg.senderUserId === user?.id;
+                            return (
+                                <View key={msg._id ?? msg.sentAt} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                                    <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+                                        <Text style={{ color: isMe ? '#fff' : (isDark ? '#F9FAFB' : '#111827'), fontSize: fontSize.sm, lineHeight: 20 }}>
+                                            {msg.body}
+                                        </Text>
+                                    </View>
+                                    <Text style={{ fontSize: 10, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 2, alignSelf: isMe ? 'flex-end' : 'flex-start' }}>
+                                        {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </ScrollView>
+
+                    <View style={styles.composer}>
+                        <TextInput
+                            placeholder={hasActiveDispute ? 'Mensaje sobre la disputa…' : 'Escribí para coordinar…'}
+                            placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                            value={chatInput}
+                            onChangeText={setChatInput}
+                            style={styles.composerInput}
+                            multiline
+                        />
+                        <TouchableOpacity
+                            onPress={handleSendMessage}
+                            disabled={!chatInput.trim()}
+                            style={[styles.sendBtn, !chatInput.trim() && styles.sendBtnDisabled]}
+                            activeOpacity={0.85}
+                        >
+                            <Send size={18} color={chatInput.trim() ? '#fff' : '#9CA3AF'} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
-        </View>
-    );
+        );
+    };
 
     const handleOpenChange = (v: boolean) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/1c27a0cc-4b8e-4eac-9cdc-ea3e06e3bd39', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'EscrowSheet.tsx:handleOpenChange', message: 'Sheet onOpenChange', data: { isControlled, nextOpen: v }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'pre-fix', hypothesisId: 'H-ts2322-props' }) }).catch(() => { });
-        // #endregion
         if (!v) closeEscrow();
         else if (isControlled) props.onOpenChange?.(true);
     };
 
-    return (
-        <Sheet open={isOpen} onOpenChange={handleOpenChange}>
-            <SheetContent side="bottom" style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16), maxHeight: height * 0.92, minHeight: height * 0.6 }]}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                    <View style={[styles.sheetInner, { maxWidth: contentMaxWidth, paddingHorizontal: horizontalPadding }]}>
-                        <View style={styles.header}>
-                            <View style={styles.headerHandle} />
-                            <View style={styles.headerRow}>
-                                {(phase === 'dispute_init' || phase === 'chat') && (
-                                    <TouchableOpacity onPress={() => setPhase('status')} style={[styles.closeBtn, { marginRight: 12 }]}>
-                                        <ChevronLeft size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                    </TouchableOpacity>
-                                )}
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.headerTitle}>
-                                        {phase === 'status' ? (hasActiveDispute ? 'Disputa Activa' : 'Escrow') : phase === 'chat' ? 'Chat de Disputa' : 'Iniciar Reclamo'}
-                                    </Text>
-                                    <Text style={styles.headerSubtitle}>
-                                        {phase === 'status' ? 'Centro de Resolución' : phase === 'chat' ? 'Conversación con ' + (role === 'buyer' ? 'Vendedor' : 'Comprador') : 'Protección de compra'}
-                                    </Text>
-                                </View>
-                                <TouchableOpacity onPress={closeEscrow} style={styles.closeBtn}>
-                                    <X size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+    const headerTitle =
+        phase === 'status'
+            ? (hasActiveDispute ? 'Disputa activa' : 'Escrow')
+            : phase === 'chat'
+                ? (hasActiveDispute ? 'Chat de disputa' : 'Coordinar pedido')
+                : 'Iniciar reclamo';
 
-                        {!order ? (
-                            <View style={styles.emptyState}>
-                                <ShieldCheck size={48} color={isDark ? '#374151' : '#E5E7EB'} />
-                                <Text style={styles.emptyText}>Cargando...</Text>
+    const headerSubtitle =
+        phase === 'status'
+            ? 'Centro de resolución'
+            : phase === 'chat'
+                ? `Con ${role === 'buyer' ? 'el vendedor' : 'el comprador'}`
+                : 'Protección de compra';
+
+    return (
+        <Sheet open={isOpen} onOpenChange={handleOpenChange} animationType="slide">
+            <SheetContent
+                side="bottom"
+                style={[
+                    styles.sheet,
+                    {
+                        paddingBottom: Math.max(insets.bottom, 12),
+                        maxHeight: height * 0.92,
+                        minHeight: height * 0.72,
+                        backgroundColor: 'transparent',
+                        borderWidth: 0,
+                    },
+                ]}
+            >
+                <View style={styles.sheetGlass}>
+                    {Platform.OS === 'web' ? (
+                        <View style={[StyleSheet.absoluteFill, styles.sheetGlassFallback]} />
+                    ) : (
+                        <BlurView
+                            intensity={isDark ? 45 : 70}
+                            tint={isDark ? 'dark' : 'light'}
+                            style={StyleSheet.absoluteFill}
+                        />
+                    )}
+                    <LinearGradient
+                        colors={
+                            isDark
+                                ? ['rgba(17,24,39,0.72)', 'rgba(17,24,39,0.92)']
+                                : ['rgba(255,255,255,0.78)', 'rgba(248,250,252,0.94)']
+                        }
+                        style={StyleSheet.absoluteFill}
+                    />
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                        <View style={[styles.sheetInner, { maxWidth: contentMaxWidth, paddingHorizontal: horizontalPadding }]}>
+                            <View style={styles.header}>
+                                <View style={styles.headerHandle} />
+                                <View style={styles.headerRow}>
+                                    {(phase === 'dispute_init' || phase === 'chat') && (
+                                        <TouchableOpacity
+                                            onPress={() => setPhase('status')}
+                                            style={[styles.glassIconBtn, { marginRight: 10 }]}
+                                            accessibilityLabel="Volver a detalles de la compra"
+                                        >
+                                            <ChevronLeft size={20} color={isDark ? '#E5E7EB' : '#374151'} />
+                                        </TouchableOpacity>
+                                    )}
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.headerTitle}>{headerTitle}</Text>
+                                        <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={closeEscrow} style={styles.glassIconBtn}>
+                                        <X size={18} color={isDark ? '#E5E7EB' : '#374151'} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        ) : (
-                            phase === 'status' ? renderStatusView() :
-                                phase === 'dispute_init' ? renderDisputeForm() :
-                                    renderChatView()
-                        )}
-                    </View>
-                </KeyboardAvoidingView>
+
+                            {!order ? (
+                                <View style={styles.emptyState}>
+                                    <ShieldCheck size={48} color={isDark ? '#374151' : '#D1D5DB'} />
+                                    <Text style={styles.emptyText}>Cargando escrow…</Text>
+                                </View>
+                            ) : phase === 'status' ? (
+                                renderStatusView()
+                            ) : phase === 'dispute_init' ? (
+                                renderDisputeForm()
+                            ) : (
+                                renderChatView()
+                            )}
+                        </View>
+                    </KeyboardAvoidingView>
+                </View>
             </SheetContent>
         </Sheet>
     );
@@ -619,42 +761,217 @@ function renderExplanation(order: Order, role: string, terms?: any) {
 }
 
 const getStyles = (isDark: boolean, fontSize: any, cardPadding: number) => StyleSheet.create({
-    sheet: { backgroundColor: isDark ? '#111827' : '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+    sheet: { backgroundColor: 'transparent', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
+    sheetGlass: {
+        flex: 1,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        overflow: 'hidden',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.65)',
+    },
+    sheetGlassFallback: {
+        backgroundColor: isDark ? 'rgba(17,24,39,0.92)' : 'rgba(255,255,255,0.92)',
+    },
     sheetInner: { width: '100%', alignSelf: 'center', height: '100%' },
-    header: { paddingTop: 8, paddingBottom: 16 },
-    headerHandle: { width: 40, height: 4, backgroundColor: isDark ? '#374151' : '#D1D5DB', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    header: { paddingTop: 10, paddingBottom: 12 },
+    headerHandle: {
+        width: 40,
+        height: 4,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.18)',
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 14,
+    },
     headerRow: { flexDirection: 'row', alignItems: 'center' },
-    headerTitle: { fontSize: fontSize.lg, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
-    headerSubtitle: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280' },
-    closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: fontSize.lg, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', letterSpacing: -0.3 },
+    headerSubtitle: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
+    glassIconBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.55)',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.8)',
+    },
+    closeBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(243,244,246,0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
     emptyText: { fontSize: fontSize.base, color: isDark ? '#6B7280' : '#9CA3AF' },
-    heroCard: { padding: cardPadding + 4, borderRadius: 24, flexDirection: 'row', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 },
-    heroIconContainer: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginRight: 16 },
+    heroCard: {
+        padding: cardPadding + 4,
+        borderRadius: 22,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.7)',
+    },
+    heroIconContainer: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        marginRight: 16,
+    },
     heroContent: { flex: 1 },
     heroTitle: { fontSize: fontSize.lg, fontWeight: '800', marginBottom: 4, letterSpacing: -0.5 },
     heroSubtitle: { fontSize: fontSize.xs, fontWeight: '500' },
     heroBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
     heroBadgeText: { fontSize: fontSize.xs, fontWeight: '700', textTransform: 'uppercase' },
     progressContainer: { marginBottom: 28, paddingHorizontal: 8 },
-    progressTrack: { height: 6, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 3, marginBottom: 12, overflow: 'hidden' },
+    progressTrack: { height: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 3, marginBottom: 12, overflow: 'hidden' },
     progressFill: { height: '100%', borderRadius: 3 },
     progressSteps: { flexDirection: 'row', justifyContent: 'space-between' },
     progressStep: { alignItems: 'center', width: 64 },
-    progressDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#E5E7EB', alignItems: 'center', justifyContent: 'center', marginBottom: 6, borderWidth: 2, borderColor: 'transparent' },
-    progressDotCurrent: { transform: [{ scale: 1.3 }], shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
+    progressDot: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    progressDotCurrent: { transform: [{ scale: 1.2 }] },
     progressLabel: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', fontWeight: '500' },
-    card: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, padding: cardPadding + 2, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+    card: {
+        backgroundColor: isDark ? 'rgba(31,41,55,0.72)' : 'rgba(255,255,255,0.72)',
+        borderRadius: 20,
+        padding: cardPadding + 2,
+        marginBottom: 16,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.85)',
+    },
+    glassCard: {
+        backgroundColor: isDark ? 'rgba(31,41,55,0.55)' : 'rgba(255,255,255,0.55)',
+        borderRadius: 22,
+        padding: cardPadding + 2,
+        marginBottom: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
+    },
+    glassChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 16,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.55)',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.9)',
+    },
+    glassChipText: { flex: 1, fontSize: fontSize.xs, fontWeight: '600' },
+    bubble: {
+        borderRadius: 18,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+    },
+    bubbleMe: {
+        backgroundColor: '#2563EB',
+        borderBottomRightRadius: 6,
+    },
+    bubbleThem: {
+        backgroundColor: isDark ? 'rgba(55,65,81,0.9)' : 'rgba(243,244,246,0.95)',
+        borderBottomLeftRadius: 6,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+    },
+    composer: {
+        padding: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'flex-end',
+        backgroundColor: isDark ? 'rgba(17,24,39,0.35)' : 'rgba(255,255,255,0.35)',
+    },
+    composerInput: {
+        flex: 1,
+        minHeight: 42,
+        maxHeight: 96,
+        borderRadius: 21,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.75)',
+        color: isDark ? '#F9FAFB' : '#111827',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.95)',
+        fontSize: fontSize.sm,
+    },
+    sendBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: '#2563EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sendBtnDisabled: {
+        backgroundColor: isDark ? 'rgba(55,65,81,0.9)' : '#E5E7EB',
+    },
     amountLabel: { fontSize: fontSize.sm, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500', marginBottom: 4 },
     amountValue: { fontSize: 28, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', letterSpacing: -1 },
     sectionTitle: { fontSize: fontSize.lg, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 16, letterSpacing: -0.5 },
+    purchaseRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+    purchaseRowDivider: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    },
+    purchaseIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: isDark ? 'rgba(37,99,235,0.2)' : 'rgba(219,234,254,0.95)',
+    },
+    purchaseTitle: { fontSize: fontSize.sm, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    purchaseMeta: { fontSize: fontSize.xs, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
+    purchaseTotalRow: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    purchaseMetaRow: {
+        marginTop: 8,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
     actionsContainer: { gap: 12 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 16, gap: 10 },
-    actionBtnPrimary: { backgroundColor: '#10B981', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 16, gap: 10 },
+    actionBtnPrimary: { backgroundColor: '#10B981' },
     actionBtnPrimaryText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-    actionBtnDanger: { backgroundColor: '#EF4444', shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-    actionBtnDangerText: { color: '#fff', fontSize: fontSize.base, fontWeight: '700' },
-    actionBtnInfo: { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF', borderWidth: 1, borderColor: isDark ? '#1D4ED8' : '#BFDBFE' },
+    actionBtnDanger: {
+        backgroundColor: isDark ? 'rgba(239,68,68,0.18)' : 'rgba(254,226,226,0.95)',
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(239,68,68,0.35)' : '#FECACA',
+    },
+    actionBtnDangerText: { color: isDark ? '#FCA5A5' : '#DC2626', fontSize: fontSize.base, fontWeight: '700' },
+    actionBtnInfo: {
+        backgroundColor: isDark ? 'rgba(37,99,235,0.18)' : 'rgba(239,246,255,0.95)',
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(37,99,235,0.4)' : '#BFDBFE',
+    },
     actionBtnInfoText: { color: isDark ? '#60A5FA' : '#2563EB', fontSize: fontSize.base, fontWeight: '700' },
     explanationHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
     explanationTitle: { fontSize: fontSize.base, fontWeight: '700' },

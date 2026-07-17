@@ -10,10 +10,19 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ToastProvider } from './src/contexts/ToastContext';
+import { ConfirmProvider } from './src/contexts/ConfirmContext';
 import { RewardsProvider } from './src/contexts/RewardsContext';
+import { PointsProvider } from './src/contexts/PointsContext';
 import { FavoritesProvider } from './src/contexts/FavoritesContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CartProvider } from './src/contexts/CartContext';
+import { ConvexProvider, ConvexReactClient } from 'convex/react';
+import { PaymentProvider } from './src/payments/PaymentProvider';
+import { PaymentModeProvider, usePaymentMode } from './src/contexts/PaymentModeContext';
+import { EscrowProvider } from './src/contexts/EscrowContext';
+import { NotificationsProvider } from './src/contexts/NotificationsContext';
+import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
+import { CrashHandler } from './src/components/CrashHandler';
 
 import { Platform } from 'react-native';
 
@@ -53,6 +62,7 @@ import VerificationScreen from './src/screens/VerificationScreen';
 import KYCScreen from './src/screens/KYCScreen';
 import TermsScreen from './src/screens/TermsScreen';
 import PrivacyScreen from './src/screens/PrivacyScreen';
+import PrivacySecurityScreen from './src/screens/PrivacySecurityScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ReferralsScreen from './src/screens/ReferralsScreen';
@@ -114,14 +124,16 @@ const AppNavigator = () => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
 
+    // Design system v2: neutral canvas + brand accent (no purple wallpaper)
     const MyDarkTheme = {
         ...DarkTheme,
         colors: {
             ...DarkTheme.colors,
-            background: '#111827',
-            card: '#1F2937',
-            text: '#F9FAFB',
-            border: '#374151',
+            background: '#09090B',
+            card: 'rgba(255,255,255,0.07)',
+            primary: '#7C3AED',
+            text: '#FAFAFA',
+            border: 'rgba(255,255,255,0.10)',
         },
     };
 
@@ -129,7 +141,11 @@ const AppNavigator = () => {
         ...DefaultTheme,
         colors: {
             ...DefaultTheme.colors,
-            background: '#ffffff',
+            background: '#FAFAFA',
+            card: 'rgba(255,255,255,0.72)',
+            primary: '#7C3AED',
+            text: '#18181B',
+            border: 'rgba(0,0,0,0.08)',
         },
     };
 
@@ -146,12 +162,12 @@ const AppNavigator = () => {
                 }
             }}>
             <StatusBar style={isDark ? "light" : "dark"} />
-            <View style={{ flex: 1, backgroundColor: isDark ? '#111827' : '#fff' }}>
+            <View style={{ flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' }}>
                 <Stack.Navigator
                     initialRouteName="Welcome"
                     screenOptions={{
                         headerShown: false,
-                        contentStyle: { backgroundColor: isDark ? '#111827' : '#fff' },
+                        contentStyle: { backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
                         animation: 'slide_from_right',
                     }}
                 >
@@ -164,6 +180,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="KYC" component={KYCScreen} />
                     <Stack.Screen name="Terms" component={TermsScreen} />
                     <Stack.Screen name="Privacy" component={PrivacyScreen} />
+                    <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
                     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Home" component={HomeScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
@@ -223,8 +240,6 @@ const AppNavigator = () => {
     );
 };
 
-import { ConvexProvider, ConvexReactClient } from "convex/react";
-
 const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 if (!convexUrl) {
     throw new Error('Missing EXPO_PUBLIC_CONVEX_URL. Configure .env.local or build-time env vars.');
@@ -234,30 +249,36 @@ const convex = new ConvexReactClient(convexUrl, {
     unsavedChangesWarning: false,
 });
 
-import { PaymentProvider } from './src/payments/PaymentProvider';
-import { PaymentModeProvider, usePaymentMode } from './src/contexts/PaymentModeContext';
-import { EscrowProvider } from './src/contexts/EscrowContext';
-import { CrashHandler } from './src/components/CrashHandler';
-
 function StripeKeyGate() {
-    const { stripePublishableKey, mode } = usePaymentMode();
-    console.log(`[DEBUG] StripeKeyGate: mode=${mode}, key=${stripePublishableKey ? 'set' : 'missing'}`);
+    const { stripePublishableKey } = usePaymentMode();
     return (
         <>
             {stripePublishableKey ? (
-<PaymentProvider stripePublishableKey={stripePublishableKey}>
+                /* 
+                 * PROVIDER TREE
+                 * E-017: CartProvider envuelve a AuthProvider por sessionTokenStore
+                 * Payment -> Toast -> Cart -> Auth -> Favorites -> Escrow -> Rewards -> AppNavigator
+                 */
+                <PaymentProvider stripePublishableKey={stripePublishableKey}>
                                     <ToastProvider>
-                                        <CartProvider>
-                                            <AuthProvider>
-                                                <FavoritesProvider>
-                                                    <EscrowProvider>
-                                                        <RewardsProvider>
-                                                            <AppNavigator />
-                                                        </RewardsProvider>
-                                                    </EscrowProvider>
-                                                </FavoritesProvider>
-                                            </AuthProvider>
-                                        </CartProvider>
+                                        <ConfirmProvider>
+                                            <CartProvider>
+                                                <AuthProvider>
+                                                    <NotificationsProvider>
+                                                    <FavoritesProvider>
+                                                        <EscrowProvider>
+                                                            <PointsProvider>
+                                                                <RewardsProvider>
+                                                                    <AppNavigator />
+                                                                    <EscrowSheet />
+                                                                </RewardsProvider>
+                                                            </PointsProvider>
+                                                        </EscrowProvider>
+                                                    </FavoritesProvider>
+                                                    </NotificationsProvider>
+                                                </AuthProvider>
+                                            </CartProvider>
+                                        </ConfirmProvider>
                                     </ToastProvider>
                                 </PaymentProvider>
             ) : (
@@ -270,7 +291,6 @@ function StripeKeyGate() {
 }
 
 function App() {
-    console.log('[DEBUG] App: Rendering started');
     return (
         <CrashHandler>
             <GestureHandlerRootView style={{ flex: 1 }}>

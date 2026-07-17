@@ -117,16 +117,16 @@ export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { width: '100%', zIndex: 10 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 12, paddingHorizontal: 12, height: 44 },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, paddingHorizontal: 12, height: 44 },
     searchIcon: { marginRight: 8 },
     input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
     clearButton: { padding: 4 },
 
-    resultsContainer: { maxHeight: 300, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 12, marginTop: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+    resultsContainer: { maxHeight: 300, backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 12, marginTop: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
     resultsContent: { padding: 8 },
     emptyText: { textAlign: 'center', padding: 16, color: '#6B7280' },
 
-    userCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    userCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     userInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     avatar: { width: 40, height: 40, marginRight: 12 },
     textContainer: { flex: 1 },
@@ -136,7 +136,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     followers: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
 
     followButton: { backgroundColor: isDark ? '#4F46E5' : '#000', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
-    followingButton: { backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
+    followingButton: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     followText: { color: '#fff', fontSize: 12, fontWeight: '600' },
     followingText: { color: isDark ? '#F9FAFB' : '#000' }
 });

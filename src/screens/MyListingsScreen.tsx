@@ -14,7 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 const { width } = Dimensions.get('window');
 
 export default function MyListingsScreen() {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -25,7 +25,7 @@ export default function MyListingsScreen() {
     const userId = (user as any)?._id || (user as any)?.id;
     const listings = useQuery(
         api.listings.getMyListings,
-        userId ? { sellerId: userId } : "skip"
+        userId && sessionToken ? { sellerId: userId, sessionToken } : "skip"
     );
     const deleteListing = useMutation(api.listings.deleteListing);
 
@@ -154,7 +154,7 @@ export default function MyListingsScreen() {
                     </SheetHeader>
                     <SheetFooter style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
                         <TouchableOpacity 
-                            style={[styles.actionButton, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? '#374151' : '#E5E7EB' }]} 
+                            style={[styles.actionButton, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]} 
                             onPress={() => setConfirmDelete(null)}
                         >
                             <Text style={[styles.actionText, { color: isDark ? '#D1D5DB' : '#4B5563', fontSize: 16 }]}>Cancelar</Text>
@@ -164,7 +164,11 @@ export default function MyListingsScreen() {
                             onPress={async () => {
                                 if (confirmDelete) {
                                     try {
-                                        await deleteListing({ id: confirmDelete.id });
+                                        await deleteListing({
+                                            id: confirmDelete.id,
+                                            sessionToken,
+                                            sellerId: userId,
+                                        });
                                     } catch (e) {
                                         show("No se pudo eliminar la publicación.", "error");
                                     }
@@ -182,7 +186,7 @@ export default function MyListingsScreen() {
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
+    container: { flex: 1, backgroundColor: '#FAFAFA' },
     containerDark: { backgroundColor: '#111827' },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
@@ -192,12 +196,12 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderBottomWidth: 1,
         borderBottomColor: isDark ? '#1F2937' : '#F3F4F6',
     },
     headerDark: {
-        backgroundColor: '#1F2937',
+        backgroundColor: 'rgba(31,41,55,0.72)',
         borderBottomColor: isDark ? '#D1D5DB' : '#374151',
     },
     headerTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
@@ -207,7 +211,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
 
     // Card Styles
     card: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         marginBottom: 16,
         padding: 12,
@@ -220,7 +224,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         borderColor: 'transparent',
     },
     cardDark: {
-        backgroundColor: '#1F2937',
+        backgroundColor: 'rgba(31,41,55,0.72)',
         borderWidth: 1,
         borderColor: isDark ? '#D1D5DB' : '#374151',
     },
@@ -261,7 +265,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     // Status Badge
     statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
     statusActive: { backgroundColor: '#DCFCE7' },
-    statusInactive: { backgroundColor: isDark ? '#1F2937' : '#F3F4F6' },
+    statusInactive: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     statusText: { fontSize: 10, fontWeight: '700' },
     statusTextActive: { color: '#166534' },
     statusTextInactive: { color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
@@ -278,7 +282,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         paddingVertical: 6,
         paddingHorizontal: 10,
         borderRadius: 8,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#FAFAFA',
     },
     actionButtonDark: {
         backgroundColor: isDark ? '#D1D5DB' : '#374151',
@@ -297,7 +301,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 16,
@@ -317,7 +321,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         shadowRadius: 8,
         elevation: 6,
     },
-    emptyBtnText: { color: isDark ? '#1F2937' : '#fff', fontWeight: 'bold', fontSize: 16 },
+    emptyBtnText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: 'bold', fontSize: 16 },
 
     // Misc
     loadingText: { marginTop: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },

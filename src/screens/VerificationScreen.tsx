@@ -254,8 +254,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     subtitle: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 32, lineHeight: 20 },
 
     otpContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 24 },
-    otpInput: { width: 44, height: 56, backgroundColor: isDark ? '#374151' : '#fff', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', fontSize: 20, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
-    otpInputFilled: { borderColor: '#7C3AED', backgroundColor: isDark ? '#2E1065' : '#F5F3FF' },
+    otpInput: { width: 44, height: 56, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', fontSize: 20, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    otpInputFilled: { borderColor: '#7C3AED', backgroundColor: isDark ? '#2E1065' : '#FAFAFA' },
 
     verifyBtnContainer: {
         width: '100%',
@@ -269,14 +269,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     resendContainer: { marginTop: 24, alignItems: 'center', gap: 8 },
     resendLabel: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' },
-    resendBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: isDark ? '#374151' : '#F5F3FF', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
+    resendBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: isDark ? '#374151' : '#FAFAFA', borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
     resendTextEnabled: { color: '#7C3AED', fontSize: 14, fontWeight: '600' },
 
     timerContainer: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#8B5CF6' },
     resendTextDisabled: { color: isDark ? '#6B7280' : '#6B7280', fontSize: 14 },
 
-    divider: { width: '100%', height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginVertical: 24 },
+    divider: { width: '100%', height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', marginVertical: 24 },
     backLink: {},
     backLinkText: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14, fontWeight: '500' },
 

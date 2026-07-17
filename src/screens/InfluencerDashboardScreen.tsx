@@ -22,6 +22,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { glassTokens, glassGradient } from '../utils/glass';
 
 export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
     const navigation = useNavigation<any>();
@@ -34,7 +36,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const { isDesktop } = useResponsive();
 
     const [modalVisible, setModalVisible] = useState(false);
-    const [transferEmail, setTransferEmail] = useState('');
+    const [transferHandle, setTransferHandle] = useState('');
     const [selectedFollower, setSelectedFollower] = useState<string | null>(null);
     const [bonusAmount, setBonusAmount] = useState('25');
     const [bonusNote, setBonusNote] = useState('Gracias por compartir el cupón esta semana.');
@@ -202,9 +204,9 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     }, [wallet, metrics.commissions]);
 
     const followerSegments = [
-        { id: '1', name: 'Top Fans', email: 'andrea.lopez@email.com' },
-        { id: '2', name: 'Nuevos Leads', email: 'nicolás.ramirez@email.com' },
-        { id: '3', name: 'Clientes VIP', email: 'luis.maestre@email.com' },
+        { id: '1', name: 'Top Fans', username: 'andrea.lopez' },
+        { id: '2', name: 'Nuevos Leads', username: 'nicolas.ramirez' },
+        { id: '3', name: 'Clientes VIP', username: 'luis.maestre' },
     ];
 
     // Pending invitations: business-initiated proposals waiting for me
@@ -340,8 +342,9 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     };
 
     const handleTransferBonus = () => {
-        if (!transferEmail) {
-            show('Ingresa el email del usuario', 'warning');
+        const handle = transferHandle.trim().replace(/^@+/, '');
+        if (!handle) {
+            show('Ingresá el @ del usuario', 'warning');
             return;
         }
         const parsedAmount = Number(bonusAmount);
@@ -350,12 +353,12 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
             return;
         }
         setModalVisible(false);
-        setTransferEmail('');
+        setTransferHandle('');
         setSelectedFollower(null);
         setBonusAmount('25');
         setBonusNote('Gracias por compartir el cupón esta semana.');
 
-        show(`¡Bono de ${formatCurrency(parsedAmount)} enviado a ${transferEmail}!`, 'success');
+        show(`¡Bono de ${formatCurrency(parsedAmount)} enviado a @${handle}!`, 'success');
     };
 
     const formatCurrency = (value: number) => {
@@ -393,6 +396,12 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                 ) : undefined
             }
         >
+            <LinearGradient
+                colors={glassGradient(isDark)}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+            />
             <MobileHeader
                 title="Panel Influencer"
                 backButton={!isTabMode}
@@ -410,7 +419,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
             />
 
             {/* Progress Bar (Global) */}
-            <View style={{ height: 4, backgroundColor: isDark ? '#374151' : '#E5E7EB', width: '100%' }}>
+            <View style={{ height: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', width: '100%' }}>
                 <View style={{ height: '100%', backgroundColor: level.color, width: `${progress}%` }} />
             </View>
 
@@ -425,7 +434,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         <Button
-                            style={{ flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' }}
+                            style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }}
                             onPress={() => navigation.navigate('CreateListing')}
                         >
                             <ShoppingCart size={18} color={isDark ? '#D1D5DB' : '#111827'} style={{ marginRight: 8 }} />
@@ -684,7 +693,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                                 ]}
                                 onPress={() => {
                                     setSelectedFollower(segment.id);
-                                    setTransferEmail(segment.email);
+                                    setTransferHandle(`@${segment.username}`);
                                 }}
                             >
                                 <Text
@@ -761,14 +770,14 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                             keyboardShouldPersistTaps="handled"
                         >
                             <View style={styles.formGroup}>
-                                <Text style={styles.modalLabel}>Email del seguidor</Text>
+                                <Text style={styles.modalLabel}>@ del seguidor</Text>
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="email@usuario.com"
-                                    value={transferEmail}
-                                    onChangeText={setTransferEmail}
-                                    keyboardType="email-address"
+                                    placeholder="@usuario"
+                                    value={transferHandle}
+                                    onChangeText={setTransferHandle}
                                     autoCapitalize="none"
+                                    autoCorrect={false}
                                     placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
                                 />
                             </View>
@@ -890,21 +899,46 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#f9f9f9' },
+const getStyles = (isDark: boolean) => {
+    const glass = glassTokens(isDark);
+    const glassCard = {
+        backgroundColor: glass.bg,
+        borderWidth: 1,
+        borderColor: glass.border,
+        ...glass.shadow,
+        ...glass.backdrop,
+    } as const;
+
+    return StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     content: { padding: 16 },
-    levelContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-    codeCard: { backgroundColor: '#6366f1', padding: 20, borderRadius: 16, marginBottom: 16 },
+    levelContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+    codeCard: { backgroundColor: '#6366f1', padding: 20, borderRadius: 18, marginBottom: 16, ...glass.shadow },
     codeBox: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, paddingLeft: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'space-between' },
     codeText: { color: '#fff', fontSize: 16, fontFamily: 'monospace', fontWeight: 'bold' },
-    copyBtn: { backgroundColor: '#fff', padding: 8, borderRadius: 6 },
+    copyBtn: { backgroundColor: 'rgba(255,255,255,0.62)', padding: 8, borderRadius: 6 },
     statsRow: { flexDirection: 'row', gap: 12 },
-    statCard: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb' },
+    statCard: { padding: 16, borderRadius: 16, ...glassCard },
     iconBox: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     statValue: { fontSize: 24, fontWeight: 'bold', marginTop: 8, color: isDark ? '#F9FAFB' : '#111827' },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, marginTop: 4, color: isDark ? '#F9FAFB' : '#111827' },
     sectionSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 4 },
     centeredView: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 16 },
+    modalBlurWeb: {
+        backgroundColor: isDark ? "rgba(9,9,11,0.55)" : "rgba(250,250,250,0.45)",
+        // @ts-expect-error web backdrop
+        backdropFilter: "blur(18px)",
+        // @ts-expect-error web webkit backdrop
+        WebkitBackdropFilter: "blur(18px)",
+    },
+    modalDim: {
+        ...StyleSheet.absoluteFill,
+        backgroundColor: isDark ? "rgba(0,0,0,0.45)" : "rgba(15,23,42,0.28)",
+        // @ts-expect-error web backdrop
+        backdropFilter: "blur(4px)",
+        // @ts-expect-error web webkit backdrop
+        WebkitBackdropFilter: "blur(4px)",
+    },
     modalView: {
         backgroundColor: isDark ? '#0B1220' : "#fff",
         borderRadius: 20,
@@ -953,21 +987,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         paddingTop: 12,
         textAlignVertical: 'top',
     },
-    metricsWrapper: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    metricsWrapper: { padding: 18, borderRadius: 18, marginBottom: 16, ...glassCard },
     metricsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     metricsTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     metricsSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 4 },
     metricsBadge: { backgroundColor: isDark ? '#312E81' : '#eef2ff', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
     metricsBadgeText: { color: isDark ? '#818CF8' : '#4338ca', fontSize: 11, fontWeight: '600' },
     metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    metricCard: { backgroundColor: isDark ? '#374151' : '#f9fafb', padding: 14, borderRadius: 12, flexBasis: '48%', alignItems: 'flex-start', gap: 6 },
-    metricIcon: { backgroundColor: isDark ? '#4B5563' : '#e5e7eb', padding: 6, borderRadius: 10 },
+    metricCard: { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: glass.border, padding: 14, borderRadius: 14, flexBasis: '48%', alignItems: 'flex-start', gap: 6 },
+    metricIcon: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', padding: 6, borderRadius: 10 },
     metricValue: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
     metricLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' },
     metricTrend: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     metricTrendArrow: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
     metricTrendText: { fontSize: 11, fontWeight: '600' },
-    goalsCard: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, marginTop: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    goalsCard: { padding: 18, borderRadius: 18, marginTop: 16, ...glassCard },
     goalsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     goalBadge: { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.2)' : '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
     goalBadgeText: { color: isDark ? '#4ADE80' : '#047857', fontSize: 11, fontWeight: '600' },
@@ -975,9 +1009,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     goalTextWrapper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
     goalTitle: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     goalDetails: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' },
-    goalProgressBar: { height: 10, backgroundColor: isDark ? '#374151' : '#e5e7eb', borderRadius: 999, overflow: 'hidden' },
+    goalProgressBar: { height: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 999, overflow: 'hidden' },
     goalProgressFill: { height: '100%', borderRadius: 999 },
-    walletCard: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#e2e8f0', marginTop: 16 },
+    walletCard: { padding: 18, borderRadius: 18, marginTop: 16, ...glassCard },
     walletHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
     walletIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? '#374151' : '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
     walletTitle: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#0f172a' },
@@ -992,7 +1026,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     walletSplitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     walletSplitLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#64748b' },
     walletSplitValue: { fontSize: 11, fontWeight: '600', color: isDark ? '#F9FAFB' : '#0f172a' },
-    transferCard: { backgroundColor: isDark ? '#1F2937' : '#fff', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#fcd34d', marginTop: 16 },
+    transferCard: { backgroundColor: glass.bg, ...glass.backdrop, ...glass.shadow, padding: 18, borderRadius: 18, borderWidth: 1, borderColor: '#fcd34d', marginTop: 16 },
     transferHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     transferIconWrapper: { backgroundColor: '#f59e0b', padding: 10, borderRadius: 12 },
     transferTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#FCD34D' : '#78350f' },
@@ -1003,7 +1037,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     transferFollowerPillActive: { backgroundColor: isDark ? '#92400E' : '#fde68a', borderColor: '#f59e0b' },
     transferFollowerText: { fontSize: 12, fontWeight: '600', color: isDark ? '#FDE68A' : '#92400e' },
     transferFollowerTextActive: { color: isDark ? '#FEF3C7' : '#78350f' },
-});
+    });
+};
 
 const MetricTrend = ({ value }: { value: number }) => {
     const { colorScheme } = useTheme();

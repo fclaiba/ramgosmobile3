@@ -277,7 +277,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                         style={StyleSheet.absoluteFill}
                     />
                 )}
-                <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FFFFFF']} style={styles.heroGradient} />
+                <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FAFAFA']} style={styles.heroGradient} />
             </View>
 
             {/* Floating top bar */}
@@ -464,8 +464,8 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 }
 
 function getStyles(isDark: boolean, insets: any) {
-    const bg = isDark ? '#09090B' : '#FFFFFF';
-    const surface = isDark ? '#18181B' : '#F9FAFB';
+    const bg = isDark ? '#09090B' : '#FAFAFA';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
@@ -568,7 +568,7 @@ function getStyles(isDark: boolean, insets: any) {
             position: 'absolute',
             bottom: 4,
             right: 4,
-            backgroundColor: isDark ? '#111827' : '#FFFFFF',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderRadius: 12,
             padding: 3,
         },
@@ -796,9 +796,9 @@ function getStyles(isDark: boolean, insets: any) {
             borderRadius: 16,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             borderWidth: 1,
-            borderColor: isDark ? '#374151' : '#F3F4F6',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         },
         favBtnActive: {
             shadowColor: '#000',
@@ -835,7 +835,7 @@ function getStyles(isDark: boolean, insets: any) {
         },
         btnSm: {
             flexDirection: 'row',
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             paddingVertical: 9,
             borderRadius: 10,
             alignItems: 'center',

@@ -14,6 +14,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/s
 import { AlertTriangle } from 'lucide-react-native';
 import { useToast } from '../contexts/ToastContext';
 import { useReferral } from '../contexts/ReferralContext';
+import { useNotifications } from '../contexts/NotificationsContext';
+import { useSavedPaymentMethods } from '../payments/hooks/useSavedPaymentMethods';
 import { MobileNav } from '../components/MobileNav';
 
 interface UserProfile {
@@ -42,6 +44,8 @@ export default function ProfileScreen({ navigation }: any) {
     const { user, logout } = useAuth();
     const { points, currentTier, nextTier, lifetimePoints, transactions } = usePoints();
     const { referralSummary, referralCode } = useReferral() as any;
+    const { unreadCount } = useNotifications();
+    const { count: paymentMethodsCount } = useSavedPaymentMethods();
     const [isEditing, setIsEditing] = useState(false);
 
     // Initial State Mock
@@ -112,10 +116,30 @@ export default function ProfileScreen({ navigation }: any) {
     ];
 
     const settingsOptions = [
-        { icon: CreditCard, label: 'Métodos de Pago', badge: '2' },
-        { icon: Bell, label: 'Notificaciones', badge: null },
-        { icon: Shield, label: 'Privacidad y Seguridad', badge: null },
-        { icon: Settings, label: 'Configuración', badge: null },
+        {
+            icon: CreditCard,
+            label: 'Métodos de Pago',
+            badge: paymentMethodsCount > 0 ? String(paymentMethodsCount) : null,
+            action: () => navigation.navigate('PaymentMethods'),
+        },
+        {
+            icon: Bell,
+            label: 'Notificaciones',
+            badge: unreadCount > 0 ? String(unreadCount) : null,
+            action: () => navigation.navigate('Notifications'),
+        },
+        {
+            icon: Shield,
+            label: 'Privacidad y Seguridad',
+            badge: null,
+            action: () => navigation.navigate('PrivacySecurity'),
+        },
+        {
+            icon: Settings,
+            label: 'Configuración',
+            badge: null,
+            action: () => navigation.navigate('Settings'),
+        },
     ];
 
     const range = nextTier ? (nextTier.minPoints - currentTier.minPoints) : 1;
@@ -417,12 +441,22 @@ export default function ProfileScreen({ navigation }: any) {
                     <Text style={styles.sectionHeader}>Ajustes</Text>
                     <View style={styles.card}>
                         {settingsOptions.map((opt, i) => (
-                            <TouchableOpacity key={i} style={[styles.settingsItem, i < settingsOptions.length - 1 && styles.borderBottom]}>
+                            <TouchableOpacity
+                                key={i}
+                                style={[styles.settingsItem, i < settingsOptions.length - 1 && styles.borderBottom]}
+                                onPress={opt.action}
+                                activeOpacity={0.75}
+                            >
                                 <View style={styles.settingsLeft}>
                                     <View style={styles.settingsIcon}>
                                         <opt.icon size={18} color={isDark ? "#D1D5DB" : "#374151"} />
                                     </View>
                                     <Text style={styles.settingsLabel}>{opt.label}</Text>
+                                    {opt.badge ? (
+                                        <View style={styles.settingsBadge}>
+                                            <Text style={styles.settingsBadgeText}>{opt.badge}</Text>
+                                        </View>
+                                    ) : null}
                                 </View>
                                 <ChevronRight size={18} color="#9CA3AF" />
                             </TouchableOpacity>
@@ -515,7 +549,7 @@ export default function ProfileScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#F9FAFB' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
 
     // Header
     headerContainer: { paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 40, alignItems: 'center', backgroundColor: '#7C3AED', borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
@@ -527,7 +561,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     profileHeader: { alignItems: 'center', width: '100%' },
     avatarWrapper: { position: 'relative', marginBottom: 16 },
     avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
-    cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#fff', padding: 8, borderRadius: 20 },
+    cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.62)', padding: 8, borderRadius: 20 },
 
     name: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
     email: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginBottom: 16 },
@@ -538,7 +572,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     levelProgressContainer: { width: '80%', alignItems: 'center' },
     progressBarBg: { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden' },
-    progressBarFill: { height: '100%', backgroundColor: '#fff', borderRadius: 3 },
+    progressBarFill: { height: '100%', backgroundColor: 'rgba(255,255,255,0.62)', borderRadius: 3 },
 
     // Body
     bodyContainer: { paddingHorizontal: 20, marginTop: -30 },
@@ -553,45 +587,55 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     // Quick Actions
     sectionHeader: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 12, marginLeft: 4 },
     quickActionsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    actionCard: { flex: 1, backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+    actionCard: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
     actionIconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     actionValue: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 2 },
     actionLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500', textAlign: 'center' },
-    inviteCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1, marginBottom: 24 },
+    inviteCard: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16, padding: 16, alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1, marginBottom: 24 },
     inviteValue: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 2 },
     inviteLabel: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
 
     // Forms & Settings
-    card: { backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, overflow: 'hidden', marginBottom: 24, padding: 4, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+    card: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 20, overflow: 'hidden', marginBottom: 24, padding: 4, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
     formRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-    formIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? '#374151' : '#F3F4F6', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    formIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
     formContent: { flex: 1 },
     formLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 2 },
     formValue: { fontSize: 15, color: isDark ? '#F9FAFB' : '#1F2937', fontWeight: '500' },
     inputObj: { fontSize: 15, color: isDark ? '#F9FAFB' : '#111827', borderBottomWidth: 1, borderBottomColor: '#7C3AED', paddingVertical: 2 },
-    divider: { height: 1, backgroundColor: isDark ? '#374151' : '#F3F4F6', marginLeft: 68 },
+    divider: { height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginLeft: 68 },
 
     // Points & referrals
     pointsTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
     pointsTitle: { fontSize: 15, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
     pointsSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
     pointsSummaryRow: { flexDirection: 'row', gap: 10, padding: 16 },
-    pointsSummaryCard: { flex: 1, backgroundColor: isDark ? '#111827' : '#F9FAFB', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    pointsSummaryCard: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     pointsSummaryLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 4 },
     pointsSummaryValue: { fontSize: 16, fontWeight: '800' },
     referralRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 16 },
 
-    txRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 14, backgroundColor: isDark ? '#111827' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB' },
+    txRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 14, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     txDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
     txTitle: { fontSize: 13, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
     txMeta: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
     txAmount: { fontSize: 13, fontWeight: '800' },
 
     settingsItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-    settingsLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    settingsLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
     settingsIcon: { width: 32, alignItems: 'center' },
     settingsLabel: { fontSize: 15, color: isDark ? '#D1D5DB' : '#374151', fontWeight: '500' },
-    borderBottom: { borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F3F4F6' },
+    settingsBadge: {
+        minWidth: 22,
+        height: 22,
+        paddingHorizontal: 6,
+        borderRadius: 11,
+        backgroundColor: '#7C3AED',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    settingsBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+    borderBottom: { borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
 
     logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#3B1010' : '#FEF2F2', paddingVertical: 16, borderRadius: 16, gap: 8, marginBottom: 12 },
     logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 15 },
@@ -600,7 +644,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Sheet Styles
     sheetContent: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },

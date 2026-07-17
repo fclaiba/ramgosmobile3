@@ -21,12 +21,14 @@ export interface FavoriteItem {
 }
 
 export const useFavorites = () => {
-    const { user, sessionToken } = useAuth();
+    const { user, sessionToken, status } = useAuth();
 
     // Query favorites from Convex
     const favoritesData = useQuery(
         api.favorites.getMyFavorites,
-        user ? { sessionToken, userId: user.id } : "skip"
+        user && sessionToken && status === 'authenticated'
+            ? { sessionToken, userId: user.id }
+            : "skip"
     );
 
     // Mutations
@@ -39,7 +41,7 @@ export const useFavorites = () => {
         type: (f.listing?.type as any) || 'product',
         name: f.listing?.title || '',
         price: f.listing?.price || 0,
-        image: f.listing?.image || '',
+        image: f.listing?.image || (f.listing as any)?.images?.[0]?.url || (f.listing as any)?.gallery?.[0] || '',
         category: f.listing?.category || '',
         rating: f.listing?.averageRating,
         discount: (f.listing as any)?.discount,

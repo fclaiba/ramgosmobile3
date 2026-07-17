@@ -101,7 +101,7 @@ const RichText = ({ text, isDark }: { text: string; isDark: boolean }) => {
                             key={idx}
                             style={{
                                 fontFamily: 'monospace',
-                                backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
                                 color: '#7C3AED',
                                 paddingHorizontal: 4,
                                 borderRadius: 4,
@@ -200,7 +200,7 @@ export default function HelpArticleDetailScreen({ route, navigation }: any) {
 
 const getStyles = (isDark: boolean) =>
     StyleSheet.create({
-        container: { flex: 1, backgroundColor: isDark ? '#111827' : '#FFFFFF' },
+        container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
         content: { padding: 20, paddingBottom: 40, gap: 12 },
         heading: {
             color: isDark ? '#F9FAFB' : '#111827',

@@ -362,7 +362,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
 
 const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     sheetContent: { 
-        backgroundColor: isDark ? '#111827' : '#FFFFFF', 
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', 
         height: '95%',
         padding: 0, // Reset default padding to allow edge-to-edge
         overflow: 'hidden',
@@ -397,7 +397,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         position: 'relative',
         width: '100%',
         aspectRatio: 1, // 1:1 aspect ratio for product images
-        backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         overflow: 'hidden',
     },
     heroSlide: {
@@ -461,7 +461,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     },
     divider: {
         height: 1,
-        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         marginVertical: 24,
     },
     section: {
@@ -503,14 +503,14 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         padding: 16,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     sellerAvatar: {
         width: 48,
         height: 48,
         borderRadius: 24,
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
@@ -550,7 +550,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
@@ -594,7 +594,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         right: 0,
         backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
         borderTopWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -634,11 +634,11 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         color: isDark ? '#F9FAFB' : '#111827',
     },
     addToCartButton: {
-        backgroundColor: '#007AFF', // Standard high-conversion blue
+        backgroundColor: '#7C3AED', // Standard high-conversion blue
         borderRadius: 100, // fully rounded pill
         paddingVertical: 16,
         paddingHorizontal: 28,
-        shadowColor: '#007AFF',
+        shadowColor: '#7C3AED',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

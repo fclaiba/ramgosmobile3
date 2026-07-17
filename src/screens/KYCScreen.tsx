@@ -1,67 +1,86 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Animated, TextInput, ScrollView, Platform, Linking } from 'react-native';
+import React, { useState, useRef, useMemo } from 'react';
+import {
+    View, Text, TouchableOpacity, StyleSheet, Animated, TextInput,
+    ScrollView, Platform, KeyboardAvoidingView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 import { AuthBackground } from '../components/auth/AuthBackground';
-import { Camera, Upload, CheckCircle2, ShieldCheck, ArrowRight, User, Building2, MapPin, Link as LinkIcon, FileText } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { CheckCircle2, ShieldCheck, ArrowRight, User, Building2, MapPin, Link as LinkIcon } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useFintech } from '../contexts/FintechContext';
-import { useAction, useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { ImageUploadField } from '../components/ui/ImageUploadField';
+import { glassTokens } from '../utils/glass';
+import {
+    LIMITS, MIN, clamp, formatEin, isValidEin, isValidBusinessAddress, isValidSocialUrl,
+} from '../utils/inputLimits';
 
 type Step = 'intro' | 'success';
 
 export default function KYCScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const styles = useMemo(() => getStyles(isDark), [isDark]);
     const { show } = useToast();
 
     const accountType = route.params?.accountType || 'consumer';
     const [step, setStep] = useState<Step>('intro');
 
-    // Common State
     const [idFront, setIdFront] = useState<string | null>(null);
     const [idBack, setIdBack] = useState<string | null>(null);
     const [faceScanned, setFaceScanned] = useState(false);
 
-    // Business State (NY Compliance)
     const [ein, setEin] = useState('');
-    const [incorporationDoc, setIncorporationDoc] = useState<string | null>(null); // Estatutos/Certificado
+    const [incorporationDoc, setIncorporationDoc] = useState<string | null>(null);
     const [businessAddress, setBusinessAddress] = useState('');
     const [premisesPhoto, setPremisesPhoto] = useState<string | null>(null);
 
-    // Influencer State
     const [socialLink, setSocialLink] = useState('');
 
     const { user, markKycSubmitted } = useAuth();
-    const { submitKyc, refreshKyc } = useFintech();
+    const { refreshKyc } = useFintech();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Animation
     const fadeAnim = useRef(new Animated.Value(1)).current;
 
     const transitionTo = (nextStep: Step) => {
         Animated.sequence([
             Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-            Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true })
+            Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
         ]).start();
         setTimeout(() => setStep(nextStep), 200);
     };
+
+    const businessReady = isValidEin(ein) && incorporationDoc
+        && isValidBusinessAddress(businessAddress) && premisesPhoto;
+    const influencerReady = isValidSocialUrl(socialLink);
+    const canSubmit = idFront && idBack && (
+        accountType === 'business' ? businessReady
+            : accountType === 'influencer' ? influencerReady
+                : true
+    );
 
     const handleStartVerification = async () => {
         if (!user) {
             show('Debes iniciar sesión primero', 'error');
             return;
         }
-
-        if (!idFront || !idBack) {
-            show('Falta adjuntar documentos de identidad', 'error');
+        if (!canSubmit) {
+            if (!idFront || !idBack) {
+                show('Adjuntá el frente y dorso del documento', 'error');
+            } else if (accountType === 'business' && !isValidEin(ein)) {
+                show('EIN inválido — formato XX-XXXXXXX (9 dígitos)', 'error');
+            } else if (accountType === 'business' && !isValidBusinessAddress(businessAddress)) {
+                show(`Dirección: mínimo ${MIN.businessAddress} caracteres`, 'error');
+            } else if (accountType === 'influencer' && !isValidSocialUrl(socialLink)) {
+                show('Ingresá una URL válida (ej. instagram.com/tuusuario)', 'error');
+            } else {
+                show('Completá todos los campos obligatorios', 'error');
+            }
             return;
         }
-
         await handleKycSuccess();
     };
 
@@ -73,33 +92,13 @@ export default function KYCScreen({ navigation, route }: any) {
                 documentFront: idFront as string,
                 documentBack: idBack as string,
                 selfieValidated: faceScanned,
-                // Business Data
                 ein: accountType === 'business' ? ein : undefined,
                 incorporationDoc: accountType === 'business' ? incorporationDoc : undefined,
                 businessAddress: accountType === 'business' ? businessAddress : undefined,
                 premisesPhoto: accountType === 'business' ? premisesPhoto : undefined,
-                // Influencer Data
                 socialLink: accountType === 'influencer' ? socialLink : undefined,
-
                 submittedFrom: 'mobile',
                 submittedAt: new Date().toISOString(),
-            });
-
-            // Submit to Fintech (Admin Dashboard)
-            submitKyc({
-                ownerId: user?.id || 'unknown',
-                ownerType: accountType as any,
-                ownerName: user?.name || user?.email || 'Unknown User',
-                data: {
-                    documentFront: idFront as string,
-                    documentBack: idBack as string,
-                    selfieValidated: faceScanned,
-                    ein: accountType === 'business' ? (ein ?? undefined) : undefined,
-                    incorporationDoc: accountType === 'business' ? (incorporationDoc ?? undefined) : undefined,
-                    businessAddress: accountType === 'business' ? (businessAddress ?? undefined) : undefined,
-                    premisesPhoto: accountType === 'business' ? (premisesPhoto ?? undefined) : undefined,
-                    socialLink: accountType === 'influencer' ? (socialLink ?? undefined) : undefined,
-                }
             });
 
             await refreshKyc();
@@ -113,84 +112,147 @@ export default function KYCScreen({ navigation, route }: any) {
     };
 
     const handleComplete = () => {
-        // All roles (Business, Influencer, Consumer) are redirected to Home.
-        // Specialized roles can access their dashboards via the 'Panel' button in the navbar.
         navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     };
 
+    const title = accountType === 'business' ? 'Verificación de Negocio (NY)'
+        : accountType === 'influencer' ? 'Verificación de Influencer'
+            : 'Verifiquemos tu identidad';
+
+    const subtitle = accountType === 'business'
+        ? 'Para operar en NY, necesitamos validar legalmente tu empresa y ubicación física.'
+        : accountType === 'influencer'
+            ? 'Validamos tu perfil público para activar campañas y comisiones.'
+            : 'Para mantener la seguridad de la comunidad, necesitamos validar tus datos.';
+
     const renderIntro = () => (
-        <View style={styles.stepContainer}>
-            <View style={styles.iconContainer}>
-                <ShieldCheck size={48} color="#7C3AED" />
-            </View>
-            <Text style={styles.title}>
-                {accountType === 'business' ? 'Verificación de Negocio (NY)' :
-                    accountType === 'influencer' ? 'Verificación de Influencer' :
-                        'Verifiquemos tu identidad'}
-            </Text>
-            <Text style={styles.subtitle}>
-                {accountType === 'business'
-                    ? 'Para operar en NY, necesitamos validar legalmente tu empresa y ubicación física.'
-                    : 'Para mantener la seguridad de la comunidad, necesitamos validar tus datos.'}
-            </Text>
-
-            <View style={styles.infoBox}>
-                <Text style={styles.infoTitle}>Requisitos:</Text>
-
-                {accountType === 'business' && (
-                    <>
-                        <View style={styles.infoRow}>
-                            <View style={styles.bullet} />
-                            <Text style={styles.infoText}>Estatutos / Certificado Incorporación (NY)</Text>
-                        </View>
-                        <View style={styles.infoRow}>
-                            <View style={styles.bullet} />
-                            <Text style={styles.infoText}>Número EIN y Licencias</Text>
-                        </View>
-                        <View style={styles.infoRow}>
-                            <View style={styles.bullet} />
-                            <Text style={styles.infoText}>Foto del local comercial</Text>
-                        </View>
-                    </>
-                )}
-
-                {accountType === 'influencer' && (
-                    <View style={styles.infoRow}>
-                        <View style={styles.bullet} />
-                        <Text style={styles.infoText}>Enlace a perfil principal</Text>
-                    </View>
-                )}
-
-                <View style={styles.infoRow}>
-                    <View style={styles.bullet} />
-                    <Text style={styles.infoText}>Identificación del representante</Text>
-                </View>
-            </View>
-
-            <TouchableOpacity
-                style={[styles.btn, isSubmitting && styles.btnDisabled]}
-                disabled={isSubmitting}
-                onPress={handleStartVerification}
+        <KeyboardAvoidingView
+            style={styles.flex}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+            <ScrollView
+                style={styles.flex}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
-                <Text style={styles.btnText}>Enviar para Verificación</Text>
-                <ArrowRight size={20} color="#fff" />
-            </TouchableOpacity>
-        </View>
+                <View style={styles.hero}>
+                    <View style={styles.iconContainer}>
+                        <ShieldCheck size={40} color="#8B5CF6" />
+                    </View>
+                    <Text style={styles.title}>{title}</Text>
+                    <Text style={styles.subtitle}>{subtitle}</Text>
+                </View>
+
+                <View style={styles.formBody}>
+                    <FormSection styles={styles} icon={User} title="Identidad">
+                        <ImageUploadField
+                            variant="document"
+                            title="Documento de identidad — Frente"
+                            images={idFront ? [idFront] : []}
+                            onChange={(imgs) => setIdFront(imgs[0] ?? null)}
+                            maxImages={1}
+                        />
+                        <ImageUploadField
+                            variant="document"
+                            title="Documento de identidad — Dorso"
+                            images={idBack ? [idBack] : []}
+                            onChange={(imgs) => setIdBack(imgs[0] ?? null)}
+                            maxImages={1}
+                        />
+                    </FormSection>
+
+                    {accountType === 'business' && (
+                        <>
+                            <FormSection styles={styles} icon={Building2} title="Empresa">
+                                <FormField
+                                    styles={styles}
+                                    label="Número EIN"
+                                    value={ein}
+                                    onChangeText={(t) => setEin(formatEin(t))}
+                                    placeholder="XX-XXXXXXX"
+                                    isDark={isDark}
+                                    maxLength={LIMITS.ein}
+                                    hint="9 dígitos · formato XX-XXXXXXX"
+                                    keyboardType="number-pad"
+                                />
+                                <ImageUploadField
+                                    variant="document"
+                                    title="Certificado de incorporación"
+                                    images={incorporationDoc ? [incorporationDoc] : []}
+                                    onChange={(imgs) => setIncorporationDoc(imgs[0] ?? null)}
+                                    maxImages={1}
+                                />
+                            </FormSection>
+
+                            <FormSection styles={styles} icon={MapPin} title="Ubicación física">
+                                <FormField
+                                    styles={styles}
+                                    label="Dirección del local"
+                                    value={businessAddress}
+                                    onChangeText={(t) => setBusinessAddress(clamp(t, LIMITS.businessAddress))}
+                                    placeholder="Calle, ciudad, NY"
+                                    isDark={isDark}
+                                    maxLength={LIMITS.businessAddress}
+                                    hint={`${businessAddress.length}/${LIMITS.businessAddress} · mín. ${MIN.businessAddress}`}
+                                />
+                                <ImageUploadField
+                                    variant="document"
+                                    title="Foto del local comercial"
+                                    images={premisesPhoto ? [premisesPhoto] : []}
+                                    onChange={(imgs) => setPremisesPhoto(imgs[0] ?? null)}
+                                    maxImages={1}
+                                />
+                            </FormSection>
+                        </>
+                    )}
+
+                    {accountType === 'influencer' && (
+                        <FormSection styles={styles} icon={LinkIcon} title="Red social">
+                            <FormField
+                                styles={styles}
+                                label="Perfil principal"
+                                value={socialLink}
+                                onChangeText={(t) => setSocialLink(clamp(t, LIMITS.socialUrl))}
+                                placeholder="https://instagram.com/tuusuario"
+                                isDark={isDark}
+                                autoCapitalize="none"
+                                keyboardType="url"
+                                maxLength={LIMITS.socialUrl}
+                                hint="URL pública de Instagram, TikTok, YouTube, etc."
+                                icon={LinkIcon}
+                            />
+                        </FormSection>
+                    )}
+
+                    <TouchableOpacity
+                        style={[styles.btn, (isSubmitting || !canSubmit) && styles.btnDisabled]}
+                        disabled={isSubmitting || !canSubmit}
+                        onPress={handleStartVerification}
+                        activeOpacity={0.9}
+                    >
+                        <Text style={styles.btnText}>
+                            {isSubmitting ? 'Enviando…' : 'Enviar para Verificación'}
+                        </Text>
+                        {!isSubmitting && <ArrowRight size={20} color="#fff" />}
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 
-
-
     const renderSuccess = () => (
-        <View style={styles.stepContainer}>
-            <View style={[styles.iconContainer, { backgroundColor: '#D1FAE5' }]}>
-                <CheckCircle2 size={48} color="#059669" />
+        <View style={styles.successBody}>
+            <View style={[styles.iconContainer, styles.iconSuccess]}>
+                <CheckCircle2 size={40} color="#059669" />
             </View>
             <Text style={styles.title}>¡Solicitud Enviada!</Text>
             <Text style={styles.subtitle}>
-                Hemos recibido tu documentación. Te notificaremos cuando tu cuenta {accountType === 'business' ? 'de Negocio' : accountType === 'influencer' ? 'de Influencer' : ''} esté activa.
+                Hemos recibido tu documentación. Te notificaremos cuando tu cuenta{' '}
+                {accountType === 'business' ? 'de Negocio' : accountType === 'influencer' ? 'de Influencer' : ''}{' '}
+                esté activa.
             </Text>
-
-            <TouchableOpacity style={styles.btn} onPress={handleComplete}>
+            <TouchableOpacity style={styles.btn} onPress={handleComplete} activeOpacity={0.9}>
                 <Text style={styles.btnText}>Ir al Panel Principal</Text>
             </TouchableOpacity>
         </View>
@@ -199,70 +261,246 @@ export default function KYCScreen({ navigation, route }: any) {
     return (
         <AuthBackground>
             <SafeAreaView style={styles.container}>
-                <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
-                    {step === 'intro' && renderIntro()}
-                    {step === 'success' && renderSuccess()}
+                <Animated.View style={[styles.cardWrapper, { opacity: fadeAnim }]}>
+                    <BlurView
+                        intensity={isDark ? 30 : 60}
+                        tint={isDark ? 'dark' : 'light'}
+                        style={styles.card}
+                    >
+                        {step === 'intro' && renderIntro()}
+                        {step === 'success' && renderSuccess()}
+                    </BlurView>
                 </Animated.View>
-                
-
             </SafeAreaView>
         </AuthBackground>
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', padding: 16 },
-    card: {
-        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 24,
-        padding: 24,
-        width: '100%',
-        maxWidth: 400,
-        alignSelf: 'center',
+function FormSection({ styles, icon: Icon, title, children }: {
+    styles: ReturnType<typeof getStyles>;
+    icon: any;
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+                <View style={styles.sectionIcon}>
+                    <Icon size={16} color="#8B5CF6" />
+                </View>
+                <Text style={styles.sectionTitle}>{title}</Text>
+            </View>
+            <View style={styles.sectionBody}>{children}</View>
+        </View>
+    );
+}
+
+function FormField({ styles, label, value, onChangeText, placeholder, isDark, autoCapitalize, icon: Icon, maxLength, hint, keyboardType }: {
+    styles: ReturnType<typeof getStyles>;
+    label: string;
+    value: string;
+    onChangeText: (t: string) => void;
+    placeholder: string;
+    isDark: boolean;
+    autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+    icon?: any;
+    maxLength?: number;
+    hint?: string;
+    keyboardType?: 'default' | 'email-address' | 'url' | 'number-pad' | 'phone-pad';
+}) {
+    return (
+        <View style={styles.field}>
+            <View style={styles.fieldLabelRow}>
+                <Text style={styles.fieldLabel}>{label}</Text>
+                {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+            </View>
+            <View style={styles.inputWrap}>
+                {Icon && <Icon size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />}
+                <TextInput
+                    style={[styles.input, Icon && styles.inputWithIcon]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                    autoCapitalize={autoCapitalize ?? 'sentences'}
+                    maxLength={maxLength}
+                    keyboardType={keyboardType ?? 'default'}
+                />
+            </View>
+        </View>
+    );
+}
+
+const getStyles = (isDark: boolean) => {
+    const glass = glassTokens(isDark);
+    const glassCard = {
+        backgroundColor: glass.bg,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
-        shadowColor: isDark ? '#000' : '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: isDark ? 0.3 : 0.1,
-        shadowRadius: 20,
-        elevation: 10,
-        minHeight: 450,
-        justifyContent: 'center'
-    },
-    stepContainer: { alignItems: 'center', width: '100%' },
-    scrollStep: { alignItems: 'center', width: '100%', paddingBottom: 20 },
-    iconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    title: { fontSize: 22, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 24, paddingHorizontal: 4 },
+        borderColor: glass.border,
+        ...glass.shadow,
+        ...glass.backdrop,
+    } as const;
 
-    infoBox: { width: '100%', backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 16, padding: 16, marginBottom: 24 },
-    infoTitle: { fontWeight: '600', color: isDark ? '#E5E7EB' : '#374151', marginBottom: 12 },
-    infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#7C3AED', marginRight: 10 },
-    infoText: { color: isDark ? '#D1D5DB' : '#4B5563', fontSize: 13, flex: 1 },
+    return StyleSheet.create({
+        flex: { flex: 1, width: '100%' },
+        container: {
+            flex: 1,
+            justifyContent: 'flex-start',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 16,
+            width: '100%',
+        },
+        cardWrapper: {
+            width: '100%',
+            maxWidth: 520,
+            flex: 1,
+            maxHeight: '94%',
+            alignSelf: 'center',
+            borderRadius: 24,
+            overflow: 'hidden',
+            ...glass.shadow,
+        },
+        card: {
+            flex: 1,
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.5)',
+            backgroundColor: isDark ? 'rgba(17,24,39,0.45)' : 'rgba(255,255,255,0.35)',
+            overflow: 'hidden',
+        },
 
-    btn: { backgroundColor: '#7C3AED', flexDirection: 'row', height: 50, borderRadius: 12, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center', width: '100%', marginTop: 16 },
-    btnDisabled: { backgroundColor: isDark ? '#4B5563' : '#D1D5DB' },
-    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 15, marginRight: 8 },
+        scrollContent: {
+            flexGrow: 1,
+            paddingBottom: 24,
+        },
+        hero: {
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingTop: 24,
+            paddingBottom: 8,
+        },
+        iconContainer: {
+            width: 72,
+            height: 72,
+            borderRadius: 20,
+            backgroundColor: isDark ? 'rgba(139,92,246,0.18)' : 'rgba(139,92,246,0.12)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(139,92,246,0.35)' : 'rgba(139,92,246,0.2)',
+        },
+        iconSuccess: { backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : '#D1FAE5', borderColor: 'rgba(16,185,129,0.35)' },
+        title: {
+            fontSize: 21,
+            fontWeight: '800',
+            color: isDark ? '#F9FAFB' : '#111827',
+            marginBottom: 6,
+            textAlign: 'center',
+        },
+        subtitle: {
+            fontSize: 13,
+            lineHeight: 19,
+            color: isDark ? '#9CA3AF' : '#6B7280',
+            textAlign: 'center',
+            paddingHorizontal: 8,
+        },
 
-    uploadCard: { width: '100%', height: 120, borderWidth: 2, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16, backgroundColor: isDark ? '#374151' : '#F9FAFB' },
-    uploadCardSimple: { width: '100%', padding: 16, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', borderRadius: 12, marginBottom: 16, backgroundColor: isDark ? '#374151' : '#F9FAFB' },
-    uploadPlaceholder: { alignItems: 'center' },
-    uploadPlaceholderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    uploadText: { color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
-    uploadedContent: { alignItems: 'center' },
-    uploadedContentRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    uploadedText: { color: '#059669', fontWeight: '600', marginTop: 8 },
-    uploadedTextSimple: { color: '#059669', fontWeight: '600' },
+        formBody: {
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            gap: 12,
+        },
+        section: {
+            borderRadius: 18,
+            padding: 14,
+            ...glassCard,
+        },
+        sectionHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 12,
+            paddingBottom: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(99,102,241,0.1)',
+        },
+        sectionIcon: {
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            backgroundColor: isDark ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.1)',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        sectionTitle: {
+            fontSize: 15,
+            fontWeight: '700',
+            color: isDark ? '#F3F4F6' : '#1F2937',
+        },
+        sectionBody: { gap: 4 },
 
-    label: { alignSelf: 'flex-start', fontSize: 13, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 6, marginTop: 4 },
-    input: { width: '100%', height: 48, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#D1D5DB', borderRadius: 10, paddingHorizontal: 12, backgroundColor: isDark ? '#374151' : '#fff', marginBottom: 12, color: isDark ? '#F9FAFB' : '#111827' },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', width: '100%', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#D1D5DB', borderRadius: 10, paddingHorizontal: 12, backgroundColor: isDark ? '#374151' : '#fff', height: 48, marginBottom: 16 },
-    inputFlex: { flex: 1, height: '100%', color: isDark ? '#F9FAFB' : '#111827' },
-    hint: { fontSize: 11, color: isDark ? '#9CA3AF' : '#9CA3AF', marginBottom: 16, textAlign: 'center' },
+        field: { marginBottom: 12 },
+        fieldLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 6 },
+        fieldLabel: {
+            fontSize: 12,
+            fontWeight: '600',
+            color: isDark ? '#D1D5DB' : '#4B5563',
+            flexShrink: 1,
+        },
+        fieldHint: {
+            fontSize: 10,
+            color: isDark ? '#6B7280' : '#9CA3AF',
+            flexShrink: 0,
+        },
+        inputWrap: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            height: 48,
+            borderRadius: 12,
+            paddingHorizontal: 14,
+            backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.65)',
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(99,102,241,0.15)',
+        },
+        input: {
+            flex: 1,
+            height: '100%',
+            fontSize: 14,
+            color: isDark ? '#F9FAFB' : '#111827',
+            ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+        },
+        inputWithIcon: { paddingLeft: 0 },
 
-    cameraPreview: { width: 200, height: 200, borderRadius: 100, backgroundColor: '#111827', marginBottom: 24, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#4B5563' : '#E5E7EB' },
-    faceOverlay: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-    scanBtn: { backgroundColor: '#111827', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 24 },
-    scanBtnText: { color: '#fff', fontWeight: '600' }
-});
+        btn: {
+            backgroundColor: 'rgba(124, 58, 237, 0.92)',
+            flexDirection: 'row',
+            height: 52,
+            borderRadius: 16,
+            paddingHorizontal: 24,
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            marginTop: 8,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.2)',
+            ...glass.backdrop,
+        },
+        btnDisabled: {
+            backgroundColor: isDark ? 'rgba(75,85,99,0.45)' : 'rgba(209,213,219,0.55)',
+            borderColor: 'transparent',
+        },
+        btnText: { color: '#fff', fontWeight: '700', fontSize: 15, marginRight: 8 },
+
+        successBody: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 24,
+            paddingVertical: 32,
+        },
+    });
+};

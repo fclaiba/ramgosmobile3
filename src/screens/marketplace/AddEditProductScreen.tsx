@@ -332,7 +332,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
     const isWide = windowWidth >= 900;
     const maxWidth = isWide ? 980 : 640;
 
-    const pageBg = isDark ? '#0B1220' : '#F9FAFB';
+    const pageBg = isDark ? '#09090B' : '#FAFAFA';
     const cardBg = isDark ? 'rgba(17, 24, 39, 0.85)' : '#FFFFFF';
     const cardBorder = isDark ? 'rgba(148, 163, 184, 0.18)' : '#E5E7EB';
     const textPrimary = isDark ? '#F9FAFB' : '#111827';

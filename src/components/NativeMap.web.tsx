@@ -23,7 +23,7 @@ export default MapView;
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: isDark ? '#1F2937' : '#f3f4f6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,

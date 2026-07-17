@@ -6,14 +6,15 @@ import { Lock, Eye, EyeOff, Tag, CheckCircle2, Store, MapPin, Award, User, Mail,
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthBackground } from '../components/AuthBackground';
 import { Badge } from '../components/ui/badge';
-import { CURRENT_TERMS_VERSION, useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useReferral } from '../contexts/ReferralContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
 import { BlurView } from 'expo-blur';
+import {
+    LIMITS, MIN, clamp, formatReferralCode, formatSocialHandle,
+} from '../utils/inputLimits';
 
 const BUSINESS_CATEGORIES = [
     'Restaurante / Gastronomía',
@@ -93,7 +94,6 @@ export default function RegisterScreen({ navigation, route }: any) {
     const { signUpWithEmail, loginWithSocial, isProcessing } = useAuth();
     useReferral();
     const { show } = useToast();
-    const acceptTermsMutation = useMutation(api.users.acceptTerms);
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -164,8 +164,17 @@ export default function RegisterScreen({ navigation, route }: any) {
             show('Debes aceptar los Términos y Privacidad', 'error');
             return;
         }
-        if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
+        if (!formData.name.trim() || formData.name.trim().length < MIN.name || !formData.email.trim() || !formData.password.trim()) {
             show('Completa nombre, email y contraseña', 'error');
+            return;
+        }
+        if (formData.email.length > LIMITS.email) {
+            show('Email demasiado largo', 'error');
+            return;
+        }
+        if (accountType === 'business' && formData.businessAddress.trim()
+            && formData.businessAddress.trim().length < MIN.businessAddress) {
+            show(`Dirección: mínimo ${MIN.businessAddress} caracteres`, 'error');
             return;
         }
         if (formData.password !== formData.confirmPassword) {
@@ -194,15 +203,6 @@ export default function RegisterScreen({ navigation, route }: any) {
 
             const result = await signUpWithEmail(signupInput);
 
-            // Mark T&C acceptance for the newly-created user (pre-verification) so it won't block later.
-            if (formData.acceptTerms) {
-                // Use backend mutation directly since AuthContext user might not be synced yet
-                await acceptTermsMutation({
-                    id: result.user.id as any,
-                    version: CURRENT_TERMS_VERSION
-                });
-            }
-
             // Referral attribution: store pending code and redeem after auth is established.
             if (formData.referralCode) {
                 await AsyncStorage.setItem(
@@ -211,10 +211,10 @@ export default function RegisterScreen({ navigation, route }: any) {
                 );
             }
 
-            navigation.navigate('Verification', {
-                email: result.user.email,
-                accountType,
-                isSignup: true
+            // ponytail: email signup ya autentica — ir directo a KYC (igual que social)
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'KYC', params: { accountType: accountType || 'consumer' } }],
             });
 
         } catch (error: any) {
@@ -231,6 +231,9 @@ export default function RegisterScreen({ navigation, route }: any) {
                     accountType,
                     isSignup: true
                 });
+            } else if (errorMessage.includes('Si ya tienes una cuenta')) {
+                show('Este correo ya está registrado. Usa Iniciar sesión con tu contraseña.', 'error');
+                navigation.navigate('Login', { email: formData.email.trim() });
             } else {
                 show(errorMessage || 'Error al registrarse', 'error');
             }
@@ -293,75 +296,24 @@ export default function RegisterScreen({ navigation, route }: any) {
         );
     };
 
-    // Modal Render
-    function renderCategoryModal() {
-        const categories = accountType === 'business' ? BUSINESS_CATEGORIES : INFLUENCER_CATEGORIES;
-
-        return (
-            <Modal
-                visible={showCategoryModal}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowCategoryModal(false)}
-            >
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShowCategoryModal(false)}
-                >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Selecciona una categoría</Text>
-                            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-                                <X size={24} color={isDark ? "#D1D5DB" : "#4B5563"} />
-                            </TouchableOpacity>
-                        </View>
-                        <FlatList
-                            data={categories}
-                            keyExtractor={(item) => item}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={[
-                                        styles.categoryItem,
-                                        formData.businessCategory === item && styles.categoryItemActive
-                                    ]}
-                                    onPress={() => {
-                                        setFormData(prev => ({ ...prev, businessCategory: item }));
-                                        setShowCategoryModal(false);
-                                    }}
-                                >
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[
-                                            styles.categoryText,
-                                            formData.businessCategory === item && styles.categoryTextActive
-                                        ]}>{item}</Text>
-                                    </View>
-                                    {formData.businessCategory === item && <CheckCircle2 size={18} color="#7C3AED" />}
-                                </TouchableOpacity>
-                            )}
-                            contentContainerStyle={{ paddingBottom: 20 }}
-                        />
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-        );
-    }
+    // Category modal is rendered inline below (shared for business / influencer).
 
     return (
         <AuthBackground>
-            {renderCategoryModal()}
-            <SafeAreaView style={styles.container}>
+            <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
                 <KeyboardAvoidingView
-                    style={styles.container}
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+                    style={{ flex: 1 }}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
                 >
                     <ScrollView
                         contentContainerStyle={styles.scrollContent}
                         showsVerticalScrollIndicator={false}
                         keyboardShouldPersistTaps="handled"
+                        bounces={false}
                     >
-                        <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
+                        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}>
+                            <BlurView intensity={isDark ? 40 : 70} tint={isDark ? 'dark' : 'light'} style={styles.card}>
 
                             {/* Header */}
                             <TouchableOpacity
@@ -447,7 +399,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     placeholder="Juan Pérez"
                                                     placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                     value={formData.name}
-                                                    onChangeText={t => setFormData({ ...formData, name: t })}
+                                                    onChangeText={t => setFormData({ ...formData, name: clamp(t, LIMITS.name) })}
+                                                    maxLength={LIMITS.name}
                                                 />
                                             </View>
                                         </View>
@@ -461,9 +414,10 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     placeholder="tu@email.com"
                                                     placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                     value={formData.email}
-                                                    onChangeText={t => setFormData({ ...formData, email: t })}
+                                                    onChangeText={t => setFormData({ ...formData, email: clamp(t.trim().toLowerCase(), LIMITS.email) })}
                                                     keyboardType="email-address"
                                                     autoCapitalize="none"
+                                                    maxLength={LIMITS.email}
                                                 />
                                             </View>
                                         </View>
@@ -481,7 +435,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                     secureTextEntry={!showPassword}
                                                     value={formData.password}
-                                                    onChangeText={t => setFormData({ ...formData, password: t })}
+                                                    onChangeText={t => setFormData({ ...formData, password: clamp(t, LIMITS.password) })}
+                                                    maxLength={LIMITS.password}
                                                 />
                                                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                                                     {showPassword ? <EyeOff size={20} color="#9CA3AF" /> : <Eye size={20} color="#9CA3AF" />}
@@ -512,7 +467,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                     secureTextEntry={!showConfirmPassword}
                                                     value={formData.confirmPassword}
-                                                    onChangeText={t => setFormData({ ...formData, confirmPassword: t })}
+                                                    onChangeText={t => setFormData({ ...formData, confirmPassword: clamp(t, LIMITS.password) })}
+                                                    maxLength={LIMITS.password}
                                                 />
                                                 <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
                                                     {showConfirmPassword ? <EyeOff size={20} color="#9CA3AF" /> : <Eye size={20} color="#9CA3AF" />}
@@ -527,15 +483,16 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             <Text style={styles.label}>Código de referido (Opcional)</Text>
                                             <Text style={{ fontSize: 10, color: isDark ? '#C4B5FD' : '#7C3AED', fontWeight: 'bold' }}>¡Gana puntos extra!</Text>
                                         </View>
-                                        <View style={[styles.inputWrapper, { borderColor: formData.referralCode ? '#7C3AED' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referralCode ? (isDark ? '#2E1065' : '#F5F3FF') : (isDark ? '#374151' : '#fff') }]}>
+                                        <View style={[styles.inputWrapper, { borderColor: formData.referralCode ? '#7C3AED' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referralCode ? (isDark ? '#2E1065' : '#FAFAFA') : (isDark ? '#374151' : '#fff') }]}>
                                             <Tag size={20} color={formData.referralCode ? '#7C3AED' : '#9CA3AF'} style={styles.icon} />
                                             <TextInput
                                                 style={[styles.input, { color: formData.referralCode ? '#7C3AED' : (isDark ? '#F9FAFB' : '#111827'), fontWeight: formData.referralCode ? '600' : '400' }]}
                                                 placeholder="Ej: RAMGOS-JUAN"
                                                 placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                 value={formData.referralCode}
-                                                onChangeText={t => setFormData({ ...formData, referralCode: t.toUpperCase() })}
+                                                onChangeText={t => setFormData({ ...formData, referralCode: formatReferralCode(t) })}
                                                 autoCapitalize="characters"
+                                                maxLength={LIMITS.referralCode}
                                             />
                                             {formData.referralCode.length > 0 && <CheckCircle2 size={16} color="#7C3AED" />}
                                         </View>
@@ -554,7 +511,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                             placeholder="Mi Negocio"
                                                             placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                             value={formData.businessName}
-                                                            onChangeText={t => setFormData({ ...formData, businessName: t })}
+                                                            onChangeText={t => setFormData({ ...formData, businessName: clamp(t, LIMITS.businessName) })}
+                                                            maxLength={LIMITS.businessName}
                                                         />
                                                     </View>
                                                 </View>
@@ -565,10 +523,11 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                         <MapPin size={20} color="#9CA3AF" style={styles.icon} />
                                                         <TextInput
                                                             style={styles.input}
-                                                            placeholder="Calle 123"
+                                                            placeholder="Calle 123, Brooklyn, NY"
                                                             placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                             value={formData.businessAddress}
-                                                            onChangeText={t => setFormData({ ...formData, businessAddress: t })}
+                                                            onChangeText={t => setFormData({ ...formData, businessAddress: clamp(t, LIMITS.businessAddress) })}
+                                                            maxLength={LIMITS.businessAddress}
                                                         />
                                                     </View>
                                                 </View>
@@ -605,8 +564,10 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                         style={styles.input}
                                                         placeholder="@usuario"
                                                         placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                                        value={formData.businessName} // Reusing field for simplicity or add new one
-                                                        onChangeText={t => setFormData({ ...formData, businessName: t })}
+                                                        value={formData.businessName}
+                                                        onChangeText={t => setFormData({ ...formData, businessName: formatSocialHandle(t) })}
+                                                        autoCapitalize="none"
+                                                        maxLength={LIMITS.socialHandle}
                                                     />
                                                 </View>
                                             </View>
@@ -717,12 +678,51 @@ export default function RegisterScreen({ navigation, route }: any) {
                                     <Text style={styles.registerLink}>Inicia sesión</Text>
                                 </TouchableOpacity>
                             </View>
-
+                            </BlurView>
                         </Animated.View>
                     </ScrollView>
                 </KeyboardAvoidingView>
-            </SafeAreaView >
-        </AuthBackground >
+            </SafeAreaView>
+
+            {/* Category Modal */}
+            <Modal visible={showCategoryModal} transparent animationType="fade">
+                <BlurView intensity={30} tint="dark" style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Selecciona una categoría</Text>
+                            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                                <X size={24} color={isDark ? "#D1D5DB" : "#4B5563"} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={accountType === 'business' ? BUSINESS_CATEGORIES : INFLUENCER_CATEGORIES}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.categoryItem,
+                                        formData.businessCategory === item && styles.categoryItemActive
+                                    ]}
+                                    onPress={() => {
+                                        setFormData(prev => ({ ...prev, businessCategory: item }));
+                                        setShowCategoryModal(false);
+                                    }}
+                                >
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[
+                                            styles.categoryText,
+                                            formData.businessCategory === item && styles.categoryTextActive
+                                        ]}>{item}</Text>
+                                    </View>
+                                    {formData.businessCategory === item && <CheckCircle2 size={18} color="#7C3AED" />}
+                                </TouchableOpacity>
+                            )}
+                            contentContainerStyle={{ paddingBottom: 20 }}
+                        />
+                    </View>
+                </BlurView>
+            </Modal>
+        </AuthBackground>
     );
 
 }
@@ -756,22 +756,25 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         card: {
             width: '100%',
             maxWidth: maxCardWidth,
-            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.8)',
-            borderRadius: isCompact ? 18 : 24,
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255, 255, 255, 0.55)',
+            borderRadius: isCompact ? 24 : 32,
             padding: cardPadding,
             alignSelf: 'center',
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
+            borderWidth: 1.5,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.6)',
+            overflow: 'hidden',
             ...Platform.select({
                 web: {
-                    boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0 10px 20px rgba(139, 92, 246, 0.1)',
+                    boxShadow: isDark ? '0 20px 40px rgba(0, 0, 0, 0.5)' : '0 20px 40px rgba(139, 92, 246, 0.15)',
+                    backdropFilter: 'blur(24px)',
+                    WebkitBackdropFilter: 'blur(24px)',
                 } as any,
                 default: {
                     shadowColor: isDark ? '#000' : '#8B5CF6',
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: isDark ? 0.3 : 0.1,
-                    shadowRadius: 20,
-                    elevation: 10,
+                    shadowOffset: { width: 0, height: 12 },
+                    shadowOpacity: isDark ? 0.4 : 0.15,
+                    shadowRadius: 24,
+                    elevation: 12,
                 },
             }),
         },
@@ -786,7 +789,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         typeBtn: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? '#374151' : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
             borderRadius: 16,
             padding: isCompact ? 12 : 16,
             marginBottom: 12,
@@ -810,10 +813,10 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         inputWrapper: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? '#374151' : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: isDark ? '#4B5563' : '#E5E7EB',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
             height: isCompact ? 44 : 48,
             paddingHorizontal: 12,
             minWidth: 0,
@@ -839,11 +842,11 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         legalLink: { color: '#7C3AED', fontWeight: 'bold', textDecorationLine: 'underline' },
 
         divider: { flexDirection: 'row', alignItems: 'center', marginVertical: isCompact ? 16 : 24 },
-        line: { flex: 1, height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB' },
+        line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
         orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
 
         socialRow: { flexDirection: 'row', gap: 12, justifyContent: 'center' },
-        socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
+        socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', justifyContent: 'center', alignItems: 'center' },
 
         footer: { flexDirection: 'row', justifyContent: 'center', marginTop: isCompact ? 16 : 24, flexWrap: 'wrap' },
         footerText: { color: isDark ? '#9CA3AF' : '#6B7280' },
@@ -855,21 +858,33 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         // Modal
         modalOverlay: {
             flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(15,23,42,0.3)',
             justifyContent: 'center',
             alignItems: 'center',
-            padding: 20
+            padding: 20,
+            ...Platform.select({
+                web: {
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                } as any,
+            }),
         },
         modalContent: {
             width: '100%',
             maxWidth: 400,
             maxHeight: '70%',
-            backgroundColor: isDark ? '#1F2937' : '#fff',
-            borderRadius: 20,
+            backgroundColor: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)',
+            borderRadius: 24,
             padding: 20,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.5)',
             ...Platform.select({
-                web: { boxShadow: '0 10px 25px rgba(0,0,0,0.2)' },
-                default: { elevation: 5 }
+                web: { 
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                } as any,
+                default: { elevation: 8 }
             })
         },
         modalHeader: {
@@ -887,13 +902,13 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             paddingVertical: 14,
             paddingHorizontal: 12,
             borderBottomWidth: 1,
-            borderBottomColor: isDark ? '#374151' : '#F3F4F6',
+            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center'
         },
         categoryItemActive: {
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#FAFAFA',
             borderRadius: 8,
             borderBottomWidth: 0
         },

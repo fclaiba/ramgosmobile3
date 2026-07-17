@@ -86,11 +86,21 @@ export default function GamesScreen() {
         if (!ARCADE_REWARD_GAMES.has(gameId)) {
             return;
         }
+        const coins = Math.floor(score / 5);
+        if (coins > 0) addGameCoins(coins);
         const outcome = registerArcadeReward(gameId, score);
         if (outcome.status === 'awarded') {
-            show(outcome.message, 'success');
+            show(
+                coins > 0
+                    ? `${outcome.message} (+${coins} monedas)`
+                    : outcome.message,
+                'success',
+            );
         } else if (outcome.status !== 'error') {
-            show(outcome.message, 'info');
+            show(
+                coins > 0 ? `+${coins} monedas. ${outcome.message}` : outcome.message,
+                'info',
+            );
         }
     };
 
@@ -238,7 +248,7 @@ export default function GamesScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     },
     content: {
         padding: 16,

@@ -128,7 +128,7 @@ export default function CartScreen({ navigation }: any) {
                             <Text style={styles.emptyTip}>• Usa el mapa para ofertas cercanas</Text>
                             <Text style={styles.emptyTip}>• Guarda favoritos para comprar luego</Text>
                         </View>
-                        <Button onPress={() => navigation.navigate('Home')} style={styles.emptyCta}>
+                        <Button onPress={() => navigation.navigate('Marketplace')} style={styles.emptyCta}>
                             <Text style={{ color: '#fff', fontWeight: '700' }}>Explorar Tienda</Text>
                         </Button>
                     </View>
@@ -312,15 +312,15 @@ export default function CartScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#111827' : '#f9f9f9' },
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
     emptyCard: {
         width: '100%',
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         padding: 20,
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         alignItems: 'center',
         gap: 8,
     },
@@ -331,27 +331,27 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     emptyTip: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
     emptyCta: { marginTop: 12, width: '100%' },
     sectionTitle: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 12, marginTop: 8 },
-    itemCard: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 12, borderRadius: 12, gap: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    itemCard: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 12, borderRadius: 12, gap: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
     itemImage: { width: 80, height: 80, borderRadius: 8, backgroundColor: isDark ? '#374151' : '#eee' },
     itemInfo: { flex: 1, justifyContent: 'space-between' },
     itemName: { fontWeight: '600', fontSize: 14, color: isDark ? '#F9FAFB' : '#000' },
     itemLocation: { fontSize: 12, color: '#888' },
     itemFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    qtyContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? '#374151' : '#f3f4f6', borderRadius: 6, padding: 2 },
+    qtyContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 6, padding: 2 },
     qtyBtn: { padding: 4 },
     qtyText: { fontWeight: 'bold', minWidth: 20, textAlign: 'center', color: isDark ? '#F9FAFB' : '#000' },
     itemPrice: { fontWeight: 'bold', fontSize: 16, color: isDark ? '#F9FAFB' : '#000' },
-    discountCard: { marginTop: 20, padding: 16, backgroundColor: isDark ? '#312E81' : '#f5f3ff', borderColor: isDark ? '#4338CA' : '#ddd6fe', borderWidth: 1 },
-    discountOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: isDark ? '#374151' : '#fff', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#ddd' },
+    discountCard: { marginTop: 20, padding: 16, backgroundColor: isDark ? '#312E81' : '#FAFAFA', borderColor: isDark ? '#4338CA' : '#ddd6fe', borderWidth: 1 },
+    discountOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#ddd' },
     discountSelected: { backgroundColor: '#7c3aed', borderColor: '#7c3aed' },
     discountText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#000' },
     discountSelectedText: { color: '#fff' },
-    shippingCard: { marginTop: 20, backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', gap: 12 },
+    shippingCard: { marginTop: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', gap: 12 },
     shippingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     shippingTitle: { fontSize: 15, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     shippingSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
     shippingOptionsRow: { gap: 12 },
-    shippingOption: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', minWidth: 130 },
+    shippingOption: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', minWidth: 130 },
     shippingOptionActive: { backgroundColor: isDark ? '#111827' : '#111827', borderColor: isDark ? '#4B5563' : '#111827' },
     shippingOptionLabel: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
     shippingOptionLabelActive: { color: '#FFFFFF' },
@@ -359,9 +359,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     shippingOptionEta: { fontSize: 11, color: '#6B7280', marginTop: 2 },
     addressForm: { gap: 10 },
     addressLabel: { fontSize: 12, fontWeight: '600', color: isDark ? '#F9FAFB' : '#374151' },
-    addressInput: { backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: isDark ? '#4B5563' : '#E5E7EB', marginTop: 4, color: isDark ? '#F9FAFB' : '#000' },
+    addressInput: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', marginTop: 4, color: isDark ? '#F9FAFB' : '#000' },
     addressRow: { flexDirection: 'row', gap: 12 },
-    summaryContainer: { marginTop: 20, backgroundColor: isDark ? '#1F2937' : '#fff', padding: 16, borderRadius: 12 },
+    summaryContainer: { marginTop: 20, backgroundColor: isDark ? '#09090B' : '#FAFAFA', padding: 16, borderRadius: 12 },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
     summaryLabel: { color: isDark ? '#9CA3AF' : '#666' },
     summaryValue: { fontWeight: '600', color: isDark ? '#F9FAFB' : '#000' },
@@ -375,9 +375,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         bottom: 0,
         padding: 16,
         paddingBottom: 24,
-        backgroundColor: isDark ? '#111827' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopWidth: 1,
-        borderTopColor: isDark ? '#374151' : '#E5E7EB',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',

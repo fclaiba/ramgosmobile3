@@ -102,10 +102,30 @@ export const addToCart = mutation({
                 | 'event'
                 | 'bono'
                 | undefined;
+            let image = listing.image as string | undefined;
+            if (image && !image.startsWith('http') && !image.startsWith('blob:') && !image.startsWith('data:')) {
+                try {
+                    const url = await ctx.storage.getUrl(image as any);
+                    if (url) image = url;
+                } catch {
+                    // keep raw id
+                }
+            }
+            if (!image && Array.isArray(listing.gallery) && listing.gallery[0]) {
+                const g0 = listing.gallery[0];
+                if (String(g0).startsWith('http')) image = String(g0);
+                else {
+                    try {
+                        image = (await ctx.storage.getUrl(g0 as any)) || String(g0);
+                    } catch {
+                        image = String(g0);
+                    }
+                }
+            }
             snapshot = {
                 title: listing.title,
                 price: listing.price,
-                image: listing.image,
+                image,
                 sellerId: listing.sellerId,
                 type: listingType ?? 'product',
                 sellerName: listing.sellerName,

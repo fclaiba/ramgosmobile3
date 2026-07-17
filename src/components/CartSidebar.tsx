@@ -96,7 +96,14 @@ export default function CartSidebar() {
                             <Text style={styles.emptyTitle}>Tu carrito está vacío</Text>
                             <Text style={styles.emptyText}>Parece que aún no has añadido nada. {"\n"}¡Descubre productos locales y ofertas exclusivas!</Text>
                             
-                            <TouchableOpacity style={styles.shopBtnContainer} onPress={closeCart} activeOpacity={0.85}>
+                            <TouchableOpacity
+                                style={styles.shopBtnContainer}
+                                onPress={() => {
+                                    closeCart();
+                                    navigation.navigate('Marketplace');
+                                }}
+                                activeOpacity={0.85}
+                            >
                                 <LinearGradient
                                     colors={isDark ? ['#3B82F6', '#7C3AED'] : ['#2563EB', '#6D28D9']}
                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
@@ -175,7 +182,7 @@ export default function CartSidebar() {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? '#111827' : '#FFFFFF',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         width: '85%', // Matching original SIDEBAR_WIDTH ratio roughly
         maxWidth: 400
     },
@@ -188,7 +195,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     headerTitle: { fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
     headerSubtitle: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
-    closeBtn: { padding: 8, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 20 },
+    closeBtn: { padding: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 20 },
 
     emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
     emptyIconContainer: { position: 'relative', marginBottom: 32 },
@@ -201,20 +208,20 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     shopBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
 
     // Items
-    itemRow: { flexDirection: 'row', backgroundColor: isDark ? '#1F2937' : '#fff', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#F3F4F6', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-    itemImage: { width: 70, height: 70, borderRadius: 12, backgroundColor: isDark ? '#374151' : '#F9FAFB' },
+    itemRow: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
+    itemImage: { width: 70, height: 70, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
     itemContent: { flex: 1, marginLeft: 12, justifyContent: 'space-between' },
     itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     itemName: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#1F2937', flex: 1, marginRight: 8 },
     deleteBtn: { padding: 4 },
     itemFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    qtyControl: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 8, padding: 2 },
+    qtyControl: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 8, padding: 2 },
     qtyBtn: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderRadius: 6, backgroundColor: isDark ? '#4B5563' : '#fff' },
     qtyText: { fontSize: 13, fontWeight: '600', paddingHorizontal: 8, color: isDark ? '#F9FAFB' : '#000' },
     priceText: { fontSize: 15, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
 
     // Footer
-    footer: { padding: 24, paddingBottom: 34, backgroundColor: isDark ? '#1F2937' : '#fff', borderTopWidth: 1, borderTopColor: isDark ? '#374151' : '#F3F4F6' },
+    footer: { padding: 24, paddingBottom: 34, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     summaryLabel: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' },
     summaryValue: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#1F2937' },

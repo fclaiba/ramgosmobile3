@@ -165,12 +165,21 @@ export const getDisputeMessages = query({
         orderId: v.string(),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
+        let actor;
+        try {
+            actor = await requireActor(ctx, (args as any).sessionToken);
+        } catch {
+            return [];
+        }
         const orderId = ctx.db.normalizeId("orders", args.orderId);
-        if (!orderId) throw new Error("Orden no encontrada");
+        if (!orderId) return [];
         const order = await ctx.db.get(orderId);
-        if (!order) throw new Error("Orden no encontrada");
-        await assertOrderParticipantOrSupport(ctx, order, actor.idString);
+        if (!order) return [];
+        try {
+            await assertOrderParticipantOrSupport(ctx, order, actor.idString);
+        } catch {
+            return [];
+        }
 
         return await ctx.db
             .query("disputeMessages")

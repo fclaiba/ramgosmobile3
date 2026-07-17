@@ -258,7 +258,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 2,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     cardHeader: {
         flexDirection: 'row',
@@ -312,7 +312,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'space-around',
         alignItems: 'center',
         borderTopWidth: 1,
-        borderTopColor: isDark ? '#374151' : '#F3F4F6',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
         paddingTop: 16,
     },
     statItem: {
@@ -331,7 +331,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     verticalDivider: {
         width: 1,
         height: 30,
-        backgroundColor: isDark ? '#374151' : '#F3F4F6',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     modalOverlay: {
         flex: 1,
@@ -340,7 +340,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 24,
     },
     modalContent: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 24,
         padding: 24,
     },
@@ -358,7 +358,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         marginBottom: 8,
     },
     input: {
-        backgroundColor: isDark ? '#374151' : '#F9FAFB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         borderRadius: 12,
         padding: 12,
         color: isDark ? '#F9FAFB' : '#111827',
@@ -373,7 +373,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flex: 1,
         padding: 14,
         borderRadius: 12,
-        backgroundColor: isDark ? '#374151' : '#E5E7EB',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         alignItems: 'center',
     },
     cancelText: {

@@ -41,7 +41,7 @@ function Skeleton({
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     skeleton: {
-        backgroundColor: isDark ? "#374151" : "#D1D5DB", // muted
+        backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', // muted
         borderRadius: 4,
     }
 })

@@ -17,6 +17,7 @@ export default defineSchema({
         subscriptionTier: v.optional(v.union(v.literal('free'), v.literal('pro'), v.literal('business'))),
         balance: v.optional(v.number()), // Wallet balance in USD
         isTest: v.optional(v.boolean()), // Flag for test users able to be impersonated
+        isBanned: v.optional(v.boolean()), // Phase 8b
         termsAcceptedVersion: v.optional(v.number()), // Version of T&C accepted
 
         // PHASE 1 ADDITIONS - User Profile Enhancement
@@ -150,7 +151,9 @@ export default defineSchema({
         // Specific Fields (Events/Bonos)
         eventDate: v.optional(v.string()), // ISO
         eventTime: v.optional(v.string()),
-        validUntil: v.optional(v.string()), // ISO for bonos
+        validUntil: v.optional(v.string()), // ISO for bonos (display / legacy absolute)
+        /** Days the purchased bono stays redeemable from purchase time. Default 7. */
+        validityDays: v.optional(v.number()),
         // Event-only: total capacity and atomically-decremented soldCount.
         // We update soldCount transactionally inside `events.holdEventCapacity`.
         eventCapacity: v.optional(v.number()),
@@ -196,6 +199,8 @@ export default defineSchema({
             title: v.string(),
             quantity: v.number(),
             price: v.number(),
+            /** Product photo at purchase time (URL or storage id). */
+            image: v.optional(v.string()),
         })),
         total: v.number(),
         currency: v.literal('USD'),
@@ -581,6 +586,7 @@ export default defineSchema({
         .index('by_status', ['status']),
 
     // Bono redemptions — emitted at payment success, redeemed at the business POS.
+    // Economics: buyer pays `paidAmount`, receives `creditTotal` to spend at the business.
     bonoRedemptions: defineTable({
         bonoCode: v.string(), // unique human-friendly code (UUID + check digit)
         listingId: v.string(),
@@ -589,6 +595,16 @@ export default defineSchema({
         paymentId: v.optional(v.string()),
         orderId: v.optional(v.string()),
         validUntil: v.optional(v.string()), // ISO copy from listing
+        /** What the buyer paid for the bono (e.g. 50). */
+        paidAmount: v.optional(v.number()),
+        /** Face value / credit at the business (e.g. 100). */
+        creditTotal: v.optional(v.number()),
+        /** Remaining credit (0 after full redeem). */
+        creditRemaining: v.optional(v.number()),
+        /** Total allowed redemptions (default 1). */
+        usesTotal: v.optional(v.number()),
+        /** Remaining redemptions. */
+        usesRemaining: v.optional(v.number()),
         status: v.union(
             v.literal('issued'),
             v.literal('redeemed'),

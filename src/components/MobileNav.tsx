@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Home, ShoppingBag, Users, LayoutDashboard, MapPin } from 'lucide-react-native';
+import { Home, ShoppingBag, Users, LayoutDashboard } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Brand } from '../theme/brand';
+import { colors, Radius, Touch } from '../theme/tokens';
+import { ChromeGlass } from './ui/ChromeGlass';
 
 export type NavSection = 'home' | 'marketplace' | 'social' | 'dashboard';
 
-export const NAV_CONTENT_HEIGHT = 65; // Height of the nav content excluding safe area
+export const NAV_CONTENT_HEIGHT = 65;
 
 interface MobileNavProps {
     activeSection: NavSection;
@@ -21,21 +24,26 @@ const navItems: { id: NavSection; icon: any; label: string }[] = [
     { id: 'social', icon: Users, label: 'Social' },
 ];
 
-const NavItem = ({ item, isActive, onPress, isDark, styles }: { item: any, isActive: boolean, onPress: () => void, isDark: boolean, styles: any }) => {
-    // Icon animation only (color/scale)
-    const activeColor = '#007AFF';
-    const inactiveColor = isDark ? '#9CA3AF' : '#999999';
-
-    // We can still subtly animate the icon scale
+const NavItem = ({
+    item,
+    isActive,
+    onPress,
+    c,
+    styles,
+}: {
+    item: any;
+    isActive: boolean;
+    onPress: () => void;
+    c: ReturnType<typeof colors>;
+    styles: any;
+}) => {
+    const activeColor = Brand.primary;
+    const inactiveColor = c.textMuted;
     const scale = useSharedValue(1);
     useEffect(() => {
-        scale.value = withSpring(isActive ? 1.1 : 1, { damping: 15 });
-    }, [isActive]);
-
-    const iconWrapperStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }]
-    }));
-
+        scale.value = withSpring(isActive ? 1.08 : 1, { damping: 16 });
+    }, [isActive, scale]);
+    const iconWrapperStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
     const Icon = item.icon;
 
     return (
@@ -44,15 +52,20 @@ const NavItem = ({ item, isActive, onPress, isDark, styles }: { item: any, isAct
             style={styles.navItem}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isActive }}
+            accessibilityLabel={item.label}
         >
-            <Animated.View style={[styles.iconWrapper, iconWrapperStyle]}>
-                <Icon
-                    size={24}
-                    color={isActive ? activeColor : inactiveColor}
-                    strokeWidth={isActive ? 2.5 : 2}
-                />
+            <Animated.View style={[styles.iconWrapper, isActive && styles.iconWrapperActive, iconWrapperStyle]}>
+                <Icon size={22} color={isActive ? activeColor : inactiveColor} strokeWidth={isActive ? 2.5 : 2} />
             </Animated.View>
-            <Text style={[styles.label, isActive && styles.activeLabel, { color: isActive ? activeColor : inactiveColor }]}>
+            <Text
+                style={[
+                    styles.label,
+                    { color: isActive ? activeColor : inactiveColor },
+                    isActive && styles.activeLabel,
+                ]}
+            >
                 {item.label}
             </Text>
         </TouchableOpacity>
@@ -64,28 +77,32 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
     const { colorScheme } = useTheme();
     const insets = useSafeAreaInsets();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const c = colors(isDark);
+    const styles = getStyles(isDark, c);
 
-    const showDashboard = isAuthenticated && user && ['influencer', 'business', 'admin'].includes(user.role);
-
+    const showDashboard =
+        isAuthenticated && user && ['influencer', 'business', 'admin'].includes(user.role);
     const allItems = useMemo(() => {
         const items = [...navItems];
-        if (showDashboard) {
-            items.push({ id: 'dashboard', icon: LayoutDashboard, label: 'Panel' });
-        }
+        if (showDashboard) items.push({ id: 'dashboard', icon: LayoutDashboard, label: 'Panel' });
         return items;
     }, [showDashboard]);
 
     return (
-        <View style={[
-            styles.container,
-            {
-                backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                paddingBottom: Platform.OS === 'ios' ? Math.max(insets.bottom, 20) : Math.max(insets.bottom, 10)
-            }
-        ]}>
-            <View style={[styles.borderTop, { backgroundColor: isDark ? '#374151' : '#E5E5E5' }]} />
-
+        <View
+            style={[
+                styles.container,
+                {
+                    paddingBottom:
+                        Platform.OS === 'ios'
+                            ? Math.max(insets.bottom, 16)
+                            : Math.max(insets.bottom, 10),
+                },
+            ]}
+            accessibilityRole="tablist"
+        >
+            <ChromeGlass edge="top" />
+            <View style={[styles.hairline, { backgroundColor: c.chromeBorder }]} />
             <View style={styles.navContent}>
                 {allItems.map((item) => (
                     <NavItem
@@ -93,7 +110,7 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
                         item={item}
                         isActive={activeSection === item.id}
                         onPress={() => onSectionChange(item.id as NavSection)}
-                        isDark={isDark}
+                        c={c}
                         styles={styles}
                     />
                 ))}
@@ -102,54 +119,58 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 10,
-        zIndex: 1000,
-    },
-    borderTop: {
-        height: 1,
-        opacity: 0.2,
-        marginBottom: 8,
-    },
-    navContent: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        height: NAV_CONTENT_HEIGHT,
-        width: '100%',
-    },
-    navItem: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 8,
-    },
-    iconWrapper: {
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 20,
-        marginBottom: 4,
-    },
-    label: {
-        fontSize: 10,
-        fontWeight: '500',
-        marginTop: 2,
-    },
-    activeLabel: {
-        fontWeight: '700',
-    },
-});
+const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
+    StyleSheet.create({
+        container: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            borderTopLeftRadius: Radius['2xl'],
+            borderTopRightRadius: Radius['2xl'],
+            overflow: 'hidden',
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderColor: c.chromeBorder,
+            backgroundColor: 'transparent',
+            zIndex: 1000,
+            ...Platform.select({
+                web: { boxShadow: isDark ? '0 -10px 32px rgba(0,0,0,0.45)' : '0 -10px 32px rgba(24,24,27,0.10)' } as any,
+                default: {
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: -6 },
+                    shadowOpacity: isDark ? 0.4 : 0.12,
+                    shadowRadius: 18,
+                    elevation: 16,
+                },
+            }),
+        },
+        hairline: { height: StyleSheet.hairlineWidth, opacity: 1 },
+        navContent: {
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            alignItems: 'center',
+            paddingHorizontal: 8,
+            height: NAV_CONTENT_HEIGHT,
+            width: '100%',
+        },
+        navItem: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: Touch.min,
+            paddingVertical: 6,
+        },
+        iconWrapper: {
+            width: 40,
+            height: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: Radius.md,
+            marginBottom: 2,
+        },
+        iconWrapperActive: {
+            backgroundColor: c.primaryMuted,
+        },
+        label: { fontSize: 10, fontWeight: '600' },
+        activeLabel: { fontWeight: '800' },
+    });

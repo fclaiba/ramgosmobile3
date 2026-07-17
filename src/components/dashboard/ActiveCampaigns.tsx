@@ -60,7 +60,7 @@ export function ActiveCampaigns({
                             style={{
                                 marginBottom: 12,
                                 padding: 12,
-                                backgroundColor: isDark ? '#1F2937' : '#fff',
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
                                 borderWidth: 1,
                                 borderColor: isDark ? '#F59E0B' : '#FCD34D',
                             }}
@@ -106,7 +106,7 @@ export function ActiveCampaigns({
                         Esperando respuesta
                     </Text>
                     {myProposals.map((c: any) => (
-                        <Card key={c._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
+                        <Card key={c._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }}>
                             <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
                                 {c.businessName}
                             </Text>
@@ -130,8 +130,8 @@ export function ActiveCampaigns({
                         padding: 14,
                         borderRadius: 14,
                         borderWidth: 1,
-                        borderColor: isDark ? '#374151' : '#E5E7EB',
-                        backgroundColor: isDark ? '#111827' : '#fff',
+                        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
                     }}
                 >
                     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
@@ -161,7 +161,7 @@ export function ActiveCampaigns({
                 </Card>
             ) : (
                 activeCampaigns.map((camp: any) => (
-                    <Card key={camp._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? '#1F2937' : '#fff' }}>
+                    <Card key={camp._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }}>
                         <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
                             {camp.businessName}
                         </Text>

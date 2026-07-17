@@ -14,8 +14,8 @@ export function DailyChallenges() {
     // Animation for success claim could be added here
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
-    const handleClaimDaily = () => {
-        const success = claimDailyReward();
+    const handleClaimDaily = async () => {
+        const success = await claimDailyReward();
         if (success) {
             show('¡Recompensa reclamada! +10 puntos', 'success');
             animateSuccess();
@@ -24,8 +24,8 @@ export function DailyChallenges() {
         }
     };
 
-    const handleClaimChallenge = (challengeId: string, title: string, reward: number) => {
-        const success = claimChallenge(challengeId);
+    const handleClaimChallenge = async (challengeId: string, title: string, reward: number) => {
+        const success = await claimChallenge(challengeId);
         if (success) {
             show(`¡Desafío completado! +${reward} puntos`, 'success');
             animateSuccess();
@@ -255,27 +255,27 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     cardMiniText: { fontSize: 10, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
 
     claimBtn: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 12, overflow: 'hidden' },
-    claimBtnDisabled: { backgroundColor: isDark ? '#374151' : '#E5E7EB' },
+    claimBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     claimBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
     claimBtnTextDisabled: { color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', fontSize: 13 },
 
     section: {},
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    badge: { backgroundColor: isDark ? '#374151' : '#F3F4F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    badge: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     badgeText: { fontSize: 11, color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '600' },
 
-    challengeCard: { padding: 16, borderRadius: 16, borderWidth: 1, borderColor: isDark ? '#374151' : '#E5E7EB', backgroundColor: isDark ? '#1F2937' : '#fff', marginBottom: 12 },
+    challengeCard: { padding: 16, borderRadius: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginBottom: 12 },
     challengeIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
     challengeTitle: { fontSize: 13, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937' },
     challengeDesc: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 8 },
-    ptsBadge: { backgroundColor: isDark ? '#374151' : '#F3F4F6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    ptsBadge: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
     ptsText: { fontSize: 10, fontWeight: 'bold', color: isDark ? '#D1D5DB' : '#4B5563' },
 
     progressContainer: { marginTop: 4 },
     progressLabel: { fontSize: 10, color: '#9CA3AF' },
     progressValue: { fontSize: 10, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
-    progressBarBg: { height: 6, backgroundColor: isDark ? '#374151' : '#F3F4F6', borderRadius: 3, overflow: 'hidden' },
+    progressBarBg: { height: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 3, overflow: 'hidden' },
     progressBarFill: { height: '100%', borderRadius: 3 },
 
     miniClaimBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, marginTop: 12 },

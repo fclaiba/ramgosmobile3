@@ -588,7 +588,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
 const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f8fafc' },
     contentContainer: { padding: 16, paddingBottom: 48, gap: 16 },
-    sectionCard: { padding: 18, borderRadius: 18, backgroundColor: isDark ? '#1F2937' : '#fff', gap: 12 },
+    sectionCard: { padding: 18, borderRadius: 18, backgroundColor: isDark ? '#09090B' : '#FAFAFA', gap: 12 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
     sectionIcon: {
@@ -601,7 +601,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
     sectionSubtitle: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginTop: 2 },
-    buttonTextLight: { color: isDark ? '#1F2937' : '#fff', fontWeight: '600', fontSize: 14 },
+    buttonTextLight: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '600', fontSize: 14 },
     buttonTextDark: { color: '#111827', fontWeight: '600', fontSize: 14 },
     divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 8 },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -630,7 +630,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 999,
     },
-    branchToggleText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '700', fontSize: 12 },
+    branchToggleText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '700', fontSize: 12 },
     catalogSummary: { flexDirection: 'row', gap: 8 },
     catalogItem: {
         flexDirection: 'row',
@@ -651,9 +651,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 999,
     },
-    catalogToggleText: { color: isDark ? '#1F2937' : '#fff', fontWeight: '700', fontSize: 12 },
+    catalogToggleText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '700', fontSize: 12 },
     sheetContent: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         height: '90%',
@@ -675,7 +675,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         padding: 24,
     },
     modalCard: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 20,
         padding: 20,
         gap: 12,
@@ -701,7 +701,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         borderTopColor: '#e2e8f0',
         paddingHorizontal: 24,
         paddingTop: 12,
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
 });

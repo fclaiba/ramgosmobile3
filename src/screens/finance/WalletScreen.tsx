@@ -115,7 +115,7 @@ export default function WalletScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#111827' : '#F9FAFB',
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         padding: 20,
     },
     header: {
@@ -156,7 +156,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         marginBottom: 24,
     },
     withdrawBtn: {
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(255,255,255,0.62)',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -170,11 +170,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         fontSize: 15,
     },
     secondaryCard: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 20,
         padding: 20,
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#E5E7EB',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     secondaryLabel: {
         color: isDark ? '#D1D5DB' : '#4B5563',
@@ -199,7 +199,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         marginBottom: 16,
     },
     txList: {
-        backgroundColor: isDark ? '#1F2937' : '#fff',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRadius: 16,
         padding: 8,
     },
@@ -214,7 +214,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 16,
         gap: 12,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? '#374151' : '#F3F4F6',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     iconBox: {
         width: 40,

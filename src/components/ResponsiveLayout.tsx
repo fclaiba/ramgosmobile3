@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../contexts/ThemeContext';
+import { atmosphere, colors } from '../theme/tokens';
 
 interface ResponsiveLayoutProps {
     children: React.ReactNode;
@@ -14,22 +16,26 @@ export function ResponsiveLayout({ children, sidebar, style, contentContainerSty
     const { isDesktop, isTablet, maxContainerWidth } = useResponsive();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-
+    const c = colors(isDark);
     const showSidebar = sidebar && isDesktop;
 
     return (
-        <View style={[styles.container, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }, style]}>
-            {showSidebar && (
-                <View style={styles.sidebarContainer}>
-                    {sidebar}
-                </View>
-            )}
+        <View style={[styles.container, { backgroundColor: c.bg }, style]}>
+            <LinearGradient
+                colors={atmosphere(isDark)}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+            />
+            {showSidebar ? <View style={styles.sidebarContainer}>{sidebar}</View> : null}
             <View style={styles.contentWrapper}>
-                <View style={[
-                    styles.mainContent,
-                    { maxWidth: isDesktop || isTablet ? maxContainerWidth : '100%' },
-                    contentContainerStyle
-                ]}>
+                <View
+                    style={[
+                        styles.mainContent,
+                        { maxWidth: isDesktop || isTablet ? maxContainerWidth : '100%' },
+                        contentContainerStyle,
+                    ]}
+                >
                     {children}
                 </View>
             </View>
@@ -38,23 +44,8 @@ export function ResponsiveLayout({ children, sidebar, style, contentContainerSty
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        flexDirection: 'row',
-        width: '100%',
-        height: '100%',
-    },
-    sidebarContainer: {
-        flexShrink: 0,
-        zIndex: 10,
-    },
-    contentWrapper: {
-        flex: 1,
-        alignItems: 'center', // Centers the main content horizontally
-        width: '100%',
-    },
-    mainContent: {
-        flex: 1,
-        width: '100%',
-    },
+    container: { flex: 1, flexDirection: 'row', width: '100%', height: '100%' },
+    sidebarContainer: { flexShrink: 0, zIndex: 10 },
+    contentWrapper: { flex: 1, alignItems: 'center', width: '100%' },
+    mainContent: { flex: 1, width: '100%' },
 });

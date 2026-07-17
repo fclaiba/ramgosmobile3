@@ -191,10 +191,10 @@ const getStyles = (isDark: any) => StyleSheet.create({
     claimedButton: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: isDark ? '#374151' : '#e5e7eb',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     claimText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
         fontSize: 14,
     },
@@ -209,7 +209,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         marginBottom: 8,
     },
     challengeItem: {
@@ -238,7 +238,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         flex: 1,
     },
     challengeTitle: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: '600',
         marginBottom: 4,
     },
@@ -284,6 +284,6 @@ const getStyles = (isDark: any) => StyleSheet.create({
         fontSize: 12,
     },
     claimableBtnText: {
-        color: isDark ? '#1F2937' : '#fff',
+        color: isDark ? '#09090B' : '#FAFAFA',
     },
 });

@@ -131,7 +131,12 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
         }
         setSubmitting(true);
         try {
-            await openDisputeMutation({ orderId: orderId as any, reason: selectedReason.code });
+            await openDisputeMutation({
+                orderId: orderId as any,
+                reason: selectedReason.code,
+                sessionToken,
+                userId: user.id,
+            });
             show('Disputa iniciada correctamente', 'success');
             navigation.replace('DisputeChat', { orderId });
         } catch (e: any) {
@@ -358,7 +363,7 @@ import { StyleSheet } from 'react-native';
 
 function getStyles(isDark: boolean, insets: any) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
-    const surface = isDark ? '#18181B' : '#FFFFFF';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
@@ -458,13 +463,13 @@ function getStyles(isDark: boolean, insets: any) {
         },
         reasonRowActive: {
             borderColor: primary,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.08)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.08)' : '#FAFAFA',
         },
         reasonIconWrap: {
             width: 44,
             height: 44,
             borderRadius: 14,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -518,14 +523,14 @@ function getStyles(isDark: boolean, insets: any) {
         footerBtnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
         footerBtnDanger: { backgroundColor: '#DC2626' },
         footerBtnDangerText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-        footerBtnDisabled: { backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+        footerBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
 
         emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
         emptyIconWrap: {
             width: 80,
             height: 80,
             borderRadius: 40,
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,

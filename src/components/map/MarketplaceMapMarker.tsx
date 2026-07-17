@@ -114,7 +114,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     justifyContent: 'flex-start',
   },
   pin: {
-    backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+    backgroundColor: isDark ? '#09090B' : '#FAFAFA',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000000',
@@ -124,7 +124,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     elevation: 5,
   },
   image: {
-    backgroundColor: isDark ? '#374151' : '#E5E7EB',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
   },
   triangle: {
     width: 0,

@@ -38,6 +38,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFavorites } from '../contexts/FavoritesContext';
+import { usePoints } from '../contexts/PointsContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
@@ -150,6 +151,7 @@ const normalizeItem = (raw: any) => {
         eventDate: raw.eventDate || raw.date,
         eventTime: raw.eventTime || raw.time,
         validUntil: raw.validUntil,
+        validityDays: raw.validityDays != null ? Number(raw.validityDays) : undefined,
     };
 };
 
@@ -180,6 +182,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const { addItem, openCart } = useCart();
     const { user } = useAuth();
     const { isFavorite, toggleFavorite } = useFavorites();
+    const { progressChallenge } = usePoints();
     const [quantity, setQuantity] = useState(1);
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -194,6 +197,11 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const scrollHandler = useAnimatedScrollHandler({
         onScroll: (event) => { scrollY.value = event.contentOffset.y; },
     });
+    const MainScrollView = Platform.OS === 'web' ? ScrollView : Animated.ScrollView;
+    const mainScrollProps =
+        Platform.OS === 'web'
+            ? { onScroll: (e: any) => { scrollY.value = e.nativeEvent.contentOffset.y; } }
+            : { onScroll: scrollHandler };
 
     useEffect(() => {
         if (item?.id) {
@@ -203,8 +211,9 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                 sessionId,
                 userId: user?.id ? (user.id as any) : undefined,
             }).catch(e => console.log("View record failed", e));
+            if (user?.id) void progressChallenge('daily_browse', 1);
         }
-    }, [item?.id, user]);
+    }, [item?.id, user?.id]);
 
     const sellerId = item?.seller?.id || item?.sellerId;
     const sellerProfile = useQuery(api.users.getUser, sellerId ? { id: sellerId as any } : "skip");
@@ -320,8 +329,8 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                 </View>
             </View>
 
-            <ScrollView
-                onScroll={scrollHandler}
+            <MainScrollView
+                {...mainScrollProps}
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 160 }}
@@ -333,6 +342,8 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                             horizontal
                             pagingEnabled
                             showsHorizontalScrollIndicator={false}
+                            scrollEventThrottle={16}
+                            onScroll={() => {}}
                             onMomentumScrollEnd={(e) => {
                                 const idx = Math.round(e.nativeEvent.contentOffset.x / width);
                                 setCurrentImageIndex(idx);
@@ -345,7 +356,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                             ))}
                         </ScrollView>
                     </Animated.View>
-                    <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FFFFFF']} style={styles.heroGradient} />
+                    <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FAFAFA']} style={styles.heroGradient} />
                     {item.gallery.length > 1 && (
                         <View style={styles.paginationRow}>
                             {item.gallery.map((_: any, index: number) => (
@@ -480,7 +491,18 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                         <View style={styles.infoCard}>
                             <Text style={styles.infoCardTitle}>Detalles del bono</Text>
                             {item.discountValue ? <InfoRow icon={Tag} label="Valor de consumo" value={`$${formatNumber(item.discountValue)}`} isDark={isDark} /> : null}
-                            {item.validUntil ? <InfoRow icon={Calendar} label="Válido hasta" value={formatDate(item.validUntil) || item.validUntil} isDark={isDark} /> : null}
+                            <InfoRow
+                                icon={Calendar}
+                                label="Vigencia"
+                                value={
+                                    item.validityDays
+                                        ? `${item.validityDays} día${item.validityDays === 1 ? '' : 's'} desde la compra`
+                                        : item.validUntil
+                                          ? formatDate(item.validUntil) || item.validUntil
+                                          : '7 días desde la compra'
+                                }
+                                isDark={isDark}
+                            />
                             <InfoRow icon={MapPin} label="Canje" value={item.locationName || 'Consultar al vendedor'} isDark={isDark} />
                         </View>
                     )}
@@ -598,7 +620,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                         <ReviewsList listingId={String(item.id)} onWriteReview={() => setIsReviewOpen(true)} />
                     </View>
                 </View>
-            </ScrollView>
+            </MainScrollView>
 
             {/* ── STICKY FOOTER: single action button ── */}
             <View style={styles.footer}>
@@ -669,7 +691,7 @@ function InfoRow({ icon: Icon, label, value, isDark }: { icon: any; label: strin
 function ShippingCard({ icon: Icon, title, subtitle, color, isDark }: { icon: any; title: string; subtitle: string; color: string; isDark: boolean }) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
-    const surface = isDark ? '#18181B' : '#F9FAFB';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const border = isDark ? '#27272A' : '#E5E7EB';
     return (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: border }}>
@@ -686,8 +708,8 @@ function ShippingCard({ icon: Icon, title, subtitle, color, isDark }: { icon: an
 
 // ─── Styles ──────────────────────────────────────────────
 function getStyles(isDark: boolean, insets: any) {
-    const bg = isDark ? '#09090B' : '#FFFFFF';
-    const surface = isDark ? '#18181B' : '#F9FAFB';
+    const bg = isDark ? '#09090B' : '#FAFAFA';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
@@ -742,7 +764,7 @@ function getStyles(isDark: boolean, insets: any) {
             width: '100%',
             height: HERO_HEIGHT,
             position: 'relative',
-            backgroundColor: isDark ? '#1F2937' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         },
         heroInner: {
             width: '100%',
@@ -780,7 +802,7 @@ function getStyles(isDark: boolean, insets: any) {
         },
         paginationDotActive: {
             width: 20,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'rgba(255,255,255,0.62)',
         },
         heroDiscountBadge: {
             position: 'absolute',
@@ -846,7 +868,7 @@ function getStyles(isDark: boolean, insets: any) {
         ratingBadge: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             paddingHorizontal: 10,
             paddingVertical: 6,
             borderRadius: 12,
@@ -1094,7 +1116,7 @@ function getStyles(isDark: boolean, insets: any) {
             height: '100%',
         },
         sellerAvatarPlaceholder: {
-            backgroundColor: isDark ? '#374151' : '#E5E7EB',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -1223,7 +1245,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: primary,
         },
         footerBtnSecondary: {
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         },
         footerBtnPrimaryText: {
             color: '#fff',

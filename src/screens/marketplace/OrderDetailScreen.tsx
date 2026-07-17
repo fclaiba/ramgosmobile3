@@ -222,11 +222,15 @@ export default function OrderDetailScreen() {
     };
 
     const handleDispute = () => {
-        navigation.navigate('Dispute', { orderId: order.id });
+        const disputed =
+            order?.escrowState === 'disputed' ||
+            order?.status === 'disputed' ||
+            order?.escrow?.state === 'disputed';
+        openEscrow(order.id, role, { phase: disputed ? 'status' : 'dispute_init' });
     };
 
     const handleOpenEscrow = () => {
-        openEscrow(order.id, role);
+        openEscrow(order.id, role, { phase: 'status' });
     };
 
     const getItemImage = (listingId?: string) => {
@@ -508,7 +512,7 @@ export default function OrderDetailScreen() {
 
 function getStyles(isDark: boolean, insets: any, width: number) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
-    const surface = isDark ? '#18181B' : '#FFFFFF';
+    const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
@@ -578,7 +582,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             borderWidth: 2,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? '#18181B' : '#fff',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         },
         heroStatus: { fontSize: 20, fontWeight: '800' },
         heroDate: { fontSize: 13, color: muted, marginTop: 4 },
@@ -608,7 +612,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             borderRadius: 18,
             borderWidth: 2,
             borderColor: isDark ? '#3F3F46' : '#E5E7EB',
-            backgroundColor: isDark ? '#27272A' : '#F3F4F6',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
@@ -705,7 +709,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 14,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.08)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.08)' : '#FAFAFA',
             borderRadius: 20,
             padding: 18,
             marginBottom: 16,
@@ -743,7 +747,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         },
         footerBtnPrimary: { backgroundColor: '#10B981' },
         footerBtnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-        footerBtnSecondary: { backgroundColor: isDark ? '#27272A' : '#F3F4F6', borderWidth: 1, borderColor: border },
+        footerBtnSecondary: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: border },
         footerBtnSecondaryText: { color: text, fontWeight: '700', fontSize: 15 },
     });
 }

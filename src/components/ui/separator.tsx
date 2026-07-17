@@ -38,12 +38,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     horizontal: {
         height: 1,
         width: "100%",
-        backgroundColor: isDark ? "#374151" : "#E5E7EB" // border-border
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' // border-border
     },
     vertical: {
         height: "100%",
         width: 1,
-        backgroundColor: isDark ? "#374151" : "#E5E7EB"
+        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)'
     }
 })
 

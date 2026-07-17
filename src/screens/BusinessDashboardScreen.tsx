@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Plus as PlusIcon,
@@ -65,6 +66,7 @@ const TABS: Array<{ id: DashboardTab; label: string }> = [
 ];
 
 import { formatCurrency, formatDateShort, getCouponStatusStyles } from "../utils/formatters";
+import { glassTokens, glassGradient } from "../utils/glass";
 
 export default function BusinessDashboardScreen({
   isTabMode,
@@ -75,7 +77,7 @@ export default function BusinessDashboardScreen({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-  const { user } = useAuth();
+  const { user, sessionToken } = useAuth();
   const { businessInfo, metrics, coupons, reviews } = useBusiness(user?.id);
   const {
     ensureWalletAccount,
@@ -138,8 +140,7 @@ export default function BusinessDashboardScreen({
     api.influencers.removeFromWhitelist,
   );
 
-  // Lookup by email or referralCode — used by the Invite modal so the
-  // business doesn't have to copy/paste a Convex id manually.
+  // Lookup by @username or referralCode — never by email.
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteLookupTerm, setInviteLookupTerm] = useState("");
   const [invitedInfluencerId, setInvitedInfluencerId] = useState<string | null>(
@@ -150,9 +151,15 @@ export default function BusinessDashboardScreen({
   const lookupResult = useQuery(
     api.campaigns.lookupInfluencer,
     user?.id && inviteLookupTerm.trim().length > 0
-      ? { emailOrCode: inviteLookupTerm }
+      ? { handleOrCode: inviteLookupTerm }
       : "skip",
   );
+
+  useEffect(() => {
+    if (lookupResult?._id) {
+      setInvitedInfluencerId(String(lookupResult._id));
+    }
+  }, [lookupResult]);
 
   const pendingProposalsFromInfluencers = useMemo(
     () =>
@@ -179,7 +186,7 @@ export default function BusinessDashboardScreen({
   const convexListings =
     useQuery(
       api.listings.getMyListings,
-      user?.id ? { sellerId: user.id } : "skip",
+      user?.id && sessionToken ? { sellerId: user.id, sessionToken } : "skip",
     ) || [];
 
   const handleInviteInfluencer = async () => {
@@ -472,6 +479,12 @@ export default function BusinessDashboardScreen({
         ) : undefined
       }
     >
+      <LinearGradient
+        colors={glassGradient(isDark)}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       <MobileHeader
         title="Panel de Negocio"
         subtitle="Gestión y métricas"
@@ -778,7 +791,7 @@ export default function BusinessDashboardScreen({
       {/* --- Invite Influencer Modal --- */}
       <Modal
         visible={inviteModalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setInviteModalVisible(false)}
       >
@@ -788,6 +801,16 @@ export default function BusinessDashboardScreen({
             { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 },
           ]}
         >
+          {Platform.OS !== "web" ? (
+            <BlurView
+              intensity={isDark ? 48 : 64}
+              tint={isDark ? "dark" : "light"}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.modalBlurWeb]} />
+          )}
+          <View style={styles.modalDim} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Invitar influencer</Text>
@@ -799,10 +822,10 @@ export default function BusinessDashboardScreen({
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalLabel}>Email o código del influencer</Text>
+            <Text style={styles.modalLabel}>@ del influencer</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="ana@ejemplo.com o JORGE10"
+              placeholder="@usuario o código JORGE10"
               placeholderTextColor="#9CA3AF"
               value={inviteLookupTerm}
               onChangeText={(v) => {
@@ -810,6 +833,7 @@ export default function BusinessDashboardScreen({
                 setInvitedInfluencerId(null);
               }}
               autoCapitalize="none"
+              autoCorrect={false}
             />
             {inviteLookupTerm.trim().length > 0 && lookupResult && (
               <View
@@ -829,7 +853,7 @@ export default function BusinessDashboardScreen({
                     fontWeight: "600",
                   }}
                 >
-                  {(lookupResult as any).name}
+                  @{(lookupResult as any).username}
                 </Text>
                 <Text
                   style={{
@@ -837,7 +861,7 @@ export default function BusinessDashboardScreen({
                     fontSize: 12,
                   }}
                 >
-                  {(lookupResult as any).email}
+                  {(lookupResult as any).name}
                   {(lookupResult as any).referralCode
                     ? ` • ${(lookupResult as any).referralCode}`
                     : ""}
@@ -848,7 +872,7 @@ export default function BusinessDashboardScreen({
               <Text
                 style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}
               >
-                No se encontró un influencer con ese email/código.
+                No se encontró un influencer con ese @ o código.
               </Text>
             )}
 
@@ -890,9 +914,18 @@ export default function BusinessDashboardScreen({
   );
 }
 
-const getStyles = (isDark: boolean) =>
-  StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? "#111827" : "#F9FAFB" },
+const getStyles = (isDark: boolean) => {
+  const glass = glassTokens(isDark);
+  const glassCard = {
+    backgroundColor: glass.bg,
+    borderWidth: 1,
+    borderColor: glass.border,
+    ...glass.shadow,
+    ...glass.backdrop,
+  } as const;
+
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
     content: { padding: 16, paddingBottom: 100 },
     page: { width: "100%", alignSelf: "center", maxWidth: 980 },
 
@@ -939,14 +972,10 @@ const getStyles = (isDark: boolean) =>
     /* Tabs */
     tabsContainer: {
       flexDirection: "row",
-      backgroundColor: isDark ? "#1F2937" : "#fff",
-      borderRadius: 12,
+      borderRadius: 14,
       padding: 4,
       marginBottom: 20,
-      shadowColor: "#000",
-      shadowOpacity: 0.02,
-      shadowRadius: 4,
-      elevation: 1,
+      ...glassCard,
     },
     tab: {
       flex: 1,
@@ -954,7 +983,7 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       borderRadius: 8,
     },
-    tabActive: { backgroundColor: isDark ? "#374151" : "#F3F4F6" },
+    tabActive: { backgroundColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.95)" },
     tabText: {
       fontSize: 13,
       fontWeight: "600",
@@ -999,11 +1028,9 @@ const getStyles = (isDark: boolean) =>
 
     /* Balance Card */
     balanceCard: {
-      backgroundColor: isDark ? "#1F2937" : "#fff",
       borderRadius: 24,
       overflow: "hidden",
-      borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      ...glassCard,
     },
     balanceHeader: { padding: 20 },
     balanceLabelLight: {
@@ -1047,7 +1074,7 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       justifyContent: "space-between",
       borderTopWidth: 1,
-      borderTopColor: isDark ? "#374151" : "#F3F4F6",
+      borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     withdrawBtn: {
       backgroundColor: isDark ? "#111827" : "#111827",
@@ -1055,18 +1082,16 @@ const getStyles = (isDark: boolean) =>
       paddingVertical: 8,
       borderRadius: 8,
     },
-    withdrawBtnDisabled: { backgroundColor: isDark ? "#374151" : "#F3F4F6" },
+    withdrawBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
     withdrawBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
     withdrawBtnTextDisabled: { color: "#9CA3AF" },
     payoutDate: { fontSize: 11, color: "#6B7280" },
 
     /* Chart Card */
     chartCard: {
-      backgroundColor: isDark ? "#1F2937" : "#fff",
       borderRadius: 20,
       padding: 20,
-      borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      ...glassCard,
     },
     cardHeader: {
       flexDirection: "row",
@@ -1089,7 +1114,7 @@ const getStyles = (isDark: boolean) =>
     barTrack: {
       width: 8,
       height: "100%",
-      backgroundColor: isDark ? "#374151" : "#F3F4F6",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       borderRadius: 4,
       justifyContent: "flex-end",
     },
@@ -1098,10 +1123,8 @@ const getStyles = (isDark: boolean) =>
 
     /* List Card */
     listCard: {
-      backgroundColor: isDark ? "#1F2937" : "#fff",
       borderRadius: 20,
-      borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      ...glassCard,
     },
     listItem: {
       flexDirection: "row",
@@ -1109,7 +1132,7 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
       gap: 12,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? "#374151" : "#F3F4F6",
+      borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     rankBadge: {
       width: 28,
@@ -1157,11 +1180,11 @@ const getStyles = (isDark: boolean) =>
     emptyDesc: { fontSize: 14, color: "#9CA3AF" },
 
     couponCard: {
-      backgroundColor: isDark ? "#1F2937" : "#fff",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       borderRadius: 16,
       padding: 16,
       borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     couponHeader: {
       flexDirection: "row",
@@ -1191,7 +1214,7 @@ const getStyles = (isDark: boolean) =>
     },
     progressBarBg: {
       height: 6,
-      backgroundColor: isDark ? "#374151" : "#F3F4F6",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       borderRadius: 3,
       marginTop: 4,
     },
@@ -1214,17 +1237,17 @@ const getStyles = (isDark: boolean) =>
     /* Reviews Tab */
     ratingCard: {
       flexDirection: "row",
-      backgroundColor: isDark ? "#1F2937" : "#fff",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       padding: 20,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     ratingLeft: {
       alignItems: "center",
       paddingRight: 20,
       borderRightWidth: 1,
-      borderRightColor: isDark ? "#374151" : "#F3F4F6",
+      borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     ratingBig: {
       fontSize: 36,
@@ -1240,11 +1263,11 @@ const getStyles = (isDark: boolean) =>
     },
 
     reviewItem: {
-      backgroundColor: isDark ? "#1F2937" : "#fff",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       padding: 16,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     reviewHeader: {
       flexDirection: "row",
@@ -1262,7 +1285,7 @@ const getStyles = (isDark: boolean) =>
       width: 6,
       height: 6,
       borderRadius: 3,
-      backgroundColor: isDark ? "#374151" : "#E5E7EB",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     starDotActive: { backgroundColor: "#F59E0B" },
     reviewText: {
@@ -1274,14 +1297,42 @@ const getStyles = (isDark: boolean) =>
     /* Influencer Invite Modal */
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
       justifyContent: "center",
       padding: 20,
+      overflow: "hidden",
+    },
+    modalBlurWeb: {
+      backgroundColor: isDark ? "rgba(9,9,11,0.55)" : "rgba(250,250,250,0.45)",
+      // @ts-expect-error web backdrop
+      backdropFilter: "blur(18px)",
+      // @ts-expect-error web webkit backdrop
+      WebkitBackdropFilter: "blur(18px)",
+    },
+    modalDim: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: isDark ? "rgba(0,0,0,0.45)" : "rgba(15,23,42,0.28)",
+      // @ts-expect-error web backdrop
+      backdropFilter: "blur(4px)",
+      // @ts-expect-error web webkit backdrop
+      WebkitBackdropFilter: "blur(4px)",
     },
     modalContent: {
-      backgroundColor: isDark ? "#1F2937" : "#fff",
-      borderRadius: 16,
+      backgroundColor: isDark ? "rgba(24,24,27,0.92)" : "rgba(255,255,255,0.94)",
+      borderRadius: 20,
       padding: 20,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+      zIndex: 2,
+      ...Platform.select({
+        ios: {
+          shadowColor: "#000",
+          shadowOpacity: 0.2,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 12 },
+        },
+        android: { elevation: 12 },
+        default: {},
+      }),
     },
     modalHeader: {
       flexDirection: "row",
@@ -1300,7 +1351,7 @@ const getStyles = (isDark: boolean) =>
       borderRadius: 15,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: isDark ? "#374151" : "#F3F4F6",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
     },
     modalLabel: {
       fontSize: 13,
@@ -1309,18 +1360,18 @@ const getStyles = (isDark: boolean) =>
       marginBottom: 6,
     },
     modalInput: {
-      backgroundColor: isDark ? "#111827" : "#F9FAFB",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       borderRadius: 8,
       padding: 12,
       color: isDark ? "#F9FAFB" : "#111827",
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? "#374151" : "#E5E7EB",
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
     },
     modalCancelBtn: {
       padding: 12,
       borderRadius: 8,
-      backgroundColor: isDark ? "#374151" : "#F3F4F6",
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
       alignItems: "center",
     },
     modalConfirmBtn: {
@@ -1330,3 +1381,4 @@ const getStyles = (isDark: boolean) =>
       alignItems: "center",
     },
   });
+};
