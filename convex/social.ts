@@ -259,11 +259,13 @@ export const createPost = mutation({
         type: v.union(
             v.literal('text'),
             v.literal('image'),
+            v.literal('video'),
             v.literal('poll'),
             v.literal('commercial'),
         ),
         content: v.string(),
         images: v.optional(v.array(v.string())),
+        videoUrl: v.optional(v.string()),
         poll: v.optional(v.object({
             options: v.array(v.object({
                 id: v.string(),
@@ -304,6 +306,7 @@ export const createPost = mutation({
             type: args.type,
             content: args.content,
             images: args.images,
+            videoUrl: args.videoUrl,
             poll: pollPayload,
             commercialProduct: args.commercialProduct,
             likeCount: 0,
@@ -506,7 +509,8 @@ export const addComment = mutation({
         if (post.authorUserId !== actor.idString) {
             const preview = args.content.length > 80 ? args.content.slice(0, 77) + '…' : args.content;
             await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                userId: post.authorUserId,
+            sendEmail: true,
+            userId: post.authorUserId,
                 title: 'Nuevo comentario en tu post',
                 body: preview,
                 category: 'social',
@@ -644,7 +648,8 @@ export const toggleLike = mutation({
                     );
                     if (!alreadyPushed) {
                         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                            userId: (post as any).authorUserId,
+            sendEmail: true,
+            userId: (post as any).authorUserId,
                             title: 'A alguien le gustó tu post',
                             body: 'Mirá quién interactuó con tu publicación.',
                             category: 'social',
@@ -739,6 +744,7 @@ export const follow = mutation({
 
         // Push to followed user.
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: args.targetUserId,
             title: 'Tenés un nuevo seguidor',
             body: `${followerProfile?.displayName ?? 'Alguien'} empezó a seguirte.`,
@@ -1060,7 +1066,8 @@ export const sendDirectMessage = mutation({
         for (const pid of chat.participantIds) {
             if (pid === actor.idString) continue;
             await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                userId: pid,
+            sendEmail: true,
+            userId: pid,
                 title: senderName,
                 body: preview,
                 category: 'social',

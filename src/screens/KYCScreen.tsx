@@ -12,6 +12,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useFintech } from '../contexts/FintechContext';
 import { ImageUploadField } from '../components/ui/ImageUploadField';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { glassTokens } from '../utils/glass';
 import {
     LIMITS, MIN, clamp, formatEin, isValidEin, isValidBusinessAddress, isValidSocialUrl,
@@ -45,6 +47,20 @@ export default function KYCScreen({ navigation, route }: any) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fadeAnim = useRef(new Animated.Value(1)).current;
+    
+    const skipKycMutation = useMutation(api.auth.skipKyc);
+
+    const handleSkip = async () => {
+        setIsSubmitting(true);
+        try {
+            await skipKycMutation({});
+            navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+        } catch (error: any) {
+            show(error.message || 'Error al saltar KYC', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const transitionTo = (nextStep: Step) => {
         Animated.sequence([
@@ -237,6 +253,17 @@ export default function KYCScreen({ navigation, route }: any) {
                         </Text>
                         {!isSubmitting && <ArrowRight size={20} color="#fff" />}
                     </TouchableOpacity>
+
+                    {accountType === 'consumer' && (
+                        <TouchableOpacity
+                            style={styles.btnGhost}
+                            onPress={handleSkip}
+                            activeOpacity={0.9}
+                            disabled={isSubmitting}
+                        >
+                            <Text style={styles.btnGhostText}>Saltar por ahora</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -495,6 +522,20 @@ const getStyles = (isDark: boolean) => {
             borderColor: 'transparent',
         },
         btnText: { color: '#fff', fontWeight: '700', fontSize: 15, marginRight: 8 },
+
+        btnGhost: {
+            flexDirection: 'row',
+            height: 52,
+            borderRadius: Radius.lg,
+            paddingHorizontal: 24,
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '100%',
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(33, 150, 243, 0.2)',
+        },
+        btnGhostText: { color: isDark ? '#D1D5DB' : '#2196F3', fontWeight: '600', fontSize: 15 },
 
         successBody: {
             flex: 1,

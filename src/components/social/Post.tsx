@@ -11,15 +11,16 @@ import { Post as PostType, useSocial } from '../../contexts/SocialContext';
 import { useCart } from '../../contexts/CartContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Radius, colors } from '../../theme/tokens';
+import { Radius, colors, glassShadow } from '../../theme/tokens';
+import { glassSurface } from '../../utils/glass';
 
 
 export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: string) => void }) => {
     const { isPostSaved, savePost, unsavePost, currentUser, deletePost } = useSocial();
-    const { addItem } = useCart();
+    const { addToCart } = useCart();
     const { addToWishlist } = useMarketplace();
     const [liked, setLiked] = useState(post.likedByUser || false);
-    const [likes, setLikes] = useState(post.likes);
+    const [likes, setLikes] = useState(post.likeCount || post.likes?.length || 0);
     const [showComments, setShowComments] = useState(false);
     const [showShare, setShowShare] = useState(false);
     const saved = isPostSaved(post.id);
@@ -29,8 +30,8 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
     const styles = getStyles(isDark);
 
     const handleSave = () => {
-        if (saved) unsavePost(post.id);
-        else savePost(post.id);
+        if (saved) unsavePost(post._id || post.id);
+        else savePost(post._id || post.id);
     };
 
     const handleLike = () => {
@@ -43,25 +44,25 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
             "Eliminar publicación",
             "¿Estás seguro de que quieres eliminar esta publicación?",
         );
-        if (ok) deletePost(post.id);
+        if (ok) deletePost(post._id || post.id);
     };
 
     const handleMoreOptions = () => {
         // Only owner action today is delete; go straight to the styled confirm.
-        if (currentUser.id === post.userId) handleDelete();
+        if (currentUser.id === (post.author || post.user)?.userId || currentUser.id === (post.author || post.user)?.id) handleDelete();
     };
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity style={styles.userInfo} onPress={() => onUserClick(post.user.id)}>
+                <TouchableOpacity style={styles.userInfo} onPress={() => onUserClick((post.author || post.user)?.userId || (post.author || post.user)?.id)}>
                     <Avatar style={{ width: 44, height: 44, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' }}>
-                        <AvatarImage src={post.user.avatar} />
-                        <AvatarFallback>{post.user.name[0]}</AvatarFallback>
+                        <AvatarImage src={(post.author || post.user)?.avatar} />
+                        <AvatarFallback>{((post.author || post.user)?.displayName || (post.author || post.user)?.name || 'U')[0]}</AvatarFallback>
                     </Avatar>
                     <View style={{ marginLeft: 12 }}>
-                        <Text style={styles.userName}>{post.user.name}</Text>
-                        <Text style={styles.timestamp}>{post.timestamp}</Text>
+                        <Text style={styles.userName}>{(post.author || post.user)?.displayName || (post.author || post.user)?.name || 'Usuario'}</Text>
+                        <Text style={styles.timestamp}>{new Date(post.createdAt || post.timestamp || Date.now()).toLocaleDateString()}</Text>
                     </View>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.moreBtn} onPress={handleMoreOptions}>
@@ -104,16 +105,15 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.commercialButton, { backgroundColor: isDark ? '#2563EB' : '#2563EB' }]}
-                                    onPress={() => addItem({
+                                    onPress={() => addToCart({
                                         id: post.commercialProduct!.id,
                                         name: post.commercialProduct!.name,
                                         price: post.commercialProduct!.price,
                                         image: post.commercialProduct!.image,
-                                        type: 'product',
-                                        sellerId: post.user.id,
-                                        sellerName: post.user.name,
-                                        referralCode: post.commercialProduct!.referralLink,
                                         quantity: 1,
+                                        sellerId: (post.author || post.user)?.userId || (post.author || post.user)?.id,
+                                        sellerName: (post.author || post.user)?.displayName || (post.author || post.user)?.name,
+                                        referralCode: post.commercialProduct!.referralLink,
                                     })}
                                 >
                                     <ShoppingBag size={16} color="#ffffff" />
@@ -133,7 +133,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton} onPress={() => setShowComments(true)}>
                         <MessageCircle size={24} color={isDark ? "#9CA3AF" : "#4B5563"} />
-                        <Text style={styles.actionText}>{post.comments.length}</Text>
+                        <Text style={styles.actionText}>{post.commentCount || post.comments?.length || 0}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton} onPress={() => setShowShare(true)}>
                         <Share2 size={24} color={isDark ? "#9CA3AF" : "#4B5563"} />
@@ -146,7 +146,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
 
 
             <PostCommentsModal
-                postId={post.id}
+                postId={post._id || post.id}
                 visible={showComments}
                 onClose={() => setShowComments(false)}
             />
@@ -162,11 +162,10 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: colors(isDark).bg,
-        marginBottom: 8,
+        ...glassSurface(isDark, 'subtle'),
+        marginBottom: 12,
         paddingHorizontal: 16,
         paddingVertical: 16,
-        borderRadius: Radius.lg,
     },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     userInfo: { flexDirection: 'row', alignItems: 'center' },

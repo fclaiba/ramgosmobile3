@@ -1,74 +1,296 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Animated, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Platform, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
-import { Mail, Send, CheckCircle2, ArrowLeft, Lock } from 'lucide-react-native';
+import { Mail, Send, CheckCircle2, ArrowLeft, Lock, Key, ArrowRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
-
+import { useMutation, useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useToast } from '../contexts/ToastContext';
+import * as Clipboard from 'expo-clipboard';
 
 export default function ForgotPasswordScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { show } = useToast();
 
     const [email, setEmail] = useState('');
+    const [code, setCode] = useState(['', '', '', '', '', '']); // 6 digits
+    const [newPassword, setNewPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [isSent, setIsSent] = useState(false);
+    
+    // States: 'request' | 'verify' | 'success'
+    const [step, setStep] = useState<'request' | 'verify' | 'success'>('request');
+    const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
 
-    const handleSend = () => {
-        if (!email) return;
-        setIsLoading(true);
-        setTimeout(() => {
-            setIsLoading(false);
-            setIsSent(true);
-        }, 1500);
+    const sendResetEmail = useAction(api.auth.sendPasswordResetEmail);
+    const resetPassword = useMutation(api.auth.resetPasswordWithCode);
+
+    // Refs for OTP
+    const inputs = useRef<Array<TextInput | null>>([]);
+    const scaleAnims = useRef(Array(6).fill(0).map(() => new Animated.Value(1))).current;
+
+    // Refs for Success Animation
+    const successScale = useRef(new Animated.Value(0)).current;
+    const successOpacity = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (step === 'success') {
+            Animated.parallel([
+                Animated.spring(successScale, {
+                    toValue: 1,
+                    friction: 6,
+                    tension: 50,
+                    useNativeDriver: true
+                }),
+                Animated.timing(successOpacity, {
+                    toValue: 1,
+                    duration: 500,
+                    easing: Easing.out(Easing.cubic),
+                    useNativeDriver: true
+                })
+            ]).start();
+        }
+    }, [step]);
+
+    useEffect(() => {
+        // Animate scale on focus change
+        code.forEach((_, idx) => {
+            Animated.spring(scaleAnims[idx], {
+                toValue: focusedIndex === idx ? 1.08 : 1,
+                useNativeDriver: true,
+                friction: 6,
+                tension: 40
+            }).start();
+        });
+    }, [focusedIndex]);
+
+    useEffect(() => {
+        // Auto-detect code from clipboard safely (only exactly 6 digits)
+        const checkClipboard = async () => {
+            try {
+                const text = await Clipboard.getStringAsync();
+                if (text && /^\d{6}$/.test(text.trim())) {
+                    setCode(text.trim().split(''));
+                    setFocusedIndex(5);
+                    inputs.current[5]?.focus();
+                }
+            } catch (e) {
+                // Ignore clipboard errors safely
+            }
+        };
+        checkClipboard();
+    }, []);
+
+    const handleChangeCode = (text: string, index: number) => {
+        // Handle Paste (user pastes 6 digits at once)
+        if (text.length === 6 && /^\d{6}$/.test(text)) {
+            setCode(text.split(''));
+            inputs.current[5]?.focus();
+            return;
+        }
+
+        // Sanitize input: only numbers, max 1 char
+        const cleanText = text.replace(/\D/g, '').slice(-1);
+
+        const newCode = [...code];
+        newCode[index] = cleanText;
+        setCode(newCode);
+
+        // Auto-focus next
+        if (cleanText && index < 5) {
+            inputs.current[index + 1]?.focus();
+        }
+        // Auto-focus previous on delete
+        if (!cleanText && index > 0) {
+            inputs.current[index - 1]?.focus();
+        }
     };
 
-    if (isSent) {
+    const handleKeyPress = (e: any, index: number) => {
+        if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+            inputs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleSendEmail = async () => {
+        if (!email) return;
+        setIsLoading(true);
+        try {
+            await sendResetEmail({ email });
+            show("Instrucciones enviadas", "success");
+            setStep('verify');
+        } catch (error: any) {
+            show(error.message || "Ocurrió un error", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        const codeValue = code.join('');
+        if (codeValue.length < 6 || !newPassword) {
+            show("Ingresa el código completo y la nueva contraseña", "warning");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await resetPassword({ email, code: codeValue, newPassword });
+            setStep('success');
+        } catch (error: any) {
+            show(error.message || "Código o contraseña inválidos", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (step === 'success') {
+        return (
+            <AuthBackground>
+                <SafeAreaView style={styles.container}>
+                    <View style={styles.content}>
+                        <Animated.View style={[styles.card, { opacity: successOpacity, transform: [{ scale: successScale }] }]}>
+                            <View style={styles.successIconContainer}>
+                                <View style={styles.successIconGlowWrapper}>
+                                    <LinearGradient colors={['#34D399', '#10B981']} style={styles.successIconGlow} />
+                                </View>
+                                <LinearGradient
+                                    colors={['#10B981', '#059669']}
+                                    style={styles.successIconBg}
+                                >
+                                    <CheckCircle2 size={56} color="#fff" strokeWidth={2.5} />
+                                </LinearGradient>
+                            </View>
+
+                            <Text style={styles.successTitle}>¡Contraseña actualizada!</Text>
+                            <Text style={styles.successSubtitle}>
+                                Tu contraseña ha sido cambiada y asegurada con éxito. Ya puedes volver a entrar.
+                            </Text>
+
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('Login')}
+                                style={styles.successBtnContainer}
+                            >
+                                <LinearGradient
+                                    colors={['#10B981', '#059669']}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                    style={styles.gradientBtn}
+                                >
+                                    <Text style={styles.btnText}>Iniciar sesión</Text>
+                                    <ArrowRight size={20} color="#fff" style={{ marginLeft: 8 }} />
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
+                </SafeAreaView>
+            </AuthBackground>
+        );
+    }
+
+    if (step === 'verify') {
         return (
             <AuthBackground>
                 <SafeAreaView style={styles.container}>
                     <View style={styles.content}>
                         <View style={styles.card}>
-                            <View style={styles.successIconContainer}>
+                            <TouchableOpacity onPress={() => setStep('request')} style={styles.backBtn}>
+                                <ArrowLeft size={18} color={isDark ? "#D1D5DB" : "#4B5563"} />
+                                <Text style={styles.backText}>Volver</Text>
+                            </TouchableOpacity>
+
+                            <View style={styles.iconContainer}>
+                                <View style={styles.iconGlowWrapper}>
+                                    <LinearGradient colors={['#4FC3F7', '#29B6F6']} style={styles.iconGlow} />
+                                </View>
                                 <LinearGradient
-                                    colors={['#10B981', '#059669']}
-                                    style={styles.successIconBg}
+                                    colors={['#4FC3F7', '#29B6F6']}
+                                    style={styles.iconBg}
                                 >
-                                    <CheckCircle2 size={40} color="#fff" />
+                                    <Key size={32} color="#fff" />
                                 </LinearGradient>
                             </View>
 
-                            <Text style={styles.title}>¡Email enviado!</Text>
+                            <Text style={styles.title}>Ingresa el código</Text>
                             <Text style={styles.subtitle}>
-                                Hemos enviado las instrucciones a {'\n'}
-                                <Text style={{ fontWeight: '600', color: isDark ? '#D1D5DB' : '#111827' }}>{email}</Text>
+                                Ingresa el código que enviamos a {email} y tu nueva contraseña.
                             </Text>
 
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate('Login')}
-                                style={[styles.submitBtnContainer, { marginTop: 16 }]}
-                            >
-                                <LinearGradient
-                                    colors={['#2196F3', '#29B6F6']}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                    style={styles.gradientBtn}
+                            <View style={styles.form}>
+                                <View style={styles.inputContainer}>
+                                    <Text style={[styles.label, { textAlign: 'center', marginBottom: 12 }]}>Código de recuperación</Text>
+                                    <View style={styles.otpContainer}>
+                                        {code.map((digit, idx) => {
+                                            const isFocused = focusedIndex === idx;
+                                            const isFilled = digit.length > 0;
+                                            return (
+                                                <Animated.View key={idx} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
+                                                    <TextInput
+                                                        ref={ref => { inputs.current[idx] = ref; }}
+                                                        style={[
+                                                            styles.otpInput,
+                                                            isFilled && styles.otpInputFilled,
+                                                            isFocused && styles.otpInputActive
+                                                        ]}
+                                                        maxLength={6} // allow pasting full 6 digits
+                                                        keyboardType="number-pad"
+                                                        textContentType="oneTimeCode"
+                                                        autoComplete="one-time-code"
+                                                        value={digit}
+                                                        onChangeText={(text) => handleChangeCode(text, idx)}
+                                                        onKeyPress={(e) => handleKeyPress(e, idx)}
+                                                        onFocus={() => setFocusedIndex(idx)}
+                                                        onBlur={() => setFocusedIndex(null)}
+                                                        textAlign="center"
+                                                        selectionColor="#29B6F6"
+                                                    />
+                                                </Animated.View>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+
+                                <View style={styles.inputContainer}>
+                                    <Text style={styles.label}>Nueva contraseña</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Lock size={20} color={isDark ? "#9CA3AF" : "#9CA3AF"} style={styles.icon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Mínimo 8 caracteres"
+                                            placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                            value={newPassword}
+                                            onChangeText={setNewPassword}
+                                            secureTextEntry
+                                            autoComplete="off"
+                                            textContentType="none"
+                                            importantForAutofill="no"
+                                            autoCorrect={false}
+                                        />
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity
+                                    onPress={handleResetPassword}
+                                    style={[styles.submitBtnContainer, { marginTop: 16 }]}
+                                    disabled={isLoading}
                                 >
-                                    <Text style={styles.btnText}>Volver al inicio de sesión</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={() => setIsSent(false)}
-                                style={[styles.ghostBtn, { marginTop: 12 }]}
-                            >
-                                <Text style={styles.ghostBtnText}>Reenviar email</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.hintBox}>
-                                <Text style={styles.hintText}>Revisa tu carpeta de spam si no lo ves en unos minutos.</Text>
+                                    <LinearGradient
+                                        colors={['#2196F3', '#29B6F6']}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                        style={styles.gradientBtn}
+                                    >
+                                        {isLoading ? (
+                                            <Text style={styles.btnText}>Guardando...</Text>
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 size={20} color="#fff" style={{ marginRight: 8 }} />
+                                                <Text style={styles.btnText}>Cambiar contraseña</Text>
+                                            </>
+                                        )}
+                                    </LinearGradient>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     </View>
@@ -77,6 +299,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
         );
     }
 
+    // Step 1: Request Email
     return (
         <AuthBackground>
             <SafeAreaView style={styles.container}>
@@ -91,6 +314,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
                         {/* Header */}
                         <View style={styles.iconContainer}>
+                            <View style={styles.iconGlowWrapper}>
+                                <LinearGradient colors={['#4FC3F7', '#29B6F6']} style={styles.iconGlow} />
+                            </View>
                             <LinearGradient
                                 colors={['#4FC3F7', '#29B6F6']}
                                 style={styles.iconBg}
@@ -123,7 +349,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                             </View>
 
                             <TouchableOpacity
-                                onPress={handleSend}
+                                onPress={handleSendEmail}
                                 style={styles.submitBtnContainer}
                                 disabled={isLoading}
                             >
@@ -178,8 +404,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     backBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 20 },
     backText: { marginLeft: 8, color: colors(isDark).textMuted, fontWeight: '500' },
 
-    iconContainer: { marginBottom: 16 },
-    iconBg: { width: 64, height: 64, borderRadius: Radius.xl, justifyContent: 'center', alignItems: 'center', ...glassShadow(isDark),},
+    iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
+    iconGlowWrapper: { position: 'absolute', width: 64, height: 64 },
+    iconGlow: { flex: 1, borderRadius: Radius.xl, opacity: 0.5, transform: [{ scale: 1.2 }] },
+    iconBg: { width: 64, height: 64, borderRadius: Radius.xl, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: isDark ? '#374151' : '#fff', ...glassShadow(isDark) },
 
     title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: colors(isDark).text, marginBottom: 8 },
     subtitle: { fontSize: 14, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 24, paddingHorizontal: 10 },
@@ -187,9 +415,37 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     form: { width: '100%', gap: 16 },
     inputContainer: { gap: 8 },
     label: { fontSize: 14, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginLeft: 4 },
-    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', height: 48, paddingHorizontal: 12 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)', borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.15)', height: 48, paddingHorizontal: 12 },
     icon: { marginRight: 12 },
     input: { flex: 1, fontSize: 16, color: colors(isDark).text },
+
+    // OTP Styles
+    otpContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 8 },
+    otpInput: { 
+        width: 48, 
+        height: 48, 
+        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)', 
+        borderRadius: Radius.lg, 
+        borderWidth: 1.5, 
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.15)', 
+        fontSize: 22, 
+        fontWeight: '700', 
+        color: colors(isDark).text,
+        textAlign: 'center',
+        padding: 0,
+    },
+    otpInputFilled: { 
+        borderColor: '#4FC3F7',
+        color: '#29B6F6',
+        backgroundColor: isDark ? 'rgba(79, 195, 247, 0.08)' : '#F0F9FF',
+    },
+    otpInputActive: {
+        borderColor: '#2196F3',
+        backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : '#E3F2FD',
+        ...Platform.select({
+            web: { boxShadow: '0 0 12px rgba(33, 150, 243, 0.3)' } as any,
+        }),
+    },
 
     submitBtnContainer: { ...glassShadow(isDark), marginTop: 8 },
     gradientBtn: { flexDirection: 'row', height: 56, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center' },
@@ -199,10 +455,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     footer: { flexDirection: 'row', justifyContent: 'center' },
 
     // Success State
-    successIconContainer: { marginBottom: 24 },
-    successIconBg: { width: 80, height: 80, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', ...glassShadow(isDark),},
-    ghostBtn: { width: '100%', height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.lg, borderWidth: 1, borderColor: isDark ? '#1565C0' : '#DDD6FE', backgroundColor: isDark ? '#374151' : '#FAFAFA' },
-    ghostBtnText: { color: '#2196F3', fontSize: 14, fontWeight: '600' },
-    hintBox: { marginTop: 24, padding: 12, backgroundColor: isDark ? 'rgba(79, 195, 247, 0.1)' : '#FAFAFA', borderRadius: Radius.md, width: '100%' },
-    hintText: { fontSize: 12, color: colors(isDark).textMuted, textAlign: 'center' },
+    successIconContainer: { marginBottom: 32, alignItems: 'center', justifyContent: 'center' },
+    successIconGlowWrapper: { position: 'absolute', width: 100, height: 100 },
+    successIconGlow: { flex: 1, borderRadius: Radius.full, opacity: 0.6, transform: [{ scale: 1.3 }] },
+    successIconBg: { width: 100, height: 100, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: 5, borderColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#fff', ...glassShadow(isDark) },
+    
+    successTitle: { fontSize: 26, fontWeight: '800', textAlign: 'center', color: isDark ? '#34D399' : '#10B981', marginBottom: 12 },
+    successSubtitle: { fontSize: 15, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 32, paddingHorizontal: 16, lineHeight: 22 },
+    successBtnContainer: { width: '100%', ...glassShadow(isDark), marginTop: 8 },
 });

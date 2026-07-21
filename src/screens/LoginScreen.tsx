@@ -189,6 +189,10 @@ export default function LoginScreen({ navigation }: any) {
                                             onChangeText={setEmail}
                                             autoCapitalize="none"
                                             keyboardType="email-address"
+                                            autoComplete="off"
+                                            textContentType="none"
+                                            importantForAutofill="no"
+                                            autoCorrect={false}
                                         />
                                     </View>
                                 </View>
@@ -211,6 +215,10 @@ export default function LoginScreen({ navigation }: any) {
                                             value={password}
                                             onChangeText={setPassword}
                                             autoCapitalize="none"
+                                            autoComplete="off"
+                                            textContentType="none"
+                                            importantForAutofill="no"
+                                            autoCorrect={false}
                                         />
                                         <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                                             {showPassword ? <EyeOff size={20} color="#9CA3AF" /> : <Eye size={20} color="#9CA3AF" />}

@@ -26,6 +26,8 @@ export default defineSchema({
         nickname: v.optional(v.string()),
         phoneVerified: v.optional(v.boolean()),
         emailVerified: v.optional(v.boolean()),
+        otp: v.optional(v.string()),
+        otpExpiresAt: v.optional(v.number()),
         
         // Fase 2 - Push Notifications
         pushTokens: v.optional(v.array(v.string())),
@@ -743,11 +745,13 @@ export default defineSchema({
         type: v.union(
             v.literal('text'),
             v.literal('image'),
+            v.literal('video'),
             v.literal('poll'),
             v.literal('commercial'),
         ),
         content: v.string(),
         images: v.optional(v.array(v.string())),
+        videoUrl: v.optional(v.string()),
         poll: v.optional(v.object({
             options: v.array(v.object({
                 id: v.string(),

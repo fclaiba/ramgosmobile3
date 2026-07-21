@@ -8,6 +8,7 @@ import { useAuth, type AuthFlowDecision } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import * as Clipboard from 'expo-clipboard';
 
 
 export default function VerificationScreen({ navigation, route }: any) {
@@ -21,12 +22,14 @@ export default function VerificationScreen({ navigation, route }: any) {
     const [timer, setTimer] = useState(60);
     const [isLoading, setIsLoading] = useState(false);
     const [canResend, setCanResend] = useState(false);
+    const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
     const { verifyEmailCode, resendVerificationCode, pendingVerification, isProcessing } = useAuth();
     const busy = isLoading || isProcessing;
     const displayEmail = pendingVerification?.email ?? email;
 
-    // Refs for auto-focus
+    // Refs for auto-focus and animations
     const inputs = useRef<Array<TextInput | null>>([]);
+    const scaleAnims = useRef(code.map(() => new Animated.Value(1))).current;
 
     useEffect(() => {
         if (timer > 0) {
@@ -36,6 +39,35 @@ export default function VerificationScreen({ navigation, route }: any) {
             setCanResend(true);
         }
     }, [timer]);
+
+    useEffect(() => {
+        // Auto-detect code from clipboard safely (only exactly 6 digits)
+        const checkClipboard = async () => {
+            try {
+                const text = await Clipboard.getStringAsync();
+                if (text && /^\d{6}$/.test(text.trim())) {
+                    setCode(text.trim().split(''));
+                    setFocusedIndex(5);
+                    inputs.current[5]?.focus();
+                }
+            } catch (e) {
+                // Ignore clipboard errors safely
+            }
+        };
+        checkClipboard();
+    }, []);
+
+    useEffect(() => {
+        // Animate scale on focus change
+        code.forEach((_, idx) => {
+            Animated.spring(scaleAnims[idx], {
+                toValue: focusedIndex === idx ? 1.08 : 1,
+                useNativeDriver: true,
+                friction: 6,
+                tension: 40
+            }).start();
+        });
+    }, [focusedIndex]);
 
     const navigateFromDecision = (decision: AuthFlowDecision) => {
         const destination = decision.nextRoute ?? { screen: 'Home' as const };
@@ -95,22 +127,41 @@ export default function VerificationScreen({ navigation, route }: any) {
     };
 
     const handleChangeCode = (text: string, index: number) => {
+        // Handle Paste (user pastes 6 digits at once)
+        if (text.length === 6 && /^\d{6}$/.test(text)) {
+            setCode(text.split(''));
+            inputs.current[5]?.focus();
+            return;
+        }
+
+        // Sanitize input: only numbers, max 1 char
+        const cleanText = text.replace(/\D/g, '').slice(-1);
+        
         const newCode = [...code];
-        newCode[index] = text;
+        newCode[index] = cleanText;
         setCode(newCode);
 
         // Auto-focus next
-        if (text && index < 5) {
+        if (cleanText && index < 5) {
             inputs.current[index + 1]?.focus();
         }
         // Auto-focus previous on delete
-        if (!text && index > 0) {
+        if (!cleanText && index > 0) {
             inputs.current[index - 1]?.focus();
         }
 
         // Auto submit
-        if (index === 5 && text) {
-            // handleVerify(); call can be here
+        if (index === 5 && cleanText) {
+            // Wait a tick to let state update before verifying
+            setTimeout(() => {
+                // Not calling handleVerify here to let user confirm, but could.
+            }, 100);
+        }
+    };
+
+    const handleKeyPress = (e: any, index: number) => {
+        if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+            inputs.current[index - 1]?.focus();
         }
     };
 
@@ -143,18 +194,33 @@ export default function VerificationScreen({ navigation, route }: any) {
 
                         {/* OTP Inputs */}
                         <View style={styles.otpContainer}>
-                            {code.map((digit, idx) => (
-                                <TextInput
-                                    key={idx}
-                                    ref={ref => { inputs.current[idx] = ref; }}
-                                    style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
-                                    maxLength={1}
-                                    keyboardType="number-pad"
-                                    value={digit}
-                                    onChangeText={(text) => handleChangeCode(text, idx)}
-                                    textAlign="center"
-                                />
-                            ))}
+                            {code.map((digit, idx) => {
+                                const isFocused = focusedIndex === idx;
+                                const isFilled = digit.length > 0;
+                                return (
+                                    <Animated.View key={idx} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
+                                        <TextInput
+                                            ref={ref => { inputs.current[idx] = ref; }}
+                                            style={[
+                                                styles.otpInput,
+                                                isFilled && styles.otpInputFilled,
+                                                isFocused && styles.otpInputActive
+                                            ]}
+                                            maxLength={6} // allow pasting full 6 digits
+                                            keyboardType="number-pad"
+                                            textContentType="oneTimeCode"
+                                            autoComplete="one-time-code"
+                                            value={digit}
+                                            onChangeText={(text) => handleChangeCode(text, idx)}
+                                            onKeyPress={(e) => handleKeyPress(e, idx)}
+                                            onFocus={() => setFocusedIndex(idx)}
+                                            onBlur={() => setFocusedIndex(null)}
+                                            textAlign="center"
+                                            selectionColor="#29B6F6"
+                                        />
+                                    </Animated.View>
+                                );
+                            })}
                         </View>
 
                         {/* Verify Button */}
@@ -251,9 +317,32 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: colors(isDark).text, marginBottom: 8 },
     subtitle: { fontSize: 14, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 32, lineHeight: 20 },
 
-    otpContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 24 },
-    otpInput: { width: 44, height: 56, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', fontSize: 20, fontWeight: '600', color: colors(isDark).text },
-    otpInputFilled: { borderColor: '#2196F3', backgroundColor: isDark ? '#2E1065' : '#FAFAFA' },
+    otpContainer: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 32 },
+    otpInput: { 
+        width: 52, 
+        height: 52, 
+        backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)', 
+        borderRadius: Radius.lg, 
+        borderWidth: 1.5, 
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.15)', 
+        fontSize: 24, 
+        fontWeight: '700', 
+        color: colors(isDark).text,
+        textAlign: 'center',
+        padding: 0, // fix centering
+    },
+    otpInputFilled: { 
+        borderColor: '#4FC3F7',
+        color: '#29B6F6', // Color the text to match theme
+        backgroundColor: isDark ? 'rgba(79, 195, 247, 0.08)' : '#F0F9FF',
+    },
+    otpInputActive: {
+        borderColor: '#2196F3',
+        backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : '#E3F2FD',
+        ...Platform.select({
+            web: { boxShadow: '0 0 12px rgba(33, 150, 243, 0.3)' } as any,
+        }),
+    },
 
     verifyBtnContainer: {
         width: '100%',

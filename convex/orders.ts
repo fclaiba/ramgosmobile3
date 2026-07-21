@@ -220,6 +220,7 @@ export const createOrder = mutation({
         // synchronous push because they triggered the action.
         const shortOrderId = String(orderId).slice(-6);
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: args.sellerId,
             title: 'Nueva orden recibida',
             body: `Pedido #${shortOrderId} por $${args.total.toFixed(2)} ${args.currency}`,
@@ -290,6 +291,7 @@ export const markAsShipped = mutation({
 
         const shortOrderId = String(args.orderId).slice(-6);
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: order.userId,
             title: 'Tu pedido fue enviado',
             body: `Pedido #${shortOrderId} en camino${args.trackingNumber ? ` (track: ${args.trackingNumber})` : ''}`,
@@ -330,6 +332,7 @@ export const markAsDelivered = mutation({
 
         const shortOrderId = String(args.orderId).slice(-6);
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: order.userId,
             title: 'Confirmá la recepción',
             body: `Tu pedido #${shortOrderId} fue marcado como entregado. Confirmá para liberar fondos.`,
@@ -375,6 +378,7 @@ export const confirmReceipt = mutation({
 
         const shortOrderId = String(args.orderId).slice(-6);
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: order.sellerId,
             title: 'Fondos liberados',
             body: `El comprador confirmó la recepción del pedido #${shortOrderId}. Tus fondos están disponibles.`,
@@ -462,6 +466,7 @@ export const openDispute = mutation({
         const otherPartyId = initiatorIsBuyer ? order.sellerId : order.userId;
         const shortOrderId = String(args.orderId).slice(-6);
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: otherPartyId,
             title: 'Disputa abierta en tu orden',
             body: `${initiatorIsBuyer ? 'El comprador' : 'El vendedor'} abrió una disputa en el pedido #${shortOrderId}.`,
@@ -509,6 +514,7 @@ export const escalateDispute = mutation({
         const shortOrderId = String(args.orderId).slice(-6);
         const otherPartyId = args.role === 'buyer' ? order.sellerId : order.userId;
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: otherPartyId,
             title: 'Disputa escalada al equipo',
             body: `La disputa del pedido #${shortOrderId} fue escalada al soporte de Ramgos.`,

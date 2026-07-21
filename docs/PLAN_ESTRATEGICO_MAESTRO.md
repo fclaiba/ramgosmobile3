@@ -1197,6 +1197,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **8b** | Admin ban (AUSR-03) | ✅ Cerrada | 100% | — | 2026-07-14 |
 | **8c** | Tests Jest (JEST-01) | ✅ Cerrada | 100% | — | 2026-07-14 |
 | **8d** | Limpiar respaldo pagos | ✅ Cerrada | 100% | — | 2026-07-14 |
+| **S1** | Sprint 1 (Roles y KYC Front-end) | ✅ Cerrada | 100% | — | 2026-07-21 |
 
 **Leyenda:** ✅ Cerrada · 🟡 En curso · 🔴 Bloqueada · ⚪ Pendiente
 
@@ -1230,6 +1231,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | E-020 | 2026-07-21 | UI | `typecheck` falló tras reemplazo masivo de color branding (Violeta -> Azul) | `StyleSheet.absoluteFillObject` reportado faltante en types, y restos de comentarios ts-ignore | Script correctivo aplicó `absoluteFill`, removió ts-expects e id->label en PointsManager | ✅ Resuelto | `PointsManager.tsx`, `sheet.tsx`, `tokens.ts` |
 | E-021 | 2026-07-21 | UI | RangeError en `tsc --noEmit` tras script de branding | `tsconfig.json` no excluía la carpeta `dist`, forzando a TS a analizar bundles minificados enormes. Errores sintácticos residuales (duplicated Radius, missing isDark). | Se añadió `dist` al exclude de `tsconfig.json`. Se corrigieron duplicados de Radius y variables en archivos de componentes. Todo compila. | ✅ Resuelto | `tsconfig.json`, `AnimatedCreditCard.tsx`, `PaymentSuccessBurst.tsx`, etc. |
 | E-022 | 2026-07-21 | 5 | typecheck falló por colisiones de variables en EscrowSheet y typos en SidebarMenu | Script de migración reemplazó variables locales erróneamente y generó camelCase typos | Variable local renombrada a toneC; typos de backgroundColor corregidos | ✅ Resuelto | EscrowSheet.tsx, SidebarMenu.tsx |
+| E-023 | 2026-07-21 | S1 | Deuda técnica mock emails | Reemplazar authEmailMocks con auth real vía Resend (Ponytail) | Integración de Resend en auth.ts, tabla users actualizada y borrado del mock | ✅ Resuelto | convex/auth.ts, AuthContext.tsx |
 **Plantilla para nuevas entradas:**
 
 ```markdown

@@ -7,14 +7,16 @@ import { useSocial } from '../../contexts/SocialContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Sheet, SheetContent } from '../ui/sheet';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
 
 
 interface UserSearchProps {
     onUserSelect?: (userId: string) => void;
+    onClose?: () => void;
 }
 
-export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
+export const UserSearch = ({ onUserSelect, onClose }: UserSearchProps) => {
     const { followUser, unfollowUser, isFollowing, currentUser } = useSocial();
     const { user: authUser } = useAuth();
     const [query, setQuery] = useState('');
@@ -58,8 +60,18 @@ export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.searchContainer}>
+        <Sheet open={true} onOpenChange={(val: boolean) => !val && onClose?.()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <View style={styles.container}>
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                            <X size={24} color={isDark ? '#F9FAFB' : '#000'} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Buscar Usuarios</Text>
+                        <View style={{ width: 24 }} />
+                    </View>
+
+                    <View style={styles.searchContainer}>
                 <Search size={20} color="#6B7280" style={styles.searchIcon} />
                 <TextInput
                     placeholder="Buscar usuarios..."
@@ -113,13 +125,25 @@ export const UserSearch = ({ onUserSelect }: UserSearchProps) => {
                     )}
                 </ScrollView>
             )}
-        </View>
+                </View>
+            </SheetContent>
+        </Sheet>
     );
 };
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { width: '100%', zIndex: 10 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, borderRadius: Radius.md, paddingHorizontal: 12, height: 44 },
+    sheetContent: {
+        backgroundColor: colors(isDark).glass,
+        height: '90%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+    },
+    container: { width: '100%', height: '100%', zIndex: 10, padding: 16 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    closeBtn: { padding: 4 },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' },
+    
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, borderRadius: Radius.md, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
     searchIcon: { marginRight: 8 },
     input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111' },
     clearButton: { padding: 4 },

@@ -27,7 +27,7 @@ export const InstagramPost = ({ post }: { post: IGPostType }) => {
     const styles = getStyles(isDark);
 
     const handleLike = () => {
-        likeInstagramPost(post.id);
+        likeInstagramPost(post._id || post.id);
         setLiked(!liked);
         setLikes((prev: number) => liked ? prev - 1 : prev + 1);
     };
@@ -56,7 +56,7 @@ export const InstagramPost = ({ post }: { post: IGPostType }) => {
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(true)}>
                                     <MessageCircle size={28} color="#fff" />
-                                    <Text style={styles.actionText}>{post.comments.length}</Text>
+                                    <Text style={styles.actionText}>{post.commentCount || post.comments?.length || 0}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.actionBtn} onPress={() => setShowShare(true)}>
                                     <Share2 size={28} color="#fff" />
@@ -70,7 +70,7 @@ export const InstagramPost = ({ post }: { post: IGPostType }) => {
             </Sheet>
 
             <PostCommentsModal
-                postId={post.id}
+                postId={post._id || post.id}
                 visible={showComments}
                 onClose={() => setShowComments(false)}
                 isInstagram={true}

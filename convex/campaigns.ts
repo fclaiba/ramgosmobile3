@@ -143,6 +143,7 @@ export const proposeCampaign = mutation({
         const influencer = influencerNorm ? await ctx.db.get(influencerNorm) : null;
         const influencerName = (influencer as any)?.name ?? 'Un influencer';
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: String(args.businessId),
             title: 'Propuesta de colaboración',
             body: `${influencerName} te propuso una campaña con ${(args.commissionRate * 100).toFixed(0)}% de comisión.`,
@@ -206,6 +207,7 @@ export const inviteInfluencer = mutation({
         const business = businessNorm ? await ctx.db.get(businessNorm) : null;
         const businessName = (business as any)?.name ?? 'Un negocio';
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: String(args.influencerId),
             title: 'Invitación de colaboración',
             body: `${businessName} te invitó a promocionar sus productos con ${(args.commissionRate * 100).toFixed(0)}% de comisión.`,
@@ -261,6 +263,7 @@ export const respondToCampaign = mutation({
             ? campaign.influencerId
             : campaign.businessId;
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: initiatorId,
             title: args.decision === 'accept' ? 'Campaña aceptada' : 'Campaña rechazada',
             body: args.decision === 'accept'
@@ -308,6 +311,7 @@ export const pauseCampaign = mutation({
             ? campaign.businessId
             : campaign.influencerId;
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: otherPartyId,
             title: 'Campaña pausada',
             body: `La contraparte pausó la campaña. Las ventas no acreditan comisión hasta que se reanude.`,
@@ -388,6 +392,7 @@ export const endCampaign = mutation({
             ? campaign.businessId
             : campaign.influencerId;
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: otherPartyId,
             title: 'Campaña finalizada',
             body: `La contraparte finalizó la campaña. Las ventas con el código antiguo ya no acreditan comisión.`,

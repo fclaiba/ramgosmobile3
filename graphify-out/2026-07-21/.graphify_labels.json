@@ -250,7 +250,9 @@
   "248": "MapView.tsx",
   "249": "RaffleService",
   "250": "3. Arquitectura de alto nivel",
-  "265": "@types/jest",
+  "251": "ImageUploadField.tsx",
+  "252": "PaymentModeContext.tsx",
+  "253": "checkApi.js",
   "266": "PAYMENTS_SETUP.md",
   "267": "append-plans.js",
   "268": "fix-setup-file.js",
@@ -390,6 +392,5 @@
   "415": "10. Protocolo de IA (Fable 5 + GPT 5.6 SOL)",
   "416": "12. Checklists de validación",
   "417": "3. Graphify — protocolo obligatorio",
-  "418": "5. Arquitectura objetivo",
-  "421": "ItemDetailScreen.tsx"
+  "418": "5. Arquitectura objetivo"
 }

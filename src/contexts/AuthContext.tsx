@@ -220,7 +220,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { show } = useToast();
     const [isProcessing, setIsProcessing] = useState(false);
     // Note: useAction is proper for actions, let's just use it directly:
-    const sendOtpActionCall = useAction(api.notifications.sendOTP);
+    const sendOtpActionCall = useAction(api.auth.sendVerificationEmail);
+    const verifyEmailCodeMutation = useMutation(api.auth.verifyEmailCode);
     const removePushTokenMutation = useMutation(api.notifications.removePushToken);
 
     // Helper to satisfy strict SessionRecord type
@@ -407,7 +408,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isTest: email.endsWith('@ramgos.com'),
                 avatar: payload.avatar,
                 status: 'active',
-                emailVerified: true,
+                emailVerified: false,
                 requiresKyc: true,
                 termsAcceptedVersion: CURRENT_TERMS_VERSION,
                 createdAt: new Date().toISOString(),
@@ -423,14 +424,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setState(prev => ({
                 ...prev,
-                status: 'authenticated',
+                status: 'pending_verification',
                 session: { ...session, userId },
                 user,
+                pendingVerification: {
+                    userId,
+                    email,
+                    expiresAt: Date.now() + 10 * 60 * 1000,
+                    user,
+                }
             }));
+
+            // Enviar el OTP real a través de Resend
+            sendOtpActionCall({ email }).catch(console.error);
 
             return {
                 user,
-                requiresVerification: false,
+                requiresVerification: true,
             };
         } catch (error: any) {
             show(extractErrorMessage(error, 'Error de registro'), 'error');
@@ -641,11 +651,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 throw new Error("No hay usuario para verificar");
             }
             
-            if (state.pendingVerification?.code && state.pendingVerification.code !== code) {
-                throw new Error("Código incorrecto o expirado.");
-            }
+            await verifyEmailCodeMutation({
+                sessionToken: state.session?.sessionToken,
+                code
+            });
 
-            // At this point OTP is valid (or __DEV__ override).
+            // At this point OTP is valid.
             // Move from pending_verification to authenticated
             
             setState(prev => {
@@ -694,13 +705,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         const email = state.pendingVerification?.email || state.user?.email!;
         
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        await sendOtpActionCall({ email, code: otpCode }).catch(console.error);
+        await sendOtpActionCall({ email }).catch(console.error);
 
         const pending: PendingVerificationState = {
             ...state.pendingVerification!,
             email,
-            code: otpCode,
             expiresAt: Date.now() + 10 * 60 * 1000,
         };
         

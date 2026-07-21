@@ -471,6 +471,7 @@ export const createWithdrawal = mutation({
         });
 
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: args.userId,
             title: 'Solicitud de retiro recibida',
             body: `Recibimos tu pedido de $${args.amount.toFixed(2)} USD a ${args.destinationLabel}. Te avisamos cuando se procese.`,
@@ -544,7 +545,8 @@ export const updateWithdrawalStatus = internalMutation({
         // Notify user on terminal transitions.
         if (args.status === 'approved' || args.status === 'rejected') {
             await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                userId: withdrawal.userId,
+            sendEmail: true,
+            userId: withdrawal.userId,
                 title: args.status === 'approved' ? 'Retiro procesado' : 'Retiro rechazado',
                 body: args.status === 'approved'
                     ? `Tu retiro de $${withdrawal.amount.toFixed(2)} fue aprobado. Llega en 1-2 días hábiles.`

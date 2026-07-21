@@ -19,6 +19,7 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
     const { show } = useToast();
     const [content, setContent] = useState('');
     const [imageUrl, setImageUrl] = useState<string | null>(null);
+    const [isVideo, setIsVideo] = useState<boolean>(false);
     const [uploading, setUploading] = useState(false);
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -33,7 +34,7 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
         if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ['images', 'videos'],
             quality: 0.7,
         });
         if (result.canceled || !result.assets[0]) return;
@@ -42,6 +43,7 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
         try {
             const uploadUrl = await generateUploadUrl({});
             const asset = result.assets[0];
+            setIsVideo(asset.type === 'video');
             let blob: Blob;
             try {
                 const fetchResponse = await fetch(asset.uri);
@@ -59,7 +61,7 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
 
             const response = await fetch(uploadUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
+                headers: { 'Content-Type': asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg') },
                 body: blob,
             });
             const { storageId } = await response.json();
@@ -74,7 +76,11 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
     const handlePost = () => {
         if (!content.trim() && !imageUrl) return;
         if (imageUrl) {
-            createPost(content || '', 'image', { images: [imageUrl] });
+            if (isVideo) {
+                createPost(content || '', 'video', { videoUrl: imageUrl });
+            } else {
+                createPost(content || '', 'image', { images: [imageUrl] });
+            }
         } else {
             createPost(content, 'text');
         }
@@ -121,8 +127,15 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
                     />
                     {imageUrl && (
                         <View style={styles.imagePreview}>
-                            <Image source={{ uri: imageUrl }} style={styles.preview} />
-                            <TouchableOpacity style={styles.removeImage} onPress={() => setImageUrl(null)}>
+                            {isVideo ? (
+                                <View style={[styles.preview, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#222' }]}>
+                                    <ImageIcon size={48} color="#666" />
+                                    <Text style={{color: '#fff', marginTop: 8}}>Video adjunto</Text>
+                                </View>
+                            ) : (
+                                <Image source={{ uri: imageUrl }} style={styles.preview} />
+                            )}
+                            <TouchableOpacity style={styles.removeImage} onPress={() => { setImageUrl(null); setIsVideo(false); }}>
                                 <X size={16} color="#fff" />
                             </TouchableOpacity>
                         </View>

@@ -8,3 +8,5 @@ export * from './CreateInstagramPost';
 export * from './UserProfile';
 export * from './UserSearch';
 export * from './DirectMessages';
+export * from './ReelFeed';
+export * from './ReelItem';

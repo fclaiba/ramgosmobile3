@@ -75,7 +75,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                             </View>
                         ) : (
                             userPosts.map((post) => (
-                                <View key={post.id} style={styles.postWrapper}>
+                                <View key={post._id || post.id} style={styles.postWrapper}>
                                     <Post post={post} onUserClick={() => { }} />
                                 </View>
                             ))
@@ -91,7 +91,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                             </View>
                         ) : (
                             instagramPosts.map((post) => (
-                                <View key={post.id} style={styles.gridItemWrapper}>
+                                <View key={post._id || post.id} style={styles.gridItemWrapper}>
                                     <InstagramPost post={post} />
                                 </View>
                             ))

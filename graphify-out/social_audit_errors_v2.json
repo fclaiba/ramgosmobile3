@@ -1,0 +1,1472 @@
+[
+    {
+        "file": "src\\components\\AdvancedFilters.tsx",
+        "line": 88,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{SORT_OPTIONS.map(opt => {"
+    },
+    {
+        "file": "src\\components\\AdvancedFilters.tsx",
+        "line": 170,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{categories.map(cat => {"
+    },
+    {
+        "file": "src\\components\\CartSidebar.tsx",
+        "line": 122,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{items.map((item) => ("
+    },
+    {
+        "file": "src\\components\\DailyChallenges.tsx",
+        "line": 124,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{dailyChallenges.map((challenge: DailyChallenge) => ("
+    },
+    {
+        "file": "src\\components\\DailyChallenges.tsx",
+        "line": 150,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{weeklyChallenges.map((challenge: DailyChallenge) => ("
+    },
+    {
+        "file": "src\\components\\DesktopSidebar.tsx",
+        "line": 49,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{allItems.map((item) => {"
+    },
+    {
+        "file": "src\\components\\ItemDetailView.tsx",
+        "line": 94,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return product.images.map((img) => img.url);"
+    },
+    {
+        "file": "src\\components\\ItemDetailView.tsx",
+        "line": 164,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{gallery.map((url, index) => ("
+    },
+    {
+        "file": "src\\components\\ItemDetailView.tsx",
+        "line": 282,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "? `${shippingProfile.dimensionsCm.length} x ${shippingProfile.dimensionsCm.width} x ${shippingProfile.dimensionsCm.height} cm`"
+    },
+    {
+        "file": "src\\components\\MobileHeader.tsx",
+        "line": 46,
+        "type": "deprecated_resize_mode",
+        "message": "style.resizeMode en <Image> está obsoleto. Usar prop resizeMode=\"...\".",
+        "snippet": "<Image source={require('../../logo.png')} style={{ width: 140, height: 36, resizeMode: 'contain', marginLeft: -4 }} />"
+    },
+    {
+        "file": "src\\components\\MobileNav.tsx",
+        "line": 109,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{allItems.map((item) => ("
+    },
+    {
+        "file": "src\\components\\PointsManager.tsx",
+        "line": 178,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{MEMBERSHIP_TIERS.map((tier, index) => {"
+    },
+    {
+        "file": "src\\components\\ReviewsList.tsx",
+        "line": 48,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "reviews.map((review: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\ActiveCampaigns.tsx",
+        "line": 59,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{pendingInvitations.map((c: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\ActiveCampaigns.tsx",
+        "line": 110,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{myProposals.map((c: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\ActiveCampaigns.tsx",
+        "line": 165,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "activeCampaigns.map((camp: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\InfluencersTab.tsx",
+        "line": 46,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{pendingProposalsFromInfluencers.map((c: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\InfluencersTab.tsx",
+        "line": 120,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{pendingMyInvitations.map((c: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\InfluencersTab.tsx",
+        "line": 193,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "whitelist.map((w: any) => {"
+    },
+    {
+        "file": "src\\components\\dashboard\\InventoryManager.tsx",
+        "line": 44,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "convexListings.map((listing: any) => {"
+    },
+    {
+        "file": "src\\components\\dashboard\\OverviewTab.tsx",
+        "line": 26,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{summaryCards.map((card: any) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\OverviewTab.tsx",
+        "line": 159,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{chartData.map((d: any, i: number) => ("
+    },
+    {
+        "file": "src\\components\\dashboard\\OverviewTab.tsx",
+        "line": 205,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "index === metrics.couponLeaders.length - 1 && {"
+    },
+    {
+        "file": "src\\components\\dashboard\\ReviewsTab.tsx",
+        "line": 46,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{reviews.map((review: any) => ("
+    },
+    {
+        "file": "src\\components\\forms\\UnifiedListingForm.tsx",
+        "line": 191,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{branches.map(branch => ("
+    },
+    {
+        "file": "src\\components\\games\\DailyChallenges.tsx",
+        "line": 85,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{challenges.map((challenge: any, index: number) => ("
+    },
+    {
+        "file": "src\\components\\games\\DinoGame.tsx",
+        "line": 278,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "const lastObs = obstacles.current[obstacles.current.length - 1];"
+    },
+    {
+        "file": "src\\components\\games\\DinoGame.tsx",
+        "line": 309,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "for (let i = obstacles.current.length - 1; i >= 0; i--) {"
+    },
+    {
+        "file": "src\\components\\games\\DinoGame.tsx",
+        "line": 382,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{obstacles.current.map(obs => ("
+    },
+    {
+        "file": "src\\components\\games\\DuckHunt.tsx",
+        "line": 387,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{items.map(item => ("
+    },
+    {
+        "file": "src\\components\\games\\FlappyBird.tsx",
+        "line": 281,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{pipes.current.map(pipe => {"
+    },
+    {
+        "file": "src\\components\\games\\FruitCatcher.tsx",
+        "line": 425,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{items.map(item => ("
+    },
+    {
+        "file": "src\\components\\games\\MemoryGame.tsx",
+        "line": 227,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "setCards(prev => prev.map(c => ({ ...c, isFlipped: false })));"
+    },
+    {
+        "file": "src\\components\\games\\MemoryGame.tsx",
+        "line": 257,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (flippedIndicesRef.current.length === 2) {"
+    },
+    {
+        "file": "src\\components\\games\\MemoryGame.tsx",
+        "line": 268,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (flippedIndicesRef.current.length === 2) {"
+    },
+    {
+        "file": "src\\components\\games\\MemoryGame.tsx",
+        "line": 360,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{cards.map((item, index) => ("
+    },
+    {
+        "file": "src\\components\\marketplace\\EscrowSheet.tsx",
+        "line": 462,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{progressSteps.map((step, index) => {"
+    },
+    {
+        "file": "src\\components\\marketplace\\EscrowSheet.tsx",
+        "line": 619,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{liveMessages.map((msg: any) => {"
+    },
+    {
+        "file": "src\\components\\marketplace\\MapView.web.tsx",
+        "line": 293,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{items.map((item) => {"
+    },
+    {
+        "file": "src\\components\\pet\\MiMascotaView.tsx",
+        "line": 346,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{HATS.map(hat => {"
+    },
+    {
+        "file": "src\\components\\pet\\MiMascotaView.tsx",
+        "line": 582,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{GAMES.map(game => ("
+    },
+    {
+        "file": "src\\components\\social\\CreateInstagramPost.tsx",
+        "line": 105,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{currentUser.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\DirectMessages.tsx",
+        "line": 148,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "searchResults.map(user => ("
+    },
+    {
+        "file": "src\\components\\social\\DirectMessages.tsx",
+        "line": 152,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{user.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\DirectMessages.tsx",
+        "line": 162,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "conversations.map((conv) => {"
+    },
+    {
+        "file": "src\\components\\social\\DirectMessages.tsx",
+        "line": 169,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{conv.otherUser.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\DirectMessages.tsx",
+        "line": 201,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{currentChatUser.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 26,
+        "type": "unsafe_id_access",
+        "message": "Uso de post.id en lugar de post._id. Considerar (post._id || post.id).",
+        "snippet": "const saved = isPostSaved(post.id);"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 52,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "if (currentUser.id === (post.author || post.user)?.userId || currentUser.id === (post.author || post.user)?.id) handleDelete();"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 58,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "<TouchableOpacity style={styles.userInfo} onPress={() => onUserClick((post.author || post.user)?.userId || (post.author || post.user)?.id)}>"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 60,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "<AvatarImage src={(post.author || post.user)?.avatar} />"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 61,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "<AvatarFallback>{((post.author || post.user)?.displayName || (post.author || post.user)?.name || 'U')[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 64,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "<Text style={styles.userName}>{(post.author || post.user)?.displayName || (post.author || post.user)?.name || 'Usuario'}</Text>"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 75,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{post.images && post.images.length > 0 && ("
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 114,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "sellerId: (post.author || post.user)?.userId || (post.author || post.user)?.id,"
+    },
+    {
+        "file": "src\\components\\social\\Post.tsx",
+        "line": 115,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Usar post.author (o fallback).",
+        "snippet": "sellerName: (post.author || post.user)?.displayName || (post.author || post.user)?.name,"
+    },
+    {
+        "file": "src\\components\\social\\StoriesBar.tsx",
+        "line": 40,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{stories.map((story: Story) => {"
+    },
+    {
+        "file": "src\\components\\social\\StoriesBar.tsx",
+        "line": 55,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{story.user.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\StoriesBar.tsx",
+        "line": 64,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{story.user.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\StoryViewer.tsx",
+        "line": 80,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (story.items && currentIndex < story.items.length - 1) {"
+    },
+    {
+        "file": "src\\components\\social\\StoryViewer.tsx",
+        "line": 121,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{story.items.map((item: any, index: number) => ("
+    },
+    {
+        "file": "src\\components\\social\\StoryViewer.tsx",
+        "line": 147,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{story.user.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\StoryViewer.tsx",
+        "line": 281,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{stories.map((story, index) => ("
+    },
+    {
+        "file": "src\\components\\social\\UserProfile.tsx",
+        "line": 77,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "userPosts.map((post) => ("
+    },
+    {
+        "file": "src\\components\\social\\UserProfile.tsx",
+        "line": 93,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "instagramPosts.map((post) => ("
+    },
+    {
+        "file": "src\\components\\social\\UserProfile.tsx",
+        "line": 109,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "commercialItems.map((item) => ("
+    },
+    {
+        "file": "src\\components\\social\\UserProfile.tsx",
+        "line": 181,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{user.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\social\\UserProfile.tsx",
+        "line": 234,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{highlights.map((h) => ("
+    },
+    {
+        "file": "src\\components\\social\\UserSearch.tsx",
+        "line": 95,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "results.map((user) => ("
+    },
+    {
+        "file": "src\\components\\social\\UserSearch.tsx",
+        "line": 104,
+        "type": "unsafe_string_index",
+        "message": "Acceso a índice [0] en string sin fallback. Si la variable es undefined, crashea (Cannot read properties of undefined (reading \"0\")).",
+        "snippet": "<AvatarFallback>{user.name[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src\\components\\ui\\badge.tsx",
+        "line": 85,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{React.Children.map(children, (child) => {"
+    },
+    {
+        "file": "src\\components\\ui\\button.tsx",
+        "line": 58,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "React.Children.map(children, (child) => {"
+    },
+    {
+        "file": "src\\components\\ui\\CoinRain.tsx",
+        "line": 79,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{coins.map((coin) => ("
+    },
+    {
+        "file": "src\\components\\ui\\ImageUploadField.tsx",
+        "line": 107,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{images.map((uri, index) => ("
+    },
+    {
+        "file": "src\\components\\ui\\ListPager.tsx",
+        "line": 56,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{pages.map((n) => ("
+    },
+    {
+        "file": "src\\components\\ui\\tabs.tsx",
+        "line": 8,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const childrenWithProps = React.Children.map(children, child => {"
+    },
+    {
+        "file": "src\\components\\ui\\tabs.tsx",
+        "line": 21,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const childrenWithProps = React.Children.map(children, child => {"
+    },
+    {
+        "file": "src\\contexts\\BusinessContext.tsx",
+        "line": 189,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...branch } : b)));"
+    },
+    {
+        "file": "src\\contexts\\CartContext.tsx",
+        "line": 86,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return serverCart.map((row: any): CartItem => {"
+    },
+    {
+        "file": "src\\contexts\\CartContext.tsx",
+        "line": 149,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i);"
+    },
+    {
+        "file": "src\\contexts\\CartContext.tsx",
+        "line": 178,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "setGuestItems(prev => prev.map(i => i.id === id ? { ...i, quantity } : i));"
+    },
+    {
+        "file": "src\\contexts\\EscrowContext.tsx",
+        "line": 101,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "? raw.items.map((it: any) => ({"
+    },
+    {
+        "file": "src\\contexts\\FintechContext.tsx",
+        "line": 91,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return rawPayments.map((p: any) => ({"
+    },
+    {
+        "file": "src\\contexts\\FintechContext.tsx",
+        "line": 108,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "payments.map((p) => ({"
+    },
+    {
+        "file": "src\\contexts\\MarketplaceContext.tsx",
+        "line": 127,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "? p.gallery.map((url: string, idx: number) => ({"
+    },
+    {
+        "file": "src\\contexts\\MarketplaceContext.tsx",
+        "line": 188,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "() => [...new Set(listings.map((p) => p.category).filter(Boolean))] as string[],"
+    },
+    {
+        "file": "src\\contexts\\PointsContext.tsx",
+        "line": 128,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "challenges: CHALLENGE_META.map((c) => ({ ...c, current: 0, claimed: false })),"
+    },
+    {
+        "file": "src\\contexts\\PointsContext.tsx",
+        "line": 205,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return CHALLENGE_META.map((meta) => {"
+    },
+    {
+        "file": "src\\contexts\\RewardsContext.tsx",
+        "line": 565,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return STREAK_MILESTONES.map((item) => ({"
+    },
+    {
+        "file": "src\\contexts\\RewardsContext.tsx",
+        "line": 640,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "referrals: prev.referrals.map((item) =>"
+    },
+    {
+        "file": "src\\contexts\\WalletContext.tsx",
+        "line": 65,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return payments.map((p: any) => ({"
+    },
+    {
+        "file": "src\\contexts\\__tests__\\constitution.test.tsx",
+        "line": 24,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const tiers = MEMBERSHIP_TIERS.map((t: any) => ({"
+    },
+    {
+        "file": "src\\payments\\components\\PaymentForm.tsx",
+        "line": 176,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{STRIPE_TEST_CARDS.map((c) => ("
+    },
+    {
+        "file": "src\\payments\\components\\PaymentForm.web.tsx",
+        "line": 175,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{STRIPE_TEST_CARDS.map((c) => ("
+    },
+    {
+        "file": "src\\payments\\components\\PaymentSuccessBurst.tsx",
+        "line": 183,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{particles.map((i) => ("
+    },
+    {
+        "file": "src\\payments\\components\\SimulatedCardsPanel.tsx",
+        "line": 78,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "() => [...STRIPE_TEST_CARDS.map((c) => ({ ...c, custom: false })), ...custom],"
+    },
+    {
+        "file": "src\\payments\\components\\SimulatedCardsPanel.tsx",
+        "line": 87,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "if (Array.isArray(parsed)) setCustom(parsed.map((c) => ({ ...c, custom: true })));"
+    },
+    {
+        "file": "src\\payments\\components\\SimulatedCardsPanel.tsx",
+        "line": 167,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const next = custom.map((c) =>"
+    },
+    {
+        "file": "src\\payments\\components\\SimulatedCardsPanel.tsx",
+        "line": 197,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{cards.map((c) => {"
+    },
+    {
+        "file": "src\\screens\\AboutScreen.tsx",
+        "line": 54,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{stats.map((stat, index) => ("
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 252,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{renderStatCard('IPs bloqueadas', `${security.blockedRateLimits.length}`, Ban, '#EF4444', 'rl')}"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 262,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const maxCommission = Math.max(...platformIncome.series.map((p) => p.commission), 1);"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 301,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{platformIncome.series.map((point) => ("
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 343,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{incomePage.items.map((row: any) => {"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 412,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{escrowPage.items.map((order: any) => {"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 485,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{usersPage.items.map((u: any) => {"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 557,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{kycPage.items.map((u: any) => {"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 578,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{docs.map((doc: any, i: number) => ("
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 672,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{security.blockedRateLimits.length > 0 && ("
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 674,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "<SectionTitle styles={styles} icon={Ban} label=\"Rate limits bloqueados\" count={security.blockedRateLimits.length} />"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 675,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{rateLimitPage.items.map((r: any) => ("
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 698,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{sessionsPage.items.map((s: any) => {"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 769,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{logsPage.items.map((log: any) => ("
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 813,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{TABS.map((tab) => {"
+    },
+    {
+        "file": "src\\screens\\AdminDashboardScreen.tsx",
+        "line": 909,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{fields.map((f) => ("
+    },
+    {
+        "file": "src\\screens\\BasicProfileSetupScreen.tsx",
+        "line": 56,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (!result.canceled && result.assets && result.assets.length > 0) {"
+    },
+    {
+        "file": "src\\screens\\BasicProfileSetupScreen.tsx",
+        "line": 79,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (!result.canceled && result.assets && result.assets.length > 0) {"
+    },
+    {
+        "file": "src\\screens\\BasicProfileSetupScreen.tsx",
+        "line": 98,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (!result.canceled && result.assets && result.assets.length > 0) {"
+    },
+    {
+        "file": "src\\screens\\BusinessCreateScreen.tsx",
+        "line": 133,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "branches={branches.map((b) => ({ ...b, id: b.id ?? `branch_${b.name}` }))}"
+    },
+    {
+        "file": "src\\screens\\BusinessCreateScreen.tsx",
+        "line": 152,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{CREATION_TYPES.map((type) => ("
+    },
+    {
+        "file": "src\\screens\\BusinessDashboardScreen.tsx",
+        "line": 435,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "...metrics.revenueSeries.map((point) => point.revenue),"
+    },
+    {
+        "file": "src\\screens\\BusinessDashboardScreen.tsx",
+        "line": 438,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return metrics.revenueSeries.map((point) => ({"
+    },
+    {
+        "file": "src\\screens\\BusinessDashboardScreen.tsx",
+        "line": 720,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{TABS.map((tab) => ("
+    },
+    {
+        "file": "src\\screens\\BusinessProfileScreen.tsx",
+        "line": 117,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{BUSINESS_BONUSES.map((bonus) => ("
+    },
+    {
+        "file": "src\\screens\\BusinessScannerScreen.tsx",
+        "line": 275,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "issuedBonos.map((bono: any) => ("
+    },
+    {
+        "file": "src\\screens\\CartScreen.tsx",
+        "line": 143,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{items.map((item) => ("
+    },
+    {
+        "file": "src\\screens\\CartScreen.tsx",
+        "line": 203,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{shippingOptions.map((option) => {"
+    },
+    {
+        "file": "src\\screens\\CommercialProfileScreen.tsx",
+        "line": 410,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{tabs.map((tab) => {"
+    },
+    {
+        "file": "src\\screens\\CreateListingScreen.tsx",
+        "line": 280,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const uploadedImages = await Promise.all(form.photos.map(uploadImage));"
+    },
+    {
+        "file": "src\\screens\\CreateListingScreen.tsx",
+        "line": 335,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "images: uploadedImages.map((url, index) => ({ url, isPrimary: index === 0 })),"
+    },
+    {
+        "file": "src\\screens\\CreateListingScreen.tsx",
+        "line": 392,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{filteredOptions.map((type: any) => ("
+    },
+    {
+        "file": "src\\screens\\CreateListingScreen.tsx",
+        "line": 543,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{options.map((cat) => ("
+    },
+    {
+        "file": "src\\screens\\GamesScreen.tsx",
+        "line": 205,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{GAMES.map((game) => ("
+    },
+    {
+        "file": "src\\screens\\HelpArticleDetailScreen.tsx",
+        "line": 89,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{parts.map((p, idx) => {"
+    },
+    {
+        "file": "src\\screens\\HelpArticleDetailScreen.tsx",
+        "line": 168,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{blocks.map((block, idx) => {"
+    },
+    {
+        "file": "src\\screens\\HelpArticleDetailScreen.tsx",
+        "line": 179,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{block.items.map((item, j) => ("
+    },
+    {
+        "file": "src\\screens\\HelpCenterScreen.tsx",
+        "line": 54,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "POPULAR_ARTICLE_IDS.map((id) =>"
+    },
+    {
+        "file": "src\\screens\\HelpCenterScreen.tsx",
+        "line": 105,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{searchResults.map((article) => ("
+    },
+    {
+        "file": "src\\screens\\HelpCenterScreen.tsx",
+        "line": 160,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{popular.map((article) => ("
+    },
+    {
+        "file": "src\\screens\\HelpCenterScreen.tsx",
+        "line": 170,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{HELP_CATEGORIES.map((category) => {"
+    },
+    {
+        "file": "src\\screens\\HelpCenterScreen.tsx",
+        "line": 192,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{articles.map((article) => ("
+    },
+    {
+        "file": "src\\screens\\HistoryScreen.tsx",
+        "line": 457,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const orderIds = new Set(purchaseOrderItems.map(o => o.orderId));"
+    },
+    {
+        "file": "src\\screens\\HistoryScreen.tsx",
+        "line": 683,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{kindChips.map((chip) => {"
+    },
+    {
+        "file": "src\\screens\\HistoryScreen.tsx",
+        "line": 1133,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "filteredItems.map((item, index) => renderItem(item, index))"
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 96,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const purchases = myOrders.map((o: any) => ({"
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 108,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const sales = mySellerOrders.map((o: any) => ({"
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 197,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{quickActions.map((action) => {"
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 307,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{heroSlides.map((_, index) => ("
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 330,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{featuredOffers.map((offer) => {"
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 364,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{categoryCards.map((card) => ("
+    },
+    {
+        "file": "src\\screens\\HomeScreen.tsx",
+        "line": 460,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{allActivity.map((item, idx) => ("
+    },
+    {
+        "file": "src\\screens\\InfluencerDashboardScreen.tsx",
+        "line": 371,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return monthlyGoals.map(goal => {"
+    },
+    {
+        "file": "src\\screens\\InfluencerDashboardScreen.tsx",
+        "line": 659,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{normalizedGoals.map(goal => ("
+    },
+    {
+        "file": "src\\screens\\InfluencerDashboardScreen.tsx",
+        "line": 689,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{followerSegments.map(segment => ("
+    },
+    {
+        "file": "src\\screens\\ItemDetailScreen.tsx",
+        "line": 115,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const gallery = raw.gallery || images.map((img: any) => img.url || img).filter(Boolean);"
+    },
+    {
+        "file": "src\\screens\\ItemDetailScreen.tsx",
+        "line": 354,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{item.gallery.map((url: string, index: number) => ("
+    },
+    {
+        "file": "src\\screens\\ItemDetailScreen.tsx",
+        "line": 362,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{item.gallery.length > 1 && ("
+    },
+    {
+        "file": "src\\screens\\ItemDetailScreen.tsx",
+        "line": 364,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{item.gallery.map((_: any, index: number) => ("
+    },
+    {
+        "file": "src\\screens\\ItemDetailScreen.tsx",
+        "line": 542,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "title={`${item.shippingProfile.dimensionsCm.length}×${item.shippingProfile.dimensionsCm.width}×${item.shippingProfile.dimensionsCm.height} cm`}"
+    },
+    {
+        "file": "src\\screens\\ItemDetailScreen.tsx",
+        "line": 594,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{item.tags.map((tag: string) => ("
+    },
+    {
+        "file": "src\\screens\\MapExplorerScreen.tsx",
+        "line": 184,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{RADIUS_OPTIONS.map(opt => ("
+    },
+    {
+        "file": "src\\screens\\MapExplorerScreen.tsx",
+        "line": 207,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{FILTERS.map(filter => ("
+    },
+    {
+        "file": "src\\screens\\MapExplorerScreen.tsx",
+        "line": 259,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{filteredProducts.map((product) => ("
+    },
+    {
+        "file": "src\\screens\\MarketplaceScreen.tsx",
+        "line": 239,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "advancedFilters.categories.length +"
+    },
+    {
+        "file": "src\\screens\\MarketplaceScreen.tsx",
+        "line": 309,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return sourceListings.map(normalizeListing);"
+    },
+    {
+        "file": "src\\screens\\MarketplaceScreen.tsx",
+        "line": 340,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (advancedFilters.categories.length > 0 && !advancedFilters.categories.includes(item.category)) return false;"
+    },
+    {
+        "file": "src\\screens\\MarketplaceScreen.tsx",
+        "line": 359,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "result = result.map((item) => ({"
+    },
+    {
+        "file": "src\\screens\\OnboardingScreen.tsx",
+        "line": 133,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{SLIDES.map((_, i) => {"
+    },
+    {
+        "file": "src\\screens\\PaymentMethodsScreen.tsx",
+        "line": 123,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "cards.map((card) => {"
+    },
+    {
+        "file": "src\\screens\\PaymentMethodsScreen.tsx",
+        "line": 200,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{testCatalog.map((tc) => ("
+    },
+    {
+        "file": "src\\screens\\PaymentScreen.tsx",
+        "line": 25,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "const lineItems = cartItems.map((item: any) => ({"
+    },
+    {
+        "file": "src\\screens\\ProfileScreen.tsx",
+        "line": 281,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{quickActions.map((action, i) => ("
+    },
+    {
+        "file": "src\\screens\\ProfileScreen.tsx",
+        "line": 445,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{settingsOptions.map((opt, i) => ("
+    },
+    {
+        "file": "src\\screens\\ProfileScreen.tsx",
+        "line": 492,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{pointHistoryPreview.map((tx: any) => {"
+    },
+    {
+        "file": "src\\screens\\ReferralsScreen.tsx",
+        "line": 97,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "history.map((item) => ("
+    },
+    {
+        "file": "src\\screens\\RegisterScreen.tsx",
+        "line": 135,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{ label: '8+ caracteres', met: formData.password.length >= 8 },"
+    },
+    {
+        "file": "src\\screens\\RegisterScreen.tsx",
+        "line": 172,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (formData.email.length > LIMITS.email) {"
+    },
+    {
+        "file": "src\\screens\\RegisterScreen.tsx",
+        "line": 186,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password)) {"
+    },
+    {
+        "file": "src\\screens\\RegisterScreen.tsx",
+        "line": 447,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{formData.password.length > 0 && ("
+    },
+    {
+        "file": "src\\screens\\RegisterScreen.tsx",
+        "line": 449,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{passwordRequirements.map((req, i) => ("
+    },
+    {
+        "file": "src\\screens\\RegisterScreen.tsx",
+        "line": 498,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos.",
+        "snippet": "{formData.referralCode.length > 0 && <CheckCircle2 size={16} color=\"#2196F3\" />}"
+    },
+    {
+        "file": "src\\screens\\RoleSelectionScreen.tsx",
+        "line": 79,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{roles.map((role) => {"
+    },
+    {
+        "file": "src\\screens\\RoleSelectionScreen.tsx",
+        "line": 101,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{role.benefits.map((benefit, index) => ("
+    },
+    {
+        "file": "src\\screens\\SavedScreen.tsx",
+        "line": 170,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{filteredItems.map(item => {"
+    },
+    {
+        "file": "src\\screens\\SubscriptionPlansScreen.tsx",
+        "line": 253,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{features.map((feature: string, index: number) => ("
+    },
+    {
+        "file": "src\\screens\\SupportScreen.tsx",
+        "line": 167,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{contactMethods.map((method, index) => ("
+    },
+    {
+        "file": "src\\screens\\SupportScreen.tsx",
+        "line": 230,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{categories.map(item => {"
+    },
+    {
+        "file": "src\\screens\\VerificationScreen.tsx",
+        "line": 146,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{code.map((digit, idx) => ("
+    },
+    {
+        "file": "src\\screens\\WithdrawalScreen.tsx",
+        "line": 226,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{INTERVALS.map((opt) => {"
+    },
+    {
+        "file": "src\\screens\\admin\\AdminFinanceScreen.tsx",
+        "line": 137,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{page.items.map((p: any) => ("
+    },
+    {
+        "file": "src\\screens\\admin\\AdminFinanceScreen.tsx",
+        "line": 168,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{page.items.map((o: any) => {"
+    },
+    {
+        "file": "src\\screens\\admin\\AdminFinanceScreen.tsx",
+        "line": 199,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{page.items.map((p: any) => ("
+    },
+    {
+        "file": "src\\screens\\admin\\AdminFinanceScreen.tsx",
+        "line": 230,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{page.items.map((p: any) => ("
+    },
+    {
+        "file": "src\\screens\\admin\\AdminFinanceScreen.tsx",
+        "line": 256,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{page.items.map((f: any) => ("
+    },
+    {
+        "file": "src\\screens\\admin\\AdminFinanceScreen.tsx",
+        "line": 340,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{TABS.map((tab) => {"
+    },
+    {
+        "file": "src\\screens\\business\\BusinessProfileScreen.tsx",
+        "line": 227,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{branches.map((branch) => ("
+    },
+    {
+        "file": "src\\screens\\business\\BusinessProfileScreen.tsx",
+        "line": 302,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{catalog.map((item) => ("
+    },
+    {
+        "file": "src\\screens\\business\\BusinessQRScannerScreen.tsx",
+        "line": 90,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{branches.map((branch) => {"
+    },
+    {
+        "file": "src\\screens\\finance\\WalletScreen.tsx",
+        "line": 93,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "myTransactions.map(tx => ("
+    },
+    {
+        "file": "src\\screens\\marketing\\CampaignManagerScreen.tsx",
+        "line": 97,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{campaigns.map((camp: any) => ("
+    },
+    {
+        "file": "src\\screens\\marketplace\\AddEditProductScreen.tsx",
+        "line": 133,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "images: images.map((url, i) => ({ url, isPrimary: i === 0 })),"
+    },
+    {
+        "file": "src\\screens\\marketplace\\AddEditProductScreen.tsx",
+        "line": 183,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{images.map((img, index) => ("
+    },
+    {
+        "file": "src\\screens\\marketplace\\AddEditProductScreen.tsx",
+        "line": 251,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{CATEGORY_OPTIONS.map((option) => {"
+    },
+    {
+        "file": "src\\screens\\marketplace\\CartScreen.tsx",
+        "line": 344,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{items.map((item, index) => ("
+    },
+    {
+        "file": "src\\screens\\marketplace\\DisputeReasonScreen.tsx",
+        "line": 182,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{REASONS.map((r) => {"
+    },
+    {
+        "file": "src\\screens\\marketplace\\DisputeReasonScreen.tsx",
+        "line": 223,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{evidenceUrls.map((url, index) => ("
+    },
+    {
+        "file": "src\\screens\\marketplace\\DisputeScreen.tsx",
+        "line": 259,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{REASONS.map((r) => {"
+    },
+    {
+        "file": "src\\screens\\marketplace\\OrderDetailScreen.tsx",
+        "line": 309,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{TIMELINE_STEPS.map((step, index) => {"
+    },
+    {
+        "file": "src\\screens\\marketplace\\OrderDetailScreen.tsx",
+        "line": 333,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "{order.items.map((item: any, idx: number) => {"
+    },
+    {
+        "file": "src\\screens\\social\\UserListScreen.tsx",
+        "line": 51,
+        "type": "unsafe_array_map",
+        "message": "Llamada a .map() sin optional chaining (?.map) o fallback (|| []). Si el array no existe, crashea.",
+        "snippet": "return fetchedUsers.map((u: any) => ({"
+    }
+]

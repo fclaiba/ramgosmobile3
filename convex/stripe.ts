@@ -369,7 +369,8 @@ export const internalMarkPaymentSucceeded = internalMutation({
 
             if (pointsAwarded > 0) {
                 await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                    userId: payment.userId,
+            sendEmail: true,
+            userId: payment.userId,
                     title: "Puntos ganados",
                     body: `Sumaste +${pointsAwarded} pts por tu compra ($${Number(payment.amount).toFixed(2)}).`,
                     category: "payment",

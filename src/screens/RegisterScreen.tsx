@@ -212,10 +212,16 @@ export default function RegisterScreen({ navigation, route }: any) {
                 );
             }
 
-            // ponytail: email signup ya autentica — ir directo a KYC (igual que social)
             navigation.reset({
                 index: 0,
-                routes: [{ name: 'KYC', params: { accountType: accountType || 'consumer' } }],
+                routes: [{ 
+                    name: 'Verification', 
+                    params: { 
+                        email: formData.email.trim(),
+                        accountType: accountType || 'consumer',
+                        isSignup: true
+                    } 
+                }],
             });
 
         } catch (error: any) {

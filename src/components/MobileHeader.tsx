@@ -43,7 +43,7 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                     ) : null}
                     <View style={styles.titles}>
                         {showLogo ? (
-                            <Image source={require('../../logo.png')} style={{ width: 140, height: 36, resizeMode: 'contain', marginLeft: -4 }} />
+                            <Image source={require('../../logo.png')} style={{ width: 140, height: 36, marginLeft: -4 }} resizeMode="contain" />
                         ) : (
                             <Text style={styles.title} numberOfLines={1}>
                                 {title}

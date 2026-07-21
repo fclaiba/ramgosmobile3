@@ -69,6 +69,7 @@ export const createDispute = mutation({
         const senderLabel = args.role === 'buyer' ? 'El comprador' : 'El vendedor';
 
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: counterPartyId,
             title: `Disputa abierta en orden #${shortOrderId}`,
             body: `${senderLabel} ha abierto una disputa: ${args.reason}`,
@@ -149,7 +150,8 @@ export const addDisputeMessage = mutation({
 
         for (const recipientId of recipients) {
             await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                userId: recipientId,
+            sendEmail: true,
+            userId: recipientId,
                 title: `Nuevo mensaje en disputa #${shortOrderId}`,
                 body: preview,
                 category: 'dispute',
@@ -237,7 +239,8 @@ export const addEvidence = mutation({
                 : null;
         if (otherPartyId) {
             await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                userId: otherPartyId,
+            sendEmail: true,
+            userId: otherPartyId,
                 title: `Nueva evidencia en disputa #${shortOrderId}`,
                 body: `${args.uploadedBy === 'buyer' ? 'El comprador' : 'El vendedor'} agregó ${args.type === 'photo' ? 'una foto' : args.type === 'video' ? 'un video' : 'una nota'}.`,
                 category: 'dispute',
@@ -395,6 +398,7 @@ export const resolveDispute = action({
             : 'a favor del vendedor (liberación de fondos)';
 
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: order.userId,
             title: `Disputa resuelta #${shortOrderId}`,
             body: `La disputa se resolvió ${outcomeMsg}.`,
@@ -402,6 +406,7 @@ export const resolveDispute = action({
             data: { type: 'dispute_resolved', orderId: args.orderId, resolveInFavorOf: args.resolveInFavorOf },
         });
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
             userId: order.sellerId,
             title: `Disputa resuelta #${shortOrderId}`,
             body: `La disputa se resolvió ${outcomeMsg}.`,

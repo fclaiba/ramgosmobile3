@@ -56,7 +56,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
             <View style={styles.commentItem}>
                 <Avatar style={styles.commentAvatar}>
                     {authorAvatar ? <AvatarImage src={authorAvatar} /> : null}
-                    <AvatarFallback>{authorName[0] ?? 'U'}</AvatarFallback>
+                    <AvatarFallback>{(authorName || 'U')[0]}</AvatarFallback>
                 </Avatar>
                 <View style={styles.commentContent}>
                     <View style={styles.commentHeader}>
@@ -105,7 +105,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                     <View style={styles.inputContainer}>
                         <Avatar style={styles.inputAvatar}>
                             <AvatarImage src={currentUser.avatar} />
-                            <AvatarFallback>{currentUser.name[0]}</AvatarFallback>
+                            <AvatarFallback>{(currentUser?.name || currentUser?.displayName || 'U')[0]}</AvatarFallback>
                         </Avatar>
                         <TextInput
                             style={styles.input}

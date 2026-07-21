@@ -1,0 +1,114 @@
+[
+    {
+        "file": "src/components/social\\InstagramPost.tsx",
+        "line": 30,
+        "type": "unsafe_id_access",
+        "message": "Uso de post.id en lugar de post._id (Convex default). Considerar (post._id || post.id).",
+        "snippet": "likeInstagramPost(post.id);"
+    },
+    {
+        "file": "src/components/social\\InstagramPost.tsx",
+        "line": 59,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos si el array es undefined.",
+        "snippet": "<Text style={styles.actionText}>{post.comments.length}</Text>"
+    },
+    {
+        "file": "src/components/social\\InstagramPost.tsx",
+        "line": 59,
+        "type": "unsafe_comments_access",
+        "message": "Acceso a post.comments sin optional chaining. Si viene vacío del backend, crasheará.",
+        "snippet": "<Text style={styles.actionText}>{post.comments.length}</Text>"
+    },
+    {
+        "file": "src/components/social\\InstagramPost.tsx",
+        "line": 73,
+        "type": "unsafe_id_access",
+        "message": "Uso de post.id en lugar de post._id (Convex default). Considerar (post._id || post.id).",
+        "snippet": "postId={post.id}"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 26,
+        "type": "unsafe_id_access",
+        "message": "Uso de post.id en lugar de post._id (Convex default). Considerar (post._id || post.id).",
+        "snippet": "const saved = isPostSaved(post.id);"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 52,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "if (currentUser.id === (post.author || post.user)?.userId || currentUser.id === (post.author || post.user)?.id) handleDelete();"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 58,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "<TouchableOpacity style={styles.userInfo} onPress={() => onUserClick((post.author || post.user)?.userId || (post.author || post.user)?.id)}>"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 60,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "<AvatarImage src={(post.author || post.user)?.avatar} />"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 61,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "<AvatarFallback>{((post.author || post.user)?.displayName || (post.author || post.user)?.name || 'U')[0]}</AvatarFallback>"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 64,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "<Text style={styles.userName}>{(post.author || post.user)?.displayName || (post.author || post.user)?.name || 'Usuario'}</Text>"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 75,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos si el array es undefined.",
+        "snippet": "{post.images && post.images.length > 0 && ("
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 114,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "sellerId: (post.author || post.user)?.userId || (post.author || post.user)?.id,"
+    },
+    {
+        "file": "src/components/social\\Post.tsx",
+        "line": 115,
+        "type": "deprecated_post_user",
+        "message": "Uso de post.user detectado. Se debe usar post.author (o fallback post.author || post.user).",
+        "snippet": "sellerName: (post.author || post.user)?.displayName || (post.author || post.user)?.name,"
+    },
+    {
+        "file": "src/components/social\\StoryViewer.tsx",
+        "line": 80,
+        "type": "unsafe_length_check",
+        "message": "Acceso a .length sin optional chaining (?.), puede causar crasheos si el array es undefined.",
+        "snippet": "if (story.items && currentIndex < story.items.length - 1) {"
+    },
+    {
+        "file": "src/components/social\\UserProfile.tsx",
+        "line": 78,
+        "type": "unsafe_id_access",
+        "message": "Uso de post.id en lugar de post._id (Convex default). Considerar (post._id || post.id).",
+        "snippet": "<View key={post.id} style={styles.postWrapper}>"
+    },
+    {
+        "file": "src/components/social\\UserProfile.tsx",
+        "line": 94,
+        "type": "unsafe_id_access",
+        "message": "Uso de post.id en lugar de post._id (Convex default). Considerar (post._id || post.id).",
+        "snippet": "<View key={post.id} style={styles.gridItemWrapper}>"
+    }
+]

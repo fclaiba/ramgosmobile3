@@ -11,6 +11,7 @@
 import type * as admin from "../admin.js";
 import type * as adminQueries from "../adminQueries.js";
 import type * as approveAll from "../approveAll.js";
+import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as bonos from "../bonos.js";
 import type * as campaigns from "../campaigns.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   adminQueries: typeof adminQueries;
   approveAll: typeof approveAll;
+  auth: typeof auth;
   authHelpers: typeof authHelpers;
   bonos: typeof bonos;
   campaigns: typeof campaigns;
