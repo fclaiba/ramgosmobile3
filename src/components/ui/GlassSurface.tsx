@@ -35,15 +35,15 @@ export function GlassSurface({ children, style, intensity = 'regular', interacti
             ]}
         >
             {Platform.OS === 'web' ? (
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: t.bg }, t.backdrop]} />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }, t.backdrop]} />
             ) : (
                 <>
                     <BlurView
                         intensity={t.blur}
                         tint={isDark ? 'dark' : 'light'}
-                        style={StyleSheet.absoluteFillObject}
+                        style={StyleSheet.absoluteFill}
                     />
-                    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: t.bg }]} />
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]} />
                 </>
             )}
             <View style={styles.content}>{children}</View>
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
     },
     interactive: {
-        borderColor: 'rgba(124,58,237,0.35)',
+        borderColor: 'rgba(33, 150, 243,0.35)',
     },
     content: {
         position: 'relative',

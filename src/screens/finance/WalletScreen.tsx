@@ -6,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { ArrowUpRight, ArrowDownLeft, Clock, Wallet as WalletIcon, DollarSign } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 export default function WalletScreen() {
     const { user } = useAuth();
@@ -51,7 +53,7 @@ export default function WalletScreen() {
             {/* Balance Cards */}
             <View style={styles.balanceContainer}>
                 <LinearGradient
-                    colors={['#7C3AED', '#6D28D9']}
+                    colors={['#2196F3', '#1565C0']}
                     style={styles.mainCard}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
@@ -61,13 +63,13 @@ export default function WalletScreen() {
                             <Text style={styles.balanceLabel}>Saldo Disponible</Text>
                             <Text style={styles.balanceAmount}>${wallet.balanceAvailable.toFixed(2)}</Text>
                         </View>
-                        <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 12 }}>
+                        <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: Radius.md }}>
                             <WalletIcon size={24} color="#fff" />
                         </View>
                     </View>
                     <TouchableOpacity style={styles.withdrawBtn} onPress={handleWithdraw}>
                         <Text style={styles.withdrawText}>Retirar Fondos</Text>
-                        <ArrowUpRight size={16} color="#7C3AED" />
+                        <ArrowUpRight size={16} color="#2196F3" />
                     </TouchableOpacity>
                 </LinearGradient>
 
@@ -115,7 +117,7 @@ export default function WalletScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
         padding: 20,
     },
     header: {
@@ -128,20 +130,16 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     headerTitle: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     balanceContainer: {
         gap: 16,
         marginBottom: 32,
     },
     mainCard: {
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         padding: 24,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 8,
+        ...glassShadow(isDark),
     },
     balanceLabel: {
         color: 'rgba(255,255,255,0.8)',
@@ -161,52 +159,52 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         gap: 8,
     },
     withdrawText: {
-        color: '#7C3AED',
+        color: '#2196F3',
         fontWeight: '700',
         fontSize: 15,
     },
     secondaryCard: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 20,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         padding: 20,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     secondaryLabel: {
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         fontWeight: '600',
         fontSize: 14,
     },
     secondaryAmount: {
         fontSize: 24,
         fontWeight: '700',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginTop: 4,
     },
     secondarySubtext: {
         fontSize: 12,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
         marginTop: 4,
     },
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 16,
     },
     txList: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         padding: 8,
     },
     emptyText: {
         padding: 20,
         textAlign: 'center',
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     txItem: {
         flexDirection: 'row',
@@ -214,24 +212,24 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 16,
         gap: 12,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     iconBox: {
         width: 40,
         height: 40,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         justifyContent: 'center',
         alignItems: 'center',
     },
     txDesc: {
         fontSize: 15,
         fontWeight: '600',
-        color: isDark ? '#F9FAFB' : '#1F2937',
+        color: colors(isDark).text,
         marginBottom: 2,
     },
     txDate: {
         fontSize: 12,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     txAmount: {
         fontSize: 16,

@@ -40,6 +40,8 @@ import { useToast } from '../../contexts/ToastContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { ListPager, paginate } from '../../components/ui/ListPager';
+import { Radius, colors } from '../../theme/tokens';
+
 
 type Tab = 'failed' | 'escrows' | 'disputes' | 'refunds' | 'recon';
 
@@ -228,7 +230,7 @@ export default function AdminFinanceScreen() {
                 {page.items.map((p: any) => (
             <View key={p._id} style={styles.row}>
                 <View style={styles.rowIcon}>
-                    <RotateCcw size={18} color="#7C3AED" />
+                    <RotateCcw size={18} color="#2196F3" />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -367,12 +369,12 @@ export default function AdminFinanceScreen() {
 }
 
 const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     content: { paddingBottom: insets.bottom + 32 },
     refreshBtn: {
         width: 36,
         height: 36,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: isDark ? 'rgba(148, 163, 184, 0.1)' : '#fff',
@@ -381,7 +383,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
 
     tabsBar: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderBottomWidth: 1,
         borderBottomColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#E5E7EB',
     },
@@ -392,8 +394,8 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 999,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.full,
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
         borderColor: isDark ? 'rgba(148, 163, 184, 0.18)' : '#E5E7EB',
     },
@@ -412,7 +414,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.25)',
         paddingHorizontal: 6,
         paddingVertical: 1,
-        borderRadius: 10,
+        borderRadius: Radius.md,
     },
     tabBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
 
@@ -422,8 +424,8 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         padding: 14,
-        borderRadius: 14,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.md,
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
         borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#E5E7EB',
         alignItems: 'flex-start',
@@ -431,7 +433,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     rowIcon: {
         width: 34,
         height: 34,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: isDark ? '#0B1220' : '#F1F5F9',
@@ -443,7 +445,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     flagBtn: {
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
     },
     flagBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 

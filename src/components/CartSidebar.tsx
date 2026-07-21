@@ -10,6 +10,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 export default function CartSidebar() {
     const { items, removeItem, updateQuantity, totalItems, totalPrice, closeCart, isOpen } = useCart();
@@ -84,10 +86,10 @@ export default function CartSidebar() {
                         <View style={styles.emptyContainer}>
                             <View style={styles.emptyIconContainer}>
                                 <LinearGradient
-                                    colors={isDark ? ['rgba(124, 58, 237, 0.25)', 'rgba(59, 130, 246, 0.25)'] : ['rgba(124, 58, 237, 0.15)', 'rgba(59, 130, 246, 0.15)']}
+                                    colors={isDark ? ['rgba(33, 150, 243, 0.25)', 'rgba(59, 130, 246, 0.25)'] : ['rgba(33, 150, 243, 0.15)', 'rgba(59, 130, 246, 0.15)']}
                                     style={styles.emptyIconBg}
                                 >
-                                    <ShoppingBag size={56} color={isDark ? '#A78BFA' : '#7C3AED'} strokeWidth={1.5} />
+                                    <ShoppingBag size={56} color={isDark ? '#5DD3F3' : '#2196F3'} strokeWidth={1.5} />
                                 </LinearGradient>
                                 <View style={[styles.decorativeDot, { top: 10, right: 10, width: 14, height: 14, backgroundColor: '#3B82F6' }]} />
                                 <View style={[styles.decorativeDot, { bottom: 20, left: -5, width: 10, height: 10, backgroundColor: '#EC4899' }]} />
@@ -105,7 +107,7 @@ export default function CartSidebar() {
                                 activeOpacity={0.85}
                             >
                                 <LinearGradient
-                                    colors={isDark ? ['#3B82F6', '#7C3AED'] : ['#2563EB', '#6D28D9']}
+                                    colors={isDark ? ['#3B82F6', '#2196F3'] : ['#2563EB', '#1565C0']}
                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                     style={styles.shopBtnGradient}
                                 >
@@ -130,8 +132,8 @@ export default function CartSidebar() {
 
                                             <View style={styles.itemFooter}>
                                                 {item.type === 'subscription' ? (
-                                                    <View style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                                                        <Text style={{ color: '#7C3AED', fontWeight: 'bold', fontSize: 12 }}>Facturación Mensual</Text>
+                                                    <View style={{ backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm }}>
+                                                        <Text style={{ color: '#2196F3', fontWeight: 'bold', fontSize: 12 }}>Facturación Mensual</Text>
                                                     </View>
                                                 ) : (
                                                     <View style={styles.qtyControl}>
@@ -182,7 +184,7 @@ export default function CartSidebar() {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         width: '85%', // Matching original SIDEBAR_WIDTH ratio roughly
         maxWidth: 400
     },
@@ -193,42 +195,42 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center'
     },
-    headerTitle: { fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
-    headerSubtitle: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
-    closeBtn: { padding: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 20 },
+    headerTitle: { fontSize: 24, fontWeight: '800', color: colors(isDark).text },
+    headerSubtitle: { fontSize: 13, color: colors(isDark).textMuted, marginTop: 2 },
+    closeBtn: { padding: 8, backgroundColor: colors(isDark).glass, borderRadius: Radius.xl },
 
     emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
     emptyIconContainer: { position: 'relative', marginBottom: 32 },
-    emptyIconBg: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 5 },
-    decorativeDot: { position: 'absolute', borderRadius: 20 },
-    emptyTitle: { fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 12, textAlign: 'center' },
-    emptyText: { fontSize: 15, lineHeight: 22, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 40, paddingHorizontal: 10 },
-    shopBtnContainer: { width: '100%', maxWidth: 280, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
-    shopBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 24, borderRadius: 16 },
+    emptyIconBg: { width: 120, height: 120, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', ...glassShadow(isDark),},
+    decorativeDot: { position: 'absolute', borderRadius: Radius.xl },
+    emptyTitle: { fontSize: 24, fontWeight: '800', color: colors(isDark).text, marginBottom: 12, textAlign: 'center' },
+    emptyText: { fontSize: 15, lineHeight: 22, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 40, paddingHorizontal: 10 },
+    shopBtnContainer: { width: '100%', maxWidth: 280, ...glassShadow(isDark),},
+    shopBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 24, borderRadius: Radius.lg },
     shopBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
 
     // Items
-    itemRow: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 2 },
-    itemImage: { width: 70, height: 70, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
+    itemRow: { flexDirection: 'row', backgroundColor: colors(isDark).glass, padding: 12, borderRadius: Radius.lg, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', ...glassShadow(isDark),},
+    itemImage: { width: 70, height: 70, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
     itemContent: { flex: 1, marginLeft: 12, justifyContent: 'space-between' },
     itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    itemName: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#1F2937', flex: 1, marginRight: 8 },
+    itemName: { fontSize: 14, fontWeight: '600', color: colors(isDark).text, flex: 1, marginRight: 8 },
     deleteBtn: { padding: 4 },
     itemFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    qtyControl: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 8, padding: 2 },
-    qtyBtn: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderRadius: 6, backgroundColor: isDark ? '#4B5563' : '#fff' },
+    qtyControl: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, borderRadius: Radius.sm, padding: 2 },
+    qtyBtn: { width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm, backgroundColor: isDark ? '#4B5563' : '#fff' },
     qtyText: { fontSize: 13, fontWeight: '600', paddingHorizontal: 8, color: isDark ? '#F9FAFB' : '#000' },
-    priceText: { fontSize: 15, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    priceText: { fontSize: 15, fontWeight: 'bold', color: colors(isDark).text },
 
     // Footer
-    footer: { padding: 24, paddingBottom: 34, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    footer: { padding: 24, paddingBottom: 34, backgroundColor: colors(isDark).glass, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    summaryLabel: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' },
-    summaryValue: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#1F2937' },
-    totalLabel: { fontSize: 18, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
-    totalValue: { fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
+    summaryLabel: { fontSize: 14, color: colors(isDark).textMuted },
+    summaryValue: { fontSize: 16, fontWeight: '600', color: colors(isDark).text },
+    totalLabel: { fontSize: 18, fontWeight: '800', color: colors(isDark).text },
+    totalValue: { fontSize: 24, fontWeight: '800', color: colors(isDark).text },
 
-    checkoutBtn: { height: 50, borderRadius: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
-    checkoutBtnGradient: { flex: 1, borderRadius: 25, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+    checkoutBtn: { height: 50, borderRadius: Radius['2xl'], ...glassShadow(isDark),},
+    checkoutBtnGradient: { flex: 1, borderRadius: Radius['2xl'], flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
     checkoutBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

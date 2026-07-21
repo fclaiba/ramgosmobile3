@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { AlertTriangle } from 'lucide-react-native';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function SavedScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -54,7 +56,7 @@ export default function SavedScreen({ navigation }: any) {
 
     const filteredItems = favorites.filter(item => {
         // Handle "bono" vs "bonus" mapping if necessary, but context normalizes to input type
-        // In FavoritesContext we said: type: 'product' | 'bono' | 'event' | 'bonus'
+        // In useFavorites we said: type: 'product' | 'bono' | 'event' | 'bonus'
         // Marketplace uses 'bono'. SavedScreen used 'bonus'. Let's stick to what's in item.type
         const matchesTab = activeTab === 'all' || item.type === activeTab || (activeTab === 'bono' && item.type === 'bonus');
 
@@ -273,27 +275,27 @@ export default function SavedScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? '#09090B' : '#FAFAFA', paddingHorizontal: 10, borderRadius: 12, height: 44, marginBottom: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).bg, paddingHorizontal: 10, borderRadius: Radius.md, height: 44, marginBottom: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     searchInput: { flex: 1, paddingHorizontal: 10, fontSize: 14, color: isDark ? '#fff' : '#000' },
 
     tabsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-    tabCard: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, padding: 8, alignItems: 'center', borderWidth: 2, borderBottomWidth: 4 },
+    tabCard: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.md, padding: 8, alignItems: 'center', borderWidth: 2, borderBottomWidth: 4 },
     activeTabCard: {},
 
     itemCard: { overflow: 'hidden' }, // Card is now smart, no need to touch bg
-    imageContainer: { width: 90, height: 90, borderRadius: 12, position: 'relative' },
-    image: { width: '100%', height: '100%', borderRadius: 12 },
-    typeIcon: { position: 'absolute', top: 4, left: 4, width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+    imageContainer: { width: 90, height: 90, borderRadius: Radius.md, position: 'relative' },
+    image: { width: '100%', height: '100%', borderRadius: Radius.md },
+    typeIcon: { position: 'absolute', top: 4, left: 4, width: 20, height: 20, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
 
     itemTitle: { fontWeight: 'bold', fontSize: 14, flex: 1, marginRight: 8, color: isDark ? '#fff' : '#000' },
     itemBusiness: { fontSize: 12, color: isDark ? '#9CA3AF' : '#666' },
 
-    priceText: { fontWeight: 'bold', fontSize: 16, color: '#7C3AED', marginBottom: 6 },
+    priceText: { fontWeight: 'bold', fontSize: 16, color: '#2196F3', marginBottom: 6 },
 
     // Sheet Styles
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
@@ -306,14 +308,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     confirmationIcon: {
         width: 64,
         height: 64,
-        borderRadius: 32,
+        borderRadius: Radius['2xl'],
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 8
     },
     sheetText: {
         fontSize: 16,
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         textAlign: 'center',
         marginBottom: 16
     },

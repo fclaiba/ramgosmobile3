@@ -18,6 +18,8 @@ import { usePoints } from '../../contexts/PointsContext';
 import { glassTokens } from '../../utils/glass';
 import { STRIPE_TEST_CARDS, formatCardNumber } from '../testCards';
 import { SimulatedCardsPanel, type WalletCard } from './SimulatedCardsPanel';
+import { Radius, colors } from '../../theme/tokens';
+
 
 const POINT_USD = 0.01;
 
@@ -131,9 +133,10 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
         }
     };
 
-    const accent = theme?.colors?.primary || '#E31C3D';
-    const textColor = theme?.colors?.text || '#0F172A';
-    const muted = theme?.colors?.textSecondary || '#64748B';
+    const c = colors(!!isDark);
+    const accent = theme?.colors?.primary || c.primary;
+    const textColor = theme?.colors?.text || c.text;
+    const muted = theme?.colors?.textSecondary || c.textMuted;
 
     return (
         <View style={styles.root}>
@@ -261,11 +264,11 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 14,
         paddingVertical: 12,
-        borderRadius: 14,
+        borderRadius: Radius.md,
         borderWidth: 1,
     },
     cheatToggleText: { flex: 1, fontSize: 13, fontWeight: '700' },
-    cheatSheet: { borderRadius: 16, borderWidth: 1, padding: 14, gap: 8 },
+    cheatSheet: { borderRadius: Radius.lg, borderWidth: 1, padding: 14, gap: 8 },
     cheatIntro: { fontSize: 11, fontWeight: '500', marginBottom: 4 },
     cheatRow: {
         flexDirection: 'row',
@@ -277,28 +280,28 @@ const styles = StyleSheet.create({
     cheatBrand: { fontSize: 13, fontWeight: '700' },
     cheatNum: { fontSize: 12, fontFamily: Platform.OS === 'web' ? 'monospace' : undefined, marginTop: 2 },
     cheatMeta: { fontSize: 11, fontWeight: '600' },
-    pointsBar: { gap: 10, borderRadius: 16, borderWidth: 1, padding: 14 },
+    pointsBar: { gap: 10, borderRadius: Radius.lg, borderWidth: 1, padding: 14 },
     pointsLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    pointsIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    pointsIcon: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
     pointsTitle: { fontSize: 14, fontWeight: '800' },
     pointsSub: { fontSize: 12, marginTop: 2 },
-    toggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+    toggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full },
     toggleText: { color: '#fff', fontSize: 11, fontWeight: '800' },
     pointsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     pointsInput: {
         flex: 1,
         borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         paddingHorizontal: 12,
         paddingVertical: 10,
         fontSize: 15,
         fontWeight: '600',
     },
     discountTag: { fontSize: 15, fontWeight: '800' },
-    payDock: { marginTop: 4, padding: 14, borderRadius: 18, gap: 12, borderWidth: 1 },
+    payDock: { marginTop: 4, padding: 14, borderRadius: Radius.lg, gap: 12, borderWidth: 1 },
     payMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
     payMetaLabel: { fontSize: 13, fontWeight: '600' },
     payMetaVal: { fontSize: 22, fontWeight: '900' },
-    payBtn: { height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    payBtn: { height: 56, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
     payBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 });

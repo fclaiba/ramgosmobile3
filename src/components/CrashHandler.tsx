@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react-native';
 import * as Sentry from '@sentry/react-native';
+import { glassShadow, Radius } from '../theme/tokens';
+
 
 interface Props {
     children: ReactNode;
@@ -98,17 +100,12 @@ const styles = StyleSheet.create({
     },
     card: {
         backgroundColor: 'rgba(255,255,255,0.62)',
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         padding: 32,
         alignItems: 'center',
         width: '100%',
         maxWidth: 400,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 5
-    },
+        ...glassShadow(false),},
     title: {
         fontSize: 24,
         fontWeight: 'bold',
@@ -123,7 +120,7 @@ const styles = StyleSheet.create({
     },
     errorBox: {
         backgroundColor: '#FEF2F2',
-        borderRadius: 12,
+        borderRadius: Radius.md,
         padding: 16,
         width: '100%',
         maxHeight: 150,
@@ -143,7 +140,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 14,
         paddingHorizontal: 24,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         width: '100%',
         marginBottom: 16
     },

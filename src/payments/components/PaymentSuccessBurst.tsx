@@ -19,6 +19,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { glassTokens } from '../../utils/glass';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 const { width: W, height: H } = Dimensions.get('window');
 const PARTICLE_COUNT = 28;
@@ -289,7 +291,7 @@ export function PaymentSuccessBurst({ amount, dark = true, onDone }: Props) {
 
 const styles = StyleSheet.create({
     root: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-    blob: { position: 'absolute', borderRadius: 999, opacity: 0.35 },
+    blob: { position: 'absolute', borderRadius: Radius.full, opacity: 0.35 },
     blobA: {
         width: W * 0.7,
         height: W * 0.7,
@@ -320,21 +322,21 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 180,
         height: 180,
-        borderRadius: 90,
+        borderRadius: Radius.full,
         backgroundColor: 'rgba(52,211,153,0.35)',
     },
     ring: {
         position: 'absolute',
         width: 140,
         height: 140,
-        borderRadius: 70,
+        borderRadius: Radius.full,
         borderWidth: 2,
     },
     orbWrap: { alignItems: 'center', justifyContent: 'center' },
     orb: {
         width: 128,
         height: 128,
-        borderRadius: 64,
+        borderRadius: Radius.full,
         borderWidth: 1.5,
         alignItems: 'center',
         justifyContent: 'center',
@@ -343,14 +345,11 @@ const styles = StyleSheet.create({
     checkBadge: {
         width: 88,
         height: 88,
-        borderRadius: 44,
+        borderRadius: Radius.full,
         backgroundColor: '#059669',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#34D399',
-        shadowOpacity: 0.65,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
+        ...glassShadow(false),shadowOffset: { width: 0, height: 8 },
         elevation: 10,
     },
     copy: { alignItems: 'center', gap: 6, marginBottom: 20 },
@@ -360,7 +359,7 @@ const styles = StyleSheet.create({
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 999,
+        borderRadius: Radius.full,
         backgroundColor: 'rgba(251,191,36,0.18)',
         marginBottom: 4,
     },
@@ -369,14 +368,14 @@ const styles = StyleSheet.create({
     amount: { fontSize: 40, fontWeight: '900', marginTop: 2 },
     sub: { fontSize: 14, fontWeight: '500', textAlign: 'center', marginTop: 4 },
     glassCard: {
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         borderWidth: 1,
         padding: 18,
         overflow: 'hidden',
         marginBottom: 22,
     },
     shimmer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         width: W * 0.45,
     },
     cardRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -384,12 +383,12 @@ const styles = StyleSheet.create({
     cardDivider: { height: StyleSheet.hairlineWidth, marginVertical: 12 },
     cardHint: { fontSize: 13, lineHeight: 19, fontWeight: '500' },
     ctaWrap: { paddingBottom: 12 },
-    cta: { borderRadius: 18, overflow: 'hidden' },
+    cta: { borderRadius: Radius.lg, overflow: 'hidden' },
     ctaGrad: {
         height: 58,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 18,
+        borderRadius: Radius.lg,
     },
     ctaText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
 });

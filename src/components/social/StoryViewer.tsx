@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useSocial, Story } from '../../contexts/SocialContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Radius, colors } from '../../theme/tokens';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -307,8 +309,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
     safeArea: { flex: 1, flexDirection: 'column' },
 
     progressContainer: { flexDirection: 'row', paddingHorizontal: 10, paddingTop: 10, gap: 4, height: 14 },
-    progressBarBg: { flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, overflow: 'hidden' },
-    progressBarFill: { height: '100%', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    progressBarBg: { flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: Radius.sm, overflow: 'hidden' },
+    progressBarFill: { height: '100%', backgroundColor: colors(isDark).glass },
 
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginTop: 12 },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -327,7 +329,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     iconBtn: { padding: 4 },
 
     footer: { position: 'absolute', bottom: Platform.OS === 'ios' ? 40 : 20, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 16 },
-    inputContainer: { flex: 1, height: 48, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', paddingHorizontal: 20 },
+    inputContainer: { flex: 1, height: 48, borderRadius: Radius.xl, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', paddingHorizontal: 20 },
     input: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 16 },
     actionBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
 

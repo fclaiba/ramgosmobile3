@@ -61,7 +61,7 @@ export function colors(isDark: boolean) {
         // Brand
         primary: Brand.primary,
         primarySoft: isDark ? Brand.primarySoft : Brand.primary,
-        primaryMuted: isDark ? 'rgba(167,139,250,0.16)' : 'rgba(124,58,237,0.10)',
+        primaryMuted: isDark ? 'rgba(93, 211, 243,0.16)' : 'rgba(33, 150, 243,0.10)',
         // Status
         success: Brand.success,
         danger: Brand.danger,
@@ -84,7 +84,6 @@ export function atmosphere(isDark: boolean): [string, string, string] {
 export function glassShadow(isDark: boolean): ViewStyle {
     if (Platform.OS === 'web') {
         return {
-            // @ts-expect-error web
             boxShadow: isDark
                 ? '0 8px 28px rgba(0,0,0,0.4)'
                 : '0 8px 28px rgba(24,24,27,0.08)',

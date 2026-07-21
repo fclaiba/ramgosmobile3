@@ -14,6 +14,7 @@ import {
   getGameTheme,
   GAME_FAMILY_BY_ID,
 } from './gameContracts';
+import { glassShadow, Radius } from '../../theme/tokens';
 
 export type GameActionSignal = { type: GameAction; nonce: number } | null;
 
@@ -420,7 +421,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
   iconBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.06)',
@@ -430,7 +431,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
   scoreBox: { alignItems: 'flex-end', minWidth: 70 },
   hudLabel: { fontSize: 10, fontWeight: '800', opacity: 0.9 },
   hudText: { fontSize: 14, fontWeight: '900' },
-  progressTrack: { height: 6, borderRadius: 6, overflow: 'hidden', marginTop: 4 },
+  progressTrack: { height: 6, borderRadius: Radius.sm, overflow: 'hidden', marginTop: 4 },
   progressFill: { height: '100%' },
   hudActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   hudRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -445,15 +446,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
   overlayCard: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: 24,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     padding: 24,
     backgroundColor: 'rgba(15,23,42,0.95)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    ...glassShadow(isDark),
   },
   overlayTitle: { fontSize: 28, fontWeight: '900', textAlign: 'center', marginBottom: 12 },
   primaryBtn: {
@@ -462,7 +459,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
   primaryBtnText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '900', fontSize: 16 },
   secondaryBtn: {
@@ -471,7 +468,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
@@ -483,7 +480,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.75)',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
   levelupText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '900', letterSpacing: 1 },
   timerBadge: {
@@ -493,7 +490,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     marginRight: 4,
   },
   timerText: {

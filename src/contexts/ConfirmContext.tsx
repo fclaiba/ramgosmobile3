@@ -4,6 +4,8 @@ import { AlertTriangle } from 'lucide-react-native';
 import { useTheme } from './ThemeContext';
 import { glassTokens } from '../utils/glass';
 import { setConfirmHandler } from '../utils/confirm';
+import { Radius, colors } from '../theme/tokens';
+
 
 interface ConfirmOptions {
     title: string;
@@ -103,7 +105,7 @@ const getStyles = (isDark: boolean) => {
         dialog: {
             width: '100%',
             maxWidth: 400,
-            borderRadius: 22,
+            borderRadius: Radius.xl,
             padding: 22,
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(17,24,39,0.92)' : 'rgba(255,255,255,0.92)',
@@ -113,20 +115,20 @@ const getStyles = (isDark: boolean) => {
             ...glass.backdrop,
         },
         iconWrap: {
-            width: 48, height: 48, borderRadius: 16,
+            width: 48, height: 48, borderRadius: Radius.lg,
             alignItems: 'center', justifyContent: 'center', marginBottom: 12,
         },
         title: {
             fontSize: 17, fontWeight: '800', textAlign: 'center',
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
         },
         message: {
             fontSize: 13.5, textAlign: 'center', marginTop: 8, lineHeight: 19,
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
         },
         actions: { flexDirection: 'row', gap: 10, marginTop: 20, alignSelf: 'stretch' },
         btn: {
-            flex: 1, paddingVertical: 12, borderRadius: 13,
+            flex: 1, paddingVertical: 12, borderRadius: Radius.md,
             alignItems: 'center', justifyContent: 'center',
         },
         btnCancel: {
@@ -136,7 +138,7 @@ const getStyles = (isDark: boolean) => {
         },
         btnPrimary: { backgroundColor: '#6366F1' },
         btnDanger: { backgroundColor: '#EF4444' },
-        btnCancelText: { fontWeight: '700', fontSize: 13.5, color: isDark ? '#E5E7EB' : '#374151' },
+        btnCancelText: { fontWeight: '700', fontSize: 13.5, color: colors(isDark).text },
         btnConfirmText: { fontWeight: '700', fontSize: 13.5, color: '#FFFFFF' },
     });
 };

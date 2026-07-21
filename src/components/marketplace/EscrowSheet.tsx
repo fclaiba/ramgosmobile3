@@ -41,6 +41,7 @@ import type { EscrowPhase, EscrowState, EscrowOrder as Order } from '../../conte
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { Radius, colors } from '../../theme/tokens';
 
 // === STATE META ===
 type _EscrowState = EscrowState;
@@ -281,7 +282,8 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
     const toneColors = isDark ? TONE_COLORS_DARK : TONE_COLORS;
     const stateMeta = order ? ESCROW_STATE_META[order.escrow.state] : null;
     const tone = stateMeta?.tone ?? 'neutral';
-    const colors = toneColors[tone];
+    const toneC = toneColors[tone];
+    const c = colors(isDark);
     const StateIcon = stateMeta?.Icon ?? ShieldCheck;
 
     const listingType = order?.items[0]?.listingType ?? 'product';
@@ -394,8 +396,8 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         >
             {stateMeta && (
                 <LinearGradient colors={isDark ? stateMeta.gradientDark : stateMeta.gradientLight} style={styles.heroCard}>
-                    <View style={[styles.heroIconContainer, { borderColor: colors.icon }]}>
-                        <StateIcon size={isSmall ? 24 : 28} color={colors.icon} />
+                    <View style={[styles.heroIconContainer, { borderColor: toneC.icon }]}>
+                        <StateIcon size={isSmall ? 24 : 28} color={toneC.icon} />
                     </View>
                     <View style={styles.heroContent}>
                         <Text style={[styles.heroTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
@@ -405,8 +407,8 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                             #{String(order?.id ?? '').slice(-6).toUpperCase()} • {role === 'buyer' ? 'Compraste' : 'Vendiste'}
                         </Text>
                     </View>
-                    <View style={[styles.heroBadge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-                        <Text style={[styles.heroBadgeText, { color: colors.text }]}>{stateMeta.shortLabel}</Text>
+                    <View style={[styles.heroBadge, { backgroundColor: toneC.bg, borderColor: toneC.border }]}>
+                        <Text style={[styles.heroBadgeText, { color: toneC.text }]}>{stateMeta.shortLabel}</Text>
                     </View>
                 </LinearGradient>
             )}
@@ -454,7 +456,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
             {!hasActiveDispute && (
                 <View style={styles.progressContainer}>
                     <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${Math.min(100, (currentStep / (progressSteps.length - 1)) * 100)}%`, backgroundColor: colors.icon }]} />
+                        <View style={[styles.progressFill, { width: `${Math.min(100, (currentStep / (progressSteps.length - 1)) * 100)}%`, backgroundColor: toneC.icon }]} />
                     </View>
                     <View style={styles.progressSteps}>
                         {progressSteps.map((step, index) => {
@@ -463,7 +465,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                             const StepIcon = step.icon;
                             return (
                                 <View key={step.label} style={styles.progressStep}>
-                                    <View style={[styles.progressDot, isActive && { backgroundColor: colors.icon, borderColor: colors.icon }, isCurrent && styles.progressDotCurrent]}>
+                                    <View style={[styles.progressDot, isActive && { backgroundColor: toneC.icon, borderColor: toneC.icon }, isCurrent && styles.progressDotCurrent]}>
                                         <StepIcon size={12} color={isActive ? '#fff' : (isDark ? '#6B7280' : '#9CA3AF')} />
                                     </View>
                                     <Text style={[styles.progressLabel, isActive && { color: isDark ? '#F9FAFB' : '#111827', fontWeight: '600' }]}>{step.label}</Text>
@@ -500,10 +502,10 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
             </View>
 
             {order && (
-                <View style={[styles.card, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                <View style={[styles.card, { backgroundColor: toneC.text, borderColor: toneC.text }]}>
                     <View style={styles.explanationHeader}>
-                        <StateIcon size={18} color={colors.icon} />
-                        <Text style={[styles.explanationTitle, { color: colors.text }]}>¿Qué significa?</Text>
+                        <StateIcon size={18} color={toneC.text} />
+                        <Text style={[styles.explanationTitle, { color: toneC.text }]}>¿Qué significa?</Text>
                     </View>
                     <Text style={[styles.explanationText, { color: isDark ? '#E5E7EB' : '#374151' }]}>
                         {renderExplanation(order, role, terms)}
@@ -574,7 +576,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                 {/* Compact escrow strip */}
                 {order && (
                     <View style={[styles.glassChip, { marginBottom: 10 }]}>
-                        <ShieldCheck size={14} color={colors.icon} />
+                        <ShieldCheck size={14} color={toneC.icon} />
                         <Text style={[styles.glassChipText, { color: isDark ? '#E5E7EB' : '#111827' }]} numberOfLines={1}>
                             {formatMoney(order.totals.grandTotal, order.totals.currency)} · {stateMeta?.shortLabel ?? order.escrow.state}
                         </Text>

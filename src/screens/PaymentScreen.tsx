@@ -7,6 +7,8 @@ import { PaymentSuccessBurst } from '../payments/components/PaymentSuccessBurst'
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { glassGradient, glassTokens } from '../utils/glass';
+import { Radius, colors } from '../theme/tokens';
+
 
 // Pedidos Ya–style checkout shell + PaymentForm (carrusel / puntos / CTA).
 
@@ -37,14 +39,15 @@ export default function PaymentScreen({ navigation, route }: any) {
     const dark = colorScheme === 'dark';
     const glass = glassTokens(dark);
     const grad = glassGradient(dark);
+    const c = colors(dark);
 
     const C = {
-        text: dark ? '#F1F5F9' : '#0F172A',
-        muted: dark ? '#94A3B8' : '#64748B',
-        border: dark ? '#334155' : '#E2E8F0',
-        accent: '#E31C3D',
-        success: '#10B981',
-        card: dark ? '#1E293B' : '#FFFFFF',
+        text: c.text,
+        muted: c.textMuted,
+        border: c.border,
+        accent: c.primary,
+        success: c.success,
+        card: c.bgElevated,
     };
 
     const fmt = (v: number) => `$${v.toFixed(2)}`;
@@ -150,7 +153,7 @@ const st = StyleSheet.create({
     headerTitle: { fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
     scroll: { flex: 1 },
     scrollContent: { padding: 20, gap: 16 },
-    summaryCard: { borderRadius: 16, borderWidth: 1, padding: 18 },
+    summaryCard: { borderRadius: Radius.lg, borderWidth: 1, padding: 18 },
     summaryRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -166,7 +169,7 @@ const st = StyleSheet.create({
         backgroundColor: '#FEE2E2',
         borderWidth: 1,
         borderColor: '#FECACA',
-        borderRadius: 12,
+        borderRadius: Radius.md,
         padding: 14,
     },
     errorText: { color: '#DC2626', fontSize: 14, fontWeight: '500', textAlign: 'center' },

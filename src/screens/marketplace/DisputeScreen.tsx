@@ -163,7 +163,7 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
             <View style={styles.container}>
                 <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
                 <View style={styles.loadingWrap}>
-                    <ActivityIndicator size="large" color="#7C3AED" />
+                    <ActivityIndicator size="large" color="#2196F3" />
                     <Text style={styles.loadingText}>Cargando orden...</Text>
                 </View>
             </View>
@@ -237,8 +237,8 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
                                 <Text style={styles.orderLabel}>ORDEN #{String(order._id).slice(-6).toUpperCase()}</Text>
                                 <Text style={styles.orderTotal}>{formatCurrency(order.total)}</Text>
                             </View>
-                            <View style={[styles.escrowBadge, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#EDE9FE' }]}>
-                                <Text style={[styles.escrowBadgeText, { color: '#7C3AED' }]}>
+                            <View style={[styles.escrowBadge, { backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : '#EDE9FE' }]}>
+                                <Text style={[styles.escrowBadgeText, { color: '#2196F3' }]}>
                                     {(order.escrow?.state || order.escrowState || 'HELD').toUpperCase()}
                                 </Text>
                             </View>
@@ -247,7 +247,7 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
                             <Text style={styles.orderMeta}>Liberación estimada: {releaseDateStr}</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Text style={styles.orderLink}>Ver escrow</Text>
-                                <ChevronRight size={14} color="#7C3AED" />
+                                <ChevronRight size={14} color="#2196F3" />
                             </View>
                         </View>
                     </TouchableOpacity>
@@ -266,14 +266,14 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
                                         onPress={() => setReason(r.label)}
                                         activeOpacity={0.8}
                                     >
-                                        <View style={[styles.reasonIconWrap, isActive && { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE' }]}>
-                                            <Icon size={20} color={isActive ? '#7C3AED' : isDark ? '#9CA3AF' : '#6B7280'} />
+                                        <View style={[styles.reasonIconWrap, isActive && { backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE' }]}>
+                                            <Icon size={20} color={isActive ? '#2196F3' : isDark ? '#9CA3AF' : '#6B7280'} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={[styles.reasonLabel, isActive && { color: '#7C3AED' }]}>{r.label}</Text>
+                                            <Text style={[styles.reasonLabel, isActive && { color: '#2196F3' }]}>{r.label}</Text>
                                             <Text style={styles.reasonDesc}>{r.description}</Text>
                                         </View>
-                                        {isActive && <CheckCircle2 size={22} color="#7C3AED" />}
+                                        {isActive && <CheckCircle2 size={22} color="#2196F3" />}
                                     </TouchableOpacity>
                                 );
                             })}
@@ -360,6 +360,8 @@ function EmptyState({ isDark, insets, navigation, message }: any) {
 }
 
 import { StyleSheet } from 'react-native';
+import { Radius, colors } from '../../theme/tokens';
+
 
 function getStyles(isDark: boolean, insets: any) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
@@ -367,7 +369,7 @@ function getStyles(isDark: boolean, insets: any) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = '#7C3AED';
+    const primary = '#2196F3';
 
     return StyleSheet.create({
         container: { flex: 1, backgroundColor: bg },
@@ -388,7 +390,7 @@ function getStyles(isDark: boolean, insets: any) {
         iconBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.9)',
@@ -422,7 +424,7 @@ function getStyles(isDark: boolean, insets: any) {
             alignItems: 'flex-start',
             gap: 14,
             backgroundColor: isDark ? 'rgba(249, 115, 22, 0.12)' : '#FFF7ED',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 16,
             marginBottom: 16,
             borderWidth: 1,
@@ -433,7 +435,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         orderCard: {
             backgroundColor: surface,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 18,
             marginBottom: 20,
             borderWidth: 1,
@@ -442,7 +444,7 @@ function getStyles(isDark: boolean, insets: any) {
         orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
         orderLabel: { fontSize: 11, fontWeight: '800', color: muted, letterSpacing: 0.5 },
         orderTotal: { fontSize: 22, fontWeight: '800', color: text, marginTop: 4 },
-        escrowBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+        escrowBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md },
         escrowBadgeText: { fontSize: 10, fontWeight: '800' },
         orderCardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTopWidth: 1, borderTopColor: border },
         orderMeta: { fontSize: 12, color: muted, fontWeight: '500' },
@@ -455,7 +457,7 @@ function getStyles(isDark: boolean, insets: any) {
             alignItems: 'center',
             gap: 14,
             backgroundColor: surface,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: 14,
             marginBottom: 10,
             borderWidth: 1,
@@ -463,13 +465,13 @@ function getStyles(isDark: boolean, insets: any) {
         },
         reasonRowActive: {
             borderColor: primary,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.08)' : '#FAFAFA',
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.08)' : '#FAFAFA',
         },
         reasonIconWrap: {
             width: 44,
             height: 44,
-            borderRadius: 14,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.md,
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -478,7 +480,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         inputWrap: {
             backgroundColor: surface,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             borderWidth: 1,
             borderColor: border,
             padding: 16,
@@ -493,7 +495,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         alreadyDisputedCard: {
             backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : '#FFFBEB',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 20,
             alignItems: 'center',
             borderWidth: 1,
@@ -516,28 +518,28 @@ function getStyles(isDark: boolean, insets: any) {
             justifyContent: 'center',
             gap: 8,
             width: '100%',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             paddingVertical: 16,
         },
         footerBtnPrimary: { backgroundColor: primary },
         footerBtnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 16 },
         footerBtnDanger: { backgroundColor: '#DC2626' },
         footerBtnDangerText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-        footerBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+        footerBtnDisabled: { backgroundColor: colors(isDark).glass },
 
         emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
         emptyIconWrap: {
             width: 80,
             height: 80,
-            borderRadius: 40,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.full,
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
         },
         emptyTitle: { fontSize: 20, fontWeight: '800', color: text },
         emptyText: { fontSize: 14, color: muted, textAlign: 'center', lineHeight: 20 },
-        emptyBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, backgroundColor: primary },
+        emptyBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: Radius.md, backgroundColor: primary },
         emptyBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
     });
 }

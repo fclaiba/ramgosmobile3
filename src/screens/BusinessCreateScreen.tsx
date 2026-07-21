@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UnifiedListingForm, ListingType } from '../components/forms/UnifiedListingForm';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 export default function BusinessCreateScreen({ navigation, route }: any) {
     const [selectedType, setSelectedType] = useState<ListingType | null>(route?.params?.type || null);
@@ -110,7 +112,7 @@ export default function BusinessCreateScreen({ navigation, route }: any) {
 
     const CREATION_TYPES = [
         { id: 'product', label: 'Producto', icon: Package, desc: 'Vende artículos físicos', color: ['#3B82F6', '#2563EB'] },
-        { id: 'service', label: 'Servicio', icon: Briefcase, desc: 'Ofrece tus servicios', color: ['#8B5CF6', '#7C3AED'] },
+        { id: 'service', label: 'Servicio', icon: Briefcase, desc: 'Ofrece tus servicios', color: ['#4FC3F7', '#2196F3'] },
         { id: 'event', label: 'Evento', icon: Calendar, desc: 'Vende entradas', color: ['#F59E0B', '#D97706'] },
         { id: 'bono', label: 'Bono', icon: Tag, desc: 'Ofrece cupones', color: ['#10B981', '#059669'] },
     ] as const;
@@ -172,7 +174,7 @@ export default function BusinessCreateScreen({ navigation, route }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4, color: isDark ? '#F9FAFB' : '#0f172a' },
     grid: {
         flexDirection: 'row',
@@ -182,13 +184,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     typeCard: {
         width: '47%',
         aspectRatio: 1,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         overflow: 'hidden',
         elevation: 4,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-    },
+        ...glassShadow(isDark),},
     cardGradient: {
         flex: 1,
         padding: 16,
@@ -213,8 +212,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         gap: 16,
         padding: 18,
-        borderRadius: 16,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.lg,
+        backgroundColor: colors(isDark).glass,
         marginBottom: 12,
         alignItems: 'center',
         borderWidth: 1,
@@ -223,14 +222,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     selectorIcon: {
         width: 48,
         height: 48,
-        borderRadius: 14,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    selectorTitle: { fontSize: 16, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
+    selectorTitle: { fontSize: 16, fontWeight: '700', color: colors(isDark).text },
     selectorSubtitle: { fontSize: 13, color: isDark ? '#9CA3AF' : '#64748b', marginTop: 4 },
     formWrapper: { gap: 16 },
-    formCard: { padding: 16, borderRadius: 16, backgroundColor: isDark ? '#09090B' : '#FAFAFA', gap: 16, borderWidth: 1, borderColor: isDark ? '#374151' : 'transparent' },
+    formCard: { padding: 16, borderRadius: Radius.lg, backgroundColor: colors(isDark).bg, gap: 16, borderWidth: 1, borderColor: isDark ? '#374151' : 'transparent' },
     formGroup: { gap: 8 },
     formRow: { flexDirection: 'row', gap: 12 },
     formColumn: { flex: 1, gap: 6 },
@@ -239,12 +238,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     input: {
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        borderRadius: 12,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        borderRadius: Radius.md,
         paddingHorizontal: 16,
         paddingVertical: 12,
         fontSize: 14,
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
 
     // Picker Styles
@@ -254,14 +253,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'space-between',
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        borderRadius: 12,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        borderRadius: Radius.md,
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
     pickerText: {
         fontSize: 14,
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     placeholderText: {
         color: isDark ? '#9CA3AF' : '#9CA3AF',
@@ -270,13 +269,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         marginTop: 8,
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        borderRadius: 12,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        borderRadius: Radius.md,
         overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 4,
+        ...glassShadow(isDark),
     },
     pickerItem: {
         flexDirection: 'row',
@@ -285,11 +281,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         paddingVertical: 12,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     pickerItemText: {
         fontSize: 14,
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
     },
     pickerItemTextActive: {
         color: '#2563EB',
@@ -299,7 +295,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     inputMultiline: { height: 100, textAlignVertical: 'top' },
     toggle: {
         height: 42,
-        borderRadius: 999,
+        borderRadius: Radius.full,
         borderWidth: 1,
         borderColor: isDark ? '#374151' : '#e2e8f0',
         alignItems: 'center',
@@ -316,29 +312,29 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 999,
+        borderRadius: Radius.full,
         borderWidth: 1,
         borderColor: isDark ? '#374151' : '#e2e8f0',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
-    selectorChipActive: { backgroundColor: isDark ? '#F3F4F6' : '#111827', borderColor: isDark ? '#F3F4F6' : '#111827' },
+    selectorChipActive: { backgroundColor: colors(isDark).text, borderColor: colors(isDark).text },
     selectorChipText: { fontSize: 12, fontWeight: '600', color: isDark ? '#9CA3AF' : '#475569' },
     selectorChipTextActive: { color: isDark ? '#000' : '#fff' },
     branchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     branchChip: {
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 999,
+        borderRadius: Radius.full,
         borderWidth: 1,
         borderColor: isDark ? '#4B5563' : '#cbd5f5',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
     branchChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
     branchChipText: { fontSize: 12, fontWeight: '600', color: isDark ? '#9CA3AF' : '#475569' },
     branchChipTextActive: { color: '#fff' },
     buttonTextLight: { color: '#fff', fontWeight: '600', fontSize: 14 },
     buttonTextDark: { color: isDark ? '#111827' : '#111827', fontWeight: '600', fontSize: 14 },
-    placeholderCard: { padding: 24, borderRadius: 18, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', gap: 12, marginTop: 16 },
+    placeholderCard: { padding: 24, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass, gap: 12, marginTop: 16 },
     placeholderTitle: { fontSize: 18, fontWeight: '700', color: isDark ? '#F9FAFB' : '#0f172a' },
     placeholderCopy: { fontSize: 14, color: isDark ? '#9CA3AF' : '#475569', lineHeight: 20 },
 });

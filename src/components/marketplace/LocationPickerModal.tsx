@@ -16,6 +16,8 @@ import { BlurView } from 'expo-blur';
 import DarkMapView, { Marker, Region } from '../map/DarkMapView';
 import { MAP_DEFAULTS } from '../../constants/darkMapStyle';
 import { useUserLocation } from '../../hooks/useUserLocation';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 interface LocationPickerModalProps {
     visible: boolean;
@@ -185,7 +187,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                                 }}
                             >
                                 <View style={styles.markerContainer}>
-                                    <MapPin size={28} color="#7C3AED" />
+                                    <MapPin size={28} color="#2196F3" />
                                 </View>
                             </Marker>
                         )}
@@ -194,7 +196,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                     {/* Crosshair overlay to show map center when no selection */}
                     {!selectedCoord && (
                         <View style={styles.crosshairOverlay} pointerEvents="none">
-                            <MapPin size={32} color="#7C3AED" />
+                            <MapPin size={32} color="#2196F3" />
                         </View>
                     )}
 
@@ -206,7 +208,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                     >
                         <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.fabBlur}>
                             {gettingLocation ? (
-                                <ActivityIndicator size="small" color="#7C3AED" />
+                                <ActivityIndicator size="small" color="#2196F3" />
                             ) : (
                                 <Crosshair size={22} color={isDark ? '#F9FAFB' : '#111827'} />
                             )}
@@ -218,9 +220,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                     <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.footerBlur}>
                         <View style={styles.footerContent}>
                             <View style={styles.addressRow}>
-                                <MapPin size={18} color="#7C3AED" style={{ marginRight: 8 }} />
+                                <MapPin size={18} color="#2196F3" style={{ marginRight: 8 }} />
                                 {loadingAddress ? (
-                                    <ActivityIndicator size="small" color="#7C3AED" />
+                                    <ActivityIndicator size="small" color="#2196F3" />
                                 ) : (
                                     <Text style={styles.addressText} numberOfLines={2}>
                                         {selectedCoord
@@ -249,7 +251,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
     },
     header: {
         position: 'absolute',
@@ -271,11 +273,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     title: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     closeBtn: {
         padding: 8,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         backgroundColor: isDark ? 'rgba(31, 41, 55, 0.8)' : 'rgba(243, 244, 246, 0.8)',
     },
     mapContainer: {
@@ -300,16 +302,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         position: 'absolute',
         right: 16,
         zIndex: 15,
-        borderRadius: 14,
+        borderRadius: Radius.md,
         overflow: 'hidden',
         ...Platform.select({
             web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.15)' },
             default: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 5,
+                ...glassShadow(isDark),
             },
         }),
     },
@@ -345,15 +343,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flex: 1,
         fontSize: 14,
         fontWeight: '500',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     confirmBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#7C3AED',
+        backgroundColor: '#2196F3',
         paddingVertical: 14,
-        borderRadius: 14,
+        borderRadius: Radius.md,
     },
     confirmBtnDisabled: {
         backgroundColor: '#9CA3AF',

@@ -36,7 +36,7 @@ const regionToZoom = (latitudeDelta: number) => {
 const purplePinIcon = L.divIcon({
     className: 'ramgos-picker-pin',
     html: `<div style="display:flex;flex-direction:column;align-items:center;">
-        <div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#7C3AED;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>
+        <div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#2196F3;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);"></div>
     </div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 28],
@@ -135,7 +135,7 @@ export const Circle = ({
     <LCircle
         center={[center.latitude, center.longitude]}
         radius={radius}
-        pathOptions={{ color: 'rgba(124, 58, 237, 0.5)', fillColor: 'rgba(124, 58, 237, 0.08)', weight: 2 }}
+        pathOptions={{ color: 'rgba(33, 150, 243, 0.5)', fillColor: 'rgba(33, 150, 243, 0.08)', weight: 2 }}
     />
 );
 

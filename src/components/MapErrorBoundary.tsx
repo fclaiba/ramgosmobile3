@@ -1,6 +1,8 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Map, RefreshCw, AlertTriangle, XCircle } from 'lucide-react-native';
+import { Radius, colors } from '../theme/tokens';
+
 
 interface Props {
   children: ReactNode;
@@ -194,7 +196,7 @@ function getErrorMessage(error: Error | null): string {
 const getStyles = (isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+    backgroundColor: colors(isDark).bg,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -202,8 +204,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
   iconContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+    borderRadius: Radius.full,
+    backgroundColor: colors(isDark).glass,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -211,13 +213,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: isDark ? '#F9FAFB' : '#111827',
+    color: colors(isDark).text,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 14,
-    color: isDark ? '#9CA3AF' : '#6B7280',
+    color: colors(isDark).textMuted,
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 20,
@@ -228,7 +230,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gap: 8,
     backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     marginBottom: 20,
     maxWidth: '100%',
   },
@@ -245,7 +247,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     backgroundColor: '#6366F1',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     marginBottom: 16,
   },
   retryText: {

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { assertSelfOrAdmin, requireActor, checkRateLimit, createSession } from "./authHelpers";
+import { assertSelfOrAdmin, requireActor, checkRateLimit, createSession, getActorOrNull } from "./authHelpers";
 import { internal } from "./_generated/api";
 import { hashPassword, verifyPassword } from "./passwordHelpers";
 
@@ -208,9 +208,15 @@ export const changePassword = mutation({
 });
 
 export const getUser = query({
-    args: { id: v.id("users") },
+    args: { id: v.id("users"), sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         try {
+            if (args.sessionToken) {
+                 const actor = await getActorOrNull(ctx, args.sessionToken);
+                 if (!actor || actor.idString !== args.id) {
+                     return null;
+                 }
+            }
             const user = await ctx.db.get(args.id);
             return user ? sanitizeUser(user) : null;
         } catch (e) {

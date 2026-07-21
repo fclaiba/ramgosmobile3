@@ -7,6 +7,8 @@ import { useGameLevel } from './useGameLevel';
 import { GAME_LEVEL_THRESHOLDS, getArcadeParams } from './gameDifficultyConfig';
 import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 // GAME_HEIGHT removed, we will use flex
@@ -424,7 +426,7 @@ const styles = StyleSheet.create({
     scoreBox: {
         backgroundColor: 'rgba(255,255,255,0.8)',
         padding: 8,
-        borderRadius: 8
+        borderRadius: Radius.sm
     },
     scoreText: {
         fontWeight: 'bold',
@@ -433,7 +435,7 @@ const styles = StyleSheet.create({
     instructions: {
         backgroundColor: 'rgba(255,255,255,0.5)',
         padding: 8,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4
@@ -472,12 +474,10 @@ const styles = StyleSheet.create({
         backgroundColor: '#B45309',
         paddingHorizontal: 24,
         paddingVertical: 12,
-        borderRadius: 30,
+        borderRadius: Radius['2xl'],
         alignItems: 'center',
         gap: 8,
-        shadowColor: '#000',
-        elevation: 5
-    },
+        ...glassShadow(false),},
     btnText: {
         color: '#fff',
         fontWeight: 'bold',

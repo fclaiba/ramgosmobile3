@@ -11,6 +11,8 @@ import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent } from './ui/sheet';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
+import { Radius, colors } from '../theme/tokens';
+
 
 interface SidebarMenuProps {
     visible: boolean;
@@ -173,7 +175,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                 <Switch
                     value={switchValue}
                     onValueChange={(val) => { triggerHaptic(); onSwitchChange?.(val); }}
-                    trackColor={{ false: '#767577', true: '#8B5CF6' }}
+                    trackColor={{ false: '#767577', true: '#4FC3F7' }}
                     thumbColor={switchValue ? '#fff' : '#f4f3f4'}
                     accessibilityLabel={`${label} ${switchValue ? 'activado' : 'desactivado'}`}
                 />
@@ -232,7 +234,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                             {displayEmail}
                                         </Text>
                                         <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                                            <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+                                            <View style={[styles.roleBadge, !effectiveUser && { backgroundColor: colors(isDark).glass }]}>
                                                 <Text style={styles.roleText}>
                                                     {isPending ? 'PENDING_VERIFICATION' : effectiveUser?.role?.toUpperCase() || 'MODO INVITADO'}
                                                 </Text>
@@ -264,7 +266,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                     icon={User}
                                     label="Iniciar sesión"
                                     action={() => { onClose(); navigation.navigate('Login'); }}
-                                    color="#8B5CF6"
+                                    color="#4FC3F7"
                                 />
                                 <MenuItem
                                     icon={Plus}
@@ -298,7 +300,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                 <>
                                     <MenuItem icon={Bell} label="Notificaciones" action={() => { onClose(); navigation.navigate('Notifications'); }} badge={unreadCount} color="#6366F1" />
                                     <MenuItem icon={PawPrint} label="Mi Mascota" action={() => { onClose(); navigation.navigate('MiMascota'); }} color="#EC4899" />
-                                    <MenuItem icon={User} label="Mi Perfil" action={() => { onClose(); navigation.navigate('Profile'); }} color="#8B5CF6" />
+                                    <MenuItem icon={User} label="Mi Perfil" action={() => { onClose(); navigation.navigate('Profile'); }} color="#4FC3F7" />
                                     <MenuItem icon={Users} label="Invitar Amigos" action={() => { onClose(); navigation.navigate('Referrals'); }} color="#10B981" />
                                     <MenuItem icon={Save} label="Guardados" action={() => { onClose(); navigation.navigate('Saved'); }} color="#F59E0B" />
                                     <MenuItem icon={PackageOpen} label="Mis Publicaciones" action={() => { onClose(); navigation.navigate('MyListings'); }} color="#3B82F6" />
@@ -314,7 +316,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                 isSwitch
                                 switchValue={isDark}
                                 onSwitchChange={toggleTheme}
-                                color={isDark ? "#A78BFA" : "#F59E0B"}
+                                color={isDark ? "#5DD3F3" : "#F59E0B"}
                             />
                             {!isAnonymous && (
                                 <MenuItem icon={History} label="Mis compras" action={() => { onClose(); navigation.navigate('History'); }} />
@@ -328,7 +330,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                         <View style={styles.section}>
                             <Text style={styles.sectionHeader}>Legales</Text>
                             <MenuItem icon={Shield} label="Términos y Condiciones" action={() => { onClose(); navigation.navigate('Terms'); }} color="#6366F1" />
-                            <MenuItem icon={Info} label="Política de Privacidad" action={() => { onClose(); navigation.navigate('Privacy'); }} color="#8B5CF6" />
+                            <MenuItem icon={Info} label="Política de Privacidad" action={() => { onClose(); navigation.navigate('Privacy'); }} color="#4FC3F7" />
                         </View>
 
                         {/* Dynamic Sections based on Role */}
@@ -374,7 +376,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         width: '85%',
         maxWidth: 380,
     },
@@ -382,7 +384,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 24,
         paddingTop: Platform.OS === 'android' ? 20 : 20,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)'
     },
     closeButton: {
         position: 'absolute',
@@ -403,7 +405,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     avatar: {
         width: 64,
         height: 64,
-        borderRadius: 32,
+        borderRadius: Radius['2xl'],
         borderWidth: 3,
         borderColor: isDark ? '#374151' : '#fff',
         shadowColor: "#000",
@@ -418,7 +420,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         right: 2,
         width: 14,
         height: 14,
-        borderRadius: 7,
+        borderRadius: Radius.sm,
         backgroundColor: '#10B981',
         borderWidth: 2,
         borderColor: isDark ? '#09090B' : '#FAFAFA'
@@ -429,25 +431,25 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     userName: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 2
     },
     userEmail: {
         fontSize: 13,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
         marginBottom: 6
     },
     roleBadge: {
         alignSelf: 'flex-start',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 99,
+        borderRadius: Radius.full,
     },
     roleText: {
         fontSize: 10,
         fontWeight: '700',
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         letterSpacing: 0.5
     },
     content: { flex: 1 },
@@ -469,7 +471,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         marginBottom: 4,
         backgroundColor: 'transparent'
     },
@@ -479,7 +481,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     iconContainer: {
         width: 36,
         height: 36,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -493,7 +495,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     badge: {
         backgroundColor: '#EF4444',
-        borderRadius: 12,
+        borderRadius: Radius.md,
         paddingHorizontal: 8,
         paddingVertical: 2,
         marginLeft: 'auto'
@@ -511,21 +513,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     roleChip: {
         width: 36,
         height: 36,
-        borderRadius: 18,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.lg,
+        backgroundColor: colors(isDark).glass,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)'
     },
     roleChipActive: {
-        backgroundColor: isDark ? '#F9FAFB' : '#111827',
-        borderColor: isDark ? '#F9FAFB' : '#111827'
+        backgroundColor: colors(isDark).text,
+        borderColor: colors(isDark).text
     },
     roleChipText: {
         fontSize: 12,
         fontWeight: '600',
-        color: isDark ? '#9CA3AF' : '#6B7280'
+        color: colors(isDark).textMuted
     },
     roleChipTextActive: {
         color: isDark ? '#09090B' : '#FAFAFA'

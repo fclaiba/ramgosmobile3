@@ -15,6 +15,7 @@ import {
     KeyRound, ScrollText, Activity, LayoutDashboard, LogOut as SessionIcon,
     FileCheck, ChevronDown, ChevronUp, Filter, Wallet, ArrowUpRight, Clock,
 } from 'lucide-react-native';
+import { Radius, colors } from '../theme/tokens';
 
 type Tab = 'resumen' | 'ingresos' | 'escrow' | 'usuarios' | 'kyc' | 'seguridad' | 'logs';
 
@@ -35,7 +36,7 @@ const ROLE_COLORS: Record<string, string> = {
     business: '#3B82F6',
     influencer: '#EC4899',
     consumer: '#10B981',
-    developer: '#8B5CF6',
+    developer: '#4FC3F7',
 };
 
 const HASH_STYLES: Record<string, { label: string; color: string }> = {
@@ -80,7 +81,7 @@ const PAYMENT_STATUS: Record<string, { label: string; color: string }> = {
     released_to_seller: { label: 'Liberado', color: '#3B82F6' },
     pending: { label: 'Pendiente', color: '#6B7280' },
     failed: { label: 'Fallido', color: '#EF4444' },
-    refunded: { label: 'Reembolsado', color: '#8B5CF6' },
+    refunded: { label: 'Reembolsado', color: '#4FC3F7' },
     disputed: { label: 'Disputa', color: '#EF4444' },
 };
 
@@ -233,7 +234,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     {renderStatCard('En Escrow', `${s.escrowHeldOrders}`, TrendingUp, '#D97706', 'e')}
                     {renderStatCard('En Disputa', `${s.disputedOrders}`, AlertTriangle, '#EF4444', 'd')}
                     {renderStatCard('Canceladas', `${s.cancelledOrders}`, XCircle, '#6B7280', 'x')}
-                    {renderStatCard('Compradores', `${s.uniqueBuyers}`, Users, '#8B5CF6', 'b')}
+                    {renderStatCard('Compradores', `${s.uniqueBuyers}`, Users, '#4FC3F7', 'b')}
                     {renderStatCard('Vendedores', `${s.uniqueSellers}`, Users, '#EC4899', 's')}
                     {renderStatCard('Vol. Escrow', `$${s.escrowHeldVolume.toFixed(2)}`, ShieldCheck, '#F59E0B', 've')}
                     {renderStatCard('Órdenes 30d', `${s.recentOrdersCount}`, TrendingUp, '#06B6D4', 'r')}
@@ -288,7 +289,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     {renderStatCard('Fees Stripe', fmtMoney(s.providerFees), XCircle, '#EF4444', 'if')}
                     {renderStatCard('En escrow', fmtMoney(s.inEscrow), Clock, '#D97706', 'ie')}
                     {renderStatCard('Comisión 30d', fmtMoney(s.commission30d), Activity, '#0EA5E9', 'i30')}
-                    {renderStatCard('MRR estimado', fmtMoney(s.estimatedMrr), Wallet, '#8B5CF6', 'imrr')}
+                    {renderStatCard('MRR estimado', fmtMoney(s.estimatedMrr), Wallet, '#4FC3F7', 'imrr')}
                     {renderStatCard('Suscripciones', `${s.activeSubscriptions}`, Users, '#EC4899', 'isub')}
                     {renderStatCard('Reembolsos', fmtMoney(s.refundedVolume), RotateCcw, '#6B7280', 'iref')}
                     {renderStatCard('Transacciones', `${s.transactionCount}`, ShoppingBag, '#3B82F6', 'itx')}
@@ -942,7 +943,7 @@ const getStyles = (isDark: boolean) => {
 
         headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: 8 },
         headerIconWrap: {
-            width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+            width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
             ...glassCard,
         },
         header: { fontSize: 22, fontWeight: '800', color: textPrimary },
@@ -952,7 +953,7 @@ const getStyles = (isDark: boolean) => {
         tabsRow: { gap: 8, paddingHorizontal: 16 },
         tab: {
             flexDirection: 'row', alignItems: 'center', gap: 6,
-            paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999,
+            paddingHorizontal: 13, paddingVertical: 8, borderRadius: Radius.full,
             ...glassCard,
         },
         tabActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
@@ -962,22 +963,22 @@ const getStyles = (isDark: boolean) => {
         sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 8 },
         sectionTitle: { fontSize: 16.5, fontWeight: '700', color: textPrimary },
         countBadge: {
-            paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
+            paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.md,
             backgroundColor: isDark ? 'rgba(129,140,248,0.2)' : 'rgba(79,70,229,0.1)',
         },
         countBadgeText: { fontSize: 11, fontWeight: '700', color: isDark ? '#C7D2FE' : '#4F46E5' },
 
         statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
         statCard: {
-            flexBasis: '30%', flexGrow: 1, minWidth: 104, padding: 13, borderRadius: 16,
+            flexBasis: '30%', flexGrow: 1, minWidth: 104, padding: 13, borderRadius: Radius.lg,
             ...glassCard,
         },
-        statIcon: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+        statIcon: { width: 32, height: 32, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
         statLabel: { fontSize: 11, color: textMuted, marginBottom: 2 },
         statValue: { fontSize: 17, fontWeight: '800', color: textPrimary },
 
-        card: { padding: 15, borderRadius: 18, marginBottom: 12, ...glassCard },
-        emptyCard: { padding: 24, borderRadius: 18, marginBottom: 12, alignItems: 'center', gap: 8, ...glassCard },
+        card: { padding: 15, borderRadius: Radius.lg, marginBottom: 12, ...glassCard },
+        emptyCard: { padding: 24, borderRadius: Radius.lg, marginBottom: 12, alignItems: 'center', gap: 8, ...glassCard },
         mutedText: { color: textMuted, fontSize: 13, textAlign: 'center' },
         monoRow: {
             fontSize: 11.5, color: textMuted, marginTop: 4,
@@ -991,7 +992,7 @@ const getStyles = (isDark: boolean) => {
         cardMeta: { fontSize: 12, color: textMuted, marginTop: 3 },
 
         statusChip: {
-            paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1,
+            paddingHorizontal: 9, paddingVertical: 3, borderRadius: Radius.full, borderWidth: 1,
             alignSelf: 'flex-start',
         },
         statusChipText: { fontSize: 11, fontWeight: '700' },
@@ -999,11 +1000,11 @@ const getStyles = (isDark: boolean) => {
         actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
         actionBtn: {
             flexGrow: 1, minWidth: 110, paddingVertical: 10, paddingHorizontal: 12,
-            borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+            borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
         },
         iconBtn: {
             flexDirection: 'row', alignItems: 'center', gap: 6,
-            paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12,
+            paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.md,
         },
         btnSuccess: { backgroundColor: '#10B981' },
         btnDanger: { backgroundColor: '#EF4444' },
@@ -1012,12 +1013,12 @@ const getStyles = (isDark: boolean) => {
         btnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12, textAlign: 'center' },
 
         userCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-        avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+        avatar: { width: 42, height: 42, borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center' },
         avatarText: { fontSize: 17, fontWeight: '800' },
 
         searchWrap: {
             flexDirection: 'row', alignItems: 'center', gap: 8,
-            paddingHorizontal: 13, paddingVertical: 4, borderRadius: 14, marginBottom: 12,
+            paddingHorizontal: 13, paddingVertical: 4, borderRadius: Radius.md, marginBottom: 12,
             ...glassCard,
         },
         searchInput: {
@@ -1028,18 +1029,18 @@ const getStyles = (isDark: boolean) => {
         advSearchWrap: { marginBottom: 12 },
         advSearchToggle: {
             flexDirection: 'row', alignItems: 'center', gap: 8,
-            paddingHorizontal: 13, paddingVertical: 10, borderRadius: 14,
+            paddingHorizontal: 13, paddingVertical: 10, borderRadius: Radius.md,
             ...glassCard,
         },
         advSearchToggleText: { flex: 1, fontSize: 13, fontWeight: '700', color: isDark ? '#C7D2FE' : '#4F46E5' },
         advSearchPanel: {
-            marginTop: 8, padding: 12, borderRadius: 16, gap: 10,
+            marginTop: 8, padding: 12, borderRadius: Radius.lg, gap: 10,
             ...glassCard,
         },
         advField: { gap: 4 },
         advLabel: { fontSize: 11.5, fontWeight: '600', color: textMuted },
         advInput: {
-            borderWidth: 1, borderColor: glass.border, borderRadius: 10,
+            borderWidth: 1, borderColor: glass.border, borderRadius: Radius.md,
             paddingHorizontal: 11, paddingVertical: 8, fontSize: 13, color: textPrimary,
             backgroundColor: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.5)',
             ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
@@ -1047,19 +1048,19 @@ const getStyles = (isDark: boolean) => {
 
         docRow: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
         docThumb: { width: 110, alignItems: 'center' },
-        docImage: { width: 100, height: 72, borderRadius: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+        docImage: { width: 100, height: 72, borderRadius: Radius.md, backgroundColor: colors(isDark).glass },
         docLabel: { fontSize: 10, color: textMuted, marginTop: 4, textAlign: 'center' },
 
-        chartCard: { padding: 14, borderRadius: 18, marginBottom: 14, ...glassCard },
+        chartCard: { padding: 14, borderRadius: Radius.lg, marginBottom: 14, ...glassCard },
         chartTitle: { fontSize: 13, fontWeight: '700', color: textPrimary, marginBottom: 10 },
         chartRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4, height: 96 },
         chartCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-        chartBar: { width: '80%', borderRadius: 6, backgroundColor: '#6366F1', minHeight: 8 },
+        chartBar: { width: '80%', borderRadius: Radius.sm, backgroundColor: '#6366F1', minHeight: 8 },
         chartLabel: { fontSize: 8, color: textMuted, marginTop: 4 },
 
         financeLink: {
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            padding: 13, borderRadius: 14, marginBottom: 14, ...glassCard,
+            padding: 13, borderRadius: Radius.md, marginBottom: 14, ...glassCard,
         },
         financeLinkText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: isDark ? '#C7D2FE' : '#4F46E5', marginRight: 8 },
     });

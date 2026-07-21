@@ -13,7 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useMarketplace } from '../contexts/MarketplaceContext';
 import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
-import { useFavorites } from '../contexts/FavoritesContext';
+import { useFavorites } from '../hooks/useFavorites';
 import { usePoints } from '../contexts/PointsContext';
 import { useTheme } from '../contexts/ThemeContext'; // Import useTheme
 
@@ -30,6 +30,8 @@ import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { useUserLocation } from '../hooks/useUserLocation';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 type ViewMode = 'grid' | 'list' | 'map';
 type ItemType = 'products' | 'bonos' | 'events' | 'services' | 'businesses';
 
@@ -340,8 +342,6 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             return true;
         });
 
-        // ponytail: compute distance for UI/sort, but never hide listings by radius
-        // (BMW in NYC vanished when center was BA + 50km). Radius circle stays visual on map.
         const center = advancedFilters.searchLocation;
         if (center) {
             const toRad = (value: number) => (value * Math.PI) / 180;
@@ -359,7 +359,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
             result = result.map((item) => ({
                 ...item,
                 distance: Number(haversineKm(center, item.location).toFixed(2)),
-            }));
+            })).filter(item => item.distance <= radius);
         }
 
         switch (advancedFilters.sortBy) {
@@ -759,7 +759,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                                         }}
                                         accessibilityLabel={`Ver en ${mode.label}`}
                                     >
-                                        <mode.Icon size={16} color={active ? '#7C3AED' : (isDark ? '#D1D5DB' : '#6B7280')} />
+                                        <mode.Icon size={16} color={active ? '#2196F3' : (isDark ? '#D1D5DB' : '#6B7280')} />
                                     </TouchableOpacity>
                                 );
                             })}
@@ -849,7 +849,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     headerControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
     mapHeaderControls: {
         marginHorizontal: 12,
@@ -857,28 +857,25 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         paddingHorizontal: 12,
         paddingTop: 12,
         paddingBottom: 10,
-        borderRadius: 22,
+        borderRadius: Radius.xl,
         backgroundColor: isDark ? 'rgba(17, 24, 39, 0.72)' : 'rgba(255, 255, 255, 0.82)',
         borderWidth: 1,
         borderColor: isDark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(229, 231, 235, 0.9)',
-        shadowColor: '#000',
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 6,
+        ...glassShadow(isDark),
     },
-    cartBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
-    cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+    cartBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center' },
+    cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
 
     // Favorites
-    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
-    favBtnActive: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    favBtnActive: { ...glassShadow(isDark),},
 
     // Search
     searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'center' },
-    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 26, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', height: 52, overflow: 'hidden' },
-    searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, color: isDark ? '#F9FAFB' : '#1F2937', height: '100%', outlineStyle: 'none' } as any,
-    filterBtn: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
-    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
+    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: Radius['2xl'], borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass, height: 52, overflow: 'hidden' },
+    searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, color: colors(isDark).text, height: '100%', outlineStyle: 'none' } as any,
+    filterBtn: { width: 52, height: 52, borderRadius: Radius['2xl'], justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass },
+    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: Radius.md, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
     activeFilterText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
 
     // Compact Controls (View mode + Categories)
@@ -887,68 +884,68 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 4,
-        borderRadius: 18,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.lg,
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
-    viewModeBtn: { width: 34, height: 34, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    viewModeBtn: { width: 34, height: 34, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center' },
     viewModeBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
     categoryChipsScroll: { flex: 1 },
     categoryChipsContent: { flexDirection: 'row', alignItems: 'center', paddingRight: 4 },
     categoryChip: {
         paddingHorizontal: 12,
         height: 34,
-        borderRadius: 17,
+        borderRadius: Radius.lg,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 8,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
-    categoryChipActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: '#7C3AED' },
-    categoryChipText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '600' },
-    categoryChipTextActive: { color: '#7C3AED' },
+    categoryChipActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: '#2196F3' },
+    categoryChipText: { fontSize: 12, color: colors(isDark).textMuted, fontWeight: '600' },
+    categoryChipTextActive: { color: '#2196F3' },
 
     // Toggles
-    viewToggleContainer: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 24, padding: 4, marginBottom: 16 },
-    toggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 20 },
-    toggleBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    viewToggleContainer: { flexDirection: 'row', backgroundColor: colors(isDark).glass, borderRadius: Radius.xl, padding: 4, marginBottom: 16 },
+    toggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: Radius.xl },
+    toggleBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', ...glassShadow(isDark),},
     toggleBtnText: { fontSize: 13, marginLeft: 8, color: '#6B7280', fontWeight: '500' },
-    toggleBtnTextActive: { color: '#7C3AED', fontWeight: 'bold' },
+    toggleBtnTextActive: { color: '#2196F3', fontWeight: 'bold' },
     categoryToggleText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
-    categoryToggleTextActive: { color: '#7C3AED', fontWeight: 'bold' },
+    categoryToggleTextActive: { color: '#2196F3', fontWeight: 'bold' },
 
     // Tabs
     tabsContainer: { flexDirection: 'row', gap: 8, paddingHorizontal: 4 },
-    tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: '#E5E7EB' },
+    tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: Radius.xl, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: '#E5E7EB' },
     tabActive: { backgroundColor: '#111827', borderColor: '#111827' },
     tabText: { fontSize: 13, color: '#4B5563', fontWeight: '500' },
     tabTextActive: { color: '#fff' },
 
     // Grid Card
     gridCardWrapper: { marginBottom: 4 },
-    gridCard: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
-    gridImgContainer: { aspectRatio: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', position: 'relative' },
+    gridCard: { flex: 1, backgroundColor: colors(isDark).bg, borderRadius: Radius.lg, overflow: 'hidden', ...glassShadow(isDark),},
+    gridImgContainer: { aspectRatio: 1, backgroundColor: colors(isDark).glass, position: 'relative' },
     cardImg: { width: '100%', height: '100%' },
-    discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+    discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, overflow: 'hidden' },
     discountText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-    categoryBadge: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-    categoryText: { fontSize: 10, color: isDark ? '#F9FAFB' : '#374151', fontWeight: '500' },
+    categoryBadge: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+    categoryText: { fontSize: 10, color: colors(isDark).text, fontWeight: '500' },
     gridContent: { padding: 12 },
-    cardTitle: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4, height: 36 },
+    cardTitle: { fontSize: 13, fontWeight: '600', color: colors(isDark).text, marginBottom: 4, height: 36 },
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
     ratingText: { fontSize: 11, color: '#6B7280' },
     priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 8 },
-    price: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    price: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text },
     originalPrice: { fontSize: 11, color: '#9CA3AF', textDecorationLine: 'line-through' },
-    btnSm: { backgroundColor: isDark ? '#374151' : '#111827', paddingVertical: 6, alignItems: 'center', borderRadius: 8 },
+    btnSm: { backgroundColor: isDark ? '#374151' : '#111827', paddingVertical: 6, alignItems: 'center', borderRadius: Radius.sm },
     btnSmText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
     // List Card
-    listCard: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16, padding: 12, gap: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-    listImgContainer: { width: 96, height: 96, borderRadius: 12, overflow: 'hidden', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    listCard: { flexDirection: 'row', backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 12, gap: 12, marginBottom: 12, ...glassShadow(isDark),},
+    listImgContainer: { width: 96, height: 96, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: colors(isDark).glass },
     listContent: { flex: 1 },
     listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
@@ -957,15 +954,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     listFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' },
 
     // Map Specific
-    mapContainer: { flex: 1, borderRadius: 24, overflow: 'hidden', marginTop: 8 },
+    mapContainer: { flex: 1, borderRadius: Radius.xl, overflow: 'hidden', marginTop: 8 },
     mapFloatBtnContainer: { position: 'absolute', bottom: 24, alignSelf: 'center', zIndex: 20 },
-    mapFloatBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111827', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, gap: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
+    mapFloatBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111827', paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.xl, gap: 8, ...glassShadow(isDark),},
     mapFloatBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 
     // Map List Overlay
-    mapListOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: MAP_LIST_HEIGHT, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderTopLeftRadius: 24, borderTopRightRadius: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10, zIndex: 30 },
-    mapListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
-    mapListHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB' },
+    mapListOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: MAP_LIST_HEIGHT, backgroundColor: colors(isDark).glass, borderTopLeftRadius: 24, borderTopRightRadius: 24, ...glassShadow(isDark), zIndex: 30 },
+    mapListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    mapListHandle: { width: 40, height: 4, borderRadius: Radius.sm, backgroundColor: '#E5E7EB' },
     closeListBtn: { position: 'absolute', right: 16, top: 16, padding: 4 },
-    mapListTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', margin: 16 },
+    mapListTitle: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text, margin: 16 },
 });

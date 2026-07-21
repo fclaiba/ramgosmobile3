@@ -10,6 +10,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { toUserErrorTitle, toUserMessage } from '../../utils/errors';
+import { Radius, colors } from '../../theme/tokens';
+
 
 export default function BusinessQRScannerScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -179,11 +181,11 @@ export default function BusinessQRScannerScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     body: { flex: 1, padding: 16, gap: 16 },
     branchSelector: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         padding: 16,
         borderWidth: 1,
         borderColor: isDark ? '#1e293b' : '#e2e8f0',
@@ -193,7 +195,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     branchChip: {
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 999,
+        borderRadius: Radius.full,
         borderWidth: 1,
         borderColor: '#1d4ed8',
         backgroundColor: 'transparent',
@@ -203,8 +205,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     branchChipTextActive: { color: '#fff' },
     cameraPlaceholder: {
         flex: 1,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 24,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         borderWidth: 1,
         borderColor: isDark ? '#334155' : '#e2e8f0',
         alignItems: 'center',
@@ -236,10 +238,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     input: {
         width: '100%',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderWidth: 2,
         borderColor: isDark ? '#374151' : '#E2E8F0',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 20,
         fontSize: 20,
         color: isDark ? '#f8fafc' : '#0f172a',
@@ -254,6 +256,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 16
+        borderRadius: Radius.lg
     },
 });

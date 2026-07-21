@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width, height } = Dimensions.get('window');
 
 import { useTheme } from '../../contexts/ThemeContext';
+import { Radius } from '../../theme/tokens';
+
 
 export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
     const { colorScheme } = useTheme();
@@ -55,8 +57,8 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
         ? ['#111827', '#1F2937', '#0F172A'] // Dark gray/blue gradient
         : ['#F3E8FF', '#FAF5FF', '#FCE7F3']; // Original light gradient
 
-    const blob1Color = isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(167, 139, 250, 0.2)';
-    const blob2Color = isDark ? 'rgba(124, 58, 237, 0.15)' : 'rgba(192, 132, 252, 0.2)';
+    const blob1Color = isDark ? 'rgba(79, 195, 247, 0.15)' : 'rgba(93, 211, 243, 0.2)';
+    const blob2Color = isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(192, 132, 252, 0.2)';
     const blob3Color = isDark ? 'rgba(236, 72, 153, 0.15)' : 'rgba(244, 114, 182, 0.2)';
 
     return (
@@ -123,7 +125,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     blob: {
         position: 'absolute',
-        borderRadius: 9999,
+        borderRadius: Radius.full,
         // blurRadius not fully supported on plain Views in Android without distinct library, 
         // using opacity/color simulation instead or could use expo-blur if needed but opacity works for "glow"
     },

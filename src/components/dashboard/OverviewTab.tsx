@@ -160,7 +160,7 @@ export function OverviewTab({
                         <View key={i} style={styles.barGroup}>
                             <View style={styles.barTrack}>
                                 <LinearGradient
-                                    colors={["#8B5CF6", "#Ec4899"]}
+                                    colors={["#4FC3F7", "#Ec4899"]}
                                     style={[
                                         styles.barFill,
                                         { height: `${d.heightPercent}%` },
@@ -182,7 +182,7 @@ export function OverviewTab({
                             padding: 16,
                             marginBottom: 0,
                             borderBottomWidth: 1,
-                            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+                            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
                         },
                     ]}
                 >

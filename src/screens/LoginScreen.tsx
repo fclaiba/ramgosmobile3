@@ -8,6 +8,8 @@ import Svg, { Path } from 'react-native-svg';
 import { useAuth, getAuthDestination, type AuthFlowDecision } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 // Existing icons...
 
@@ -236,7 +238,7 @@ export default function LoginScreen({ navigation }: any) {
                                     style={[styles.submitBtnContainer, busy && { opacity: 0.8 }]}
                                 >
                                     <LinearGradient
-                                        colors={['#7C3AED', '#9333EA']}
+                                        colors={['#2196F3', '#29B6F6']}
                                         start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                         style={styles.gradientBtn}
                                     >
@@ -264,7 +266,7 @@ export default function LoginScreen({ navigation }: any) {
 
                             {/* Security Badge */}
                             <View style={styles.securityBadge}>
-                                <Sparkles size={12} color="#8B5CF6" style={{ marginRight: 6 }} />
+                                <Sparkles size={12} color="#4FC3F7" style={{ marginRight: 6 }} />
                                 <Text style={styles.securityText}>Conexión segura y encriptada</Text>
                             </View>
 
@@ -285,42 +287,38 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: '100%',
         maxWidth: 400,
         backgroundColor: isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         padding: 32,
         alignSelf: 'center',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
-        shadowColor: isDark ? '#000' : '#8B5CF6',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: isDark ? 0.3 : 0.1,
-        shadowRadius: 20,
-        elevation: 10,
+        borderColor: isDark ? 'rgba(79, 195, 247, 0.3)' : 'rgba(79, 195, 247, 0.2)',
+        ...glassShadow(isDark),
     },
 
     backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, alignSelf: 'flex-start', paddingLeft: 4 },
-    backText: { marginLeft: 8, color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '500', fontSize: 14 },
+    backText: { marginLeft: 8, color: colors(isDark).textMuted, fontWeight: '500', fontSize: 14 },
 
-    title: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#7C3AED', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 32 },
+    title: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 32 },
 
     form: { gap: 20 },
     inputContainer: { gap: 8 },
     label: { fontSize: 14, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginLeft: 4 },
-    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', height: 48, paddingHorizontal: 12 },
+    inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', height: 48, paddingHorizontal: 12 },
     icon: { marginRight: 12 },
-    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#111827' },
+    input: { flex: 1, fontSize: 16, color: colors(isDark).text },
 
     passHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    forgotLink: { fontSize: 12, color: '#7C3AED', fontWeight: '500' },
+    forgotLink: { fontSize: 12, color: '#2196F3', fontWeight: '500' },
 
     // Checkbox
     rememberContainer: { flexDirection: 'row', alignItems: 'center', marginTop: -4 },
-    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
-    checkboxChecked: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
-    rememberText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#4B5563' },
+    checkbox: { width: 18, height: 18, borderRadius: Radius.sm, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
+    checkboxChecked: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
+    rememberText: { fontSize: 14, color: colors(isDark).textMuted },
 
-    submitBtnContainer: { shadowColor: '#7C3AED', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4, marginTop: 8 },
-    gradientBtn: { flexDirection: 'row', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+    submitBtnContainer: { ...glassShadow(isDark), marginTop: 8 },
+    gradientBtn: { flexDirection: 'row', height: 56, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
     divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
@@ -328,12 +326,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     orText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 12 },
 
     socialRow: { flexDirection: 'row', gap: 12, marginBottom: 24, justifyContent: 'center' },
-    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', justifyContent: 'center', alignItems: 'center' },
+    socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },
 
     footer: { flexDirection: 'row', justifyContent: 'center', marginBottom: 16 },
-    footerText: { color: isDark ? '#9CA3AF' : '#6B7280' },
-    registerLink: { color: '#7C3AED', fontWeight: '600' },
+    footerText: { color: colors(isDark).textMuted },
+    registerLink: { color: '#2196F3', fontWeight: '600' },
 
     securityBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-    securityText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
+    securityText: { fontSize: 12, color: colors(isDark).textMuted },
 });

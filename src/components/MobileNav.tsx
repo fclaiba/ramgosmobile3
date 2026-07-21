@@ -8,6 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brand } from '../theme/brand';
 import { colors, Radius, Touch } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
+import { glassShadow } from '../theme/tokens';
+
 
 export type NavSection = 'home' | 'marketplace' | 'social' | 'dashboard';
 
@@ -136,11 +138,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
             ...Platform.select({
                 web: { boxShadow: isDark ? '0 -10px 32px rgba(0,0,0,0.45)' : '0 -10px 32px rgba(24,24,27,0.10)' } as any,
                 default: {
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: -6 },
-                    shadowOpacity: isDark ? 0.4 : 0.12,
-                    shadowRadius: 18,
-                    elevation: 16,
+                    ...glassShadow(isDark),
                 },
             }),
         },

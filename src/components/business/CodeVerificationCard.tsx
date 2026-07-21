@@ -4,6 +4,8 @@ import { CheckCircle2, XCircle, User, QrCode, AlertCircle, AlertTriangle, ArrowR
 import { useTheme } from '../../contexts/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeOut, SlideInUp, SlideInDown, Layout } from 'react-native-reanimated';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 interface CodeVerificationCardProps {
     code: string;
@@ -155,43 +157,37 @@ export const CodeVerificationCard = ({
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
-        borderRadius: 24,
+        backgroundColor: colors(isDark).bg,
+        borderRadius: Radius.xl,
         padding: 24,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 10,
+        ...glassShadow(isDark),
         width: '100%',
         maxWidth: 400,
         alignSelf: 'center',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         overflow: 'hidden',
     },
     // Success Styles
     successContainer: {
         alignItems: 'center',
         borderColor: isDark ? '#065F46' : '#DCFCE7',
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
     },
     iconCircleSuccess: {
         width: 80,
         height: 80,
-        borderRadius: 40,
+        borderRadius: Radius.full,
         backgroundColor: '#10B981',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 20,
-        shadowColor: '#10B981',
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-        elevation: 8,
+        ...glassShadow(isDark),
     },
     resultTitle: {
         fontSize: 22,
         fontWeight: '800',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         textAlign: 'center',
         marginBottom: 8,
     },
@@ -199,7 +195,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: '100%',
         backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#ECFDF5',
         padding: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         marginVertical: 16,
         alignItems: 'center',
         borderWidth: 1,
@@ -222,15 +218,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#10B981',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         paddingVertical: 14,
         paddingHorizontal: 32,
         gap: 8,
         width: '100%',
-        shadowColor: '#10B981',
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+        ...glassShadow(isDark),
         marginTop: 8,
     },
     successButtonText: {
@@ -247,22 +240,19 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     iconCircleError: {
         width: 80,
         height: 80,
-        borderRadius: 40,
+        borderRadius: Radius.full,
         backgroundColor: '#EF4444',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 20,
-        shadowColor: '#EF4444',
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-        elevation: 8,
+        ...glassShadow(isDark),
     },
     errorText: {
         color: isDark ? '#FCA5A5' : '#DC2626',
     },
     errorMessage: {
         fontSize: 15,
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         textAlign: 'center',
         marginHorizontal: 16,
         marginBottom: 24,
@@ -275,7 +265,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     // Pending Styles (unchanged mostly)
     codeBox: {
         backgroundColor: isDark ? 'rgba(22, 101, 52, 0.2)' : '#DCFCE7',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 16,
         borderWidth: 1,
         borderColor: isDark ? 'rgba(22, 163, 74, 0.3)' : '#BBF7D0',
@@ -308,21 +298,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'center',
         gap: 8,
         marginBottom: 24,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         paddingVertical: 8,
         paddingHorizontal: 16,
-        borderRadius: 999,
+        borderRadius: Radius.full,
         alignSelf: 'center',
     },
     userIconContainer: {
         padding: 4,
-        borderRadius: 999,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.full,
+        backgroundColor: colors(isDark).glass,
     },
     username: {
         fontSize: 15,
         fontWeight: '600',
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
     },
     instructionsContainer: {
         flexDirection: 'row',
@@ -342,14 +332,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     confirmButton: {
         height: 54,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: isDark ? '#3B82F6' : '#000',
-        shadowOpacity: isDark ? 0.3 : 0.2,
-        shadowRadius: 8,
-        elevation: 4,
+        ...glassShadow(isDark),
     },
     confirmText: {
         color: '#FFFFFF',
@@ -358,15 +345,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     cancelButton: {
         height: 54,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     cancelText: {
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         fontSize: 15,
         fontWeight: '600',
     },

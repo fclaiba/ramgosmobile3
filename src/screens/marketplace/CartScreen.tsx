@@ -30,6 +30,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { usePoints } from '../../contexts/PointsContext';
 import { useActionGate } from '../../utils/useActionGate';
 import { LinearGradient } from 'expo-linear-gradient';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -179,12 +181,12 @@ export default function CartScreen({ navigation }: any) {
         <View style={styles.emptyContainer}>
             <View style={styles.emptyIconWrapper}>
                 <LinearGradient
-                    colors={isDark ? ['#4C1D95', '#7C3AED'] : ['#EDE9FE', '#DDD6FE']}
+                    colors={isDark ? ['#4C1D95', '#2196F3'] : ['#EDE9FE', '#DDD6FE']}
                     style={styles.emptyIconGradient}
                 >
                     <ShoppingCart
                         size={48}
-                        color={isDark ? '#E9D5FF' : '#7C3AED'}
+                        color={isDark ? '#E9D5FF' : '#2196F3'}
                         strokeWidth={1.5}
                     />
                 </LinearGradient>
@@ -204,7 +206,7 @@ export default function CartScreen({ navigation }: any) {
                 </View>
                 <View style={styles.emptyFeature}>
                     <View style={[styles.featureIcon, { backgroundColor: isDark ? '#3D1F47' : '#F3E8FF' }]}>
-                        <Sparkles size={16} color={isDark ? '#C084FC' : '#9333EA'} />
+                        <Sparkles size={16} color={isDark ? '#C084FC' : '#29B6F6'} />
                     </View>
                     <Text style={styles.featureText}>Gana puntos en cada compra</Text>
                 </View>
@@ -222,7 +224,7 @@ export default function CartScreen({ navigation }: any) {
                 activeOpacity={0.8}
             >
                 <LinearGradient
-                    colors={['#7C3AED', '#6D28D9']}
+                    colors={['#2196F3', '#1565C0']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.exploreCTAGradient}
@@ -286,7 +288,7 @@ export default function CartScreen({ navigation }: any) {
                 activeOpacity={0.85}
             >
                 <LinearGradient
-                    colors={['#7C3AED', '#6D28D9']}
+                    colors={['#2196F3', '#1565C0']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.checkoutGradient}
@@ -333,7 +335,7 @@ export default function CartScreen({ navigation }: any) {
                             onPress={() => navigation.navigate('Marketplace')}
                             style={styles.addMoreBtn}
                         >
-                            <Plus size={14} color={isDark ? '#A78BFA' : '#7C3AED'} />
+                            <Plus size={14} color={isDark ? '#5DD3F3' : '#2196F3'} />
                             <Text style={styles.addMoreText}>Agregar más</Text>
                         </TouchableOpacity>
                     </View>
@@ -358,7 +360,7 @@ const getStyles = (isDark: boolean) =>
     StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+            backgroundColor: colors(isDark).bg,
         },
         scrollView: {
             flex: 1,
@@ -387,21 +389,17 @@ const getStyles = (isDark: boolean) =>
         addMoreText: {
             fontSize: 14,
             fontWeight: '600',
-            color: isDark ? '#A78BFA' : '#7C3AED',
+            color: isDark ? '#5DD3F3' : '#2196F3',
         },
 
         // Item Card
         itemCard: {
             flexDirection: 'row',
             backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: 12,
             marginBottom: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.3 : 0.06,
-            shadowRadius: 8,
-            elevation: 3,
+            ...glassShadow(isDark),
             borderWidth: 1,
             borderColor: isDark ? '#334155' : '#F1F5F9',
         },
@@ -411,15 +409,15 @@ const getStyles = (isDark: boolean) =>
         itemImage: {
             width: 88,
             height: 88,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             backgroundColor: isDark ? '#334155' : '#F1F5F9',
         },
         typeBadge: {
             position: 'absolute',
             top: 4,
             left: 4,
-            backgroundColor: '#7C3AED',
-            borderRadius: 6,
+            backgroundColor: '#2196F3',
+            borderRadius: Radius.sm,
             padding: 4,
         },
         itemContent: {
@@ -470,7 +468,7 @@ const getStyles = (isDark: boolean) =>
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: isDark ? '#334155' : '#F1F5F9',
-            borderRadius: 10,
+            borderRadius: Radius.md,
             overflow: 'hidden',
         },
         qtyBtn: {
@@ -506,7 +504,7 @@ const getStyles = (isDark: boolean) =>
         emptyIconGradient: {
             width: 100,
             height: 100,
-            borderRadius: 50,
+            borderRadius: Radius.full,
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -536,14 +534,14 @@ const getStyles = (isDark: boolean) =>
             gap: 12,
             backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
             padding: 14,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             borderWidth: 1,
             borderColor: isDark ? '#334155' : '#F1F5F9',
         },
         featureIcon: {
             width: 32,
             height: 32,
-            borderRadius: 8,
+            borderRadius: Radius.sm,
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -561,7 +559,7 @@ const getStyles = (isDark: boolean) =>
             justifyContent: 'center',
             paddingVertical: 16,
             paddingHorizontal: 24,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             gap: 8,
         },
         exploreCTAText: {
@@ -573,14 +571,10 @@ const getStyles = (isDark: boolean) =>
         // Summary Card
         summaryCard: {
             backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 16,
             marginTop: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDark ? 0.4 : 0.08,
-            shadowRadius: 12,
-            elevation: 5,
+            ...glassShadow(isDark),
             borderWidth: 1,
             borderColor: isDark ? '#334155' : '#F1F5F9',
         },
@@ -590,7 +584,7 @@ const getStyles = (isDark: boolean) =>
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB',
             padding: 12,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             marginBottom: 16,
             borderWidth: 1,
             borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#FEF3C7',
@@ -659,7 +653,7 @@ const getStyles = (isDark: boolean) =>
         },
         checkoutBtn: {
             marginTop: 16,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             overflow: 'hidden',
         },
         checkoutGradient: {
@@ -677,7 +671,7 @@ const getStyles = (isDark: boolean) =>
         },
         checkoutArrow: {
             backgroundColor: 'rgba(255,255,255,0.2)',
-            borderRadius: 8,
+            borderRadius: Radius.sm,
             padding: 4,
         },
         securityNote: {

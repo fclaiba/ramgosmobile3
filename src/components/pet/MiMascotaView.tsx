@@ -20,6 +20,8 @@ import { DinoGame } from '../games/DinoGame';
 import { FlappyBird } from '../games/FlappyBird';
 import { GameWrapper } from '../games/GameWrapper';
 import type { GameId } from '../games/gameContracts';
+import { Radius, colors } from '../../theme/tokens';
+
 
 // Parte 0 (contrato): tipos/tokens para wrapper compartido (sin refactor aún).
 // Ver `src/components/games/gameContracts.ts` y `src/components/games/GAME_CONTRACT.md`.
@@ -300,7 +302,7 @@ export function MiMascotaView({ navigation }: any) {
                 <View style={styles.evoTrackContainer}>
                     <View style={styles.evoTrack}>
                         <LinearGradient
-                            colors={['#8B5CF6', '#EC4899']}
+                            colors={['#4FC3F7', '#EC4899']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={[styles.evoFill, { width: `${progress}%` }]}
@@ -547,7 +549,7 @@ export function MiMascotaView({ navigation }: any) {
 
                     <TouchableOpacity style={styles.actionBtn} onPress={handleSleepPet}>
                         <View style={[styles.actionIcon, { backgroundColor: '#FAF5FF' }]}>
-                            <Moon size={24} color="#8B5CF6" />
+                            <Moon size={24} color="#4FC3F7" />
                         </View>
                         <Text style={styles.actionLabel}>Dormir</Text>
                     </TouchableOpacity>
@@ -607,7 +609,7 @@ export function MiMascotaView({ navigation }: any) {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
     },
     scroll: {
         padding: 16,
@@ -618,7 +620,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: '#FEF3C7',
         paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         gap: 4,
     },
     headerWalletText: {
@@ -628,9 +630,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     // Hero
     heroCard: {
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         overflow: 'hidden',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         marginBottom: 16,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
@@ -666,7 +668,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.2)',
         paddingHorizontal: 12,
         paddingVertical: 4,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
     },
     bubbleLabel: {
         color: isDark ? '#E5E7EB' : '#4B5563',
@@ -676,7 +678,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     statsGrid: {
         padding: 16,
         gap: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
     statRow: {
         flexDirection: 'row',
@@ -685,19 +687,19 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     statIconBox: {
         width: 28,
         height: 28,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         alignItems: 'center',
         justifyContent: 'center',
     },
     statTrack: {
         height: 8,
         backgroundColor: isDark ? '#374151' : '#F1F5F9',
-        borderRadius: 4,
+        borderRadius: Radius.sm,
         overflow: 'hidden',
     },
     statFill: {
         height: '100%',
-        borderRadius: 4,
+        borderRadius: Radius.sm,
     },
     statValue: {
         width: 40,
@@ -707,8 +709,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     // Evolution
     evoCard: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         padding: 16,
         marginBottom: 20,
         borderWidth: 1,
@@ -722,7 +724,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     evoTitle: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: isDark ? '#F3F4F6' : '#1F2937',
+        color: colors(isDark).text,
     },
     evoTrackContainer: {
         gap: 6,
@@ -730,12 +732,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     evoTrack: {
         height: 6,
         backgroundColor: isDark ? '#374151' : '#E2E8F0',
-        borderRadius: 3,
+        borderRadius: Radius.sm,
         overflow: 'hidden',
     },
     evoFill: {
         height: '100%',
-        borderRadius: 3,
+        borderRadius: Radius.sm,
     },
     evoText: {
         fontSize: 11,
@@ -746,7 +748,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: isDark ? '#F3F4F6' : '#1F2937',
+        color: colors(isDark).text,
         marginBottom: 12,
     },
     actionRow: {
@@ -761,7 +763,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     actionIcon: {
         width: 56,
         height: 56,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: "#000",
@@ -773,11 +775,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     actionLabel: {
         fontSize: 12,
         fontWeight: '500',
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
     },
     // Converter
     converterCard: {
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 16,
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -797,7 +799,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.2)',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     convBtnText: {
         color: '#FFF',
@@ -811,9 +813,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gameItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         padding: 12,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         gap: 12,
         borderWidth: 1,
         borderColor: isDark ? '#374151' : '#F1F5F9',
@@ -821,14 +823,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gameIconBox: {
         width: 48,
         height: 48,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
     gameTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: isDark ? '#F3F4F6' : '#1F2937',
+        color: colors(isDark).text,
     },
     gameDesc: {
         fontSize: 12,
@@ -856,7 +858,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     roundBtn: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         backgroundColor: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.08)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -868,7 +870,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     previewCircle: {
         width: 140,
         height: 140,
-        borderRadius: 70,
+        borderRadius: Radius.full,
         backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
@@ -889,7 +891,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: isDark ? 'rgba(251,191,36,0.2)' : '#FEF3C7',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         gap: 6,
     },
     BalanceText: {
@@ -907,15 +909,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: (width - 32 - 24) / 3, // 3 columns
         aspectRatio: 1,
         backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#FFF',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
         borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#E5E7EB',
     },
     wardrobeItemActive: {
-        borderColor: '#8B5CF6',
-        backgroundColor: isDark ? 'rgba(139, 92, 246, 0.1)' : '#FAFAFA',
+        borderColor: '#4FC3F7',
+        backgroundColor: isDark ? 'rgba(79, 195, 247, 0.1)' : '#FAFAFA',
     },
     hatName: {
         fontSize: 10,
@@ -928,7 +930,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: '#F59E0B',
         paddingHorizontal: 6,
         paddingVertical: 2,
-        borderRadius: 10,
+        borderRadius: Radius.md,
         gap: 2,
         marginTop: 4,
     },
@@ -944,7 +946,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: '#10B981',
         width: 16,
         height: 16,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -954,9 +956,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderColor: isDark ? '#374151' : '#E2E8F0',
     },
     mainBtn: {
-        backgroundColor: '#8B5CF6',
+        backgroundColor: '#4FC3F7',
         paddingVertical: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         alignItems: 'center',
     },
     btnText: {
@@ -973,8 +975,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(15,23,42,0.35)',
     },
     guideCard: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 24,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         padding: 24,
         width: '100%',
         alignItems: 'center',
@@ -985,11 +987,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         marginBottom: 12,
-        color: isDark ? '#F9FAFB' : '#1F2937',
+        color: colors(isDark).text,
     },
     guideText: {
         textAlign: 'center',
-        color: isDark ? '#D1D5DB' : '#6B7280',
+        color: colors(isDark).textMuted,
         marginBottom: 24,
     },
     stageRow: {
@@ -1008,13 +1010,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         color: isDark ? '#E5E7EB' : '#4B5563',
         backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6',
         padding: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     closeGuideBtn: {
         backgroundColor: isDark ? '#0F172A' : '#1F2937',
         paddingHorizontal: 32,
         paddingVertical: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     // Games
     gameContainer: {
@@ -1029,7 +1031,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gameBackBtn: {
         padding: 8,
         backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 20,
+        borderRadius: Radius.xl,
     },
     gameCoinDisplay: {
         flexDirection: 'row',
@@ -1037,7 +1039,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.2)',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         gap: 6,
     },
 });

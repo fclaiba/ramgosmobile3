@@ -41,7 +41,7 @@ const STATUS_TONE: Record<string, { label: string; color: string; bg: string }> 
     released: { label: 'Liberado', color: '#10B981', bg: '#D1FAE5' },
     refunded: { label: 'Reembolsado', color: '#6B7280', bg: '#F3F4F6' },
     open: { label: 'Abierta', color: '#F59E0B', bg: '#FEF3C7' },
-    escalated: { label: 'Escalada', color: '#7C3AED', bg: '#EDE9FE' },
+    escalated: { label: 'Escalada', color: '#2196F3', bg: '#EDE9FE' },
     resolved: { label: 'Resuelta', color: '#10B981', bg: '#D1FAE5' },
 };
 
@@ -158,7 +158,7 @@ export default function DisputeChatScreen({ route, navigation }: any) {
             <View style={styles.container}>
                 <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
                 <View style={styles.loadingWrap}>
-                    <ActivityIndicator size="large" color="#7C3AED" />
+                    <ActivityIndicator size="large" color="#2196F3" />
                     <Text style={styles.loadingText}>Cargando mediación...</Text>
                 </View>
             </View>
@@ -228,7 +228,7 @@ export default function DisputeChatScreen({ route, navigation }: any) {
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity style={styles.summaryBtn} onPress={() => setEscrowOpen(true)}>
-                            <ShieldCheck size={14} color="#7C3AED" />
+                            <ShieldCheck size={14} color="#2196F3" />
                             <Text style={styles.summaryBtnText}>Ver escrow</Text>
                         </TouchableOpacity>
                         {canEscalate && (
@@ -333,6 +333,8 @@ export default function DisputeChatScreen({ route, navigation }: any) {
 }
 
 import { StyleSheet } from 'react-native';
+import { Radius, colors } from '../../theme/tokens';
+
 
 function getStyles(isDark: boolean, insets: any) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
@@ -340,7 +342,7 @@ function getStyles(isDark: boolean, insets: any) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = '#7C3AED';
+    const primary = '#2196F3';
 
     return StyleSheet.create({
         container: { flex: 1, backgroundColor: bg },
@@ -361,7 +363,7 @@ function getStyles(isDark: boolean, insets: any) {
         iconBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.9)',
@@ -389,7 +391,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         summaryCard: {
             backgroundColor: surface,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 16,
             marginHorizontal: 16,
             marginTop: insets.top + 70,
@@ -400,7 +402,7 @@ function getStyles(isDark: boolean, insets: any) {
         summaryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
         summaryTitle: { fontSize: 16, fontWeight: '800', color: text },
         summarySubtitle: { fontSize: 12, color: muted, marginTop: 3 },
-        statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+        statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.md, borderWidth: 1 },
         statusBadgeText: { fontSize: 10, fontWeight: '800' },
 
         summaryActions: {
@@ -420,10 +422,10 @@ function getStyles(isDark: boolean, insets: any) {
             gap: 6,
             paddingHorizontal: 12,
             paddingVertical: 8,
-            borderRadius: 10,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#FAFAFA',
+            borderRadius: Radius.md,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.1)' : '#FAFAFA',
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#DDD6FE',
+            borderColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#DDD6FE',
         },
         summaryBtnDanger: { backgroundColor: '#DC2626', borderColor: '#DC2626' },
         summaryBtnText: { fontSize: 12, color: primary, fontWeight: '700' },
@@ -436,7 +438,7 @@ function getStyles(isDark: boolean, insets: any) {
         messageWrap: { marginBottom: 12, alignSelf: 'flex-start', maxWidth: '82%' },
         messageWrapMe: { alignSelf: 'flex-end', alignItems: 'flex-end' },
         messageBubble: {
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             paddingHorizontal: 14,
             paddingVertical: 10,
             borderBottomLeftRadius: 4,
@@ -474,7 +476,7 @@ function getStyles(isDark: boolean, insets: any) {
         attachBtn: {
             width: 44,
             height: 44,
-            borderRadius: 22,
+            borderRadius: Radius.xl,
             borderWidth: 1,
             borderColor: border,
             justifyContent: 'center',
@@ -483,10 +485,10 @@ function getStyles(isDark: boolean, insets: any) {
         },
         composerInput: {
             flex: 1,
-            borderRadius: 22,
+            borderRadius: Radius.xl,
             borderWidth: 1,
             borderColor: border,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             color: text,
             paddingHorizontal: 16,
             paddingVertical: 12,
@@ -497,7 +499,7 @@ function getStyles(isDark: boolean, insets: any) {
         sendBtn: {
             width: 44,
             height: 44,
-            borderRadius: 22,
+            borderRadius: Radius.xl,
             backgroundColor: primary,
             justifyContent: 'center',
             alignItems: 'center',
@@ -509,26 +511,26 @@ function getStyles(isDark: boolean, insets: any) {
         emptyIconWrap: {
             width: 80,
             height: 80,
-            borderRadius: 40,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.full,
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
         },
         emptyTitle: { fontSize: 20, fontWeight: '800', color: text },
         emptyText: { fontSize: 14, color: muted, textAlign: 'center', lineHeight: 20 },
-        emptyBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14, backgroundColor: primary },
+        emptyBtn: { marginTop: 16, paddingHorizontal: 24, paddingVertical: 12, borderRadius: Radius.md, backgroundColor: primary },
         emptyBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 
         escalateSheet: {
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
         },
         escalateHandle: {
             width: 40,
             height: 4,
-            borderRadius: 2,
+            borderRadius: Radius.sm,
             backgroundColor: isDark ? '#3F3F46' : '#D1D5DB',
             alignSelf: 'center',
             marginTop: 12,
@@ -536,7 +538,7 @@ function getStyles(isDark: boolean, insets: any) {
         escalateIconWrap: {
             width: 60,
             height: 60,
-            borderRadius: 30,
+            borderRadius: Radius['2xl'],
             backgroundColor: '#DC2626',
             justifyContent: 'center',
             alignItems: 'center',
@@ -549,8 +551,8 @@ function getStyles(isDark: boolean, insets: any) {
         escalateCancel: {
             flex: 1,
             paddingVertical: 14,
-            borderRadius: 14,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.md,
+            backgroundColor: colors(isDark).glass,
             alignItems: 'center',
             borderWidth: 1,
             borderColor: border,
@@ -559,7 +561,7 @@ function getStyles(isDark: boolean, insets: any) {
         escalateConfirm: {
             flex: 1,
             paddingVertical: 14,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             backgroundColor: '#DC2626',
             alignItems: 'center',
         },

@@ -12,6 +12,8 @@ import { BusinessLocationSearch } from '../../components/business/BusinessLocati
 import { useAction, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { LIMITS, MIN, clamp, formatTaxId } from '../../utils/inputLimits';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 
 export default function BusinessKYCScreen({ navigation }: any) {
@@ -216,7 +218,7 @@ export default function BusinessKYCScreen({ navigation }: any) {
                         {step === 3 && (
                             <View style={styles.stepContent}>
                                 <View style={styles.iconContainer}>
-                                    <ShieldCheck size={48} color="#7C3AED" />
+                                    <ShieldCheck size={48} color="#2196F3" />
                                 </View>
                                 <Text style={styles.stepTitle}>Confirmar Verificación</Text>
                                 <Text style={styles.stepDesc}>Tus datos serán revisados manualmente.</Text>
@@ -263,40 +265,36 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     scroll: { flexGrow: 1, padding: 16, justifyContent: 'center' },
     card: {
         backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : '#fff',
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         padding: 24,
-        shadowColor: isDark ? '#000' : '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: isDark ? 0.3 : 0.1,
-        shadowRadius: 12,
-        elevation: 5,
+        ...glassShadow(isDark),
         borderWidth: 1,
         borderColor: isDark ? '#374151' : 'transparent',
     },
 
     progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    stepDot: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
-    stepActive: { backgroundColor: '#7C3AED' },
+    stepDot: { width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center' },
+    stepActive: { backgroundColor: '#2196F3' },
     stepNum: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#9CA3AF' : '#9CA3AF' },
-    stepLine: { width: 40, height: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginHorizontal: 4 },
+    stepLine: { width: 40, height: 2, backgroundColor: colors(isDark).glass, marginHorizontal: 4 },
 
     stepContent: { alignItems: 'stretch' },
-    stepTitle: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', textAlign: 'center', marginBottom: 8 },
-    stepDesc: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: 24 },
+    stepTitle: { fontSize: 20, fontWeight: 'bold', color: colors(isDark).text, textAlign: 'center', marginBottom: 8 },
+    stepDesc: { fontSize: 14, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 24 },
 
     inputGroup: { marginBottom: 16 },
     label: { fontSize: 13, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 6 },
-    input: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderRadius: 12, height: 48, paddingHorizontal: 16, fontSize: 15, color: isDark ? '#F9FAFB' : '#111827' },
+    input: { backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', borderRadius: Radius.md, height: 48, paddingHorizontal: 16, fontSize: 15, color: colors(isDark).text },
 
-    btn: { backgroundColor: '#7C3AED', height: 50, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
+    btn: { backgroundColor: '#2196F3', height: 50, borderRadius: Radius.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
     btnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginRight: 8 },
 
-    uploadBox: { height: 160, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderStyle: 'dashed', borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginBottom: 24 },
-    uploadText: { marginTop: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
+    uploadBox: { height: 160, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', borderStyle: 'dashed', borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center', backgroundColor: colors(isDark).glass, marginBottom: 24 },
+    uploadText: { marginTop: 12, color: colors(isDark).textMuted, fontWeight: '500' },
 
-    iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: 40, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    summaryBox: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 16, borderRadius: 12, marginBottom: 24 },
-    summaryLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 12, marginBottom: 2 },
-    summaryVal: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 16, fontWeight: '600', marginBottom: 12 }
+    iconContainer: { alignSelf: 'center', width: 80, height: 80, borderRadius: Radius.full, backgroundColor: isDark ? '#2E1065' : '#ede9fe', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    summaryBox: { backgroundColor: colors(isDark).glass, padding: 16, borderRadius: Radius.md, marginBottom: 24 },
+    summaryLabel: { color: colors(isDark).textMuted, fontSize: 12, marginBottom: 2 },
+    summaryVal: { color: colors(isDark).text, fontSize: 16, fontWeight: '600', marginBottom: 12 }
 });

@@ -13,7 +13,7 @@ import { ToastProvider } from './src/contexts/ToastContext';
 import { ConfirmProvider } from './src/contexts/ConfirmContext';
 import { RewardsProvider } from './src/contexts/RewardsContext';
 import { PointsProvider } from './src/contexts/PointsContext';
-import { FavoritesProvider } from './src/contexts/FavoritesContext';
+
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CartProvider } from './src/contexts/CartContext';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
@@ -62,7 +62,7 @@ import VerificationScreen from './src/screens/VerificationScreen';
 import KYCScreen from './src/screens/KYCScreen';
 import TermsScreen from './src/screens/TermsScreen';
 import PrivacyScreen from './src/screens/PrivacyScreen';
-import PrivacySecurityScreen from './src/screens/PrivacySecurityScreen';
+
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ReferralsScreen from './src/screens/ReferralsScreen';
@@ -131,7 +131,7 @@ const AppNavigator = () => {
             ...DarkTheme.colors,
             background: '#09090B',
             card: 'rgba(255,255,255,0.07)',
-            primary: '#7C3AED',
+            primary: '#2196F3',
             text: '#FAFAFA',
             border: 'rgba(255,255,255,0.10)',
         },
@@ -143,7 +143,7 @@ const AppNavigator = () => {
             ...DefaultTheme.colors,
             background: '#FAFAFA',
             card: 'rgba(255,255,255,0.72)',
-            primary: '#7C3AED',
+            primary: '#2196F3',
             text: '#18181B',
             border: 'rgba(0,0,0,0.08)',
         },
@@ -180,7 +180,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="KYC" component={KYCScreen} />
                     <Stack.Screen name="Terms" component={TermsScreen} />
                     <Stack.Screen name="Privacy" component={PrivacyScreen} />
-                    <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
+
                     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Home" component={HomeScreen} />
                     <Stack.Screen name="Register" component={RegisterScreen} />
@@ -265,7 +265,7 @@ function StripeKeyGate() {
                                             <CartProvider>
                                                 <AuthProvider>
                                                     <NotificationsProvider>
-                                                    <FavoritesProvider>
+
                                                         <EscrowProvider>
                                                             <PointsProvider>
                                                                 <RewardsProvider>
@@ -274,7 +274,7 @@ function StripeKeyGate() {
                                                                 </RewardsProvider>
                                                             </PointsProvider>
                                                         </EscrowProvider>
-                                                    </FavoritesProvider>
+
                                                     </NotificationsProvider>
                                                 </AuthProvider>
                                             </CartProvider>

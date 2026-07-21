@@ -31,6 +31,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useTheme } from '../contexts/ThemeContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 type Interval = 'manual' | 'daily' | 'weekly' | 'monthly';
 
@@ -295,17 +297,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
 
     balanceCard: {
         padding: 24,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         marginBottom: 24,
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.2,
-        shadowRadius: 20,
-        elevation: 10,
+        ...glassShadow(isDark),
     },
     balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     balanceLabel: { color: '#94a3b8', fontSize: 14, fontWeight: '500' },
-    usdBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    usdBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm },
     usdText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 12, fontWeight: 'bold' },
     balanceValue: { fontSize: 42, fontWeight: '800', color: isDark ? '#09090B' : '#FAFAFA', marginBottom: 8 },
     balanceHint: { color: '#94a3b8', fontSize: 13 },
@@ -316,7 +314,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#FFFBEB',
         borderColor: '#FEF3C7',
         borderWidth: 1,
-        borderRadius: 14,
+        borderRadius: Radius.md,
         padding: 16,
         alignItems: 'flex-start',
     },
@@ -332,10 +330,10 @@ const getStyles = (isDark: any) => StyleSheet.create({
         alignItems: 'center',
         gap: 12,
         padding: 14,
-        borderRadius: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.md,
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     scheduleRowActive: { borderColor: '#1D4ED8', backgroundColor: '#EFF6FF' },
     scheduleLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
@@ -344,10 +342,10 @@ const getStyles = (isDark: any) => StyleSheet.create({
     amountInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        borderRadius: 12,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        borderRadius: Radius.md,
         paddingHorizontal: 16,
         paddingVertical: 14,
     },
@@ -366,10 +364,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#111827',
         paddingVertical: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         marginTop: 14,
-        shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
-    },
+        ...glassShadow(isDark),},
     disabledButton: { opacity: 0.6, backgroundColor: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
     withdrawButtonText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 16, fontWeight: 'bold' },
     securityNote: { textAlign: 'center', fontSize: 11, color: isDark ? '#6B7280' : '#9CA3AF', marginTop: 12 },

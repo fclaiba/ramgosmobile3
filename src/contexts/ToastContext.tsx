@@ -6,6 +6,8 @@ import { CheckCircle, AlertCircle, Info, X, AlertTriangle } from 'lucide-react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from './ThemeContext';
 import { toUserMessage } from '../utils/errors';
+import { Radius, colors } from '../theme/tokens';
+
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -108,7 +110,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
                                 <Text style={[styles.title, { color: isDark ? '#FFF' : '#1F2937' }]}>
                                     {type === 'success' ? '¡Éxito!' : type === 'error' ? 'Error' : 'Información'}
                                 </Text>
-                                <Text style={[styles.message, { color: isDark ? '#D1D5DB' : '#4B5563' }]} numberOfLines={2}>
+                                <Text style={[styles.message, { color: colors(isDark).textMuted }]} numberOfLines={2}>
                                     {message}
                                 </Text>
                             </View>
@@ -136,7 +138,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         width: '100%',
         maxWidth: 400,
         borderWidth: 1,

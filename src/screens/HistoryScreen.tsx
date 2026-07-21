@@ -46,6 +46,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/s
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { Radius, colors } from '../theme/tokens';
+
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
@@ -93,8 +95,8 @@ const STATUS_META: Record<HistoryStatus, { label: string; color: string; bg: str
 };
 
 const KIND_META: Record<HistoryKind | 'all', { label: string; icon: any; color: string }> = {
-    all: { label: 'Todos', icon: ShoppingBag, color: '#7C3AED' },
-    products: { label: 'Productos', icon: Package, color: '#8B5CF6' },
+    all: { label: 'Todos', icon: ShoppingBag, color: '#2196F3' },
+    products: { label: 'Productos', icon: Package, color: '#4FC3F7' },
     services: { label: 'Servicios', icon: ShoppingBag, color: '#38BDF8' },
     bonos: { label: 'Bonos', icon: Ticket, color: '#3B82F6' },
     events: { label: 'Eventos', icon: Calendar, color: '#F59E0B' },
@@ -451,7 +453,10 @@ export default function HistoryScreen({ navigation, route }: any) {
         (datePreset !== 'custom' || !!parseDateInput(dateFrom) || !!parseDateInput(dateTo));
 
     const allItems = useMemo(() => {
-        const purchases = [...purchaseOrderItems, ...fintechItems, ...bonoPurchaseItems];
+        // ponytail: skip fintech payments that belong to a marketplace order (prevents duplicates)
+        const orderIds = new Set(purchaseOrderItems.map(o => o.orderId));
+        const standalonePayments = fintechItems.filter(f => !orderIds.has(f.orderId));
+        const purchases = [...purchaseOrderItems, ...standalonePayments, ...bonoPurchaseItems];
         const sales = [...salesOrderItems, ...bonoSaleItems];
         const combined = activeTab === 'sales' ? sales : purchases;
         return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -632,11 +637,11 @@ export default function HistoryScreen({ navigation, route }: any) {
                 <Text style={[styles.statValue, { color: '#10B981' }]}>{formatCurrency(stats.total)}</Text>
                 <Text style={styles.statLabel}>{activeTab === 'sales' ? 'Total vendido' : 'Total gastado'}</Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.12)' : '#FAFAFA' }]}>
-                <View style={[styles.statIconWrap, { backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE' }]}>
-                    <History size={18} color="#7C3AED" />
+            <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(33, 150, 243, 0.12)' : '#FAFAFA' }]}>
+                <View style={[styles.statIconWrap, { backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE' }]}>
+                    <History size={18} color="#2196F3" />
                 </View>
-                <Text style={[styles.statValue, { color: '#7C3AED' }]}>{stats.count}</Text>
+                <Text style={[styles.statValue, { color: '#2196F3' }]}>{stats.count}</Text>
                 <Text style={styles.statLabel}>Transacciones</Text>
             </View>
             <View style={[styles.statCard, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#FFFBEB' }]}>
@@ -711,7 +716,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 <View key={item.id || `history-${index}`} style={[styles.itemCard, styles.bonoCard]}>
                     <View style={styles.itemRow}>
                         <View style={[styles.imageWrap, styles.bonoThumb]}>
-                            <Ticket size={28} color="#7C3AED" />
+                            <Ticket size={28} color="#2196F3" />
                         </View>
                         <View style={styles.itemBody}>
                             <View style={styles.itemTopRow}>
@@ -844,7 +849,7 @@ export default function HistoryScreen({ navigation, route }: any) {
 
         return (
             <Sheet open={!!selectedItem} onOpenChange={(open: boolean) => { if (!open) setSelectedItem(null); }}>
-                <SheetContent side="bottom" style={[styles.detailSheet, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+                <SheetContent side="bottom" style={[styles.detailSheet, { backgroundColor: colors(isDark).glass }]}>
                     <View style={styles.detailHandle} />
                     <View style={styles.detailHeader}>
                         <View>
@@ -890,10 +895,10 @@ export default function HistoryScreen({ navigation, route }: any) {
                                 <BlurView
                                     intensity={isDark ? 40 : 60}
                                     tint={isDark ? 'dark' : 'light'}
-                                    style={StyleSheet.absoluteFillObject}
+                                    style={StyleSheet.absoluteFill}
                                 />
                             ) : (
-                                <View style={[StyleSheet.absoluteFillObject, styles.summaryCardWebBg]} />
+                                <View style={[StyleSheet.absoluteFill, styles.summaryCardWebBg]} />
                             )}
                             <View style={styles.summaryCardInner}>
                                 <View style={styles.summaryHeader}>
@@ -1015,9 +1020,9 @@ export default function HistoryScreen({ navigation, route }: any) {
 
     const renderFiltersSheet = () => (
         <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <SheetContent side="bottom" style={[styles.filterSheet, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+            <SheetContent side="bottom" style={[styles.filterSheet, { backgroundColor: colors(isDark).glass }]}>
                 <SheetHeader>
-                    <SheetTitle style={{ color: isDark ? '#F9FAFB' : '#111827' }}>Filtros</SheetTitle>
+                    <SheetTitle style={{ color: colors(isDark).text }}>Filtros</SheetTitle>
                 </SheetHeader>
                 <View style={styles.filterBody}>
                     <Text style={styles.filterLabel}>Fecha de {activeTab === 'sales' ? 'venta' : 'compra'}</Text>
@@ -1086,7 +1091,7 @@ export default function HistoryScreen({ navigation, route }: any) {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#7C3AED" />
+                <ActivityIndicator size="large" color="#2196F3" />
                 <Text style={styles.loadingText}>Cargando historial...</Text>
             </View>
         );
@@ -1142,7 +1147,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = '#7C3AED';
+    const primary = '#2196F3';
     const isNarrow = width < 390;
     const sheetPad = width < 360 ? 12 : width < 768 ? 16 : 24;
 
@@ -1153,7 +1158,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
 
         headerWrapper: { zIndex: 50 },
         hero: {
-            backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+            backgroundColor: colors(isDark).bg,
             paddingHorizontal: 16,
             paddingTop: insets.top + 12,
             paddingBottom: 16,
@@ -1164,10 +1169,10 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         iconBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
         },
         headerTitles: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
         headerTitle: { fontSize: 18, fontWeight: '800', color: text },
@@ -1178,7 +1183,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             right: -2,
             width: 8,
             height: 8,
-            borderRadius: 4,
+            borderRadius: Radius.sm,
             backgroundColor: primary,
             borderWidth: 1,
             borderColor: isDark ? '#09090B' : '#FAFAFA',
@@ -1203,8 +1208,8 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         searchBar: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-            borderRadius: 14,
+            backgroundColor: colors(isDark).glass,
+            borderRadius: Radius.md,
             paddingHorizontal: 14,
             height: 48,
             gap: 10,
@@ -1224,7 +1229,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         statsRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginTop: 16, marginBottom: 18 },
         statCard: {
             flex: 1,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             padding: 14,
             alignItems: 'flex-start',
             borderWidth: 1,
@@ -1233,7 +1238,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         statIconWrap: {
             width: 36,
             height: 36,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5',
@@ -1245,8 +1250,8 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         controlsBar: { paddingHorizontal: 16, marginBottom: 12 },
         tabPill: {
             flexDirection: 'row',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-            borderRadius: 18,
+            backgroundColor: colors(isDark).glass,
+            borderRadius: Radius.lg,
             padding: 4,
             borderWidth: 1,
             borderColor: border,
@@ -1258,7 +1263,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             justifyContent: 'center',
             gap: 6,
             paddingVertical: 10,
-            borderRadius: 14,
+            borderRadius: Radius.md,
         },
         tabPillBtnActive: { backgroundColor: primary },
         tabPillText: { fontSize: 14, fontWeight: '700', color: muted },
@@ -1271,7 +1276,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 6,
             paddingHorizontal: 14,
             paddingVertical: 9,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             backgroundColor: surface,
             borderWidth: 1,
             borderColor: border,
@@ -1289,19 +1294,19 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         emptyWrap: { alignItems: 'center', paddingVertical: 48, gap: 12 },
         emptyTitle: { fontSize: 17, fontWeight: '700', color: text },
         emptyText: { fontSize: 14, color: muted, textAlign: 'center' },
-        emptyClearBtn: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: primary },
+        emptyClearBtn: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.md, backgroundColor: primary },
         emptyClearText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
         itemCard: {
             backgroundColor: surface,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             padding: 14,
             marginBottom: 12,
             borderWidth: 1,
             borderColor: border,
         },
         itemRow: { flexDirection: 'row', gap: 14 },
-        imageWrap: { width: 76, height: 76, borderRadius: 14, overflow: 'hidden', position: 'relative', backgroundColor: border },
+        imageWrap: { width: 76, height: 76, borderRadius: Radius.md, overflow: 'hidden', position: 'relative', backgroundColor: border },
         itemImage: { width: '100%', height: '100%' },
         typeBadge: {
             position: 'absolute',
@@ -1309,7 +1314,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             left: 6,
             backgroundColor: 'rgba(0,0,0,0.6)',
             padding: 4,
-            borderRadius: 8,
+            borderRadius: Radius.sm,
         },
         itemBody: { flex: 1, justifyContent: 'space-between' },
         itemTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
@@ -1320,7 +1325,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 4,
             paddingHorizontal: 8,
             paddingVertical: 4,
-            borderRadius: 10,
+            borderRadius: Radius.md,
         },
         statusText: { fontSize: 10, fontWeight: '800' },
         itemBusiness: { fontSize: 13, color: muted, marginTop: 3 },
@@ -1331,7 +1336,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             backgroundColor: primary,
             paddingHorizontal: 12,
             paddingVertical: 7,
-            borderRadius: 10,
+            borderRadius: Radius.md,
         },
         confirmBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
         detailBtn: {
@@ -1346,10 +1351,10 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         },
         detailBtnText: { fontSize: 13, color: muted, fontWeight: '600' },
         bonoCard: {
-            borderColor: isDark ? 'rgba(124,58,237,0.35)' : 'rgba(124,58,237,0.18)',
+            borderColor: isDark ? 'rgba(33, 150, 243,0.35)' : 'rgba(33, 150, 243,0.18)',
         },
         bonoThumb: {
-            backgroundColor: isDark ? 'rgba(124,58,237,0.18)' : 'rgba(124,58,237,0.08)',
+            backgroundColor: isDark ? 'rgba(33, 150, 243,0.18)' : 'rgba(33, 150, 243,0.08)',
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -1359,7 +1364,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             marginTop: 14,
             paddingVertical: 12,
             paddingHorizontal: 4,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(9,9,11,0.03)',
         },
         bonoStat: { flex: 1, paddingHorizontal: 12 },
@@ -1388,7 +1393,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             marginTop: 12,
             paddingVertical: 12,
             paddingHorizontal: 14,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             borderWidth: 1,
             borderColor: border,
             borderStyle: 'dashed',
@@ -1415,7 +1420,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 8,
             backgroundColor: primary,
             paddingVertical: 13,
-            borderRadius: 14,
+            borderRadius: Radius.md,
         },
         bonoQrBtnText: {
             color: '#fff',
@@ -1434,7 +1439,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         detailHandle: {
             width: 40,
             height: 4,
-            borderRadius: 2,
+            borderRadius: Radius.sm,
             backgroundColor: isDark ? '#3F3F46' : '#D1D5DB',
             alignSelf: 'center',
             marginTop: 12,
@@ -1454,8 +1459,8 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         detailCloseBtn: {
             width: 36,
             height: 36,
-            borderRadius: 18,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.lg,
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -1466,23 +1471,23 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 14,
             margin: 16,
             padding: 16,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
         },
         detailHeroIcon: {
             width: 52,
             height: 52,
-            borderRadius: 26,
+            borderRadius: Radius['2xl'],
             borderWidth: 2,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
         },
         detailHeroTitle: { fontSize: 17, fontWeight: '800', color: text },
         detailHeroSubtitle: { fontSize: 12, color: muted, marginTop: 2 },
         detailHeroBadge: {
             paddingHorizontal: 10,
             paddingVertical: 5,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             borderWidth: 1,
         },
         detailHeroBadgeText: { fontSize: 10, fontWeight: '800' },
@@ -1491,7 +1496,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             marginHorizontal: 16,
             marginBottom: 16,
             height: 180,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             overflow: 'hidden',
             position: 'relative',
         },
@@ -1509,7 +1514,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
 
         detailCard: {
             backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: sheetPad,
             marginHorizontal: sheetPad,
             marginBottom: 16,
@@ -1545,7 +1550,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         summaryCard: {
             marginHorizontal: sheetPad,
             marginBottom: 16,
-            borderRadius: 22,
+            borderRadius: Radius.xl,
             overflow: 'hidden',
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.9)',
@@ -1585,7 +1590,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 5,
             paddingHorizontal: 10,
             paddingVertical: 6,
-            borderRadius: 999,
+            borderRadius: Radius.full,
             borderWidth: StyleSheet.hairlineWidth,
             flexShrink: 0,
             maxWidth: '46%',
@@ -1629,7 +1634,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             marginTop: 12,
             paddingVertical: 14,
             paddingHorizontal: 14,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.1)',
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: isDark ? 'rgba(16,185,129,0.35)' : 'rgba(16,185,129,0.28)',
@@ -1660,14 +1665,14 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             gap: 8,
             paddingVertical: 12,
             paddingHorizontal: 16,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             minWidth: 140,
             flex: 1,
         },
         detailActionPrimary: { backgroundColor: primary },
         detailActionPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
         detailActionSecondary: {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             borderWidth: 1,
             borderColor: border,
         },
@@ -1683,8 +1688,8 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         filterChip: {
             paddingHorizontal: 14,
             paddingVertical: 10,
-            borderRadius: 20,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.xl,
+            backgroundColor: colors(isDark).glass,
             borderWidth: 1,
             borderColor: border,
             marginRight: 6,
@@ -1696,8 +1701,8 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         dateInput: {
             borderColor: border,
             color: text,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-            borderRadius: 12,
+            backgroundColor: colors(isDark).glass,
+            borderRadius: Radius.md,
         },
         dateError: { fontSize: 12, color: '#EF4444' },
         filterFooter: { flexDirection: 'row', gap: 12, marginTop: 8 },
@@ -1708,8 +1713,8 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             justifyContent: 'center',
             gap: 6,
             paddingVertical: 14,
-            borderRadius: 14,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.md,
+            backgroundColor: colors(isDark).glass,
             borderWidth: 1,
             borderColor: border,
         },
@@ -1717,7 +1722,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         filterApplyBtn: {
             flex: 1,
             paddingVertical: 14,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             backgroundColor: primary,
             alignItems: 'center',
         },

@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
-import { useFavorites } from '../../contexts/FavoritesContext';
+import { useFavorites } from '../../hooks/useFavorites';
 import { useToast } from '../../contexts/ToastContext';
 import { ShoppingCart, Crosshair, Minus, Plus, ArrowRight, Heart } from 'lucide-react-native';
 import { MarketplaceMapMarker } from '../map/MarketplaceMapMarker';
@@ -24,6 +24,8 @@ import { DARK_MAP_STYLE, LIGHT_MAP_STYLE, MAP_DEFAULTS } from '../../constants/d
 
 import Slider from '@react-native-community/slider';
 import { useUserLocation } from '../../hooks/useUserLocation';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 
@@ -212,8 +214,8 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                             center={{ latitude: searchLocation.lat, longitude: searchLocation.lng }}
                             radius={radius * 1000}
                             strokeWidth={2}
-                            strokeColor={isDark ? 'rgba(139, 92, 246, 0.5)' : 'rgba(139, 92, 246, 0.6)'}
-                            fillColor={isDark ? 'rgba(139, 92, 246, 0.1)' : 'rgba(139, 92, 246, 0.1)'}
+                            strokeColor={isDark ? 'rgba(79, 195, 247, 0.5)' : 'rgba(79, 195, 247, 0.6)'}
+                            fillColor={isDark ? 'rgba(79, 195, 247, 0.1)' : 'rgba(79, 195, 247, 0.1)'}
                         />
                     )}
 
@@ -265,9 +267,9 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                 step={1}
                                 value={radius}
                                 onValueChange={onRadiusChange}
-                                minimumTrackTintColor="#8B5CF6"
+                                minimumTrackTintColor="#4FC3F7"
                                 maximumTrackTintColor={isDark ? '#4B5563' : '#D1D5DB'}
-                                thumbTintColor="#8B5CF6"
+                                thumbTintColor="#4FC3F7"
                             />
 
                             <TouchableOpacity
@@ -298,7 +300,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                             if (target) mapRef.current?.animateToRegion(target, 1000);
                         }}
                     >
-                        <Crosshair size={24} color={isTrackingUser ? '#8B5CF6' : (isDark ? '#fff' : '#000')} />
+                        <Crosshair size={24} color={isTrackingUser ? '#4FC3F7' : (isDark ? '#fff' : '#000')} />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.controlBtn, { backgroundColor: isDark ? 'rgba(31,41,55,0.9)' : 'rgba(255,255,255,0.9)' }]}
@@ -316,7 +318,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
                 {/* Item Detail Card (Bottom Sheet Style) */}
                 {activeItem && (
-                    <Animated.View style={[styles.detailCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', bottom: bottomOffset + 16 }]}>
+                    <Animated.View style={[styles.detailCard, { backgroundColor: colors(isDark).glass, bottom: bottomOffset + 16 }]}>
                         <View style={styles.detailHeader}>
                             <TouchableOpacity
                                 style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
@@ -327,7 +329,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                     <Text style={[styles.detailTitle, { color: isDark ? '#fff' : '#000' }]} numberOfLines={1}>
                                         {activeItem.name}
                                     </Text>
-                                    <Text style={[styles.detailSub, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                    <Text style={[styles.detailSub, { color: colors(isDark).textMuted }]}>
                                         {activeItem.category} • {activeItem.distance}km
                                     </Text>
                                     <View style={styles.priceTag}>
@@ -339,7 +341,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                             {/* Actions */}
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <TouchableOpacity
-                                    style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                    style={[styles.actionBtn, { backgroundColor: colors(isDark).glass }]}
                                     onPress={() => toggleFavorite(activeItem)}
                                 >
                                     <Heart
@@ -351,7 +353,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
                                 {activeItem.type === 'product' && (
                                     <TouchableOpacity
-                                        style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]}
+                                        style={[styles.actionBtn, { backgroundColor: '#4FC3F7' }]}
                                         onPress={() => {
                                             addItem({
                                                 id: activeItem.id,
@@ -376,7 +378,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                 )}
 
                                 <TouchableOpacity
-                                    style={[styles.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                    style={[styles.actionBtn, { backgroundColor: colors(isDark).glass }]}
                                     onPress={() => onItemClick(activeItem)}
                                 >
                                     <ArrowRight size={18} color={isDark ? '#D1D5DB' : '#6B7280'} />
@@ -416,7 +418,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     errorIconContainer: {
         width: 72,
         height: 72,
-        borderRadius: 36,
+        borderRadius: Radius.full,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 16,
@@ -435,7 +437,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#6366F1',
         paddingHorizontal: 24,
         paddingVertical: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     retryButtonText: {
         color: isDark ? '#09090B' : '#FAFAFA',
@@ -445,50 +447,49 @@ const getStyles = (isDark: any) => StyleSheet.create({
     // Top Overlay
     topOverlay: { position: 'absolute', left: 16, right: 16, zIndex: 10 },
     searchRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-    blurSearch: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 24, height: 48, overflow: 'hidden', paddingRight: 4 },
+    blurSearch: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: Radius.xl, height: 48, overflow: 'hidden', paddingRight: 4 },
     searchInput: { flex: 1, paddingHorizontal: 16, height: 48, fontSize: 14 },
-    filterBtn: { borderRadius: 16, overflow: 'hidden', width: 48, height: 48 },
+    filterBtn: { borderRadius: Radius.lg, overflow: 'hidden', width: 48, height: 48 },
     blurBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
-    activeFilterBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED', borderWidth: 1, borderColor: isDark ? '#09090B' : '#FAFAFA' },
+    activeFilterBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#2196F3', borderWidth: 1, borderColor: isDark ? '#09090B' : '#FAFAFA' },
 
     secondRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    viewToggles: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 4, height: 40, alignItems: 'center' },
-    viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
-    viewToggleBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    viewToggles: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: Radius.xl, padding: 4, height: 40, alignItems: 'center' },
+    viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.lg },
+    viewToggleBtnActive: { backgroundColor: colors(isDark).glass },
 
     catsRow: { gap: 8 },
-    catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: 'transparent' },
-    catChipActive: { borderColor: '#7C3AED' },
+    catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.xl, borderWidth: 1, borderColor: 'transparent' },
+    catChipActive: { borderColor: '#2196F3' },
     catText: { fontSize: 13, fontWeight: '500' },
     catTextActive: { fontWeight: 'bold' },
 
     // Controls
     controlsContainer: { position: 'absolute', right: 16, top: '50%', marginTop: -66, gap: 12 },
-    controlBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
+    controlBtn: { width: 44, height: 44, borderRadius: Radius.xl, justifyContent: 'center', alignItems: 'center', ...glassShadow(isDark),},
 
     // Slider
     sliderContainer: { position: 'absolute', alignSelf: 'center', width: '60%', maxWidth: 300, zIndex: 5 },
-    blurPill: { borderRadius: 24, padding: 12, overflow: 'hidden' },
+    blurPill: { borderRadius: Radius.xl, padding: 12, overflow: 'hidden' },
     sliderLabel: { textAlign: 'center', fontSize: 12, fontWeight: 'bold', marginBottom: 8 },
     sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    barContainer: { flex: 1, height: 4, backgroundColor: 'rgba(150,150,150,0.3)', borderRadius: 2 },
-    barFill: { height: '100%', backgroundColor: '#8B5CF6', borderRadius: 2 },
+    barContainer: { flex: 1, height: 4, backgroundColor: 'rgba(150,150,150,0.3)', borderRadius: Radius.sm },
+    barFill: { height: '100%', backgroundColor: '#4FC3F7', borderRadius: Radius.sm },
     iconBtn: { padding: 4 },
 
     // Detail Card
     detailCard: {
         position: 'absolute', left: 16, right: 16,
-        borderRadius: 20, padding: 16,
-        shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8
-    },
+        borderRadius: Radius.xl, padding: 16,
+        ...glassShadow(isDark),},
     detailHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    detailImage: { width: 56, height: 56, borderRadius: 12 },
+    detailImage: { width: 56, height: 56, borderRadius: Radius.md },
     detailContent: { flex: 1 },
     detailTitle: { fontSize: 16, fontWeight: 'bold' },
     detailSub: { fontSize: 13 },
-    priceTag: { backgroundColor: '#10B981', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
+    priceTag: { backgroundColor: '#10B981', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.sm, marginTop: 4 },
     priceText: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 12, fontWeight: 'bold' },
-    actionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center' }
+    actionBtn: { width: 40, height: 40, borderRadius: Radius.xl, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center' }
 });
 
 // Map styles are now centralized in src/constants/darkMapStyle.ts

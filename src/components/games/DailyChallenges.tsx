@@ -6,6 +6,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { usePoints } from '../../contexts/PointsContext';
 import { Card } from '../ui/card';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Radius } from '../../theme/tokens';
+
 
 export function DailyChallenges() {
     const { colorScheme } = useTheme();
@@ -30,7 +32,7 @@ export function DailyChallenges() {
     const getIcon = (icon: string) => {
         switch (icon) {
             case 'login': return <Zap size={20} color="#F59E0B" />;
-            case 'purchase': return <ShoppingBag size={20} color="#8B5CF6" />;
+            case 'purchase': return <ShoppingBag size={20} color="#4FC3F7" />;
             default: return <Gift size={20} color="#EC4899" />;
         }
     };
@@ -136,7 +138,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 16,
     },
     streakCard: {
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 16,
         borderWidth: 1,
         borderColor: 'rgba(253,186,116,0.3)',
@@ -155,7 +157,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     flameIcon: {
         width: 48,
         height: 48,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         backgroundColor: '#F97316',
         justifyContent: 'center',
         alignItems: 'center',
@@ -185,13 +187,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#F97316',
         padding: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         gap: 8,
     },
     claimedButton: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     claimText: {
         color: isDark ? '#09090B' : '#FAFAFA',
@@ -229,7 +231,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     iconContainer: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         backgroundColor: 'rgba(255,255,255,0.05)',
         justifyContent: 'center',
         alignItems: 'center',
@@ -250,13 +252,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
     progressBar: {
         height: 4,
         backgroundColor: '#404040',
-        borderRadius: 2,
+        borderRadius: Radius.sm,
         marginBottom: 4,
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
-        backgroundColor: '#8B5CF6',
+        backgroundColor: '#4FC3F7',
     },
     progressText: {
         color: '#A3A3A3',
@@ -266,12 +268,12 @@ const getStyles = (isDark: any) => StyleSheet.create({
     actionBtn: {
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         backgroundColor: '#404040',
         marginLeft: 8,
     },
     claimableBtn: {
-        backgroundColor: '#8B5CF6',
+        backgroundColor: '#4FC3F7',
     },
     completedBtn: {
         backgroundColor: 'transparent',

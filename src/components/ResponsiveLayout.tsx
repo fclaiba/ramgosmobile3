@@ -25,7 +25,7 @@ export function ResponsiveLayout({ children, sidebar, style, contentContainerSty
                 colors={atmosphere(isDark)}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
             />
             {showSidebar ? <View style={styles.sidebarContainer}>{sidebar}</View> : null}
             <View style={styles.contentWrapper}>

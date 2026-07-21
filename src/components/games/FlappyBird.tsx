@@ -7,6 +7,8 @@ import { useGameLevel } from './useGameLevel';
 import { GAME_LEVEL_THRESHOLDS, getArcadeParams } from './gameDifficultyConfig';
 import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
+import { Radius } from '../../theme/tokens';
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -354,7 +356,7 @@ export const FlappyBird = (props: FlappyBirdProps) => {
                         )}
 
                         <TouchableOpacity style={s.startBtn} onPress={startGame} activeOpacity={0.8}>
-                            <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={s.startBtnGrad}>
+                            <LinearGradient colors={['#4FC3F7', '#2196F3']} style={s.startBtnGrad}>
                                 <RotateCcw size={20} color="#fff" />
                                 <Text style={s.startBtnText}>Reintentar</Text>
                             </LinearGradient>
@@ -423,7 +425,7 @@ const s = StyleSheet.create({
         backgroundColor: '#27AE60',
         borderWidth: 2,
         borderColor: '#1E8449',
-        borderRadius: 4,
+        borderRadius: Radius.sm,
     },
 
     // Bird
@@ -451,7 +453,7 @@ const s = StyleSheet.create({
         width: 18,
         height: 12,
         backgroundColor: '#FF6B35',
-        borderRadius: 6,
+        borderRadius: Radius.sm,
         transform: [{ rotate: '-15deg' }],
     },
     birdEye: {
@@ -461,7 +463,7 @@ const s = StyleSheet.create({
         width: 8,
         height: 8,
         backgroundColor: 'rgba(255,255,255,0.62)',
-        borderRadius: 4,
+        borderRadius: Radius.sm,
         borderWidth: 2,
         borderColor: '#333',
     },
@@ -472,7 +474,7 @@ const s = StyleSheet.create({
         width: 12,
         height: 8,
         backgroundColor: '#FF6B35',
-        borderRadius: 3,
+        borderRadius: Radius.sm,
     },
 
     // Overlays
@@ -498,7 +500,7 @@ const s = StyleSheet.create({
         marginBottom: 32,
     },
     startBtn: {
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         overflow: 'hidden',
         marginTop: 16,
     },
@@ -508,7 +510,7 @@ const s = StyleSheet.create({
         gap: 10,
         paddingHorizontal: 36,
         paddingVertical: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
     },
     startBtnText: {
         color: '#fff',
@@ -523,7 +525,7 @@ const s = StyleSheet.create({
         backgroundColor: 'rgba(245,158,11,0.15)',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
     },
     highScoreText: {
         color: '#F59E0B',
@@ -556,7 +558,7 @@ const s = StyleSheet.create({
         backgroundColor: 'rgba(245,158,11,0.2)',
         paddingHorizontal: 20,
         paddingVertical: 8,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         marginTop: 8,
         marginBottom: 8,
     },

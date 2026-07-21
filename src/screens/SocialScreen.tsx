@@ -14,6 +14,8 @@ import { Post } from '../components/social';
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any) {
     const { width } = useWindowDimensions();
@@ -92,10 +94,10 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     headerActions: { flexDirection: 'row', gap: 12 },
-    iconBtn: { padding: 8, backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderRadius: 12 },
-    createPostBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 12, borderRadius: 16, marginBottom: 16, gap: 12 },
-    avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? '#374151' : '#E5E5E5', justifyContent: 'center', alignItems: 'center' },
+    iconBtn: { padding: 8, backgroundColor: colors(isDark).bg, borderRadius: Radius.md },
+    createPostBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, padding: 12, borderRadius: Radius.lg, marginBottom: 16, gap: 12 },
+    avatarPlaceholder: { width: 40, height: 40, borderRadius: Radius.xl, backgroundColor: isDark ? '#374151' : '#E5E5E5', justifyContent: 'center', alignItems: 'center' },
     avatarLetter: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#9CA3AF' : '#666' },
-    cpInput: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', height: 36, borderRadius: 18, justifyContent: 'center', paddingHorizontal: 16 },
+    cpInput: { flex: 1, backgroundColor: colors(isDark).glass, height: 36, borderRadius: Radius.lg, justifyContent: 'center', paddingHorizontal: 16 },
     cpText: { color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 13 },
 });

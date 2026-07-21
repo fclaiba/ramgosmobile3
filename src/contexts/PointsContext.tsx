@@ -461,6 +461,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             unlockHat,
             equipHat,
             challenges,
+            quarterlyMission,
             ready: economyState !== undefined,
         }),
         [

@@ -2,15 +2,18 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
-import { useFavorites } from '../../contexts/FavoritesContext';
+import { useFavorites } from '../../hooks/useFavorites';
 import { useToast } from '../../contexts/ToastContext';
-import { Heart, ShoppingCart, ArrowRight, Crosshair, Minus, Plus, Bell, BellOff } from 'lucide-react-native';
+import { Heart, ShoppingCart, ArrowRight, Crosshair, Minus, Plus, Bell, BellOff, Settings, X, Check } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 
 // react-leaflet imports (web only)
 import { MapContainer, TileLayer, Marker as LeafletMarker, Popup, Circle as LeafletCircle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { BlurView } from 'expo-blur';
+import { Radius, colors } from '../../theme/tokens';
+import { UNIFIED_CATEGORIES } from '../../config/UnifiedCategories';
+
 
 // ponytail: inject leaflet CSS from CDN at runtime instead of importing the file
 // (Metro can't handle CSS url() references to local images)
@@ -40,7 +43,7 @@ const FALLBACK_IMAGE = 'https://placehold.co/300x300.png';
 
 const getMarkerColor = (type: string) => {
     switch (type) {
-        case 'product': return '#8B5CF6';
+        case 'product': return '#4FC3F7';
         case 'bono': return '#10B981';
         case 'event': return '#F59E0B';
         case 'service': return '#38BDF8';
@@ -189,6 +192,9 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     const [loading, setLoading] = useState(false);
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [notificationDistance, setNotificationDistance] = useState(500); // meters
+    const [isNotifConfigOpen, setIsNotifConfigOpen] = useState(false);
+    const [notifTypes, setNotifTypes] = useState<string[]>(['product', 'service', 'event', 'business', 'bono']);
+    const [notifCategories, setNotifCategories] = useState<string[]>([]);
     const mapRef = useRef<any>(null);
 
     // ponytail: browser geolocation API, no extra deps
@@ -228,8 +234,8 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
     if (loading) {
         return (
             <View style={[s.container, { backgroundColor: isDark ? '#0a0a0a' : '#f9fafb' }]}>
-                <ActivityIndicator size="large" color="#8B5CF6" />
-                <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 12 }}>Cargando mapa...</Text>
+                <ActivityIndicator size="large" color="#4FC3F7" />
+                <Text style={{ color: colors(isDark).textMuted, marginTop: 12 }}>Cargando mapa...</Text>
             </View>
         );
     }
@@ -262,8 +268,8 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                     center={[center.lat, center.lng]}
                     radius={radius * 1000}
                     pathOptions={{
-                        color: 'rgba(139, 92, 246, 0.5)',
-                        fillColor: 'rgba(139, 92, 246, 0.08)',
+                        color: 'rgba(79, 195, 247, 0.5)',
+                        fillColor: 'rgba(79, 195, 247, 0.08)',
                         weight: 2,
                     }}
                 />
@@ -275,8 +281,8 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         className: 'center-pin',
                         html: `<div style="
                             width: 16px; height: 16px; border-radius: 50%;
-                            background: #8B5CF6; border: 3px solid white;
-                            box-shadow: 0 0 0 4px rgba(139,92,246,0.3), 0 2px 8px rgba(0,0,0,0.3);
+                            background: #4FC3F7; border: 3px solid white;
+                            box-shadow: 0 0 0 4px rgba(79, 195, 247,0.3), 0 2px 8px rgba(0,0,0,0.3);
                         "></div>`,
                         iconSize: [16, 16],
                         iconAnchor: [8, 8],
@@ -307,13 +313,13 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
             ]}>
                 <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={s.blurContainerCompact}>
                     <View style={s.sliderRowCompact}>
-                        <Text style={[s.sliderLabelCompact, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+                        <Text style={[s.sliderLabelCompact, { color: colors(isDark).text }]}>
                             RADIO
                         </Text>
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingHorizontal: 12 }}>
                             <TouchableOpacity
-                                style={[s.zoomBtnCompact, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                style={[s.zoomBtnCompact, { backgroundColor: colors(isDark).glass }]}
                                 onPress={() => onRadiusChange && onRadiusChange(Math.max(1, radius - 1))}
                             >
                                 <Minus size={12} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -326,13 +332,13 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                                 step={1}
                                 value={radius}
                                 onValueChange={onRadiusChange}
-                                minimumTrackTintColor="#8B5CF6"
+                                minimumTrackTintColor="#4FC3F7"
                                 maximumTrackTintColor={isDark ? '#4B5563' : '#D1D5DB'}
-                                thumbTintColor="#8B5CF6"
+                                thumbTintColor="#4FC3F7"
                             />
 
                             <TouchableOpacity
-                                style={[s.zoomBtnCompact, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                style={[s.zoomBtnCompact, { backgroundColor: colors(isDark).glass }]}
                                 onPress={() => onRadiusChange && onRadiusChange(Math.min(50, radius + 1))}
                             >
                                 <Plus size={12} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -351,17 +357,25 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                 <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={s.notifBlurCompact}>
                     <TouchableOpacity style={s.notifRowCompact} onPress={handleToggleNotifications}>
                         {notificationsEnabled
-                            ? <Bell size={18} color="#8B5CF6" />
+                            ? <Bell size={18} color="#4FC3F7" />
                             : <BellOff size={18} color={isDark ? '#6B7280' : '#9CA3AF'} />
                         }
                     </TouchableOpacity>
                     
                     {notificationsEnabled && (
-                        <View style={[s.notifDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' }]} />
+                        <>
+                            <View style={[s.notifDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' }]} />
+                            <TouchableOpacity 
+                                style={[s.notifRowCompact, { paddingHorizontal: 4 }]} 
+                                onPress={() => setIsNotifConfigOpen(true)}
+                            >
+                                <Settings size={18} color={isDark ? '#D1D5DB' : '#374151'} />
+                            </TouchableOpacity>
+                        </>
                     )}
 
                     {notificationsEnabled && (
-                        <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', marginLeft: 4 }}>
                             {[100, 500, 1000].map(d => (
                                 <TouchableOpacity
                                     key={d}
@@ -381,6 +395,69 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                 </BlurView>
             </View>
 
+            {/* Notification Config Modal */}
+            {isNotifConfigOpen && (
+                <View style={[StyleSheet.absoluteFill, { zIndex: 10000, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.4)' }]}>
+                    <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[s.notifConfigModal, { backgroundColor: isDark ? 'rgba(31,41,55,0.85)' : 'rgba(255,255,255,0.9)' }]}>
+                        <View style={s.notifConfigHeader}>
+                            <View>
+                                <Text style={[s.notifConfigTitle, { color: colors(isDark).text }]}>Configurar Filtros</Text>
+                                <Text style={[s.notifConfigSub, { color: colors(isDark).textMuted }]}>Alertas en mapa para:</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setIsNotifConfigOpen(false)} style={s.closeBtn}>
+                                <X size={20} color={colors(isDark).textMuted} />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        {/* Tipo de Unidad Comercial */}
+                        <Text style={[s.notifSectionTitle, { color: colors(isDark).text }]}>Tipos de unidades</Text>
+                        <View style={s.chipGroup}>
+                            {['product', 'service', 'event', 'business', 'bono'].map(type => {
+                                const isSelected = notifTypes.includes(type);
+                                const label = type === 'product' ? 'Productos' : type === 'service' ? 'Servicios' : type === 'event' ? 'Eventos' : type === 'business' ? 'Negocios' : 'Bonos';
+                                return (
+                                    <TouchableOpacity 
+                                        key={type} 
+                                        style={[s.configChip, isSelected && s.configChipActive, { borderColor: isSelected ? '#4FC3F7' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)') }]}
+                                        onPress={() => {
+                                            setNotifTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
+                                        }}
+                                    >
+                                        {isSelected && <Check size={14} color="#fff" style={{ marginRight: 4 }} />}
+                                        <Text style={[s.configChipText, isSelected && { color: '#fff', fontWeight: 'bold' }]}>{label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {/* Categorías Internas */}
+                        {notifTypes.length > 0 && (
+                            <View style={{ marginTop: 20 }}>
+                                <Text style={[s.notifSectionTitle, { color: colors(isDark).text }]}>Categorías internas</Text>
+                                <View style={s.chipGroup}>
+                                    {Array.from(new Set(notifTypes.flatMap(t => (UNIFIED_CATEGORIES as any)[t] || []))).sort().map(cat => {
+                                        const isSelected = notifCategories.includes(cat as string);
+                                        return (
+                                            <TouchableOpacity 
+                                                key={cat as string} 
+                                                style={[s.configChip, isSelected && s.configChipActive, { borderColor: isSelected ? '#4FC3F7' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)') }]}
+                                                onPress={() => {
+                                                    setNotifCategories(prev => prev.includes(cat as string) ? prev.filter(c => c !== cat) : [...prev, cat as string]);
+                                                }}
+                                            >
+                                                {isSelected && <Check size={14} color="#fff" style={{ marginRight: 4 }} />}
+                                                <Text style={[s.configChipText, isSelected && { color: '#fff', fontWeight: 'bold' }]}>{cat as string}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        )}
+                        
+                    </BlurView>
+                </View>
+            )}
+
             {/* Recenter Button */}
             {userLocation && (
                 <TouchableOpacity
@@ -394,7 +471,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         mapRef.current?.setView([userLocation.lat, userLocation.lng], 13, { animate: true });
                     }}
                 >
-                    <Crosshair size={20} color="#8B5CF6" />
+                    <Crosshair size={20} color="#4FC3F7" />
                 </TouchableOpacity>
             )}
 
@@ -409,10 +486,10 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         >
                             <Image source={{ uri: activeItem.image }} style={s.detailImg} />
                             <View style={s.detailInfo}>
-                                <Text style={[s.detailTitle, { color: isDark ? '#F9FAFB' : '#111827' }]} numberOfLines={1}>
+                                <Text style={[s.detailTitle, { color: colors(isDark).text }]} numberOfLines={1}>
                                     {activeItem.name}
                                 </Text>
-                                <Text style={[s.detailSub, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                <Text style={[s.detailSub, { color: colors(isDark).textMuted }]}>
                                     {activeItem.category} • {activeItem.distance}km
                                 </Text>
                                 <View style={s.priceTag}>
@@ -424,7 +501,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         <View style={s.detailActions}>
                             {/* Save */}
                             <TouchableOpacity
-                                style={[s.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                style={[s.actionBtn, { backgroundColor: colors(isDark).glass }]}
                                 onPress={() => toggleFavorite(activeItem)}
                             >
                                 <Heart
@@ -437,7 +514,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                             {/* Cart */}
                             {activeItem.type === 'product' && (
                                 <TouchableOpacity
-                                    style={[s.actionBtn, { backgroundColor: '#8B5CF6' }]}
+                                    style={[s.actionBtn, { backgroundColor: '#4FC3F7' }]}
                                     onPress={() => {
                                         addItem({
                                             id: activeItem.id,
@@ -463,7 +540,7 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
                             {/* Detail */}
                             <TouchableOpacity
-                                style={[s.actionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                style={[s.actionBtn, { backgroundColor: colors(isDark).glass }]}
                                 onPress={() => onItemClick(activeItem)}
                             >
                                 <ArrowRight size={18} color={isDark ? '#D1D5DB' : '#6B7280'} />
@@ -490,7 +567,7 @@ const s = StyleSheet.create({
         position: 'absolute' as any,
         alignSelf: 'center',
         width: 320,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         overflow: 'hidden',
         zIndex: 9999,
         ...Platform.select({
@@ -510,7 +587,7 @@ const s = StyleSheet.create({
     zoomBtnCompact: {
         width: 24,
         height: 24,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -522,13 +599,13 @@ const s = StyleSheet.create({
     radiusBadgeTextCompact: {
         fontSize: 13,
         fontWeight: '800',
-        color: '#8B5CF6',
+        color: '#4FC3F7',
     },
 
     // Notification panel
     notifPanelCompact: {
         position: 'absolute' as any,
-        borderRadius: 22,
+        borderRadius: Radius.xl,
         overflow: 'hidden',
         zIndex: 9999,
         ...Platform.select({
@@ -555,11 +632,11 @@ const s = StyleSheet.create({
     distChipCompact: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         backgroundColor: 'transparent',
     },
     distChipCompactActive: {
-        backgroundColor: '#8B5CF6',
+        backgroundColor: '#4FC3F7',
     },
     distChipTextCompact: {
         fontSize: 12,
@@ -576,7 +653,7 @@ const s = StyleSheet.create({
         left: 16,
         width: 44,
         height: 44,
-        borderRadius: 22,
+        borderRadius: Radius.xl,
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 9999,
@@ -591,7 +668,7 @@ const s = StyleSheet.create({
         position: 'absolute' as any,
         left: 16,
         right: 16,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         overflow: 'hidden',
         zIndex: 9999,
         ...Platform.select({
@@ -613,7 +690,7 @@ const s = StyleSheet.create({
     detailImg: {
         width: 52,
         height: 52,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     detailInfo: {
         flex: 1,
@@ -631,7 +708,7 @@ const s = StyleSheet.create({
         alignSelf: 'flex-start',
         paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 6,
+        borderRadius: Radius.sm,
         marginTop: 4,
     },
     priceText: {
@@ -647,8 +724,71 @@ const s = StyleSheet.create({
     actionBtn: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+
+    // Notification Config Modal
+    notifConfigModal: {
+        width: '100%',
+        maxWidth: 480,
+        maxHeight: '80%',
+        borderRadius: Radius.xl,
+        padding: 24,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        ...Platform.select({
+            web: { boxShadow: '0 16px 40px rgba(0,0,0,0.25)' }
+        })
+    },
+    notifConfigHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 24
+    },
+    notifConfigTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        letterSpacing: -0.5
+    },
+    notifConfigSub: {
+        fontSize: 14
+    },
+    closeBtn: {
+        padding: 8,
+        backgroundColor: 'rgba(150,150,150,0.1)',
+        borderRadius: Radius.full
+    },
+    notifSectionTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 12,
+        letterSpacing: -0.3
+    },
+    chipGroup: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    configChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: Radius.full,
+        borderWidth: 1,
+        backgroundColor: 'rgba(150,150,150,0.05)'
+    },
+    configChipActive: {
+        backgroundColor: '#4FC3F7'
+    },
+    configChipText: {
+        fontSize: 13,
+        color: '#6B7280',
+        fontWeight: '500'
     },
 });

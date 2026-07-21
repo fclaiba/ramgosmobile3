@@ -5,6 +5,8 @@ import { ShoppingBag, Store, Zap, ArrowRight, Check } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 
@@ -39,7 +41,7 @@ const roles: RoleOption[] = [
         title: 'Influencer / Creador',
         description: 'Monetiza tu contenido y promociona marcas exclusivas.',
         icon: Zap,
-        color: '#8B5CF6',
+        color: '#4FC3F7',
         benefits: ['Gana comisiones por referidos', 'Colaboraciones con marcas', 'Verificación KYC requerida']
     }
 ];
@@ -81,7 +83,7 @@ export default function RoleSelectionScreen({ navigation }: any) {
                             key={role.id}
                             style={[
                                 styles.card,
-                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }
+                                isSelected && { borderColor: role.color, borderWidth: 2, backgroundColor: colors(isDark).glass }
                             ]}
                             onPress={() => setSelectedRole(role.id)}
                             activeOpacity={0.9}
@@ -123,7 +125,7 @@ export default function RoleSelectionScreen({ navigation }: any) {
                     disabled={!selectedRole}
                 >
                     <LinearGradient
-                        colors={selectedRole ? ['#7C3AED', '#EC4899'] : ['#E5E7EB', '#E5E7EB']}
+                        colors={selectedRole ? ['#2196F3', '#EC4899'] : ['#E5E7EB', '#E5E7EB']}
                         style={styles.btnGradient}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
@@ -138,25 +140,22 @@ export default function RoleSelectionScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     header: { padding: 24, paddingTop: 40 },
-    headerTitle: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 },
-    headerSubtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280' },
+    headerTitle: { fontSize: 28, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 8 },
+    headerSubtitle: { fontSize: 16, color: colors(isDark).textMuted },
 
     scrollContent: { padding: 16, paddingBottom: 100 },
 
     card: {
         flexDirection: 'row',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 20,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         padding: 20,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        shadowColor: isDark ? '#000' : '#000',
-        shadowOpacity: isDark ? 0.3 : 0.03,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 4 },
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        ...glassShadow(isDark),shadowOffset: { width: 0, height: 4 },
         elevation: 2,
         position: 'relative',
         overflow: 'hidden'
@@ -164,18 +163,18 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     iconContainer: {
         width: 48,
         height: 48,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16
     },
     cardContent: { flex: 1 },
-    cardTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 4 },
-    cardDesc: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 20 },
+    cardTitle: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 4 },
+    cardDesc: { fontSize: 13, color: colors(isDark).textMuted, lineHeight: 20 },
 
     benefitsContainer: { marginTop: 12, gap: 4 },
     benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    benefitText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#4B5563' },
+    benefitText: { fontSize: 12, color: colors(isDark).textMuted },
 
     checkCircle: {
         position: 'absolute',
@@ -183,19 +182,19 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         right: 16,
         width: 24,
         height: 24,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center'
     },
 
     footer: {
         padding: 24,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)'
     },
-    btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
-    btnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    btn: { width: '100%', height: 56, borderRadius: Radius.lg, overflow: 'hidden' },
+    btnDisabled: { backgroundColor: colors(isDark).glass },
     btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

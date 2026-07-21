@@ -25,6 +25,8 @@ import { api } from '../../convex/_generated/api';
 import { ImageUploadField } from '../components/ui/ImageUploadField';
 import { LocationPickerModal } from '../components/marketplace/LocationPickerModal';
 import { UNIFIED_CATEGORIES } from '../config/UnifiedCategories';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 type PublicationType = 'product' | 'event' | 'service' | 'bono' | null;
 
@@ -197,7 +199,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 <MobileHeader title="Nueva Publicación" backButton={true} onBack={() => navigation.goBack()} />
                 <View style={[styles.blockedContainer, { paddingHorizontal: isMobile ? 24 : 0 }]}>
                     <View style={styles.blockedIconContainer}>
-                        <Lock size={48} color={isDark ? '#A78BFA' : '#7C3AED'} />
+                        <Lock size={48} color={isDark ? '#5DD3F3' : '#2196F3'} />
                     </View>
                     <Text style={styles.blockedTitle}>{publishBlock.title}</Text>
                     <Text style={styles.blockedSubtitle}>{publishBlock.message}</Text>
@@ -377,7 +379,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
     const renderTypeSelection = () => {
         const allOptions = [
             { id: 'product', label: 'Producto', icon: Package, desc: 'Vende artículos físicos', color: ['#3B82F6', '#2563EB'] },
-            { id: 'service', label: 'Servicio', icon: Briefcase, desc: 'Ofrece tus servicios', color: ['#8B5CF6', '#7C3AED'] },
+            { id: 'service', label: 'Servicio', icon: Briefcase, desc: 'Ofrece tus servicios', color: ['#4FC3F7', '#2196F3'] },
             { id: 'event', label: 'Evento', icon: Calendar, desc: 'Vende entradas', color: ['#F59E0B', '#D97706'] },
             { id: 'bono', label: 'Bono', icon: Tag, desc: 'Ofrece cupones', color: ['#10B981', '#059669'] },
         ];
@@ -467,10 +469,10 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View style={{ flex: 1, paddingRight: 12 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <Megaphone size={16} color={isDark ? '#A78BFA' : '#7C3AED'} />
+                            <Megaphone size={16} color={isDark ? '#5DD3F3' : '#2196F3'} />
                             <Text style={[styles.label, { marginBottom: 0 }]}>Promoción abierta para influencers</Text>
                         </View>
-                        <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                        <Text style={{ fontSize: 12, color: colors(isDark).textMuted }}>
                             {form.openPromotion 
                                 ? "Cualquier influencer registrado podrá promocionar esta publicación." 
                                 : "Solo los influencers en tu Whitelist podrán promocionar esta publicación."}
@@ -481,8 +483,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         style={{
                             width: 50,
                             height: 28,
-                            borderRadius: 14,
-                            backgroundColor: form.openPromotion ? '#7C3AED' : (isDark ? '#374151' : '#E5E7EB'),
+                            borderRadius: Radius.md,
+                            backgroundColor: form.openPromotion ? '#2196F3' : (isDark ? '#374151' : '#E5E7EB'),
                             justifyContent: 'center',
                             paddingHorizontal: 3,
                         }}
@@ -491,7 +493,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                             style={{
                                 width: 22,
                                 height: 22,
-                                borderRadius: 11,
+                                borderRadius: Radius.md,
                                 backgroundColor: 'rgba(255,255,255,0.62)',
                                 alignSelf: form.openPromotion ? 'flex-end' : 'flex-start',
                             }}
@@ -513,7 +515,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                                 setForm((prev) => ({ ...prev, openCommissionRate: sanitized }));
                             }}
                         />
-                        <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4 }}>
+                        <Text style={{ fontSize: 11, color: colors(isDark).textMuted, marginTop: 4 }}>
                             Entre 1% y 50%. Se descuenta de tu cobro neto, no del precio que paga el cliente.
                         </Text>
                     </View>
@@ -598,8 +600,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     <View style={styles.formColumn}>
                         <View style={{ gap: 8 }}>
                             <Text style={styles.label}>Precio de venta (50%)</Text>
-                            <View style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center' }]}>
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#6B7280' }}>
+                            <View style={[styles.input, { backgroundColor: colors(isDark).glass, justifyContent: 'center' }]}>
+                                <Text style={{ color: colors(isDark).textMuted }}>
                                     ${form.price || '50.00'}
                                 </Text>
                             </View>
@@ -790,7 +792,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 {renderOpenPromotionSection()}
             </Card>
 
-            <Button onPress={handlePublish} style={{ backgroundColor: '#7C3AED' }}>
+            <Button onPress={handlePublish} style={{ backgroundColor: '#2196F3' }}>
                 <Text style={styles.buttonTextLight}>Publicar servicio</Text>
             </Button>
             <Button variant="outline" onPress={() => setSelectedType(null)}>
@@ -961,44 +963,44 @@ const getStyles = (isDark: boolean, width: number) => {
         sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12, color: text },
 
         grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-        typeCard: { width: '47%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+        typeCard: { width: '47%', aspectRatio: 1, borderRadius: Radius.lg, overflow: 'hidden', elevation: 4, ...glassShadow(isDark),shadowRadius: 10 },
         cardGradient: { flex: 1, padding: 16, justifyContent: 'center', alignItems: 'center' },
         cardTitle: { marginTop: 12, fontSize: 16, fontWeight: '700', color: '#fff', textAlign: 'center' },
         cardDesc: { marginTop: 4, fontSize: 12, color: 'rgba(255,255,255,0.9)', textAlign: 'center' },
 
         formWrapper: { gap: 16 },
-        formCard: { padding: 16, borderRadius: 16, backgroundColor: isDark ? '#09090B' : '#FAFAFA', gap: 16, borderWidth: 1, borderColor: border },
+        formCard: { padding: 16, borderRadius: Radius.lg, backgroundColor: colors(isDark).bg, gap: 16, borderWidth: 1, borderColor: border },
         formGroup: { gap: 8 },
         formRow: { flexDirection: 'row', gap: 12 },
         formColumn: { flex: 1, gap: 6 },
         inputGroup: { gap: 8 },
 
         label: { fontSize: 13, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
-        input: { backgroundColor: inputBg, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: border, color: text },
+        input: { backgroundColor: inputBg, paddingVertical: 12, paddingHorizontal: 16, borderRadius: Radius.md, borderWidth: 1, borderColor: border, color: text },
         inputMultiline: { minHeight: 100, textAlignVertical: 'top' },
         placeholderText: { color: muted },
 
-        pickerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: inputBg, borderRadius: 12, borderWidth: 1, borderColor: border },
+        pickerButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: inputBg, borderRadius: Radius.md, borderWidth: 1, borderColor: border },
         pickerText: { fontSize: 14, color: text },
-        pickerDropdown: { marginTop: 4, backgroundColor: inputBg, borderRadius: 10, borderWidth: 1, borderColor: border, overflow: 'hidden' },
+        pickerDropdown: { marginTop: 4, backgroundColor: inputBg, borderRadius: Radius.md, borderWidth: 1, borderColor: border, overflow: 'hidden' },
         pickerItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
         pickerItemText: { color: text, fontSize: 14 },
         pickerItemTextActive: { fontWeight: '700', color: '#2563EB' },
 
         selectorRow: { flexDirection: 'row', gap: 8 },
-        selectorChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: border, backgroundColor: inputBg },
+        selectorChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.xl, borderWidth: 1, borderColor: border, backgroundColor: inputBg },
         selectorChipActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
         selectorChipText: { fontSize: 13, fontWeight: '600', color: text },
         selectorChipTextActive: { color: '#fff' },
 
-        usedSection: { backgroundColor: isDark ? 'rgba(234, 179, 8, 0.10)' : '#fefce8', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: isDark ? 'rgba(234, 179, 8, 0.35)' : '#fde047', marginBottom: 12 },
+        usedSection: { backgroundColor: isDark ? 'rgba(234, 179, 8, 0.10)' : '#fefce8', padding: 12, borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(234, 179, 8, 0.35)' : '#fde047', marginBottom: 12 },
 
         photoRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
         photoInput: { flex: 1 },
-        photoAddButton: { backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+        photoAddButton: { backgroundColor: '#2196F3', paddingHorizontal: 12, paddingVertical: 12, borderRadius: Radius.md, flexDirection: 'row', alignItems: 'center', gap: 8 },
         photoAddText: { color: '#fff', fontWeight: '800' },
         photoList: { marginTop: 12, gap: 8 },
-        photoChip: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, backgroundColor: isDark ? 'rgba(31,41,55,0.7)' : '#fff', borderWidth: 1, borderColor: border },
+        photoChip: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(31,41,55,0.7)' : '#fff', borderWidth: 1, borderColor: border },
         photoChipText: { flex: 1, color: text, fontSize: 12 },
 
         blockedContainer: {
@@ -1011,19 +1013,19 @@ const getStyles = (isDark: boolean, width: number) => {
         blockedIconContainer: {
             width: 80,
             height: 80,
-            borderRadius: 40,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : 'rgba(124, 58, 237, 0.1)',
+            borderRadius: Radius.full,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(33, 150, 243, 0.1)',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(124, 58, 237, 0.3)' : 'rgba(124, 58, 237, 0.2)',
+            borderColor: isDark ? 'rgba(33, 150, 243, 0.3)' : 'rgba(33, 150, 243, 0.2)',
         },
         blockedTitle: { fontSize: 24, fontWeight: '800', color: text, textAlign: 'center', letterSpacing: -0.5 },
         blockedSubtitle: { fontSize: 16, color: muted, textAlign: 'center', lineHeight: 24, maxWidth: 300 },
         blockedActions: { width: '100%', maxWidth: 320, gap: 12, marginTop: 12 },
-        blockedButton: { width: '100%', backgroundColor: '#7C3AED', height: 56, borderRadius: 16 },
-        blockedButtonSecondary: { width: '100%', borderColor: border, borderWidth: 1, height: 56, borderRadius: 16 },
+        blockedButton: { width: '100%', backgroundColor: '#2196F3', height: 56, borderRadius: Radius.lg },
+        blockedButtonSecondary: { width: '100%', borderColor: border, borderWidth: 1, height: 56, borderRadius: Radius.lg },
 
         dropdownBtn: {
             flexDirection: 'row',
@@ -1031,7 +1033,7 @@ const getStyles = (isDark: boolean, width: number) => {
             justifyContent: 'space-between',
             padding: 12,
             backgroundColor: inputBg,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             borderWidth: 1,
             borderColor: border,
         },
@@ -1039,7 +1041,7 @@ const getStyles = (isDark: boolean, width: number) => {
 
         actionBtn: {
             paddingVertical: 14,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -1062,9 +1064,9 @@ const getStyles = (isDark: boolean, width: number) => {
             flexDirection: 'row',
             alignItems: 'center',
             padding: 12,
-            borderRadius: 8,
+            borderRadius: Radius.sm,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
             marginBottom: 16,
             gap: 8,
             backgroundColor: inputBg,

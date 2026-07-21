@@ -8,6 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent } from '../ui/sheet';
+import { Radius, colors } from '../../theme/tokens';
+
 
 interface DirectMessagesProps {
     onClose: () => void;
@@ -252,48 +254,48 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         height: '95%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
     safeArea: { flex: 1 },
-    header: { height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    header: { height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     backButton: { marginRight: 12 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' },
 
     searchContainer: { padding: 16 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, paddingHorizontal: 12, height: 44 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, borderRadius: Radius.md, paddingHorizontal: 12, height: 44 },
     searchInput: { flex: 1, marginLeft: 8, fontSize: 16, color: isDark ? '#F9FAFB' : '#000' },
 
     listContainer: { flex: 1 },
     convItem: { flexDirection: 'row', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? '#374151' : '#F9FAFB' },
     avatar: { width: 56, height: 56 },
     smallAvatar: { width: 36, height: 36, marginRight: 8 },
-    unreadBadge: { position: 'absolute', top: 0, right: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#fff' },
+    unreadBadge: { position: 'absolute', top: 0, right: 0, width: 12, height: 12, borderRadius: Radius.sm, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#fff' },
 
     convInfo: { flex: 1, marginLeft: 12, justifyContent: 'center' },
     convHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     convName: { fontWeight: '600', fontSize: 15, color: isDark ? '#F9FAFB' : '#111' },
     convTime: { fontSize: 12, color: '#9CA3AF' },
-    convLastMessage: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' },
+    convLastMessage: { fontSize: 13, color: colors(isDark).textMuted },
     unreadMessage: { color: isDark ? '#F9FAFB' : '#111', fontWeight: '500' },
 
-    chatHeader: { height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    chatHeader: { height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     chatHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
     chatHeaderRight: { flexDirection: 'row', alignItems: 'center' },
     chatName: { fontWeight: '600', fontSize: 14, color: isDark ? '#F9FAFB' : '#000' },
     chatUsername: { fontSize: 11, color: '#6B7280' },
 
     chatContent: { flex: 1 },
-    messageBubble: { padding: 12, borderRadius: 16, maxWidth: '80%', marginBottom: 8 },
-    messageReceived: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
+    messageBubble: { padding: 12, borderRadius: Radius.lg, maxWidth: '80%', marginBottom: 8 },
+    messageReceived: { backgroundColor: colors(isDark).glass, alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
     messageSent: { backgroundColor: isDark ? '#4F46E5' : '#000', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
     messageText: { fontSize: 15, color: isDark ? '#F9FAFB' : '#111' },
     sentText: { color: '#fff' },
 
-    inputArea: { flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    inputArea: { flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     attachButton: { padding: 8 },
-    messageInput: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, marginHorizontal: 8, fontSize: 15, color: isDark ? '#F9FAFB' : '#000' },
-    sendButton: { width: 40, height: 40, backgroundColor: isDark ? '#4F46E5' : '#000', borderRadius: 20, alignItems: 'center', justifyContent: 'center' }
+    messageInput: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.xl, paddingHorizontal: 16, paddingVertical: 8, marginHorizontal: 8, fontSize: 15, color: isDark ? '#F9FAFB' : '#000' },
+    sendButton: { width: 40, height: 40, backgroundColor: isDark ? '#4F46E5' : '#000', borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center' }
 });

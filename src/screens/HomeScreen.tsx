@@ -26,6 +26,8 @@ import SocialScreen from './SocialScreen';
 import BusinessDashboardScreen from './BusinessDashboardScreen';
 import InfluencerDashboardScreen from './InfluencerDashboardScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const heroSlides = [
     {
@@ -55,9 +57,9 @@ const heroSlides = [
 ];
 
 const featuredOffers = [
-    { id: 1, title: 'Super Descuentos', subtitle: 'Hasta 50% OFF', image: 'https://images.unsplash.com/photo-1700843699012-0dadd2089fe4?w=1080', badge: '50% OFF', badgeColor: '#EF4444', gradient: ['rgba(37,99,235,0.9)', 'rgba(147,51,234,0.9)'], icon: Percent, filter: 'products', advancedFilters: { minDiscount: 50 } },
+    { id: 1, title: 'Super Descuentos', subtitle: 'Hasta 50% OFF', image: 'https://images.unsplash.com/photo-1700843699012-0dadd2089fe4?w=1080', badge: '50% OFF', badgeColor: '#EF4444', gradient: ['rgba(37,99,235,0.9)', 'rgba(41, 182, 246,0.9)'], icon: Percent, filter: 'products', advancedFilters: { minDiscount: 50 } },
     { id: 2, title: 'Eventos Latinos', subtitle: 'Música en vivo', image: 'https://images.unsplash.com/photo-1618414098138-c33f9e82b405?w=1080', badge: 'Nuevo', badgeColor: '#22C55E', gradient: ['rgba(219,39,119,0.9)', 'rgba(234,88,12,0.9)'], icon: Calendar, filter: 'events' },
-    { id: 3, title: 'Bonos Exclusivos', subtitle: 'Negocios locales', image: 'https://images.unsplash.com/photo-1671749999622-4087a86868cc?w=1080', badge: 'Popular', badgeColor: '#8B5CF6', gradient: ['rgba(124,58,237,0.9)', 'rgba(147,51,234,0.9)'], icon: Tag, filter: 'bonos' },
+    { id: 3, title: 'Bonos Exclusivos', subtitle: 'Negocios locales', image: 'https://images.unsplash.com/photo-1671749999622-4087a86868cc?w=1080', badge: 'Popular', badgeColor: '#4FC3F7', gradient: ['rgba(33, 150, 243,0.9)', 'rgba(41, 182, 246,0.9)'], icon: Tag, filter: 'bonos' },
 ];
 
 const categoryCards = [
@@ -70,7 +72,7 @@ const categoryCards = [
 ];
 
 const quickActions = [
-    { id: 1, title: 'Mi Mascota', icon: Sparkles, color: '#7C3AED', bg: 'rgba(124,58,237,0.1)', action: 'mascota' },
+    { id: 1, title: 'Mi Mascota', icon: Sparkles, color: '#2196F3', bg: 'rgba(33, 150, 243,0.1)', action: 'mascota' },
     { id: 2, title: 'Mapa', icon: MapPin, color: '#2563EB', bg: 'rgba(37,99,235,0.1)', action: 'marketplace-map' },
     { id: 3, title: 'Mis Puntos', icon: Zap, color: '#D97706', bg: 'rgba(217,119,6,0.1)', action: 'points' },
 ];
@@ -285,7 +287,7 @@ export default function HomeScreen({ navigation, route }: any) {
                                     {/* Hero Carousel */}
                                     <View style={styles.heroContainer}>
                                         <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
-                                            <ImageBackground source={{ uri: heroSlides[currentSlide].image }} style={styles.heroImage} imageStyle={{ borderRadius: 24 }}>
+                                            <ImageBackground source={{ uri: heroSlides[currentSlide].image }} style={styles.heroImage} imageStyle={{ borderRadius: Radius.xl }}>
                                                 <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFill} />
                                                 <View style={styles.heroContent}>
                                                     <Text style={styles.heroTitle}>{heroSlides[currentSlide].title}</Text>
@@ -389,7 +391,7 @@ export default function HomeScreen({ navigation, route }: any) {
                                         onPress={() => handleNavigate('Marketplace', { viewMode: 'map' })}
                                     >
                                         <Image source={{ uri: 'https://images.unsplash.com/photo-1759091161289-017ad3c7e836?w=1080' }} style={StyleSheet.absoluteFill} />
-                                        <LinearGradient colors={['rgba(147,51,234,0.9)', 'rgba(219,39,119,0.9)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+                                        <LinearGradient colors={['rgba(41, 182, 246,0.9)', 'rgba(219,39,119,0.9)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
                                         <View style={styles.exploreContent}>
                                             <View>
                                                 <Text style={styles.exploreTitle}>Explora el Mapa</Text>
@@ -408,7 +410,7 @@ export default function HomeScreen({ navigation, route }: any) {
                                 <View style={styles.contentContainer}>
                                     <View style={styles.summaryCard}>
                                         <LinearGradient
-                                            colors={['#7C3AED', '#9333EA', '#DB2777']}
+                                            colors={['#2196F3', '#29B6F6', '#DB2777']}
                                             start={{ x: 0, y: 0 }}
                                             end={{ x: 1, y: 1 }}
                                             style={styles.summaryGradient}
@@ -451,7 +453,7 @@ export default function HomeScreen({ navigation, route }: any) {
 
                                     {allActivity.length === 0 ? (
                                         <View style={{ padding: 24, alignItems: 'center' }}>
-                                            <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>No hay actividad reciente.</Text>
+                                            <Text style={{ color: colors(isDark).textMuted }}>No hay actividad reciente.</Text>
                                         </View>
                                     ) : (
                                         <View style={{ gap: 12, marginTop: 12 }}>
@@ -509,90 +511,90 @@ export default function HomeScreen({ navigation, route }: any) {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    headerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    headerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.xl },
     headerBtnActive: { backgroundColor: isDark ? '#4B5563' : '#111827' },
     headerBtnText: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#374151', marginLeft: 6 },
-    headerIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
-    badge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+    headerIconBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center' },
+    badge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
 
-    viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16 },
-    viewTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 12 },
-    viewTabActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-    viewTabText: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 6 },
-    viewTabTextActive: { color: isDark ? '#F9FAFB' : '#111827' },
+    viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg },
+    viewTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.md },
+    viewTabActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', ...glassShadow(isDark),},
+    viewTabText: { fontSize: 13, fontWeight: '600', color: colors(isDark).textMuted, marginLeft: 6 },
+    viewTabTextActive: { color: colors(isDark).text },
 
     contentContainer: { paddingHorizontal: 16 },
-    heroContainer: { height: 380, borderRadius: 24, overflow: 'hidden', marginBottom: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    heroContainer: { height: 380, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 20, backgroundColor: colors(isDark).glass },
     heroImage: { width: '100%', height: '100%', justifyContent: 'flex-end' },
     heroContent: { padding: 24 },
     heroTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
     heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 14, marginBottom: 16 },
-    heroBtn: { backgroundColor: 'rgba(255,255,255,0.62)', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 24, alignSelf: 'flex-start' },
+    heroBtn: { backgroundColor: 'rgba(255,255,255,0.62)', paddingHorizontal: 24, paddingVertical: 10, borderRadius: Radius.xl, alignSelf: 'flex-start' },
     heroBtnText: { fontWeight: 'bold', color: '#000' },
     indicators: { position: 'absolute', bottom: 16, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 8 },
-    indicatorDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.5)' },
+    indicatorDot: { width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: 'rgba(255,255,255,0.5)' },
     indicatorDotActive: { width: 32, backgroundColor: 'rgba(255,255,255,0.62)' },
 
     quickActionsGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    actionBtn: { flex: 1, alignItems: 'center', padding: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05 },
-    actionIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    actionBtn: { flex: 1, alignItems: 'center', padding: 16, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, elevation: 1, ...glassShadow(isDark),shadowOpacity: 0.05 },
+    actionIcon: { width: 48, height: 48, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
     actionTitle: { fontSize: 12, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151' },
 
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text },
     seeAll: { fontSize: 13, color: '#4F46E5', fontWeight: '600' },
 
     grid3: { flexDirection: 'row', gap: 10 },
-    featuredRef: { flex: 1, height: 128, borderRadius: 16, overflow: 'hidden', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    featuredRef: { flex: 1, height: 128, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors(isDark).glass },
     featuredImg: { width: '100%', height: '100%' },
     featuredOverlay: { position: 'absolute', inset: 0, padding: 12, justifyContent: 'space-between' },
     featuredTitle: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
     featuredSub: { color: 'rgba(255,255,255,0.9)', fontSize: 9 },
 
     grid2: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    catCard: { height: 180, borderRadius: 16, overflow: 'hidden', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    catCard: { height: 180, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors(isDark).glass },
     catImg: { width: '100%', height: '100%' },
     catOverlay: { position: 'absolute', inset: 0, padding: 16, justifyContent: 'space-between' },
     catTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 
-    miniBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    miniBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm },
     miniBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
 
-    exploreCard: { height: 128, marginTop: 20, borderRadius: 16, overflow: 'hidden' },
+    exploreCard: { height: 128, marginTop: 20, borderRadius: Radius.lg, overflow: 'hidden' },
     exploreContent: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
     exploreTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 2 },
     exploreSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13 },
-    arrowCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    arrowCircle: { width: 40, height: 40, borderRadius: Radius.xl, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
 
     // Consumos Styles
-    summaryCard: { borderRadius: 24, overflow: 'hidden', marginBottom: 16, elevation: 4 },
+    summaryCard: { borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 16, elevation: 4 },
     summaryGradient: { padding: 24 },
     summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
     summaryLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginBottom: 2 },
     summaryMonth: { color: '#fff', fontSize: 28, fontWeight: 'bold' },
-    summaryIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    summaryIcon: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     summaryGrid: { flexDirection: 'row', gap: 12 },
-    summaryStat: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 12 },
+    summaryStat: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: Radius.lg, padding: 12 },
     statLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginBottom: 2 },
     statValue: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
     statSub: { color: 'rgba(255,255,255,0.8)', fontSize: 10, marginTop: 2 },
 
-    statCard: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 16, padding: 12, elevation: 1 },
-    statIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    catLabel: { fontSize: 11, color: isDark ? '#D1D5DB' : '#6B7280', marginBottom: 2 },
-    catValue: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    statCard: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 12, elevation: 1 },
+    statIcon: { width: 40, height: 40, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    catLabel: { fontSize: 11, color: colors(isDark).textMuted, marginBottom: 2 },
+    catValue: { fontSize: 14, fontWeight: 'bold', color: colors(isDark).text },
     catCount: { fontSize: 10, color: '#9CA3AF' },
 
-    pillBadge: { borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+    pillBadge: { borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', borderRadius: Radius.xl, paddingHorizontal: 10, paddingVertical: 4 },
     pillText: { fontSize: 11, color: isDark ? '#D1D5DB' : '#374151' },
 
-    historyItem: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 10, borderRadius: 16, gap: 12 },
-    historyImg: { width: 64, height: 64, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    historyItem: { flexDirection: 'row', backgroundColor: colors(isDark).glass, padding: 10, borderRadius: Radius.lg, gap: 12 },
+    historyImg: { width: 64, height: 64, borderRadius: Radius.md, backgroundColor: colors(isDark).glass },
     historyInfo: { flex: 1, justifyContent: 'center' },
-    historyName: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
-    historyDesc: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginVertical: 2 },
+    historyName: { fontSize: 13, fontWeight: '600', color: colors(isDark).text },
+    historyDesc: { fontSize: 11, color: colors(isDark).textMuted, marginVertical: 2 },
     historyDate: { fontSize: 11, color: '#9CA3AF' },
-    historyAmount: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
-    statusBadge: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+    historyAmount: { fontSize: 13, fontWeight: '600', color: colors(isDark).text },
+    statusBadge: { borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
     statusText: { fontSize: 9, fontWeight: 'bold' }
 });

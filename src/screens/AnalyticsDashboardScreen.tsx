@@ -8,6 +8,8 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 export default function AnalyticsDashboardScreen() {
     const { width } = useWindowDimensions();
@@ -78,9 +80,9 @@ export default function AnalyticsDashboardScreen() {
                     <View style={styles.pendingBalanceCard}>
                         <View style={styles.balanceHeader}>
                             <Clock size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                            <Text style={[styles.balanceLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>En Custodia (Escrow)</Text>
+                            <Text style={[styles.balanceLabel, { color: colors(isDark).textMuted }]}>En Custodia (Escrow)</Text>
                         </View>
-                        <Text style={[styles.balanceAmount, { fontSize: 24, color: isDark ? '#F9FAFB' : '#111827' }]}>
+                        <Text style={[styles.balanceAmount, { fontSize: 24, color: colors(isDark).text }]}>
                             ${stats.pendingRevenue.toFixed(2)}
                         </Text>
                     </View>
@@ -113,8 +115,8 @@ export default function AnalyticsDashboardScreen() {
                         <Text style={styles.statDesc}>Ticket promedio</Text>
                     </View>
                     <View style={styles.statBox}>
-                        <View style={[styles.statIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
-                            <Activity size={20} color="#8B5CF6" />
+                        <View style={[styles.statIconWrap, { backgroundColor: 'rgba(79, 195, 247, 0.1)' }]}>
+                            <Activity size={20} color="#4FC3F7" />
                         </View>
                         <Text style={styles.statValue}>+12%</Text>
                         <Text style={styles.statDesc}>Crecimiento (mes)</Text>
@@ -142,30 +144,30 @@ const getStyles = (isDark: boolean) => {
     return StyleSheet.create({
         container: { flex: 1, backgroundColor: bg },
         header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-        backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: cardBg, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: border },
+        backBtn: { width: 40, height: 40, borderRadius: Radius.xl, backgroundColor: cardBg, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: border },
         headerTitle: { fontSize: 18, fontWeight: '800', color: text },
 
         scrollContent: { padding: 20, paddingBottom: 100 },
 
         balanceContainer: { gap: 16, marginBottom: 32 },
-        mainBalanceCard: { borderRadius: 24, padding: 24, shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+        mainBalanceCard: { borderRadius: Radius.xl, padding: 24, ...glassShadow(isDark),},
         balanceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
         balanceLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500' },
         balanceAmount: { color: '#fff', fontSize: 36, fontWeight: '800', marginBottom: 20 },
-        withdrawBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+        withdrawBtn: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 12, borderRadius: Radius.md, alignItems: 'center' },
         withdrawBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
-        pendingBalanceCard: { backgroundColor: cardBg, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: border },
+        pendingBalanceCard: { backgroundColor: cardBg, borderRadius: Radius.xl, padding: 20, borderWidth: 1, borderColor: border },
 
         sectionTitle: { fontSize: 18, fontWeight: '700', color: text, marginBottom: 16 },
 
         statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 32 },
-        statBox: { width: '47%', backgroundColor: cardBg, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: border },
-        statIconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+        statBox: { width: '47%', backgroundColor: cardBg, borderRadius: Radius.xl, padding: 16, borderWidth: 1, borderColor: border },
+        statIconWrap: { width: 40, height: 40, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
         statValue: { fontSize: 20, fontWeight: '800', color: text, marginBottom: 4 },
         statDesc: { fontSize: 12, color: muted, fontWeight: '500' },
 
-        chartPlaceholder: { height: 200, backgroundColor: cardBg, borderRadius: 24, borderWidth: 1, borderColor: border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
+        chartPlaceholder: { height: 200, backgroundColor: cardBg, borderRadius: Radius.xl, borderWidth: 1, borderColor: border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
         chartText: { marginTop: 12, fontSize: 14, color: muted, fontWeight: '500' },
     });
 };

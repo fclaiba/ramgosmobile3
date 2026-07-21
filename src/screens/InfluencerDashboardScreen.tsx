@@ -24,6 +24,8 @@ import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { glassTokens, glassGradient } from '../utils/glass';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
     const navigation = useNavigation<any>();
@@ -150,7 +152,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const getLevelInfo = (count: number) => {
         if (count < 50) return { current: 'Silver', next: 'Gold', min: 0, max: 50, color: isDark ? '#9CA3AF' : '#9CA3AF' };
         if (count < 200) return { current: 'Gold', next: 'Platinum', min: 50, max: 200, color: '#FBBF24' };
-        return { current: 'Platinum', next: 'Diamond', min: 200, max: 500, color: '#7C3AED' };
+        return { current: 'Platinum', next: 'Diamond', min: 200, max: 500, color: '#2196F3' };
     };
 
     const level = getLevelInfo(referrals);
@@ -419,7 +421,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
             />
 
             {/* Progress Bar (Global) */}
-            <View style={{ height: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', width: '100%' }}>
+            <View style={{ height: 4, backgroundColor: colors(isDark).glass, width: '100%' }}>
                 <View style={{ height: '100%', backgroundColor: level.color, width: `${progress}%` }} />
             </View>
 
@@ -434,7 +436,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         <Button
-                            style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }}
+                            style={{ flex: 1, backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' }}
                             onPress={() => navigation.navigate('CreateListing')}
                         >
                             <ShoppingCart size={18} color={isDark ? '#D1D5DB' : '#111827'} style={{ marginRight: 8 }} />
@@ -608,13 +610,13 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                                     alignItems: 'center',
                                     gap: 12,
                                     padding: 14,
-                                    borderRadius: 14,
+                                    borderRadius: Radius.md,
                                     borderWidth: 1,
                                     borderColor: palette.border,
                                     backgroundColor: palette.bg,
                                 }}
                             >
-                                <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.icoBg }}>
+                                <View style={{ width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.icoBg }}>
                                     <Icon size={18} color={palette.text} />
                                 </View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -873,7 +875,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                                 />
                             </View>
 
-                            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' }}>
+                            <Text style={{ fontSize: 12, color: colors(isDark).textMuted }}>
                                 El negocio tiene que aceptar la propuesta antes de que se acrediten comisiones. Tu código personal es {referralCode || '(generándose)'}.
                             </Text>
                         </ScrollView>
@@ -910,38 +912,34 @@ const getStyles = (isDark: boolean) => {
     } as const;
 
     return StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     content: { padding: 16 },
-    levelContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-    codeCard: { backgroundColor: '#6366f1', padding: 20, borderRadius: 18, marginBottom: 16, ...glass.shadow },
-    codeBox: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, paddingLeft: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'space-between' },
+    levelContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.md },
+    codeCard: { backgroundColor: '#6366f1', padding: 20, borderRadius: Radius.lg, marginBottom: 16, ...glass.shadow },
+    codeBox: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.2)', padding: 4, paddingLeft: 12, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'space-between' },
     codeText: { color: '#fff', fontSize: 16, fontFamily: 'monospace', fontWeight: 'bold' },
-    copyBtn: { backgroundColor: 'rgba(255,255,255,0.62)', padding: 8, borderRadius: 6 },
+    copyBtn: { backgroundColor: 'rgba(255,255,255,0.62)', padding: 8, borderRadius: Radius.sm },
     statsRow: { flexDirection: 'row', gap: 12 },
-    statCard: { padding: 16, borderRadius: 16, ...glassCard },
-    iconBox: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    statValue: { fontSize: 24, fontWeight: 'bold', marginTop: 8, color: isDark ? '#F9FAFB' : '#111827' },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, marginTop: 4, color: isDark ? '#F9FAFB' : '#111827' },
-    sectionSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 4 },
+    statCard: { padding: 16, borderRadius: Radius.lg, ...glassCard },
+    iconBox: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+    statValue: { fontSize: 24, fontWeight: 'bold', marginTop: 8, color: colors(isDark).text },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, marginTop: 4, color: colors(isDark).text },
+    sectionSubtitle: { fontSize: 12, color: colors(isDark).textMuted, marginTop: 4 },
     centeredView: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 16 },
     modalBlurWeb: {
         backgroundColor: isDark ? "rgba(9,9,11,0.55)" : "rgba(250,250,250,0.45)",
-        // @ts-expect-error web backdrop
         backdropFilter: "blur(18px)",
-        // @ts-expect-error web webkit backdrop
         WebkitBackdropFilter: "blur(18px)",
-    },
+    } as any,
     modalDim: {
         ...StyleSheet.absoluteFill,
         backgroundColor: isDark ? "rgba(0,0,0,0.45)" : "rgba(15,23,42,0.28)",
-        // @ts-expect-error web backdrop
         backdropFilter: "blur(4px)",
-        // @ts-expect-error web webkit backdrop
         WebkitBackdropFilter: "blur(4px)",
-    },
+    } as any,
     modalView: {
         backgroundColor: isDark ? '#0B1220' : "#fff",
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         width: '100%',
         maxWidth: 520,
         alignSelf: 'center',
@@ -958,14 +956,14 @@ const getStyles = (isDark: boolean) => {
     modalCloseBtn: {
         width: 36,
         height: 36,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: isDark ? 'rgba(148, 163, 184, 0.08)' : '#F1F5F9',
         borderWidth: 1,
         borderColor: isDark ? 'rgba(148, 163, 184, 0.12)' : '#E2E8F0',
     },
-    modalTitle: { fontSize: 18, fontWeight: "800", color: isDark ? '#F9FAFB' : '#111827' },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: colors(isDark).text },
     modalText: { marginTop: 6, fontSize: 12, color: isDark ? '#94A3B8' : '#6b7280' },
     modalLabel: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 4, marginTop: 12 },
     modalScroll: { paddingHorizontal: 18, paddingBottom: 12 },
@@ -977,46 +975,46 @@ const getStyles = (isDark: boolean) => {
         width: '100%',
         borderColor: isDark ? 'rgba(148, 163, 184, 0.22)' : '#E5E7EB',
         borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         paddingHorizontal: 14,
         backgroundColor: isDark ? 'rgba(148, 163, 184, 0.06)' : '#fff',
-        color: isDark ? '#F9FAFB' : '#111827'
+        color: colors(isDark).text
     },
     inputMultiline: {
         height: 110,
         paddingTop: 12,
         textAlignVertical: 'top',
     },
-    metricsWrapper: { padding: 18, borderRadius: 18, marginBottom: 16, ...glassCard },
+    metricsWrapper: { padding: 18, borderRadius: Radius.lg, marginBottom: 16, ...glassCard },
     metricsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-    metricsTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    metricsSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 4 },
-    metricsBadge: { backgroundColor: isDark ? '#312E81' : '#eef2ff', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    metricsTitle: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text },
+    metricsSubtitle: { fontSize: 12, color: colors(isDark).textMuted, marginTop: 4 },
+    metricsBadge: { backgroundColor: isDark ? '#312E81' : '#eef2ff', borderRadius: Radius.md, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
     metricsBadgeText: { color: isDark ? '#818CF8' : '#4338ca', fontSize: 11, fontWeight: '600' },
     metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    metricCard: { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: glass.border, padding: 14, borderRadius: 14, flexBasis: '48%', alignItems: 'flex-start', gap: 6 },
-    metricIcon: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', padding: 6, borderRadius: 10 },
-    metricValue: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    metricLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' },
+    metricCard: { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.7)', borderWidth: 1, borderColor: glass.border, padding: 14, borderRadius: Radius.md, flexBasis: '48%', alignItems: 'flex-start', gap: 6 },
+    metricIcon: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', padding: 6, borderRadius: Radius.md },
+    metricValue: { fontSize: 20, fontWeight: 'bold', color: colors(isDark).text },
+    metricLabel: { fontSize: 12, color: colors(isDark).textMuted },
     metricTrend: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    metricTrendArrow: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+    metricTrendArrow: { width: 14, height: 14, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
     metricTrendText: { fontSize: 11, fontWeight: '600' },
-    goalsCard: { padding: 18, borderRadius: 18, marginTop: 16, ...glassCard },
+    goalsCard: { padding: 18, borderRadius: Radius.lg, marginTop: 16, ...glassCard },
     goalsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    goalBadge: { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.2)' : '#dcfce7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    goalBadge: { backgroundColor: isDark ? 'rgba(22, 163, 74, 0.2)' : '#dcfce7', borderRadius: Radius.md, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
     goalBadgeText: { color: isDark ? '#4ADE80' : '#047857', fontSize: 11, fontWeight: '600' },
     goalRow: { marginBottom: 14 },
     goalTextWrapper: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    goalTitle: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
-    goalDetails: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280' },
-    goalProgressBar: { height: 10, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 999, overflow: 'hidden' },
-    goalProgressFill: { height: '100%', borderRadius: 999 },
-    walletCard: { padding: 18, borderRadius: 18, marginTop: 16, ...glassCard },
+    goalTitle: { fontSize: 14, fontWeight: '600', color: colors(isDark).text },
+    goalDetails: { fontSize: 12, color: colors(isDark).textMuted },
+    goalProgressBar: { height: 10, backgroundColor: colors(isDark).glass, borderRadius: Radius.full, overflow: 'hidden' },
+    goalProgressFill: { height: '100%', borderRadius: Radius.full },
+    walletCard: { padding: 18, borderRadius: Radius.lg, marginTop: 16, ...glassCard },
     walletHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-    walletIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: isDark ? '#374151' : '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
+    walletIcon: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: isDark ? '#374151' : '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
     walletTitle: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#0f172a' },
     walletSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#475569', marginTop: 2 },
-    walletBadge: { borderColor: isDark ? '#F9FAFB' : '#0f172a', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'transparent' },
+    walletBadge: { borderColor: isDark ? '#F9FAFB' : '#0f172a', borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'transparent' },
     walletBadgeText: { fontSize: 10, fontWeight: '600', color: isDark ? '#F9FAFB' : '#0f172a' },
     walletRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
     walletLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#64748b' },
@@ -1026,14 +1024,14 @@ const getStyles = (isDark: boolean) => {
     walletSplitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     walletSplitLabel: { fontSize: 11, color: isDark ? '#9CA3AF' : '#64748b' },
     walletSplitValue: { fontSize: 11, fontWeight: '600', color: isDark ? '#F9FAFB' : '#0f172a' },
-    transferCard: { backgroundColor: glass.bg, ...glass.backdrop, ...glass.shadow, padding: 18, borderRadius: 18, borderWidth: 1, borderColor: '#fcd34d', marginTop: 16 },
+    transferCard: { backgroundColor: glass.bg, ...glass.backdrop, ...glass.shadow, padding: 18, borderRadius: Radius.lg, borderWidth: 1, borderColor: '#fcd34d', marginTop: 16 },
     transferHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    transferIconWrapper: { backgroundColor: '#f59e0b', padding: 10, borderRadius: 12 },
+    transferIconWrapper: { backgroundColor: '#f59e0b', padding: 10, borderRadius: Radius.md },
     transferTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#FCD34D' : '#78350f' },
     transferSubtitle: { fontSize: 12, color: isDark ? '#FDE68A' : '#92400e', marginTop: 4 },
-    transferButton: { backgroundColor: '#ea580c', paddingHorizontal: 16, height: 36, borderRadius: 12 },
+    transferButton: { backgroundColor: '#ea580c', paddingHorizontal: 16, height: 36, borderRadius: Radius.md },
     transferFollowers: { flexDirection: 'row', gap: 10, marginTop: 16, flexWrap: 'wrap' },
-    transferFollowerPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: isDark ? '#78350F' : '#fef3c7', borderWidth: 1, borderColor: '#fcd34d' },
+    transferFollowerPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: isDark ? '#78350F' : '#fef3c7', borderWidth: 1, borderColor: '#fcd34d' },
     transferFollowerPillActive: { backgroundColor: isDark ? '#92400E' : '#fde68a', borderColor: '#f59e0b' },
     transferFollowerText: { fontSize: 12, fontWeight: '600', color: isDark ? '#FDE68A' : '#92400e' },
     transferFollowerTextActive: { color: isDark ? '#FEF3C7' : '#78350f' },

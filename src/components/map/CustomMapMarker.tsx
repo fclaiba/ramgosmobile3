@@ -11,6 +11,7 @@ import {
   Store,
   type LucideIcon,
 } from 'lucide-react-native';
+import { Radius } from '../../theme/tokens';
 
 // ─── Types ──────────────────────────────────────────────
 export type ListingType = 'product' | 'service' | 'event' | 'bono' | 'business';
@@ -28,7 +29,7 @@ interface CustomMapMarkerProps {
 
 // ─── Color Palette ──────────────────────────────────────
 const MARKER_COLORS: Record<ListingType, { primary: string; light: string }> = {
-  product:  { primary: '#8B5CF6', light: '#C4B5FD' },  // Violet
+  product:  { primary: '#4FC3F7', light: '#C4B5FD' },  // Violet
   service:  { primary: '#06B6D4', light: '#67E8F9' },  // Cyan
   event:    { primary: '#F59E0B', light: '#FCD34D' },  // Amber
   bono:     { primary: '#10B981', light: '#6EE7B7' },  // Emerald
@@ -160,7 +161,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
   shadowDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
     opacity: 0.4,
     marginTop: -2,
   },

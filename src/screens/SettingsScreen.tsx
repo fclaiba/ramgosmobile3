@@ -10,6 +10,8 @@ import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { useUserPreferences } from '../hooks/useUserPreferences';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function SettingsScreen({ navigation }: any) {
     const { theme, setTheme, colorScheme } = useTheme();
@@ -54,7 +56,7 @@ export default function SettingsScreen({ navigation }: any) {
                 <Switch
                     value={value}
                     onValueChange={onPress}
-                    trackColor={{ false: '#767577', true: '#7C3AED' }}
+                    trackColor={{ false: '#767577', true: '#2196F3' }}
                     thumbColor={value ? '#fff' : '#f4f3f4'}
                 />
             )}
@@ -147,7 +149,7 @@ export default function SettingsScreen({ navigation }: any) {
                             <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
                                 <View style={{
                                     backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
-                                    borderRadius: 10,
+                                    borderRadius: Radius.md,
                                     padding: 12,
                                     borderLeftWidth: 3,
                                     borderLeftColor: '#F59E0B',
@@ -318,12 +320,12 @@ export default function SettingsScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     content: { padding: 16, paddingBottom: 100 }, // Added padding for bottom safe area
     sectionHeader: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#666', marginTop: 16, marginBottom: 8, paddingLeft: 4, textTransform: 'uppercase' },
     card: { overflow: 'hidden', borderWidth: 0, shadowColor: isDark ? '#F9FAFB' : "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 }, // Removed bg color, handled by Card component
     cardContent: { padding: 0 },
-    settingRow: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    settingRow: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: colors(isDark).glass },
     settingIconContainer: { marginRight: 12 },
     settingLabel: { fontSize: 16, color: isDark ? '#F9FAFB' : '#333' },
     settingValueText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#666' },
@@ -331,7 +333,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Sheet Styles
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
@@ -344,14 +346,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     confirmationIcon: {
         width: 64,
         height: 64,
-        borderRadius: 32,
+        borderRadius: Radius['2xl'],
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 8
     },
     sheetText: {
         fontSize: 16,
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         textAlign: 'center',
         marginBottom: 16
     },

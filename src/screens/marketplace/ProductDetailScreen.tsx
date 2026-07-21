@@ -6,6 +6,8 @@ import { useCart } from '../../contexts/CartContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 // const { width } = Dimensions.get('window'); removed
 
@@ -140,7 +142,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
 
                     {/* Safety Badge */}
                     <View style={styles.safetyBox}>
-                        <ShieldCheck size={24} color="#7C3AED" />
+                        <ShieldCheck size={24} color="#2196F3" />
                         <View style={{ flex: 1 }}>
                             <Text style={styles.safetyTitle}>Compra Protegida</Text>
                             <Text style={styles.safetyDesc}>Recibe el producto que esperabas o te devolvemos tu dinero. Retenemos el pago por 10 días.</Text>
@@ -171,7 +173,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: {
         position: 'absolute',
@@ -186,47 +188,42 @@ const getStyles = (isDark: any) => StyleSheet.create({
     iconBtn: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         backgroundColor: 'rgba(255,255,255,0.9)',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
-    },
+        ...glassShadow(isDark),},
     carousel: { height: 350 },
     productImage: { height: 350, resizeMode: 'contain' },
-    content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: colors(isDark).glass },
     title: { fontSize: 24, fontWeight: '400', color: '#1F2937', marginBottom: 12 },
     price: { fontSize: 32, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
 
     badgesRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-    badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
+    badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radius.md, borderWidth: 1 },
     badgeNew: { backgroundColor: '#ECFDF5', borderColor: '#34D399' },
     badgeUsed: { backgroundColor: '#FFF7ED', borderColor: '#FB923C' },
     badgeText: { fontSize: 12, fontWeight: 'bold' },
     textNew: { color: '#059669' },
     textUsed: { color: '#C2410C' },
-    verificationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12 },
+    verificationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, backgroundColor: colors(isDark).glass, borderRadius: Radius.md },
     verificationText: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
 
-    warningBox: { backgroundColor: '#FFFBEB', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FCD34D', marginBottom: 16 },
+    warningBox: { backgroundColor: '#FFFBEB', padding: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: '#FCD34D', marginBottom: 16 },
     warningTitle: { fontSize: 14, fontWeight: 'bold', color: '#92400E', marginBottom: 4 },
     warningText: { fontSize: 14, color: '#B45309' },
 
-    separator: { height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginVertical: 20 },
+    separator: { height: 1, backgroundColor: colors(isDark).glass, marginVertical: 20 },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
     description: { fontSize: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', lineHeight: 24 },
 
     sellerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    sellerAvatar: { width: 48, height: 48, borderRadius: 24 },
+    sellerAvatar: { width: 48, height: 48, borderRadius: Radius.xl },
     sellerName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
     sellerRating: { fontSize: 14, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
 
-    safetyBox: { flexDirection: 'row', gap: 12, backgroundColor: '#FAFAFA', padding: 16, borderRadius: 12, alignItems: 'flex-start' },
-    shippingBox: { flexDirection: 'row', gap: 12, backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12, marginTop: 12, alignItems: 'flex-start' },
+    safetyBox: { flexDirection: 'row', gap: 12, backgroundColor: '#FAFAFA', padding: 16, borderRadius: Radius.md, alignItems: 'flex-start' },
+    shippingBox: { flexDirection: 'row', gap: 12, backgroundColor: '#EFF6FF', padding: 16, borderRadius: Radius.md, marginTop: 12, alignItems: 'flex-start' },
     safetyTitle: { fontSize: 14, fontWeight: 'bold', color: '#1F2937' },
     safetyDesc: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', marginTop: 2 },
 
@@ -237,25 +234,25 @@ const getStyles = (isDark: any) => StyleSheet.create({
         right: 0,
         flexDirection: 'row',
         padding: 16,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         gap: 12
     },
     cartBtn: {
         flex: 1,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         padding: 16,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         justifyContent: 'center',
         alignItems: 'center'
     },
     cartBtnText: { color: isDark ? '#D1D5DB' : '#374151', fontWeight: 'bold', fontSize: 16 },
     buyBtn: {
         flex: 2,
-        backgroundColor: '#7C3AED',
+        backgroundColor: '#2196F3',
         padding: 16,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         justifyContent: 'center',
         alignItems: 'center'
     },

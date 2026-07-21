@@ -4,6 +4,8 @@ import { Home, ShoppingBag, Users, LayoutDashboard, Settings, LogOut, MapPin } f
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Radius, colors } from '../theme/tokens';
+
 
 export type NavSection = 'home' | 'marketplace' | 'social' | 'dashboard';
 
@@ -88,9 +90,9 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         width: 250,
         height: '100%',
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
         borderRightWidth: 1,
-        borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         paddingHorizontal: 16,
         paddingBottom: 24,
     },
@@ -108,7 +110,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     brandText: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     navContent: {
         flex: 1,
@@ -118,7 +120,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 16,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         marginBottom: 8,
     },
     activeNavItem: {
@@ -134,7 +136,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     bottomContent: {
         borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         paddingTop: 16,
     },
     actionItem: {
@@ -142,7 +144,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 16,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     actionLabel: {
         fontSize: 16,

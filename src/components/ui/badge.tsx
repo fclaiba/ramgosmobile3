@@ -34,7 +34,7 @@ export const Badge = ({
     let borderColor: string | undefined;
 
     if (variant === 'secondary') {
-        bg = isDark ? 'rgba(124, 58, 237, 0.28)' : 'rgba(124, 58, 237, 0.12)';
+        bg = isDark ? 'rgba(33, 150, 243, 0.28)' : 'rgba(33, 150, 243, 0.12)';
         fg = isDark ? '#E9D5FF' : '#5B21B6';
     }
 
@@ -65,7 +65,7 @@ export const Badge = ({
         fg = '#FFF';
     }
     if (className?.includes('bg-violet')) {
-        bg = '#7C3AED';
+        bg = '#2196F3';
         fg = '#FFF';
     }
 

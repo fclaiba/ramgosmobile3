@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useSocial, Story } from '../../contexts/SocialContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Radius, colors } from '../../theme/tokens';
+
 
 interface StoriesBarProps {
     onStoryClick: (storyId: string) => void;
@@ -43,7 +45,7 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
                             <View style={styles.avatarWrapper}>
                                 {hasStory && hasUnviewed ? (
                                     <LinearGradient
-                                        colors={['#8B5CF6', '#EC4899', '#F59E0B']}
+                                        colors={['#4FC3F7', '#EC4899', '#F59E0B']}
                                         style={styles.gradientRing}
                                     >
                                         <View style={styles.imageBorder}>
@@ -79,17 +81,17 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     storyItem: { alignItems: 'center', gap: 6, width: 68 },
 
     // Add Story Style
-    addStoryContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    addStoryContainer: { width: 64, height: 64, borderRadius: Radius['2xl'], backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     addStoryIcon: { opacity: 0.5 },
     absolutePlus: { position: 'absolute', bottom: 0, right: 0 },
-    plusBadge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
+    plusBadge: { width: 20, height: 20, borderRadius: Radius.md, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
 
     // Story Avatar Style
     avatarWrapper: { width: 68, height: 68, justifyContent: 'center', alignItems: 'center' },
-    gradientRing: { width: 68, height: 68, borderRadius: 34, justifyContent: 'center', alignItems: 'center' },
+    gradientRing: { width: 68, height: 68, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center' },
     noStoryRing: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
-    imageBorder: { width: 62, height: 62, borderRadius: 31, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center', alignItems: 'center' },
-    avatar: { width: 56, height: 56, borderRadius: 28 },
+    imageBorder: { width: 62, height: 62, borderRadius: Radius['2xl'], backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center' },
+    avatar: { width: 56, height: 56, borderRadius: Radius['2xl'] },
 
     name: { fontSize: 11, textAlign: 'center', color: isDark ? '#D1D5DB' : '#374151', width: '100%' }
 });

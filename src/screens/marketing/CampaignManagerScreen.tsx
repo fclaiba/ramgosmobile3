@@ -8,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 /**
  * CampaignManagerScreen — influencer-side view to propose campaigns to
@@ -88,7 +90,7 @@ export default function CampaignManagerScreen() {
 
             <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 0, gap: 16 }}>
                 {campaigns.length === 0 && (
-                    <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginTop: 32 }}>
+                    <Text style={{ color: colors(isDark).textMuted, textAlign: 'center', marginTop: 32 }}>
                         Todavía no tenés campañas. Tocá + para proponerle una a un negocio.
                     </Text>
                 )}
@@ -162,7 +164,7 @@ function CampaignCard({ campaign, isDark, styles }: { campaign: any; isDark: boo
         <View style={styles.card}>
             <LinearGradient
                 colors={isDark ? ['#1F2937', '#374151'] : ['#ffffff', '#F9FAFB']}
-                style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+                style={[StyleSheet.absoluteFill, { borderRadius: Radius.lg }]}
             />
             <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
@@ -171,7 +173,7 @@ function CampaignCard({ campaign, isDark, styles }: { campaign: any; isDark: boo
                         <Text style={styles.codeText}>
                             {(campaign.commissionRate * 100).toFixed(1)}% por venta
                         </Text>
-                        <Copy size={12} color="#7C3AED" />
+                        <Copy size={12} color="#2196F3" />
                     </View>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: `${statusColor}20` }]}>
@@ -231,34 +233,26 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     createBtn: {
-        backgroundColor: '#7C3AED',
+        backgroundColor: '#2196F3',
         width: 48,
         height: 48,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        ...glassShadow(isDark),
     },
     card: {
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        ...glassShadow(isDark),
+        backgroundColor: colors(isDark).glass,
     },
     cardHeader: {
         flexDirection: 'row',
@@ -269,21 +263,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     storeName: {
         fontSize: 16,
         fontWeight: '600',
-        color: isDark ? '#F9FAFB' : '#1F2937',
+        color: colors(isDark).text,
         marginBottom: 4,
     },
     codeBadge: {
-        backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+        backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 6,
+        borderRadius: Radius.sm,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
         alignSelf: 'flex-start'
     },
     codeText: {
-        color: '#7C3AED',
+        color: '#2196F3',
         fontWeight: 'bold',
         fontSize: 13,
     },
@@ -294,12 +288,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     activeDot: {
         width: 6,
         height: 6,
-        borderRadius: 3,
+        borderRadius: Radius.sm,
         backgroundColor: '#10B981',
     },
     activeText: {
@@ -312,7 +306,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'space-around',
         alignItems: 'center',
         borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         paddingTop: 16,
     },
     statItem: {
@@ -322,16 +316,16 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     statValue: {
         fontSize: 16,
         fontWeight: '700',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     statLabel: {
         fontSize: 12,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     verticalDivider: {
         width: 1,
         height: 30,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
     modalOverlay: {
         flex: 1,
@@ -340,28 +334,28 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 24,
     },
     modalContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 24,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         padding: 24,
     },
     modalTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 20,
         textAlign: 'center',
     },
     label: {
         fontSize: 14,
         fontWeight: '600',
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         marginBottom: 8,
     },
     input: {
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
-        borderRadius: 12,
+        borderRadius: Radius.md,
         padding: 12,
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 16,
     },
     modalActions: {
@@ -372,19 +366,19 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     cancelBtn: {
         flex: 1,
         padding: 14,
-        borderRadius: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.md,
+        backgroundColor: colors(isDark).glass,
         alignItems: 'center',
     },
     cancelText: {
         fontWeight: '600',
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
     },
     confirmBtn: {
         flex: 1,
         padding: 14,
-        borderRadius: 12,
-        backgroundColor: '#7C3AED',
+        borderRadius: Radius.md,
+        backgroundColor: '#2196F3',
         alignItems: 'center',
     },
     confirmText: {

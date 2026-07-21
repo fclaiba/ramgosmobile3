@@ -5,6 +5,8 @@ import { AuthBackground } from '../components/auth/AuthBackground';
 import { ArrowLeft, Lock, Eye } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { CommonActions } from '@react-navigation/native';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 export default function PrivacyScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
@@ -43,7 +45,7 @@ export default function PrivacyScreen({ navigation, route }: any) {
 
                     <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
                         <View style={styles.iconContainer}>
-                            <Lock size={48} color="#7C3AED" />
+                            <Lock size={48} color="#2196F3" />
                         </View>
 
                         <Text style={styles.sectionTitle}>1. ¿QUÉ DATOS RECOPILAMOS?</Text>
@@ -132,37 +134,33 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     card: {
         flex: 1,
         backgroundColor: isDark ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         padding: 24,
         width: '100%',
         maxWidth: 500,
         alignSelf: 'center',
-        shadowColor: isDark ? '#000' : '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: isDark ? 0.3 : 0.1,
-        shadowRadius: 20,
-        elevation: 10,
+        ...glassShadow(isDark),
         marginVertical: 20,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'transparent',
+        borderColor: isDark ? 'rgba(79, 195, 247, 0.3)' : 'transparent',
     },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
     backBtn: { padding: 4 },
-    title: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
+    title: { fontSize: 20, fontWeight: 'bold', color: colors(isDark).text },
     scroll: { flex: 1 },
     iconContainer: {
         alignSelf: 'center',
         width: 80,
         height: 80,
-        borderRadius: 40,
+        borderRadius: Radius.full,
         backgroundColor: isDark ? '#2E1065' : '#ede9fe',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24
     },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#E5E7EB' : '#374151', marginBottom: 8, marginTop: 16 },
-    text: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 20 },
-    btn: { backgroundColor: '#7C3AED', height: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 8, marginTop: 16 },
+    text: { fontSize: 13, color: colors(isDark).textMuted, lineHeight: 20 },
+    btn: { backgroundColor: '#2196F3', height: 50, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
     btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
 

@@ -11,6 +11,8 @@ import { useMarketplace, ShippingMethod, ShippingQuote } from '../contexts/Marke
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 export default function CartScreen({ navigation }: any) {
     const { items, removeItem, updateQuantity, totalItems, totalPrice, clearCart } = useCart();
@@ -118,7 +120,7 @@ export default function CartScreen({ navigation }: any) {
                 <View style={styles.emptyContainer}>
                     <View style={styles.emptyCard}>
                         <View style={styles.emptyIcon}>
-                            <CartIcon size={40} color={isDark ? '#C4B5FD' : '#7C3AED'} />
+                            <CartIcon size={40} color={isDark ? '#C4B5FD' : '#2196F3'} />
                         </View>
                         <Text style={styles.emptyText}>Tu carrito está vacío</Text>
                         <Text style={styles.emptySubText}>
@@ -152,8 +154,8 @@ export default function CartScreen({ navigation }: any) {
 
                                         <View style={styles.itemFooter}>
                                             {item.type === 'subscription' ? (
-                                                <View style={{ backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
-                                                    <Text style={{ color: '#7C3AED', fontWeight: 'bold', fontSize: 12 }}>Facturación Mensual</Text>
+                                                <View style={{ backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: Radius.sm }}>
+                                                    <Text style={{ color: '#2196F3', fontWeight: 'bold', fontSize: 12 }}>Facturación Mensual</Text>
                                                 </View>
                                             ) : (
                                                 <View style={styles.qtyContainer}>
@@ -312,56 +314,56 @@ export default function CartScreen({ navigation }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
     emptyCard: {
         width: '100%',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         padding: 20,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         alignItems: 'center',
         gap: 8,
     },
-    emptyIcon: { width: 80, height: 80, backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE', borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    emptyText: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    emptySubText: { color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4, textAlign: 'center' },
+    emptyIcon: { width: 80, height: 80, backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE', borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+    emptyText: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text },
+    emptySubText: { color: colors(isDark).textMuted, marginTop: 4, textAlign: 'center' },
     emptyTips: { marginTop: 8, gap: 4, alignSelf: 'stretch' },
-    emptyTip: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
+    emptyTip: { fontSize: 12, color: colors(isDark).textMuted },
     emptyCta: { marginTop: 12, width: '100%' },
-    sectionTitle: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 12, marginTop: 8 },
-    itemCard: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 12, borderRadius: 12, gap: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-    itemImage: { width: 80, height: 80, borderRadius: 8, backgroundColor: isDark ? '#374151' : '#eee' },
+    sectionTitle: { fontSize: 14, fontWeight: '700', color: colors(isDark).text, marginBottom: 12, marginTop: 8 },
+    itemCard: { flexDirection: 'row', backgroundColor: colors(isDark).glass, padding: 12, borderRadius: Radius.md, gap: 12, ...glassShadow(isDark),},
+    itemImage: { width: 80, height: 80, borderRadius: Radius.sm, backgroundColor: isDark ? '#374151' : '#eee' },
     itemInfo: { flex: 1, justifyContent: 'space-between' },
     itemName: { fontWeight: '600', fontSize: 14, color: isDark ? '#F9FAFB' : '#000' },
     itemLocation: { fontSize: 12, color: '#888' },
     itemFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    qtyContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 6, padding: 2 },
+    qtyContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors(isDark).glass, borderRadius: Radius.sm, padding: 2 },
     qtyBtn: { padding: 4 },
     qtyText: { fontWeight: 'bold', minWidth: 20, textAlign: 'center', color: isDark ? '#F9FAFB' : '#000' },
     itemPrice: { fontWeight: 'bold', fontSize: 16, color: isDark ? '#F9FAFB' : '#000' },
     discountCard: { marginTop: 20, padding: 16, backgroundColor: isDark ? '#312E81' : '#FAFAFA', borderColor: isDark ? '#4338CA' : '#ddd6fe', borderWidth: 1 },
-    discountOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#ddd' },
-    discountSelected: { backgroundColor: '#7c3aed', borderColor: '#7c3aed' },
+    discountOption: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.lg, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? '#4B5563' : '#ddd' },
+    discountSelected: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
     discountText: { fontSize: 12, color: isDark ? '#D1D5DB' : '#000' },
     discountSelectedText: { color: '#fff' },
-    shippingCard: { marginTop: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', gap: 12 },
+    shippingCard: { marginTop: 20, backgroundColor: colors(isDark).glass, padding: 16, borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', gap: 12 },
     shippingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    shippingTitle: { fontSize: 15, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
-    shippingSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
+    shippingTitle: { fontSize: 15, fontWeight: '600', color: colors(isDark).text },
+    shippingSubtitle: { fontSize: 12, color: colors(isDark).textMuted },
     shippingOptionsRow: { gap: 12 },
-    shippingOption: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', minWidth: 130 },
+    shippingOption: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', minWidth: 130 },
     shippingOptionActive: { backgroundColor: isDark ? '#111827' : '#111827', borderColor: isDark ? '#4B5563' : '#111827' },
-    shippingOptionLabel: { fontSize: 13, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+    shippingOptionLabel: { fontSize: 13, fontWeight: '600', color: colors(isDark).text },
     shippingOptionLabelActive: { color: '#FFFFFF' },
-    shippingOptionPrice: { fontSize: 14, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginTop: 4 },
+    shippingOptionPrice: { fontSize: 14, fontWeight: '700', color: colors(isDark).text, marginTop: 4 },
     shippingOptionEta: { fontSize: 11, color: '#6B7280', marginTop: 2 },
     addressForm: { gap: 10 },
-    addressLabel: { fontSize: 12, fontWeight: '600', color: isDark ? '#F9FAFB' : '#374151' },
-    addressInput: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', marginTop: 4, color: isDark ? '#F9FAFB' : '#000' },
+    addressLabel: { fontSize: 12, fontWeight: '600', color: colors(isDark).text },
+    addressInput: { backgroundColor: colors(isDark).glass, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', marginTop: 4, color: isDark ? '#F9FAFB' : '#000' },
     addressRow: { flexDirection: 'row', gap: 12 },
-    summaryContainer: { marginTop: 20, backgroundColor: isDark ? '#09090B' : '#FAFAFA', padding: 16, borderRadius: 12 },
+    summaryContainer: { marginTop: 20, backgroundColor: colors(isDark).bg, padding: 16, borderRadius: Radius.md },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
     summaryLabel: { color: isDark ? '#9CA3AF' : '#666' },
     summaryValue: { fontWeight: '600', color: isDark ? '#F9FAFB' : '#000' },
@@ -375,26 +377,23 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         bottom: 0,
         padding: 16,
         paddingBottom: 24,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: 12,
-        shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 6,
+        ...glassShadow(isDark),
     },
-    checkoutLabel: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
-    checkoutAmount: { fontSize: 20, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' },
-    checkoutHint: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
+    checkoutLabel: { fontSize: 12, color: colors(isDark).textMuted },
+    checkoutAmount: { fontSize: 20, fontWeight: '800', color: colors(isDark).text },
+    checkoutHint: { fontSize: 11, color: colors(isDark).textMuted, marginTop: 2 },
     checkoutButton: {
         backgroundColor: '#111827',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         flex: 1,
         alignItems: 'center',
     },

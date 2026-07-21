@@ -25,13 +25,15 @@ import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { useSavedPaymentMethods } from '../payments/hooks/useSavedPaymentMethods';
 import { formatCardNumber, type TestCard } from '../payments/testCards';
 import { colors, Radius, Space } from '../theme/tokens';
+import { glassShadow } from '../theme/tokens';
+
 
 function brandColor(brand: string) {
     const b = brand.toLowerCase();
     if (b === 'visa') return '#1A1F71';
     if (b === 'mastercard') return '#EB001B';
     if (b === 'amex') return '#2E77BB';
-    return '#7C3AED';
+    return '#2196F3';
 }
 
 export default function PaymentMethodsScreen({ navigation }: any) {
@@ -258,7 +260,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: c.glassBorder,
             ...Platform.select({
-                ios: { shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+                ios: { ...glassShadow(isDark),shadowOffset: { width: 0, height: 4 } },
                 android: { elevation: 2 },
                 default: {},
             }),
@@ -266,7 +268,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
         brandChip: {
             width: 44,
             height: 44,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -325,7 +327,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
         brandChipSm: {
             width: 36,
             height: 36,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
         },

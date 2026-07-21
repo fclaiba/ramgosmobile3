@@ -207,7 +207,7 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
                         <Text style={styles.sectionTitle}>Evidencias (opcional)</Text>
                         <TouchableOpacity style={styles.uploadBox} onPress={handleUploadEvidence} disabled={uploading} activeOpacity={0.8}>
                             {uploading ? (
-                                <ActivityIndicator size="small" color="#7C3AED" />
+                                <ActivityIndicator size="small" color="#2196F3" />
                             ) : (
                                 <>
                                     <Camera size={24} color={isDark ? '#9CA3AF' : '#6B7280'} />
@@ -273,6 +273,8 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
 }
 
 import { StyleSheet } from 'react-native';
+import { Radius, colors } from '../../theme/tokens';
+
 
 function getStyles(isDark: boolean, insets: any) {
     const bg = isDark ? '#09090B' : '#FAFAFA';
@@ -280,7 +282,7 @@ function getStyles(isDark: boolean, insets: any) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = '#7C3AED';
+    const primary = '#2196F3';
 
     return StyleSheet.create({
         container: { flex: 1, backgroundColor: bg },
@@ -299,7 +301,7 @@ function getStyles(isDark: boolean, insets: any) {
         iconBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.9)',
@@ -329,7 +331,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         introCard: {
             backgroundColor: surface,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 22,
             alignItems: 'center',
             marginBottom: 18,
@@ -339,7 +341,7 @@ function getStyles(isDark: boolean, insets: any) {
         introIconWrap: {
             width: 60,
             height: 60,
-            borderRadius: 30,
+            borderRadius: Radius['2xl'],
             backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEE2E2',
             justifyContent: 'center',
             alignItems: 'center',
@@ -355,7 +357,7 @@ function getStyles(isDark: boolean, insets: any) {
             alignItems: 'center',
             gap: 14,
             backgroundColor: surface,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: 14,
             marginBottom: 10,
             borderWidth: 1,
@@ -368,8 +370,8 @@ function getStyles(isDark: boolean, insets: any) {
         reasonIconWrap: {
             width: 44,
             height: 44,
-            borderRadius: 14,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            borderRadius: Radius.md,
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -378,7 +380,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         uploadBox: {
             height: 90,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             borderWidth: 2,
             borderStyle: 'dashed',
             borderColor: border,
@@ -397,7 +399,7 @@ function getStyles(isDark: boolean, insets: any) {
         evidenceItem: {
             width: 80,
             height: 80,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             overflow: 'hidden',
             position: 'relative',
         },
@@ -408,7 +410,7 @@ function getStyles(isDark: boolean, insets: any) {
             right: 4,
             width: 24,
             height: 24,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             backgroundColor: 'rgba(0,0,0,0.6)',
             justifyContent: 'center',
             alignItems: 'center',
@@ -416,7 +418,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         inputWrap: {
             backgroundColor: surface,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             borderWidth: 1,
             borderColor: border,
             padding: 16,
@@ -439,11 +441,11 @@ function getStyles(isDark: boolean, insets: any) {
         },
         footerBtn: {
             backgroundColor: '#EF4444',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             paddingVertical: 16,
             alignItems: 'center',
         },
-        footerBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+        footerBtnDisabled: { backgroundColor: colors(isDark).glass },
         footerBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
         footerBtnTextDisabled: { color: muted },
     });

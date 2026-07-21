@@ -36,7 +36,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         paddingVertical: 12,
         backgroundColor: isDark ? '#09090B' : '#FAFAFA',
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     containerDark: {
         backgroundColor: '#111827',

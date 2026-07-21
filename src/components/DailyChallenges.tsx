@@ -6,6 +6,8 @@ import { usePoints, DailyChallenge } from '../contexts/PointsContext';
 import { useTheme } from '../contexts/ThemeContext';
 
 import { useToast } from '../contexts/ToastContext';
+import { Radius, colors } from '../theme/tokens';
+
 
 export function DailyChallenges() {
     const { challenges, challengeProgress, claimDailyReward, claimChallenge } = usePoints();
@@ -137,7 +139,7 @@ export function DailyChallenges() {
                 <View style={[styles.section, { marginTop: 20 }]}>
                     <View style={styles.sectionHeader}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Trophy size={20} color="#9333EA" />
+                            <Trophy size={20} color="#29B6F6" />
                             <Text style={styles.sectionTitle}>Desafíos Semanales</Text>
                         </View>
                         <View style={styles.badge}>
@@ -185,8 +187,8 @@ const ChallengeCard = ({ challenge, onClaim, getIcon, isWeekly = false, isDark, 
     const isCompleted = challenge.current >= challenge.target;
     const isClaimed = challenge.claimed;
 
-    const activeColor = isWeekly ? '#9333EA' : '#2563EB'; // Purple for weekly, Blue for daily
-    const activeBg = isWeekly ? (isDark ? 'rgba(147, 51, 234, 0.1)' : '#F3E8FF') : (isDark ? 'rgba(37, 99, 235, 0.1)' : '#EFF6FF');
+    const activeColor = isWeekly ? '#29B6F6' : '#2563EB'; // Purple for weekly, Blue for daily
+    const activeBg = isWeekly ? (isDark ? 'rgba(41, 182, 246, 0.1)' : '#F3E8FF') : (isDark ? 'rgba(37, 99, 235, 0.1)' : '#EFF6FF');
 
     return (
         <View style={[
@@ -245,44 +247,44 @@ const ChallengeCard = ({ challenge, onClaim, getIcon, isWeekly = false, isDark, 
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { gap: 16 },
-    streakCard: { borderRadius: 16, padding: 1, overflow: 'hidden', borderWidth: 1, borderColor: isDark ? 'rgba(249, 115, 22, 0.2)' : '#FED7AA' },
+    streakCard: { borderRadius: Radius.lg, padding: 1, overflow: 'hidden', borderWidth: 1, borderColor: isDark ? 'rgba(249, 115, 22, 0.2)' : '#FED7AA' },
     cardContent: { padding: 16 },
     streakHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     streakInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    streakIconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F97316', justifyContent: 'center', alignItems: 'center' },
+    streakIconBg: { width: 48, height: 48, borderRadius: Radius.xl, backgroundColor: '#F97316', justifyContent: 'center', alignItems: 'center' },
     cardTitle: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#fff' : '#111827' },
-    cardSubtitle: { fontSize: 13, color: isDark ? '#D1D5DB' : '#6B7280' },
-    cardMiniText: { fontSize: 10, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
+    cardSubtitle: { fontSize: 13, color: colors(isDark).textMuted },
+    cardMiniText: { fontSize: 10, color: colors(isDark).textMuted, marginTop: 2 },
 
-    claimBtn: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: 12, overflow: 'hidden' },
-    claimBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    claimBtn: { backgroundColor: '#F97316', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderRadius: Radius.md, overflow: 'hidden' },
+    claimBtnDisabled: { backgroundColor: colors(isDark).glass },
     claimBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-    claimBtnTextDisabled: { color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', fontSize: 13 },
+    claimBtnTextDisabled: { color: colors(isDark).textMuted, fontWeight: '600', fontSize: 13 },
 
     section: {},
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    badge: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-    badgeText: { fontSize: 11, color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '600' },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text },
+    badge: { backgroundColor: colors(isDark).glass, paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.md },
+    badgeText: { fontSize: 11, color: colors(isDark).textMuted, fontWeight: '600' },
 
-    challengeCard: { padding: 16, borderRadius: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', marginBottom: 12 },
-    challengeIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-    challengeTitle: { fontSize: 13, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937' },
-    challengeDesc: { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 8 },
-    ptsBadge: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-    ptsText: { fontSize: 10, fontWeight: 'bold', color: isDark ? '#D1D5DB' : '#4B5563' },
+    challengeCard: { padding: 16, borderRadius: Radius.lg, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass, marginBottom: 12 },
+    challengeIcon: { width: 40, height: 40, borderRadius: Radius.xl, justifyContent: 'center', alignItems: 'center' },
+    challengeTitle: { fontSize: 13, fontWeight: 'bold', color: colors(isDark).text },
+    challengeDesc: { fontSize: 11, color: colors(isDark).textMuted, marginBottom: 8 },
+    ptsBadge: { backgroundColor: colors(isDark).glass, paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm },
+    ptsText: { fontSize: 10, fontWeight: 'bold', color: colors(isDark).textMuted },
 
     progressContainer: { marginTop: 4 },
     progressLabel: { fontSize: 10, color: '#9CA3AF' },
     progressValue: { fontSize: 10, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
-    progressBarBg: { height: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 3, overflow: 'hidden' },
-    progressBarFill: { height: '100%', borderRadius: 3 },
+    progressBarBg: { height: 6, backgroundColor: colors(isDark).glass, borderRadius: Radius.sm, overflow: 'hidden' },
+    progressBarFill: { height: '100%', borderRadius: Radius.sm },
 
-    miniClaimBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, marginTop: 12 },
+    miniClaimBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.sm, marginTop: 12 },
     claimedRef: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
 
-    infoCard: { flexDirection: 'row', gap: 12, backgroundColor: isDark ? 'rgba(217, 119, 6, 0.1)' : '#FFFBEB', padding: 16, borderRadius: 16, borderColor: isDark ? '#7C2D12' : '#FDE68A', borderWidth: 1 },
-    infoIconBg: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#D97706', justifyContent: 'center', alignItems: 'center' },
+    infoCard: { flexDirection: 'row', gap: 12, backgroundColor: isDark ? 'rgba(217, 119, 6, 0.1)' : '#FFFBEB', padding: 16, borderRadius: Radius.lg, borderColor: isDark ? '#7C2D12' : '#FDE68A', borderWidth: 1 },
+    infoIconBg: { width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: '#D97706', justifyContent: 'center', alignItems: 'center' },
     infoTitle: { color: isDark ? '#FCD34D' : '#92400E', fontWeight: 'bold', fontSize: 13, marginBottom: 2 },
     infoText: { color: isDark ? '#FDBA74' : '#B45309', fontSize: 11 }
 });

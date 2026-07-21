@@ -115,13 +115,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
             web: {
                 boxShadow: isDark
                     ? '0 -8px 40px rgba(0,0,0,0.45)'
-                    : '0 -8px 40px rgba(124,58,237,0.12)',
+                    : '0 -8px 40px rgba(33, 150, 243,0.12)',
                 backdropFilter: 'blur(18px)',
-                // @ts-expect-error web
                 WebkitBackdropFilter: 'blur(18px)',
             } as any,
             default: {
-                shadowColor: isDark ? '#000' : '#7C3AED',
+                shadowColor: isDark ? '#000' : '#2196F3',
                 shadowOffset: { width: 0, height: -4 },
                 shadowOpacity: isDark ? 0.35 : 0.14,
                 shadowRadius: 20,

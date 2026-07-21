@@ -34,6 +34,7 @@ import * as Haptics from 'expo-haptics';
 import { colors, Radius, Space } from '../theme/tokens';
 import { toUserErrorTitle, toUserMessage } from '../utils/errors';
 
+
 const { width } = Dimensions.get('window');
 const VIEWFINDER = Math.min(width * 0.86, 340);
 
@@ -215,7 +216,7 @@ export default function BusinessScannerScreen() {
                                         <View style={[styles.corner, styles.tr]} />
                                         <View style={[styles.corner, styles.bl]} />
                                         <View style={[styles.corner, styles.br]} />
-                                        <ScanLine size={28} color="rgba(124,58,237,0.85)" />
+                                        <ScanLine size={28} color="rgba(33, 150, 243,0.85)" />
                                     </View>
                                 </View>
                                 <Text style={styles.hint}>
@@ -393,7 +394,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
         iconBtn: {
             width: 40,
             height: 40,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             backgroundColor: c.glass,
             alignItems: 'center',
             justifyContent: 'center',
@@ -461,7 +462,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
         bonoIcon: {
             width: 36,
             height: 36,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             backgroundColor: c.primary,
             alignItems: 'center',
             justifyContent: 'center',

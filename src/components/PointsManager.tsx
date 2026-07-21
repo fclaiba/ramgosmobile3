@@ -10,6 +10,8 @@ import { useRewards } from '../contexts/RewardsContext';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 const POINT_VALUE_USD = 0.01;
@@ -116,7 +118,7 @@ export function PointsManager() {
         <View style={styles.heroContainer}>
             {/* Background Mesh Gradient Simulation */}
             <LinearGradient
-                colors={isDark ? ['#4F46E5', '#7C3AED', '#2E1065'] : ['#6366F1', '#8B5CF6', '#4C1D95']}
+                colors={isDark ? ['#4F46E5', '#2196F3', '#2E1065'] : ['#6366F1', '#4FC3F7', '#4C1D95']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 locations={[0, 0.6, 1]}
@@ -175,11 +177,11 @@ export function PointsManager() {
 
                 {MEMBERSHIP_TIERS.map((tier, index) => {
                     const isReached = lifetimePoints >= tier.minPoints;
-                    const isCurrent = currentTier?.id === tier.id;
+                    const isCurrent = currentTier?.label === tier.label;
                     const isLocked = !isReached;
 
                     return (
-                        <View key={tier.id} style={styles.nodeWrapper}>
+                        <View key={tier.label} style={styles.nodeWrapper}>
                             {/* The Node */}
                             <View style={[
                                 styles.nodeCircle,
@@ -286,8 +288,8 @@ export function PointsManager() {
                         </View>
 
                         <View style={styles.howItWorksRow}>
-                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE' }]}>
-                                <Crown size={14} color="#8B5CF6" />
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(79, 195, 247, 0.2)' : '#EDE9FE' }]}>
+                                <Crown size={14} color="#4FC3F7" />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Bonus por Nivel</Text>
@@ -458,7 +460,7 @@ export function PointsManager() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 20 }}>
                     {currentTier?.perks?.map((perk: string, i: number) => (
                         <View key={i} style={styles.benefitPill}>
-                            <Sparkles size={14} color="#8B5CF6" />
+                            <Sparkles size={14} color="#4FC3F7" />
                             <Text style={styles.benefitText}>{perk}</Text>
                         </View>
                     ))}
@@ -490,7 +492,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
     return StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? '#09090B' : '#FAFAFA', // Slate 900 vs Slate 50
+            backgroundColor: colors(isDark).bg, // Slate 900 vs Slate 50
         },
         contentPadding: {
             paddingHorizontal: 24,
@@ -525,7 +527,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             backgroundColor: 'rgba(0,0,0,0.4)',
             paddingHorizontal: 16,
             paddingVertical: 8,
-            borderRadius: 100,
+            borderRadius: Radius.full,
             borderWidth: 1,
             borderColor: 'rgba(255,255,255,0.1)',
         },
@@ -563,7 +565,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         track3D: {
             height: 10,
             backgroundColor: 'rgba(0,0,0,0.4)',
-            borderRadius: 5,
+            borderRadius: Radius.sm,
             overflow: 'hidden',
             borderWidth: 1,
             borderColor: 'rgba(255,255,255,0.1)',
@@ -594,7 +596,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             left: lineOffset,
             right: lineOffset,
             height: 4,
-            borderRadius: 2,
+            borderRadius: Radius.sm,
             backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
             zIndex: -1,
         },
@@ -603,8 +605,8 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             top: lineTop,
             left: lineOffset,
             height: 4,
-            borderRadius: 2,
-            backgroundColor: '#7C3AED',
+            borderRadius: Radius.sm,
+            backgroundColor: '#2196F3',
             zIndex: -1,
         },
         nodeWrapper: {
@@ -622,22 +624,16 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            shadowOffset: { width: 0, height: 2 },
+            ...glassShadow(isDark),shadowOffset: { width: 0, height: 2 },
             elevation: 2,
         },
-        nodeReached: { backgroundColor: '#7C3AED' },
+        nodeReached: { backgroundColor: '#2196F3' },
         nodeCurrent: {
             backgroundColor: '#F59E0B',
             transform: [{ scale: 1.1 }],
             borderColor: '#F59E0B',
             borderWidth: 0,
-            shadowColor: '#F59E0B',
-            shadowOpacity: 0.4,
-            shadowRadius: 8,
-        },
+            ...glassShadow(isDark),},
         nodeLocked: { backgroundColor: isDark ? '#334155' : '#E2E8F0' },
         nodeLabel: { fontSize: 10, fontWeight: '700', color: isDark ? '#FFF' : '#1E293B', letterSpacing: 0.5 },
         nodeLabelCurrent: { color: '#F59E0B' },
@@ -649,22 +645,18 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)', // More translucent
             padding: 16,
-            borderRadius: 24,
+            borderRadius: Radius.xl,
             gap: 16,
             borderWidth: 1,
             borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.4)',
 
             // Subtle shadow
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 10,
-            elevation: 2,
+            ...glassShadow(isDark),
         },
         glassIconBox: {
             width: 52,
             height: 52,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 1,
@@ -676,7 +668,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             backgroundColor: isDark ? 'rgba(15, 23, 42, 0.8)' : '#F1F5F9',
             paddingHorizontal: 14,
             paddingVertical: 10,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 6,
@@ -692,12 +684,12 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             gap: 8,
             paddingHorizontal: 16,
             paddingVertical: 12,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#FAFAFA',
-            borderRadius: 100,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.1)' : '#FAFAFA',
+            borderRadius: Radius.full,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+            borderColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE',
         },
-        benefitText: { fontSize: 13, fontWeight: '600', color: isDark ? '#E9D5FF' : '#7C3AED' },
+        benefitText: { fontSize: 13, fontWeight: '600', color: isDark ? '#E9D5FF' : '#2196F3' },
         benefitPillLocked: { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: 'transparent' },
         benefitTextLocked: { color: '#94A3B8' },
 
@@ -705,15 +697,12 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         missionCard: {
             marginTop: 24,
             backgroundColor: isDark ? '#1E293B' : '#FFF',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 2, // Gradient border effect simulation or just padding
             overflow: 'hidden',
             borderWidth: 1,
             borderColor: isDark ? '#334155' : '#E2E8F0',
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 4 },
+            ...glassShadow(isDark),shadowOffset: { width: 0, height: 4 },
             elevation: 3,
         },
         missionCardCompleted: {
@@ -728,12 +717,12 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             backgroundColor: isDark ? '#1E293B' : '#FFF',
         },
         missionIconBox: {
-            width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(252, 211, 77, 0.15)',
+            width: 40, height: 40, borderRadius: Radius.md, backgroundColor: 'rgba(252, 211, 77, 0.15)',
             justifyContent: 'center', alignItems: 'center'
         },
         missionTitle: { fontSize: 13, fontWeight: '800', color: isDark ? '#FFF' : '#1E293B', letterSpacing: 0.5 },
         missionSubtitle: { fontSize: 12, color: isDark ? '#94A3B8' : '#64748B' },
-        missionBadge: { backgroundColor: '#FCD34D', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100 },
+        missionBadge: { backgroundColor: '#FCD34D', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full },
         missionBadgeText: { fontSize: 11, fontWeight: '800', color: '#78350F' },
 
         missionProgressBox: {
@@ -744,15 +733,15 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         missionMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
         missionProgressText: { fontSize: 11, fontWeight: '600', color: isDark ? '#CBD5E1' : '#475569' },
         missionProgressPercent: { fontSize: 11, fontWeight: '700', color: '#FCD34D' },
-        missionTrack: { height: 6, backgroundColor: isDark ? '#334155' : '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginBottom: 8 },
+        missionTrack: { height: 6, backgroundColor: isDark ? '#334155' : '#E2E8F0', borderRadius: Radius.sm, overflow: 'hidden', marginBottom: 8 },
         missionFill: { height: '100%', backgroundColor: '#FCD34D' },
         missionHint: { fontSize: 10, color: isDark ? '#64748B' : '#94A3B8', fontStyle: 'italic' },
 
         // --- HOW IT WORKS ---
         howItWorksCard: {
             marginTop: 0,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-            borderRadius: 20,
+            backgroundColor: colors(isDark).glass,
+            borderRadius: Radius.xl,
             padding: 16,
             borderWidth: 1,
             borderColor: isDark ? '#334155' : '#E2E8F0',
@@ -766,7 +755,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         howItWorksIcon: {
             width: 32,
             height: 32,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB',
             alignItems: 'center',
             justifyContent: 'center',
@@ -775,7 +764,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             fontSize: 12,
             fontWeight: '800',
             letterSpacing: 1.2,
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
         },
         howItWorksSummary: {
             flexDirection: 'row',
@@ -783,7 +772,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             alignItems: 'center',
             paddingVertical: 12,
             backgroundColor: isDark ? 'rgba(99, 102, 241, 0.1)' : '#FAFAFA',
-            borderRadius: 12,
+            borderRadius: Radius.md,
             marginBottom: 8,
         },
         summaryItem: {
@@ -824,14 +813,14 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         howItWorksIconBadge: {
             width: 32,
             height: 32,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
         },
         howItWorksRowTitle: {
             fontSize: 14,
             fontWeight: '700',
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
             marginBottom: 2,
         },
         howItWorksText: {
@@ -848,7 +837,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         howItWorksSubTitle: {
             fontSize: 13,
             fontWeight: '700',
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
             marginBottom: 10,
         },
         howItWorksSmallText: {
@@ -872,15 +861,15 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
             paddingHorizontal: 12,
             paddingVertical: 8,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 6,
         },
         discountTierItemActive: {
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE',
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.2)' : '#EDE9FE',
             borderWidth: 1,
-            borderColor: '#8B5CF6',
+            borderColor: '#4FC3F7',
         },
         discountTierPoints: {
             fontSize: 12,
@@ -893,7 +882,7 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
             color: isDark ? '#D1D5DB' : '#334155',
         },
         discountTierActive: {
-            color: '#8B5CF6',
+            color: '#4FC3F7',
         },
     });
 };

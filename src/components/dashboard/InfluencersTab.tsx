@@ -2,6 +2,8 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { UserPlus, Users } from "lucide-react-native";
+import { Radius } from '../../theme/tokens';
+
 
 export function InfluencersTab({
     styles,
@@ -21,7 +23,7 @@ export function InfluencersTab({
                 onPress={() => setInviteModalVisible(true)}
             >
                 <LinearGradient
-                    colors={["#7C3AED", "#5B21B6"]}
+                    colors={["#2196F3", "#5B21B6"]}
                     style={StyleSheet.absoluteFill}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
@@ -70,7 +72,7 @@ export function InfluencersTab({
                                         flex: 1,
                                         backgroundColor: "#16a34a",
                                         paddingVertical: 10,
-                                        borderRadius: 8,
+                                        borderRadius: Radius.sm,
                                         alignItems: "center",
                                     }}
                                     onPress={() =>
@@ -87,7 +89,7 @@ export function InfluencersTab({
                                         borderWidth: 1,
                                         borderColor: "#ef4444",
                                         paddingVertical: 10,
-                                        borderRadius: 8,
+                                        borderRadius: Radius.sm,
                                         alignItems: "center",
                                     }}
                                     onPress={() =>
@@ -231,7 +233,7 @@ export function InfluencersTab({
                                             borderWidth: 1,
                                             borderColor: "#ef4444",
                                             paddingVertical: 10,
-                                            borderRadius: 8,
+                                            borderRadius: Radius.sm,
                                             alignItems: "center",
                                         }}
                                         onPress={() =>

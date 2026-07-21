@@ -24,6 +24,7 @@ import {
     endIapConnection,
     type IapPurchaseResult,
 } from '../services/iap/iapService';
+import { glassShadow, Radius, colors } from '../theme/tokens';
 
 const { width } = Dimensions.get('window');
 
@@ -210,7 +211,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                 <View style={[
                     styles.card,
                     {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+                        backgroundColor: colors(isDark).glass,
                         borderColor: recommended ? color : (isDark ? '#374151' : '#E5E7EB'),
                         borderWidth: recommended ? 2 : 1
                     }
@@ -241,9 +242,9 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                     {/* Content */}
                     <View style={styles.cardContent}>
                         <View style={styles.priceContainer}>
-                            <Text style={[styles.currency, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>$</Text>
-                            <Text style={[styles.price, { color: isDark ? '#F9FAFB' : '#111827' }]}>{price}</Text>
-                            <Text style={[styles.period, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>/mes</Text>
+                            <Text style={[styles.currency, { color: colors(isDark).textMuted }]}>$</Text>
+                            <Text style={[styles.price, { color: colors(isDark).text }]}>{price}</Text>
+                            <Text style={[styles.period, { color: colors(isDark).textMuted }]}>/mes</Text>
                         </View>
 
                         <View style={styles.divider} />
@@ -258,7 +259,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                                     <View style={[styles.checkCircle, { backgroundColor: color + '15' }]}>
                                         <Check size={14} color={color} strokeWidth={3} />
                                     </View>
-                                    <Text style={[styles.featureText, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>
+                                    <Text style={[styles.featureText, { color: colors(isDark).textMuted }]}>
                                         {feature}
                                     </Text>
                                 </Animated.View>
@@ -304,7 +305,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                     style={{ flex: 1 }}
                 />
                 {/* Decorative circles */}
-                <View style={[styles.circle, { top: -100, right: -100, backgroundColor: '#7C3AED', opacity: 0.1 }]} />
+                <View style={[styles.circle, { top: -100, right: -100, backgroundColor: '#2196F3', opacity: 0.1 }]} />
                 <View style={[styles.circle, { bottom: -100, left: -50, backgroundColor: '#EC4899', opacity: 0.1 }]} />
             </View>
 
@@ -321,10 +322,10 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                             <Star size={12} color="#F59E0B" fill="#F59E0B" />
                             <Text style={styles.headerTagText}>NIVEL SUPERIOR</Text>
                         </View>
-                        <Text style={[styles.headerTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+                        <Text style={[styles.headerTitle, { color: colors(isDark).text }]}>
                             Elige tu Potencial
                         </Text>
-                        <Text style={[styles.headerSubtitle, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                        <Text style={[styles.headerSubtitle, { color: colors(isDark).textMuted }]}>
                             Desbloquea beneficios exclusivos y lleva tu experiencia Ramgos al siguiente nivel.
                         </Text>
                     </Animated.View>
@@ -371,7 +372,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                             ) : (
                                 <RefreshCw size={16} color={isDark ? '#D1D5DB' : '#4B5563'} />
                             )}
-                            <Text style={[styles.restoreText, { color: isDark ? '#D1D5DB' : '#4B5563' }]}>
+                            <Text style={[styles.restoreText, { color: colors(isDark).textMuted }]}>
                                 {restoring ? 'Restaurando...' : 'Restaurar compras'}
                             </Text>
                         </TouchableOpacity>
@@ -396,7 +397,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         position: 'absolute',
         width: 400,
         height: 400,
-        borderRadius: 200,
+        borderRadius: Radius.full,
     },
     scrollContent: {
         padding: 24,
@@ -412,7 +413,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         marginBottom: 16,
         borderWidth: 1,
         borderColor: 'rgba(245, 158, 11, 0.3)'
@@ -440,13 +441,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 24,
     },
     cardContainer: {
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         shadowOffset: { width: 0, height: 10 },
         shadowRadius: 20,
         elevation: 8,
     },
     card: {
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         overflow: 'hidden',
     },
     recommendedBadge: {
@@ -455,13 +456,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         alignSelf: 'center',
         paddingHorizontal: 16,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         zIndex: 10,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-    },
+        ...glassShadow(isDark),},
     recommendedText: {
         color: isDark ? '#1F2937' : 'white',
         fontSize: 10,
@@ -477,7 +474,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     iconContainer: {
         width: 56,
         height: 56,
-        borderRadius: 28,
+        borderRadius: Radius['2xl'],
         backgroundColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -498,7 +495,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: isDark ? '#1F2937' : 'white',
         paddingHorizontal: 10,
         paddingVertical: 6,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     currentBadgeText: {
         color: isDark ? '#F9FAFB' : '#000',
@@ -549,7 +546,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     checkCircle: {
         width: 24,
         height: 24,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -561,17 +558,12 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     subscribeButton: {
         paddingVertical: 18,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4
-    },
+        ...glassShadow(isDark),},
     subscribeButtonText: {
         color: isDark ? '#1F2937' : 'white',
         fontSize: 18,
@@ -592,7 +584,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         marginTop: 24,
         paddingVertical: 12,
         paddingHorizontal: 20,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         backgroundColor: 'rgba(255,255,255,0.06)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',

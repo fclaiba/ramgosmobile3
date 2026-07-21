@@ -37,7 +37,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useFavorites } from '../contexts/FavoritesContext';
+import { useFavorites } from '../hooks/useFavorites';
 import { usePoints } from '../contexts/PointsContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -50,6 +50,8 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { Radius, colors } from '../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 const HERO_HEIGHT = 420;
@@ -101,7 +103,7 @@ const typeMeta = (type: string) => {
         case 'event': return { label: 'Evento', icon: Calendar, color: '#F59E0B', cta: 'Reservar', ctaSecondary: 'Ver detalles' };
         case 'bono': return { label: 'Bono', icon: Tag, color: '#10B981', cta: 'Comprar Bono', ctaSecondary: 'Ver bono' };
         case 'business': return { label: 'Negocio', icon: Store, color: '#EC4899', cta: 'Ver catálogo', ctaSecondary: 'Ver perfil' };
-        default: return { label: 'Producto', icon: ShoppingBag, color: '#8B5CF6', cta: 'Comprar ahora', ctaSecondary: 'Agregar al carrito' };
+        default: return { label: 'Producto', icon: ShoppingBag, color: '#4FC3F7', cta: 'Comprar ahora', ctaSecondary: 'Agregar al carrito' };
     }
 };
 
@@ -522,7 +524,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                                     icon={Truck}
                                     title="Envío calculado"
                                     subtitle="En checkout según tu ubicación"
-                                    color="#8B5CF6"
+                                    color="#4FC3F7"
                                     isDark={isDark}
                                 />
                                 {item.shippingProfile?.weightKg ? (
@@ -694,8 +696,8 @@ function ShippingCard({ icon: Icon, title, subtitle, color, isDark }: { icon: an
     const surface = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)';
     const border = isDark ? '#27272A' : '#E5E7EB';
     return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: border }}>
-            <View style={{ width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: `${color}15` }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: surface, borderRadius: Radius.lg, padding: 14, borderWidth: 1, borderColor: border }}>
+            <View style={{ width: 44, height: 44, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', backgroundColor: `${color}15` }}>
                 <Icon size={18} color={color} />
             </View>
             <View style={{ flex: 1 }}>
@@ -713,8 +715,8 @@ function getStyles(isDark: boolean, insets: any) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = isDark ? '#A78BFA' : '#7C3AED';
-    const primaryDarker = isDark ? '#8B5CF6' : '#6D28D9';
+    const primary = isDark ? '#5DD3F3' : '#2196F3';
+    const primaryDarker = isDark ? '#4FC3F7' : '#1565C0';
     const starColor = '#FBBF24';
 
     return StyleSheet.create({
@@ -753,7 +755,7 @@ function getStyles(isDark: boolean, insets: any) {
         glassBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             overflow: 'hidden',
             justifyContent: 'center',
             alignItems: 'center',
@@ -764,7 +766,7 @@ function getStyles(isDark: boolean, insets: any) {
             width: '100%',
             height: HERO_HEIGHT,
             position: 'relative',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
         },
         heroInner: {
             width: '100%',
@@ -797,7 +799,7 @@ function getStyles(isDark: boolean, insets: any) {
         paginationDot: {
             width: 8,
             height: 8,
-            borderRadius: 4,
+            borderRadius: Radius.sm,
             backgroundColor: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)',
         },
         paginationDotActive: {
@@ -811,7 +813,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: '#EF4444',
             paddingHorizontal: 12,
             paddingVertical: 6,
-            borderRadius: 12,
+            borderRadius: Radius.md,
         },
         heroDiscountText: {
             color: '#FFFFFF',
@@ -837,7 +839,7 @@ function getStyles(isDark: boolean, insets: any) {
             gap: 6,
             paddingHorizontal: 12,
             paddingVertical: 6,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
         },
         typeText: {
             fontSize: 12,
@@ -868,10 +870,10 @@ function getStyles(isDark: boolean, insets: any) {
         ratingBadge: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             paddingHorizontal: 10,
             paddingVertical: 6,
-            borderRadius: 12,
+            borderRadius: Radius.md,
         },
         ratingText: {
             fontSize: 14,
@@ -888,7 +890,7 @@ function getStyles(isDark: boolean, insets: any) {
         dot: {
             width: 4,
             height: 4,
-            borderRadius: 2,
+            borderRadius: Radius.sm,
             backgroundColor: muted,
             marginHorizontal: 12,
         },
@@ -927,7 +929,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: 'rgba(239, 68, 68, 0.12)',
             paddingHorizontal: 8,
             paddingVertical: 3,
-            borderRadius: 8,
+            borderRadius: Radius.sm,
         },
         discountBadgeText: {
             fontSize: 12,
@@ -944,7 +946,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#D1FAE5',
             paddingHorizontal: 14,
             paddingVertical: 10,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             alignItems: 'center',
         },
         bonoValueLabel: {
@@ -973,7 +975,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
             paddingHorizontal: 12,
             paddingVertical: 7,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
         },
         stockBadgeOut: {
             backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEE2E2',
@@ -990,15 +992,15 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 6,
-            backgroundColor: isDark ? 'rgba(139, 92, 246, 0.12)' : '#F3E8FF',
+            backgroundColor: isDark ? 'rgba(79, 195, 247, 0.12)' : '#F3E8FF',
             paddingHorizontal: 12,
             paddingVertical: 7,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
         },
         conditionText: {
             fontSize: 13,
             fontWeight: '700',
-            color: '#8B5CF6',
+            color: '#4FC3F7',
         },
 
         warningCard: {
@@ -1006,7 +1008,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: isDark ? 'rgba(180, 83, 9, 0.12)' : '#FFFBEB',
             borderWidth: 1,
             borderColor: isDark ? 'rgba(180, 83, 9, 0.25)' : '#FDE68A',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: 16,
             marginBottom: 24,
         },
@@ -1024,7 +1026,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         infoCard: {
             backgroundColor: surface,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 18,
             marginBottom: 24,
             borderWidth: 1,
@@ -1071,7 +1073,7 @@ function getStyles(isDark: boolean, insets: any) {
             alignItems: 'center',
             gap: 14,
             backgroundColor: surface,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: 14,
             borderWidth: 1,
             borderColor: border,
@@ -1079,7 +1081,7 @@ function getStyles(isDark: boolean, insets: any) {
         shippingIconBox: {
             width: 44,
             height: 44,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -1098,7 +1100,7 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: surface,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 16,
             marginBottom: 28,
             borderWidth: 1,
@@ -1107,7 +1109,7 @@ function getStyles(isDark: boolean, insets: any) {
         sellerAvatarWrap: {
             width: 60,
             height: 60,
-            borderRadius: 30,
+            borderRadius: Radius['2xl'],
             overflow: 'hidden',
             marginRight: 16,
         },
@@ -1116,7 +1118,7 @@ function getStyles(isDark: boolean, insets: any) {
             height: '100%',
         },
         sellerAvatarPlaceholder: {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -1155,7 +1157,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: surface,
             paddingHorizontal: 12,
             paddingVertical: 7,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             borderWidth: 1,
             borderColor: border,
         },
@@ -1168,7 +1170,7 @@ function getStyles(isDark: boolean, insets: any) {
         escrowCard: {
             flexDirection: 'row',
             backgroundColor: isDark ? 'rgba(37, 99, 235, 0.12)' : '#EFF6FF',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 18,
             marginBottom: 28,
             borderWidth: 1,
@@ -1208,7 +1210,7 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: 5,
             borderWidth: 1,
             borderColor: border,
@@ -1218,7 +1220,7 @@ function getStyles(isDark: boolean, insets: any) {
             height: 38,
             justifyContent: 'center',
             alignItems: 'center',
-            borderRadius: 12,
+            borderRadius: Radius.md,
         },
         qtyText: {
             fontSize: 17,
@@ -1237,7 +1239,7 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             paddingVertical: 14,
             gap: 6,
         },
@@ -1245,7 +1247,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: primary,
         },
         footerBtnSecondary: {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
         },
         footerBtnPrimaryText: {
             color: '#fff',
@@ -1253,7 +1255,7 @@ function getStyles(isDark: boolean, insets: any) {
             fontWeight: '800',
         },
         footerBtnSecondaryText: {
-            color: isDark ? '#E5E7EB' : '#374151',
+            color: colors(isDark).text,
             fontSize: 14,
             fontWeight: '700',
         },

@@ -110,7 +110,7 @@ def patch(text: str) -> tuple[str, dict[str, int]]:
 
     text = RE_BORDER.sub(border_sub, text)
 
-    text, n = RE_IOS.subn("#7C3AED", text)
+    text, n = RE_IOS.subn("#2196F3", text)
     c["blue"] = n
     return text, c
 

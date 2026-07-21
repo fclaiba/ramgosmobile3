@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useSocial, User } from '../../contexts/SocialContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CheckCircle2 } from 'lucide-react-native';
+import { Radius, colors } from '../../theme/tokens';
+
 
 interface UserListItemProps {
     user: User;
@@ -56,13 +58,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
         marginBottom: 1,
     },
     avatar: {
         width: 48,
         height: 48,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         backgroundColor: '#E5E7EB',
     },
     info: {
@@ -76,22 +78,22 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     name: {
         fontSize: 16,
         fontWeight: '600',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     username: {
         fontSize: 14,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     btn: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: '#7C3AED',
-        borderRadius: 20,
+        backgroundColor: '#2196F3',
+        borderRadius: Radius.xl,
     },
     btnFollowing: {
         backgroundColor: 'transparent',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     btnText: {
         fontSize: 14,
@@ -99,6 +101,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         color: '#fff',
     },
     btnTextFollowing: {
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
 });

@@ -11,6 +11,8 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { useTheme } from '../contexts/ThemeContext';
 import { getArticleById, type HelpArticle } from '../data/helpArticles';
+import { Radius, colors } from '../theme/tokens';
+
 
 type Block =
     | { kind: 'heading'; text: string }
@@ -83,13 +85,13 @@ const RichText = ({ text, isDark }: { text: string; isDark: boolean }) => {
         remaining = remaining.slice(match.index + token.length);
     }
     return (
-        <Text style={{ color: isDark ? '#E5E7EB' : '#1F2937', fontSize: 15, lineHeight: 22 }}>
+        <Text style={{ color: colors(isDark).text, fontSize: 15, lineHeight: 22 }}>
             {parts.map((p, idx) => {
                 if (p.kind === 'bold') {
                     return (
                         <Text
                             key={idx}
-                            style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' }}
+                            style={{ fontWeight: '700', color: colors(isDark).text }}
                         >
                             {p.value}
                         </Text>
@@ -101,10 +103,10 @@ const RichText = ({ text, isDark }: { text: string; isDark: boolean }) => {
                             key={idx}
                             style={{
                                 fontFamily: 'monospace',
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-                                color: '#7C3AED',
+                                backgroundColor: colors(isDark).glass,
+                                color: '#2196F3',
                                 paddingHorizontal: 4,
-                                borderRadius: 4,
+                                borderRadius: Radius.sm,
                             }}
                         >
                             {p.value}
@@ -200,10 +202,10 @@ export default function HelpArticleDetailScreen({ route, navigation }: any) {
 
 const getStyles = (isDark: boolean) =>
     StyleSheet.create({
-        container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+        container: { flex: 1, backgroundColor: colors(isDark).bg },
         content: { padding: 20, paddingBottom: 40, gap: 12 },
         heading: {
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
             fontSize: 18,
             fontWeight: '700',
             marginTop: 8,
@@ -212,14 +214,14 @@ const getStyles = (isDark: boolean) =>
         list: { gap: 8, paddingLeft: 4, paddingVertical: 4 },
         listItem: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
         bullet: {
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
             fontSize: 15,
             lineHeight: 22,
             minWidth: 18,
         },
         emptyBox: { padding: 30, alignItems: 'center' },
         emptyText: {
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
             textAlign: 'center',
             fontSize: 14,
         },

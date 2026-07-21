@@ -10,6 +10,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 import { useToast } from '../../contexts/ToastContext';
+import { Radius, colors } from '../../theme/tokens';
+
 
 export const CreatePost = ({ onClose }: { onClose: () => void }) => {
     const { currentUser, createPost } = useSocial();
@@ -144,28 +146,28 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         height: '90%'
     },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     closeBtn: { padding: 4 },
-    title: { fontSize: 16, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    postBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    postBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    title: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text },
+    postBtn: { backgroundColor: '#2196F3', paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.xl },
+    postBtnDisabled: { backgroundColor: colors(isDark).glass },
     postBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
     postBtnTextDisabled: { color: '#9CA3AF' },
 
     content: { padding: 20, flex: 1 },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-    userName: { fontWeight: 'bold', fontSize: 15, color: isDark ? '#F9FAFB' : '#111827' },
-    input: { fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', minHeight: 120, flex: 1 },
+    userName: { fontWeight: 'bold', fontSize: 15, color: colors(isDark).text },
+    input: { fontSize: 16, color: colors(isDark).text, minHeight: 120, flex: 1 },
 
-    footer: { padding: 16, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', marginBottom: 20 },
-    mediaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
-    mediaText: { color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '500' },
+    footer: { padding: 16, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', marginBottom: 20 },
+    mediaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
+    mediaText: { color: colors(isDark).textMuted, fontWeight: '500' },
     imagePreview: { marginTop: 16, position: 'relative' },
-    preview: { width: '100%', height: 200, borderRadius: 12 },
-    removeImage: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+    preview: { width: '100%', height: 200, borderRadius: Radius.md },
+    removeImage: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: Radius.md, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
 });

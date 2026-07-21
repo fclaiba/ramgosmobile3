@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { colors } from '../theme/tokens';
+
 
 const MapView = (props: any) => {
     const { colorScheme } = useTheme();
@@ -23,7 +25,7 @@ export default MapView;
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,

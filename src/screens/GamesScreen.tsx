@@ -20,6 +20,8 @@ import { FlappyBird } from '../components/games/FlappyBird';
 import { GameWrapper } from '../components/games/GameWrapper';
 import type { GameId } from '../components/games/gameContracts';
 import { TierProgressBar } from '../components/ui/TierProgressBar';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const ARCADE_REWARD_GAMES = new Set(['dino', 'duck', 'fruit', 'memory', 'flappy']);
 
@@ -29,7 +31,7 @@ const GAMES = [
         title: 'Dino Run',
         description: 'Corre y salta obstáculos en este clásico infinito.',
         icon: <Dna size={32} color="#fff" />,
-        color: ['#8B5CF6', '#6D28D9'],
+        color: ['#4FC3F7', '#1565C0'],
         image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=60',
         component: DinoGame
     },
@@ -182,7 +184,7 @@ export default function GamesScreen() {
                     onPress={() => navigation.navigate('MiMascota')}
                 >
                     <LinearGradient
-                        colors={['#8B5CF6', '#7C3AED']}
+                        colors={['#4FC3F7', '#2196F3']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.petGradient}
@@ -210,7 +212,7 @@ export default function GamesScreen() {
                             <ImageBackground
                                 source={{ uri: game.image }}
                                 style={styles.gameBg}
-                                imageStyle={{ borderRadius: 16 }}
+                                imageStyle={{ borderRadius: Radius.lg }}
                             >
                                 <LinearGradient
                                     colors={['transparent', 'rgba(0,0,0,0.9)']}
@@ -248,7 +250,7 @@ export default function GamesScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
     },
     content: {
         padding: 16,
@@ -259,7 +261,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         gap: 6,
     },
     pointsText: {
@@ -273,12 +275,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     heroTitle: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 4,
     },
     heroSubtitle: {
         fontSize: 16,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     section: {
         marginBottom: 32,
@@ -286,7 +288,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gridTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 16,
     },
     grid: {
@@ -294,14 +296,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     gameCard: {
         height: 160,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         marginBottom: 16,
         // Basic shadow for light mode
-        shadowColor: isDark ? 'transparent' : '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
+        ...glassShadow(isDark),
     },
     gameBg: {
         flex: 1,
@@ -312,7 +310,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         height: '100%',
         justifyContent: 'flex-end', // Fallback
         backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.7)',
@@ -320,7 +318,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gameIcon: {
         width: 48,
         height: 48,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -337,7 +335,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     playButton: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
@@ -350,7 +348,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     petCard: {
         marginBottom: 24,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         overflow: 'hidden',
     },
     petGradient: {
@@ -386,7 +384,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     closeBtn: {
         padding: 8,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         backgroundColor: isDark ? '#333' : '#F3F4F6',
     },
     modalTitle: {

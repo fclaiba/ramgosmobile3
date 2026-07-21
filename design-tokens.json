@@ -3,10 +3,10 @@
   "version": "2.0.0",
   "direction": "refined-utilitarian-marketplace",
   "brand": {
-    "primary": "#7C3AED",
-    "primaryDark": "#6D28D9",
-    "primaryLight": "#8B5CF6",
-    "primarySoft": "#A78BFA",
+    "primary": "#2196F3",
+    "primaryDark": "#1565C0",
+    "primaryLight": "#4FC3F7",
+    "primarySoft": "#5DD3F3",
     "success": "#10B981",
     "danger": "#EF4444",
     "warning": "#F59E0B"
@@ -23,7 +23,7 @@
       "text": "#18181B",
       "textMuted": "#71717A",
       "border": "rgba(0,0,0,0.08)",
-      "primary": "#7C3AED"
+      "primary": "#2196F3"
     },
     "dark": {
       "bg": "#09090B",
@@ -36,7 +36,7 @@
       "text": "#FAFAFA",
       "textMuted": "#A1A1AA",
       "border": "rgba(255,255,255,0.10)",
-      "primary": "#7C3AED"
+      "primary": "#2196F3"
     }
   },
   "space": [0, 4, 8, 12, 16, 20, 24, 32, 40, 48],

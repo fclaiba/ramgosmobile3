@@ -22,7 +22,7 @@ export function GlassScreen({ children, style }: Props) {
                 colors={atmosphere(isDark)}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
             />
             <View style={styles.content}>{children}</View>
         </View>

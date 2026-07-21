@@ -7,6 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent, GameThemeTokens } from './gameContracts';
 import { useTheme } from '../../contexts/ThemeContext';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 const EMOJIS = ['🐟', '🐁', '🧶', '🥛', '🐾', '📦', '🧸', '🔔', '🍗', '🦋'];
 const getRandomLifeInterval = () => (Math.random() < 0.5 ? 2 : 3);
@@ -385,7 +387,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
         width: '100%',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
     header: {
         flexDirection: 'row',
@@ -396,10 +398,10 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     statBox: {
         alignItems: 'center',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         paddingHorizontal: 12,
         paddingVertical: 4,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         minWidth: 60
     },
     statLabel: {
@@ -410,7 +412,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     statValue: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#7C3AED'
+        color: '#2196F3'
     },
     gridContainer: {
         flex: 1,
@@ -430,25 +432,21 @@ const getStyles = (isDark: any) => StyleSheet.create({
         width: '100%',
         height: '100%',
         position: 'absolute',
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         justifyContent: 'center',
         alignItems: 'center',
         backfaceVisibility: 'hidden',
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 3,
+        ...glassShadow(isDark),
     },
     cardBack: {
-        backgroundColor: '#8B5CF6',
+        backgroundColor: '#4FC3F7',
         borderWidth: 2,
-        borderColor: '#7C3AED'
+        borderColor: '#2196F3'
     },
     cardFront: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderWidth: 2,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)'
     },
     emoji: {
         fontSize: 28
@@ -463,20 +461,18 @@ const getStyles = (isDark: any) => StyleSheet.create({
     title: {
         fontSize: 40,
         fontWeight: '900',
-        color: '#7C3AED',
+        color: '#2196F3',
         marginBottom: 20
     },
     startBtn: {
         flexDirection: 'row',
-        backgroundColor: '#7C3AED',
+        backgroundColor: '#2196F3',
         paddingHorizontal: 24,
         paddingVertical: 12,
-        borderRadius: 30,
+        borderRadius: Radius['2xl'],
         alignItems: 'center',
         gap: 8,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        elevation: 5
-    },
+        ...glassShadow(isDark),},
     btnText: {
         color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
@@ -508,7 +504,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#F59E0B',
         paddingHorizontal: 20,
         paddingVertical: 10,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         alignItems: 'center',
         gap: 8
     },

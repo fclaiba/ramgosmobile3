@@ -28,6 +28,7 @@ import {
     type HelpCategoryId,
     type HelpArticle,
 } from '../data/helpArticles';
+import { glassShadow, Radius, colors } from '../theme/tokens';
 
 const CATEGORY_VISUAL: Record<
     HelpCategoryId,
@@ -239,13 +240,13 @@ const ArticleRow = ({
 
 const getStyles = (isDark: boolean) =>
     StyleSheet.create({
-        container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+        container: { flex: 1, backgroundColor: colors(isDark).bg },
         searchContainer: { padding: 16, paddingBottom: 0 },
         searchBar: {
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: isDark ? '#1F2937' : '#F0F0F0',
-            borderRadius: 12,
+            borderRadius: Radius.md,
             paddingHorizontal: 12,
             height: 44,
         },
@@ -254,16 +255,14 @@ const getStyles = (isDark: boolean) =>
         quickAction: { flex: 1 },
         quickActionCard: {
             borderWidth: 0,
-            shadowColor: isDark ? '#F9FAFB' : '#000',
-            shadowOpacity: 0.1,
-            elevation: 2,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            ...glassShadow(isDark),
+            backgroundColor: colors(isDark).glass,
         },
         quickActionContent: { alignItems: 'center', padding: 16 },
         iconContainer: {
             width: 48,
             height: 48,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 8,
@@ -285,7 +284,7 @@ const getStyles = (isDark: boolean) =>
         categoryHeaderIcon: {
             width: 32,
             height: 32,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
         },
@@ -296,16 +295,14 @@ const getStyles = (isDark: boolean) =>
         },
         categoryHeaderDesc: {
             fontSize: 12,
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
             marginTop: 2,
         },
         articleRow: { marginBottom: 8 },
         articleCard: {
             borderWidth: 0,
-            shadowColor: isDark ? '#F9FAFB' : '#000',
-            shadowOpacity: 0.05,
-            elevation: 1,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            ...glassShadow(isDark),
+            backgroundColor: colors(isDark).glass,
         },
         articleContent: {
             flexDirection: 'row',
@@ -314,14 +311,14 @@ const getStyles = (isDark: boolean) =>
             padding: 14,
             gap: 10,
         },
-        articleTitle: { fontSize: 14, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827' },
+        articleTitle: { fontSize: 14, fontWeight: '600', color: colors(isDark).text },
         articleSummary: {
             fontSize: 12,
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
             lineHeight: 16,
         },
         emptyHint: {
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
             fontSize: 13,
             textAlign: 'center',
             paddingVertical: 24,

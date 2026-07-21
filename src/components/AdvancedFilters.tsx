@@ -14,6 +14,8 @@ export interface FilterState {
 }
 
 import { UNIFIED_CATEGORIES } from '../config/UnifiedCategories';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const SORT_OPTIONS = [
     { id: 'relevancia', label: 'Relevancia' },
@@ -203,35 +205,35 @@ export const AdvancedFilters = ({ open, onOpenChange, onApplyFilters, currentFil
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: { backgroundColor: isDark ? '#1F2937' : 'white' },
-    header: { paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827' },
-    closeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center' },
+    header: { paddingHorizontal: 24, paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    headerTitle: { fontSize: 20, fontWeight: 'bold', color: colors(isDark).text },
+    closeBtn: { width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center' },
     scrollContent: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
     section: { marginBottom: 32 },
-    sectionTitle: { fontSize: 13, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-    subSectionTitle: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#4B5563', marginBottom: 12, marginTop: 4 },
+    sectionTitle: { fontSize: 13, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+    subSectionTitle: { fontSize: 13, fontWeight: '600', color: colors(isDark).textMuted, marginBottom: 12, marginTop: 4 },
     chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
-    chipInactive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
-    chipActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+    chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.md, borderWidth: 1, flexDirection: 'row', alignItems: 'center' },
+    chipInactive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    chipActive: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
     chipText: { fontSize: 13, fontWeight: '600' },
-    chipTextInactive: { color: isDark ? '#D1D5DB' : '#4B5563' },
+    chipTextInactive: { color: colors(isDark).textMuted },
     chipTextActive: { color: '#fff' },
 
     priceRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-    priceInput: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderRadius: 12, paddingHorizontal: 16, height: 48 },
+    priceInput: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', borderRadius: Radius.md, paddingHorizontal: 16, height: 48 },
     currency: { color: isDark ? '#9CA3AF' : '#9CA3AF', marginRight: 8, fontSize: 15 },
-    input: { flex: 1, fontSize: 15, color: isDark ? '#F9FAFB' : '#111827', fontWeight: '600' },
+    input: { flex: 1, fontSize: 15, color: colors(isDark).text, fontWeight: '600' },
     priceDivider: { width: 12, height: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
 
-    ratingChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', gap: 6 },
-    ratingChipActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
-    ratingText: { fontSize: 14, fontWeight: '600', color: isDark ? '#D1D5DB' : '#4B5563' },
+    ratingChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', gap: 6 },
+    ratingChipActive: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
+    ratingText: { fontSize: 14, fontWeight: '600', color: colors(isDark).textMuted },
     ratingTextActive: { color: '#fff' },
 
-    footer: { flexDirection: 'row', padding: 24, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', gap: 16 },
-    clearBtn: { paddingVertical: 14, paddingHorizontal: 24, borderRadius: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', alignItems: 'center' },
-    clearBtnText: { color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '600', fontSize: 15 },
-    applyBtn: { flex: 1, backgroundColor: isDark ? '#7C3AED' : '#111827', borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+    footer: { flexDirection: 'row', padding: 24, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', gap: 16 },
+    clearBtn: { paddingVertical: 14, paddingHorizontal: 24, borderRadius: Radius.lg, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', alignItems: 'center' },
+    clearBtnText: { color: colors(isDark).textMuted, fontWeight: '600', fontSize: 15 },
+    applyBtn: { flex: 1, backgroundColor: isDark ? '#2196F3' : '#111827', borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, ...glassShadow(isDark),},
     applyBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

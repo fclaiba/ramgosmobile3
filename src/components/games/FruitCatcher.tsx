@@ -9,6 +9,8 @@ import { useGameLevel } from './useGameLevel';
 import { GAME_LEVEL_THRESHOLDS } from './gameDifficultyConfig';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GameThemeTokens } from './gameContracts';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 const BASKET_WIDTH = 80;
 const FRUIT_SIZE = 40;
@@ -454,7 +456,7 @@ export const FruitCatcher = (props: FruitCatcherProps) => {
 const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
     },
     header: {
         flexDirection: 'row',
@@ -524,15 +526,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#DB2777',
         paddingHorizontal: 32,
         paddingVertical: 16,
-        borderRadius: 32,
+        borderRadius: Radius['2xl'],
         alignItems: 'center',
         gap: 8,
         elevation: 5,
-        shadowColor: '#DB2777',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-    },
+        ...glassShadow(isDark),},
     playText: {
         color: isDark ? '#09090B' : '#FAFAFA',
         fontWeight: 'bold',
@@ -541,7 +539,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     instructions: {
         marginTop: 20,
         padding: 10,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         backgroundColor: '#FFF1F2',
     },
     instructionText: {
@@ -565,7 +563,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#DB2777',
         paddingHorizontal: 24,
         paddingVertical: 12,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         gap: 8,
     },
     btnText: {

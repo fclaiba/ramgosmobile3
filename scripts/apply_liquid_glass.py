@@ -2,7 +2,7 @@
 """
 apply_liquid_glass.py — elevate Ramgos RN frontend toward Liquid Glass + brand.
 
-Brand (kept): #7C3AED / #8B5CF6 / #6D28D9
+Brand (kept): #2196F3 / #4FC3F7 / #1565C0
 Design ref: .agents/skills/liquid-glass-design (blur, tint, interactive glass)
 
 Usage:
@@ -33,8 +33,8 @@ SKIP_FILES = {
 
 # iOS system blue → Ramgos violet
 BRAND_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"#007AFF", re.I), "#7C3AED"),
-    (re.compile(r"#0A84FF", re.I), "#8B5CF6"),
+    (re.compile(r"#007AFF", re.I), "#2196F3"),
+    (re.compile(r"#0A84FF", re.I), "#4FC3F7"),
     (re.compile(r"rgb\(\s*0\s*,\s*122\s*,\s*255\s*\)", re.I), "rgb(124, 58, 237)"),
 ]
 
@@ -199,7 +199,7 @@ def main() -> int:
             f"- Files scanned: {len(files)}\n",
             f"- Glass-aware: {sum(1 for h in hits if h.has_glass)}\n",
             f"- Actionable: {len(actionable)}\n",
-            "\n## Brand\nKeep `#7C3AED` / `#8B5CF6`. Replace `#007AFF`.\n",
+            "\n## Brand\nKeep `#2196F3` / `#4FC3F7`. Replace `#007AFF`.\n",
             "\n## How to adopt\n",
             "```tsx\nimport { GlassSurface } from '../components/ui/GlassSurface';\n",
             "<GlassSurface intensity=\"regular\">{...}</GlassSurface>\n```\n",

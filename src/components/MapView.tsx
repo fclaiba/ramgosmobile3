@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { Radius } from '../theme/tokens';
+
 
 export const MapView = ({ items, radius, onItemClick }: any) => {
     const { colorScheme } = useTheme();
@@ -26,7 +28,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     container: {
         height: 400,
         backgroundColor: '#e1e1e1',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden'

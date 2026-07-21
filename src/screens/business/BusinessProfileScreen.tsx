@@ -17,6 +17,8 @@ import { useBusiness, BranchInput, CatalogItemInput } from '../../contexts/Busin
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Radius, colors } from '../../theme/tokens';
+
 
 const formatCurrency = (value: number) =>
     `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -588,13 +590,13 @@ export default function BusinessProfileScreen({ navigation }: any) {
 const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f8fafc' },
     contentContainer: { padding: 16, paddingBottom: 48, gap: 16 },
-    sectionCard: { padding: 18, borderRadius: 18, backgroundColor: isDark ? '#09090B' : '#FAFAFA', gap: 12 },
+    sectionCard: { padding: 18, borderRadius: Radius.lg, backgroundColor: colors(isDark).bg, gap: 12 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
     sectionHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
     sectionIcon: {
         width: 44,
         height: 44,
-        borderRadius: 14,
+        borderRadius: Radius.md,
         backgroundColor: '#f1f5f9',
         alignItems: 'center',
         justifyContent: 'center',
@@ -610,7 +612,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     branchCard: {
         borderWidth: 1,
         borderColor: '#e2e8f0',
-        borderRadius: 14,
+        borderRadius: Radius.md,
         padding: 14,
         marginTop: 10,
         gap: 8,
@@ -628,7 +630,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 999,
+        borderRadius: Radius.full,
     },
     branchToggleText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '700', fontSize: 12 },
     catalogSummary: { flexDirection: 'row', gap: 8 },
@@ -649,11 +651,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
         alignSelf: 'center',
         paddingHorizontal: 14,
         paddingVertical: 8,
-        borderRadius: 999,
+        borderRadius: Radius.full,
     },
     catalogToggleText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: '700', fontSize: 12 },
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         height: '90%',
@@ -675,8 +677,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
         padding: 24,
     },
     modalCard: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 20,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         padding: 20,
         gap: 12,
     },
@@ -687,7 +689,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     inputLabel: { fontSize: 13, fontWeight: '600', color: '#475569' },
     input: {
         backgroundColor: '#f8fafc',
-        borderRadius: 10,
+        borderRadius: Radius.md,
         borderWidth: 1,
         borderColor: '#e2e8f0',
         paddingHorizontal: 12,
@@ -701,7 +703,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         borderTopColor: '#e2e8f0',
         paddingHorizontal: 24,
         paddingTop: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
     modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
 });

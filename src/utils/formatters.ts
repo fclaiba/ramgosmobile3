@@ -37,8 +37,8 @@ export const getCouponStatusStyles = (status: Coupon["status"], isDark: boolean)
             label: "Pausado",
         },
         draft: {
-            background: isDark ? "rgba(124, 58, 237, 0.2)" : "#F5F3FF",
-            color: isDark ? "#A78BFA" : "#7C3AED",
+            background: isDark ? "rgba(33, 150, 243, 0.2)" : "#F5F3FF",
+            color: isDark ? "#5DD3F3" : "#2196F3",
             label: "Borrador",
         },
     };

@@ -18,6 +18,8 @@ import { X, Clock, AlertCircle, Copy, CheckCircle2, Ticket, ShieldCheck } from '
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { glassShadow, Radius } from '../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 
@@ -146,7 +148,7 @@ export default function BonusQRScreen() {
                     <BlurView
                         intensity={isDark ? 40 : 55}
                         tint={isDark ? 'dark' : 'light'}
-                        style={StyleSheet.absoluteFillObject}
+                        style={StyleSheet.absoluteFill}
                     />
                 ) : null}
                 <X size={22} color={isDark ? '#F4F4F5' : '#18181B'} />
@@ -268,7 +270,7 @@ function getStyles(isDark: boolean, insets: any) {
     const text = isDark ? '#FAFAFA' : '#09090B';
     const muted = isDark ? '#A1A1AA' : '#71717A';
     const canvas = isDark ? '#09090B' : '#FAFAFA';
-    const accent = '#7C3AED';
+    const accent = '#2196F3';
 
     return StyleSheet.create({
         container: { flex: 1 },
@@ -278,7 +280,7 @@ function getStyles(isDark: boolean, insets: any) {
             right: 20,
             width: 44,
             height: 44,
-            borderRadius: 22,
+            borderRadius: Radius.xl,
             overflow: 'hidden',
             backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)',
             borderWidth: 1,
@@ -298,11 +300,7 @@ function getStyles(isDark: boolean, insets: any) {
         ticketContainer: {
             width: '100%',
             maxWidth: 360,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 16 },
-            shadowOpacity: isDark ? 0.45 : 0.12,
-            shadowRadius: 28,
-            elevation: 12,
+            ...glassShadow(isDark),
         },
         ticketSection: {
             backgroundColor: surface,
@@ -330,15 +328,15 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
             paddingHorizontal: 14,
             paddingVertical: 7,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             marginBottom: 16,
         },
-        pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 8 },
+        pulseDot: { width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#10B981', marginRight: 8 },
         badgeText: { color: '#10B981', fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
         businessIconWrap: {
             width: 56,
             height: 56,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             backgroundColor: accent,
             justifyContent: 'center',
             alignItems: 'center',
@@ -362,7 +360,7 @@ function getStyles(isDark: boolean, insets: any) {
         creditRow: {
             flexDirection: 'row',
             width: '100%',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(9,9,11,0.03)',
             paddingVertical: 14,
             marginBottom: 10,
@@ -401,7 +399,7 @@ function getStyles(isDark: boolean, insets: any) {
             top: -12,
             width: 24,
             height: 24,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             backgroundColor: canvas,
         },
         circleRight: {
@@ -410,21 +408,21 @@ function getStyles(isDark: boolean, insets: any) {
             top: -12,
             width: 24,
             height: 24,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             backgroundColor: canvas,
         },
 
         qrWrapper: {
             padding: 14,
             backgroundColor: '#FFFFFF',
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             marginBottom: 20,
             borderWidth: 1,
             borderColor: isDark ? '#E4E4E7' : border,
             alignSelf: 'center',
         },
         qrInner: { justifyContent: 'center', alignItems: 'center' },
-        expiredInner: { backgroundColor: '#FEF2F2', borderRadius: 16 },
+        expiredInner: { backgroundColor: '#FEF2F2', borderRadius: Radius.lg },
         expiredText: { marginTop: 12, fontSize: 16, fontWeight: 'bold', color: '#EF4444' },
 
         codeLabel: {
@@ -442,7 +440,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(9,9,11,0.03)',
             borderWidth: 1,
             borderColor: border,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             paddingVertical: 14,
             paddingHorizontal: 16,
             marginBottom: 14,
@@ -465,7 +463,7 @@ function getStyles(isDark: boolean, insets: any) {
             backgroundColor: isDark ? 'rgba(217, 119, 6, 0.12)' : '#FFFBEB',
             paddingHorizontal: 16,
             paddingVertical: 9,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             marginBottom: 12,
         },
         timerText: { marginLeft: 8, fontSize: 13, fontWeight: '700', color: '#D97706' },

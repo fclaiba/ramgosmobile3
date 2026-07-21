@@ -13,6 +13,8 @@ import { Check, CreditCard, Pencil, Plus, Trash2, X } from 'lucide-react-native'
 import { STRIPE_TEST_CARDS, formatCardNumber, type TestCard } from '../testCards';
 import { glassTokens } from '../../utils/glass';
 import { useToast } from '../../contexts/ToastContext';
+import { Radius, colors } from '../../theme/tokens';
+
 
 const STORAGE_KEY = '@ramgos/user_payment_cards';
 
@@ -51,16 +53,18 @@ type Props = {
     isDark?: boolean;
 };
 
-export function SimulatedCardsPanel({
-    selectedId,
-    onSelect,
-    onSelectedCard,
-    accent = '#E31C3D',
-    textColor = '#0F172A',
-    muted = '#64748B',
-    isDark = false,
-}: Props) {
+export function SimulatedCardsPanel(props: Props) {
+    const {
+        selectedId,
+        onSelect,
+        onSelectedCard,
+        isDark = false,
+    } = props;
     const glass = glassTokens(isDark);
+    const c = colors(isDark);
+    const accent = props.accent || c.primary;
+    const textColor = props.textColor || c.text;
+    const muted = props.muted || c.textMuted;
     const { show } = useToast();
     const [custom, setCustom] = useState<WalletCard[]>([]);
     const [mode, setMode] = useState<'idle' | 'add' | 'edit'>('idle');
@@ -326,22 +330,22 @@ const styles = StyleSheet.create({
     cardTile: {
         width: 140,
         height: 100,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 12,
         justifyContent: 'space-between',
     },
     cardTileTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     cardBrand: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-    check: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    check: { width: 20, height: 20, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
     cardLast4: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
     cardLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '600' },
     cardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 },
     actionsOverlay: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    iconBtn: { padding: 4, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 6 },
+    iconBtn: { padding: 4, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: Radius.sm },
     addTile: {
         width: 120,
         height: 100,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         borderWidth: 1.5,
         borderStyle: 'dashed',
         alignItems: 'center',
@@ -349,22 +353,22 @@ const styles = StyleSheet.create({
         gap: 6,
         padding: 10,
     },
-    addCircle: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+    addCircle: { width: 34, height: 34, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
     addText: { fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 15 },
-    form: { borderRadius: 16, borderWidth: 1, padding: 14, gap: 8 },
+    form: { borderRadius: Radius.lg, borderWidth: 1, padding: 14, gap: 8 },
     formHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     formTitle: { fontSize: 15, fontWeight: '800' },
     hint: { fontSize: 11, fontWeight: '500', marginBottom: 4 },
     fieldLabel: { fontSize: 11, fontWeight: '700', marginTop: 4 },
     input: {
         borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         paddingHorizontal: 12,
         paddingVertical: Platform.OS === 'web' ? 10 : 12,
         fontSize: 15,
         fontWeight: '600',
     },
     row: { flexDirection: 'row', gap: 10 },
-    saveBtn: { height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+    saveBtn: { height: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
     saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

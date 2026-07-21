@@ -7,6 +7,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { CheckCircle, Circle, MapPin, Calendar, Clock, ChevronDown } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Radius, colors } from '../../theme/tokens';
+
 
 export type ListingType = 'product' | 'service' | 'event' | 'bono';
 
@@ -124,8 +126,8 @@ export const UnifiedListingForm = ({ type, initialData, onSubmit, onCancel, isLo
                                     {/* For Bono, price is automatically 50% of value */}
                                     <View style={styles.inputGroup}>
                                         <Text style={styles.label}>Precio a Cobrar (50%)</Text>
-                                        <View style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', justifyContent: 'center' }]}>
-                                            <Text style={{ color: isDark ? '#D1D5DB' : '#6B7280' }}>
+                                        <View style={[styles.input, { backgroundColor: colors(isDark).glass, justifyContent: 'center' }]}>
+                                            <Text style={{ color: colors(isDark).textMuted }}>
                                                 ${formData.price || '0.00'}
                                             </Text>
                                         </View>
@@ -253,10 +255,10 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
     },
     card: {
         padding: 24,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
@@ -269,11 +271,11 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
     headerTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     headerSubtitle: {
         fontSize: 14,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
         marginTop: 4,
     },
     grid: {
@@ -295,16 +297,16 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
     label: {
         fontSize: 14,
         fontWeight: '600',
-        color: isDark ? '#E5E7EB' : '#374151',
+        color: colors(isDark).text,
         marginBottom: 8,
     },
     input: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        borderRadius: 12,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        borderRadius: Radius.md,
         padding: 12,
-        color: isDark ? '#FFFFFF' : '#111827',
+        color: colors(isDark).text,
         fontSize: 16,
     },
     textArea: {
@@ -316,8 +318,8 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         gap: 12,
     },
     submitBtn: {
-        backgroundColor: '#7C3AED', // Premium Purple
-        borderRadius: 12,
+        backgroundColor: '#2196F3', // Premium Purple
+        borderRadius: Radius.md,
         paddingVertical: 16,
     },
     submitText: {
@@ -327,23 +329,23 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         textAlign: 'center',
     },
     cancelBtn: {
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     cancelText: {
-        color: isDark ? '#9CA3AF' : '#4B5563',
+        color: colors(isDark).textMuted,
         textAlign: 'center',
     },
     toggleRow: {
         flexDirection: 'row',
         backgroundColor: isDark ? '#111827' : '#F3F4F6',
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         padding: 4,
     },
     toggleBtn: {
         flex: 1,
         paddingVertical: 8,
         alignItems: 'center',
-        borderRadius: 6,
+        borderRadius: Radius.sm,
     },
     toggleBtnActive: {
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
@@ -356,7 +358,7 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
         color: isDark ? '#6B7280' : '#9CA3AF',
     },
     toggleTextActive: {
-        color: '#7C3AED',
+        color: '#2196F3',
     },
     toggleRowSimple: {
         flexDirection: 'row',
@@ -365,14 +367,14 @@ const getStyles = (isDark: boolean, isMobile: boolean) => StyleSheet.create({
     chip: {
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.xl,
+        backgroundColor: colors(isDark).glass,
     },
     chipActive: {
-        backgroundColor: '#7C3AED',
+        backgroundColor: '#2196F3',
     },
     chipText: {
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         fontWeight: '600',
     },
     chipTextActive: {

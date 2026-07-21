@@ -67,6 +67,8 @@ const TABS: Array<{ id: DashboardTab; label: string }> = [
 
 import { formatCurrency, formatDateShort, getCouponStatusStyles } from "../utils/formatters";
 import { glassTokens, glassGradient } from "../utils/glass";
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function BusinessDashboardScreen({
   isTabMode,
@@ -401,7 +403,7 @@ export default function BusinessDashboardScreen({
         label: "Ingresos Hoy",
         value: formatCurrency(metrics.summary.revenueToday),
         icon: DollarSign,
-        colors: ["#7C3AED", "#C026D3"] as const,
+        colors: ["#2196F3", "#C026D3"] as const,
       },
       {
         id: "redeemedToday",
@@ -840,7 +842,7 @@ export default function BusinessDashboardScreen({
                 style={{
                   backgroundColor: isDark ? "#0f172a" : "#f0fdf4",
                   padding: 10,
-                  borderRadius: 8,
+                  borderRadius: Radius.sm,
                   marginBottom: 12,
                   borderWidth: 1,
                   borderColor: "#16a34a",
@@ -925,7 +927,7 @@ const getStyles = (isDark: boolean) => {
   } as const;
 
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     content: { padding: 16, paddingBottom: 100 },
     page: { width: "100%", alignSelf: "center", maxWidth: 980 },
 
@@ -933,7 +935,7 @@ const getStyles = (isDark: boolean) => {
     scanBtn: {
       width: 36,
       height: 36,
-      borderRadius: 18,
+      borderRadius: Radius.lg,
       backgroundColor: isDark ? "#1F2937" : "#111827",
       alignItems: "center",
       justifyContent: "center",
@@ -944,7 +946,7 @@ const getStyles = (isDark: boolean) => {
       backgroundColor: "#2563EB",
       paddingHorizontal: 12,
       height: 36,
-      borderRadius: 18,
+      borderRadius: Radius.lg,
       gap: 4,
     },
     createBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
@@ -955,14 +957,14 @@ const getStyles = (isDark: boolean) => {
       alignItems: "center",
       gap: 12,
       padding: 12,
-      borderRadius: 12,
+      borderRadius: Radius.md,
       marginBottom: 20,
       borderWidth: 1,
     },
     kycIcon: {
       width: 32,
       height: 32,
-      borderRadius: 16,
+      borderRadius: Radius.lg,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -972,7 +974,7 @@ const getStyles = (isDark: boolean) => {
     /* Tabs */
     tabsContainer: {
       flexDirection: "row",
-      borderRadius: 14,
+      borderRadius: Radius.md,
       padding: 4,
       marginBottom: 20,
       ...glassCard,
@@ -981,7 +983,7 @@ const getStyles = (isDark: boolean) => {
       flex: 1,
       paddingVertical: 10,
       alignItems: "center",
-      borderRadius: 8,
+      borderRadius: Radius.sm,
     },
     tabActive: { backgroundColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.95)" },
     tabText: {
@@ -996,7 +998,7 @@ const getStyles = (isDark: boolean) => {
     /* Grid */
     grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
     summaryCard: {
-      borderRadius: 20,
+      borderRadius: Radius.xl,
       overflow: "hidden",
       height: 110,
       shadowColor: "#2563EB",
@@ -1008,7 +1010,7 @@ const getStyles = (isDark: boolean) => {
     summaryIconCircle: {
       width: 32,
       height: 32,
-      borderRadius: 16,
+      borderRadius: Radius.lg,
       backgroundColor: isDark ? "rgba(255,255,255,0.2)" : "#fff",
       alignItems: "center",
       justifyContent: "center",
@@ -1028,7 +1030,7 @@ const getStyles = (isDark: boolean) => {
 
     /* Balance Card */
     balanceCard: {
-      borderRadius: 24,
+      borderRadius: Radius.xl,
       overflow: "hidden",
       ...glassCard,
     },
@@ -1048,7 +1050,7 @@ const getStyles = (isDark: boolean) => {
     walletIcon: {
       width: 40,
       height: 40,
-      borderRadius: 12,
+      borderRadius: Radius.md,
       backgroundColor: "rgba(255,255,255,0.1)",
       alignItems: "center",
       justifyContent: "center",
@@ -1074,22 +1076,22 @@ const getStyles = (isDark: boolean) => {
       alignItems: "center",
       justifyContent: "space-between",
       borderTopWidth: 1,
-      borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     withdrawBtn: {
       backgroundColor: isDark ? "#111827" : "#111827",
       paddingHorizontal: 16,
       paddingVertical: 8,
-      borderRadius: 8,
+      borderRadius: Radius.sm,
     },
-    withdrawBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    withdrawBtnDisabled: { backgroundColor: colors(isDark).glass },
     withdrawBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
     withdrawBtnTextDisabled: { color: "#9CA3AF" },
     payoutDate: { fontSize: 11, color: "#6B7280" },
 
     /* Chart Card */
     chartCard: {
-      borderRadius: 20,
+      borderRadius: Radius.xl,
       padding: 20,
       ...glassCard,
     },
@@ -1114,16 +1116,16 @@ const getStyles = (isDark: boolean) => {
     barTrack: {
       width: 8,
       height: "100%",
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-      borderRadius: 4,
+      backgroundColor: colors(isDark).glass,
+      borderRadius: Radius.sm,
       justifyContent: "flex-end",
     },
-    barFill: { width: "100%", borderRadius: 4 },
+    barFill: { width: "100%", borderRadius: Radius.sm },
     barLabel: { fontSize: 10, color: "#6B7280" },
 
     /* List Card */
     listCard: {
-      borderRadius: 20,
+      borderRadius: Radius.xl,
       ...glassCard,
     },
     listItem: {
@@ -1132,12 +1134,12 @@ const getStyles = (isDark: boolean) => {
       alignItems: "center",
       gap: 12,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     rankBadge: {
       width: 28,
       height: 28,
-      borderRadius: 8,
+      borderRadius: Radius.sm,
       backgroundColor: isDark ? "rgba(217, 119, 6, 0.2)" : "#FEF3C7",
       alignItems: "center",
       justifyContent: "center",
@@ -1158,7 +1160,7 @@ const getStyles = (isDark: boolean) => {
     /* Coupons Tab */
     bigCreateBtn: {
       height: 56,
-      borderRadius: 16,
+      borderRadius: Radius.lg,
       overflow: "hidden",
       flexDirection: "row",
       alignItems: "center",
@@ -1180,11 +1182,11 @@ const getStyles = (isDark: boolean) => {
     emptyDesc: { fontSize: 14, color: "#9CA3AF" },
 
     couponCard: {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-      borderRadius: 16,
+      backgroundColor: colors(isDark).glass,
+      borderRadius: Radius.lg,
       padding: 16,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     couponHeader: {
       flexDirection: "row",
@@ -1203,7 +1205,7 @@ const getStyles = (isDark: boolean) => {
       fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
       color: "#6B7280",
     },
-    statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    statusTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.sm },
     statusText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
     progressSection: { marginBottom: 16 },
     progressLabel: { fontSize: 12, color: "#6B7280" },
@@ -1214,11 +1216,11 @@ const getStyles = (isDark: boolean) => {
     },
     progressBarBg: {
       height: 6,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-      borderRadius: 3,
+      backgroundColor: colors(isDark).glass,
+      borderRadius: Radius.sm,
       marginTop: 4,
     },
-    progressBarFill: { height: "100%", borderRadius: 3 },
+    progressBarFill: { height: "100%", borderRadius: Radius.sm },
     couponFooter: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -1237,17 +1239,17 @@ const getStyles = (isDark: boolean) => {
     /* Reviews Tab */
     ratingCard: {
       flexDirection: "row",
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+      backgroundColor: colors(isDark).glass,
       padding: 20,
-      borderRadius: 16,
+      borderRadius: Radius.lg,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     ratingLeft: {
       alignItems: "center",
       paddingRight: 20,
       borderRightWidth: 1,
-      borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     ratingBig: {
       fontSize: 36,
@@ -1263,11 +1265,11 @@ const getStyles = (isDark: boolean) => {
     },
 
     reviewItem: {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+      backgroundColor: colors(isDark).glass,
       padding: 16,
-      borderRadius: 16,
+      borderRadius: Radius.lg,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     reviewHeader: {
       flexDirection: "row",
@@ -1284,8 +1286,8 @@ const getStyles = (isDark: boolean) => {
     starDot: {
       width: 6,
       height: 6,
-      borderRadius: 3,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+      borderRadius: Radius.sm,
+      backgroundColor: colors(isDark).glass,
     },
     starDotActive: { backgroundColor: "#F59E0B" },
     reviewText: {
@@ -1303,22 +1305,18 @@ const getStyles = (isDark: boolean) => {
     },
     modalBlurWeb: {
       backgroundColor: isDark ? "rgba(9,9,11,0.55)" : "rgba(250,250,250,0.45)",
-      // @ts-expect-error web backdrop
       backdropFilter: "blur(18px)",
-      // @ts-expect-error web webkit backdrop
       WebkitBackdropFilter: "blur(18px)",
-    },
+    } as any,
     modalDim: {
       ...StyleSheet.absoluteFill,
       backgroundColor: isDark ? "rgba(0,0,0,0.45)" : "rgba(15,23,42,0.28)",
-      // @ts-expect-error web backdrop
       backdropFilter: "blur(4px)",
-      // @ts-expect-error web webkit backdrop
       WebkitBackdropFilter: "blur(4px)",
-    },
+    } as any,
     modalContent: {
       backgroundColor: isDark ? "rgba(24,24,27,0.92)" : "rgba(255,255,255,0.94)",
-      borderRadius: 20,
+      borderRadius: Radius.xl,
       padding: 20,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
@@ -1348,10 +1346,10 @@ const getStyles = (isDark: boolean) => {
     modalCloseBtn: {
       width: 30,
       height: 30,
-      borderRadius: 15,
+      borderRadius: Radius.lg,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+      backgroundColor: colors(isDark).glass,
     },
     modalLabel: {
       fontSize: 13,
@@ -1360,24 +1358,24 @@ const getStyles = (isDark: boolean) => {
       marginBottom: 6,
     },
     modalInput: {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-      borderRadius: 8,
+      backgroundColor: colors(isDark).glass,
+      borderRadius: Radius.sm,
       padding: 12,
       color: isDark ? "#F9FAFB" : "#111827",
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     modalCancelBtn: {
       padding: 12,
-      borderRadius: 8,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+      borderRadius: Radius.sm,
+      backgroundColor: colors(isDark).glass,
       alignItems: "center",
     },
     modalConfirmBtn: {
       padding: 12,
-      borderRadius: 8,
-      backgroundColor: "#7C3AED",
+      borderRadius: Radius.sm,
+      backgroundColor: "#2196F3",
       alignItems: "center",
     },
   });

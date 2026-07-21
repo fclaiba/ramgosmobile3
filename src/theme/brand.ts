@@ -3,11 +3,11 @@
  * Liquid Glass surfaces must tint with these, not generic iOS blue/purple kits.
  */
 export const Brand = {
-    primary: '#7C3AED',
-    primaryDark: '#6D28D9',
-    primaryLight: '#8B5CF6',
-    primarySoft: '#A78BFA',
-    accent: '#9333EA',
+    primary: '#2196F3',
+    primaryDark: '#1565C0',
+    primaryLight: '#4FC3F7',
+    primarySoft: '#5DD3F3',
+    accent: '#29B6F6',
     accentPink: '#DB2777',
     success: '#10B981',
     danger: '#EF4444',
@@ -15,6 +15,6 @@ export const Brand = {
 } as const;
 
 export const brandTint = (isDark: boolean, alpha = 0.14) =>
-    isDark ? `rgba(167,139,250,${alpha})` : `rgba(124,58,237,${alpha})`;
+    isDark ? `rgba(93, 211, 243,${alpha})` : `rgba(33, 150, 243,${alpha})`;
 
 export const brandText = (isDark: boolean) => (isDark ? Brand.primarySoft : Brand.primary);

@@ -4,6 +4,8 @@ import { CardField } from '@stripe/stripe-react-native';
 import { BlurView } from 'expo-blur';
 import { CreditCard, Lock } from 'lucide-react-native';
 import { glassTokens } from '../../utils/glass';
+import { Radius } from '../../theme/tokens';
+
 
 interface LiquidCardInputProps {
     isDark: boolean;
@@ -93,7 +95,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     glassWrapper: {
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         borderWidth: 1,
         padding: 20,
     },
@@ -120,7 +122,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.04)',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     secureText: {
         fontSize: 11,
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
         height: 54,
         justifyContent: 'center',
         backgroundColor: 'rgba(0,0,0,0.02)',
-        borderRadius: 12,
+        borderRadius: Radius.md,
         paddingHorizontal: 12,
         marginBottom: 12,
     },

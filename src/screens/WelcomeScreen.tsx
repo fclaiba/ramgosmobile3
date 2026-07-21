@@ -8,6 +8,8 @@ import { AuthBackground } from '../components/auth/AuthBackground';
 import { useAuth, getAuthDestination } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 // Social Icons Components
 const GoogleIcon = () => (
@@ -154,19 +156,19 @@ export default function WelcomeScreen({ navigation }: any) {
                             <Animated.View style={[styles.iconContainer, { transform: [{ scale: iconScale }, { rotate: rotateInterp }] }]}>
                                 <View style={styles.iconGlowWrapper}>
                                     <LinearGradient
-                                        colors={['#8B5CF6', '#9333EA']}
+                                        colors={['#4FC3F7', '#29B6F6']}
                                         style={styles.iconGlow}
                                     />
                                 </View>
 
                                 <LinearGradient
-                                    colors={['#8B5CF6', '#9333EA', '#EC4899']}
+                                    colors={['#4FC3F7', '#29B6F6', '#EC4899']}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 1 }}
                                     style={styles.mainIcon}
                                 >
                                     <Image
-                                        source={require('../../logo.jpeg')}
+                                        source={require('../../logo.png')}
                                         style={styles.logoImage}
                                         resizeMode="contain"
                                     />
@@ -194,7 +196,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                         activeOpacity={0.9}
                                     >
                                         <LinearGradient
-                                            colors={['#7C3AED', '#9333EA']}
+                                            colors={['#2196F3', '#29B6F6']}
                                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                             style={styles.gradientBtn}
                                         >
@@ -240,9 +242,9 @@ export default function WelcomeScreen({ navigation }: any) {
 
                         {/* Bottom Decoration */}
                         <Animated.View style={[styles.bottomDeco, { opacity: bottomDecoOpacity }]}>
-                            <Sparkles size={16} color="#8B5CF6" style={{ marginRight: 8 }} />
+                            <Sparkles size={16} color="#4FC3F7" style={{ marginRight: 8 }} />
                             <Text style={styles.bottomDecoText}>Una experiencia única te espera</Text>
-                            <Sparkles size={16} color="#8B5CF6" style={{ marginLeft: 8 }} />
+                            <Sparkles size={16} color="#4FC3F7" style={{ marginLeft: 8 }} />
                         </Animated.View>
 
                     </View>
@@ -262,21 +264,17 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: '100%',
         maxWidth: 400,
         backgroundColor: isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         padding: 32,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.2)',
+        borderColor: isDark ? 'rgba(79, 195, 247, 0.3)' : 'rgba(79, 195, 247, 0.2)',
         ...Platform.select({
             web: {
-                boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0px 10px 20px rgba(139, 92, 246, 0.1)',
+                boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0px 10px 20px rgba(79, 195, 247, 0.1)',
             },
             default: {
-                shadowColor: isDark ? '#000' : '#8B5CF6',
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: isDark ? 0.3 : 0.1,
-                shadowRadius: 20,
-                elevation: 10,
+                ...glassShadow(isDark),
             },
         }),
     },
@@ -284,38 +282,34 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     // Icon
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
     iconGlowWrapper: { position: 'absolute', width: 100, height: 100 },
-    iconGlow: { flex: 1, borderRadius: 30, opacity: 0.5, transform: [{ scale: 1.2 }] },
-    mainIcon: { width: 112, height: 112, borderRadius: 28, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#374151' : '#fff' },
+    iconGlow: { flex: 1, borderRadius: Radius['2xl'], opacity: 0.5, transform: [{ scale: 1.2 }] },
+    mainIcon: { width: 112, height: 112, borderRadius: Radius['2xl'], justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#374151' : '#fff' },
     logoImage: { width: 72, height: 72 },
     sparkle: { position: 'absolute', top: -8, right: -8 },
 
     // Text
-    title: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#7C3AED', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: isDark ? '#D1D5DB' : '#6B7280', textAlign: 'center', paddingHorizontal: 4, lineHeight: 22 },
+    title: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: colors(isDark).textMuted, textAlign: 'center', paddingHorizontal: 4, lineHeight: 22 },
 
     // Buttons
     buttonGroup: { width: '100%', gap: 12, marginBottom: 24 },
     primaryBtn: {
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         ...Platform.select({
-            web: { boxShadow: '0px 8px 16px rgba(124, 58, 237, 0.25)' },
+            web: { boxShadow: '0px 8px 16px rgba(33, 150, 243, 0.25)' },
             default: {
-                shadowColor: '#7C3AED',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 8,
-                elevation: 4,
+                ...glassShadow(isDark),
             },
         }),
     },
-    gradientBtn: { flexDirection: 'row', height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+    gradientBtn: { flexDirection: 'row', height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.lg },
     primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#6D28D9' : '#DDD6FE' },
-    secondaryBtnText: { color: isDark ? '#F9FAFB' : '#111827', fontSize: 16, fontWeight: '600' },
+    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#1565C0' : '#DDD6FE' },
+    secondaryBtnText: { color: colors(isDark).text, fontSize: 16, fontWeight: '600' },
 
-    ghostBtn: { flexDirection: 'row', height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    ghostBtnText: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 16, fontWeight: '500' },
+    ghostBtn: { flexDirection: 'row', height: 56, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
+    ghostBtnText: { color: colors(isDark).textMuted, fontSize: 16, fontWeight: '500' },
 
     // Footer
     divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 24 },
@@ -323,12 +317,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
 
     socialRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
-    socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', justifyContent: 'center', alignItems: 'center' },
+    socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },
 
     footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', textAlign: 'center' },
-    link: { color: '#7C3AED', fontWeight: '500' },
+    link: { color: '#2196F3', fontWeight: '500' },
 
     // Bottom Deco
     bottomDeco: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
-    bottomDecoText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '500' },
+    bottomDecoText: { fontSize: 14, color: colors(isDark).textMuted, fontWeight: '500' },
 });

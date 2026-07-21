@@ -263,7 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userId = state.session?.userId;
     // CRITICAL: Skip query if ID is a mock ID (from previous offline testing) to prevent Server Errors
     const isValidConvexId = userId && !userId.startsWith('mock_') && !userId.startsWith('user_') && !userId.includes('session');
-    const userData = useQuery(api.users.getUser, isValidConvexId ? { id: userId as Id<"users"> } : "skip");
+    const userData = useQuery(api.users.getUser, isValidConvexId ? { id: userId as Id<"users">, sessionToken: state.session?.sessionToken } : "skip");
 
     const USER_ID_KEY = '@ramgos/auth/user_id';
 

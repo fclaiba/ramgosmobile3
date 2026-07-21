@@ -46,6 +46,8 @@ import { useSocial } from '../../contexts/SocialContext';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 
@@ -57,7 +59,7 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string; te
     cancelled: { label: 'Cancelada', color: '#EF4444', bg: '#FEE2E2', text: '#991B1B', icon: AlertCircle },
     refunded: { label: 'Reembolsada', color: '#6B7280', bg: '#F3F4F6', text: '#374151', icon: RotateCcw },
     disputed: { label: 'En disputa', color: '#DC2626', bg: '#FEE2E2', text: '#991B1B', icon: AlertCircle },
-    paid_escrow: { label: 'En escrow', color: '#7C3AED', bg: '#EDE9FE', text: '#5B21B6', icon: ShieldCheck },
+    paid_escrow: { label: 'En escrow', color: '#2196F3', bg: '#EDE9FE', text: '#5B21B6', icon: ShieldCheck },
 };
 
 const TIMELINE_STEPS = [
@@ -192,7 +194,7 @@ export default function OrderDetailScreen() {
     if (!order) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#7C3AED" />
+                <ActivityIndicator size="large" color="#2196F3" />
                 <Text style={styles.loadingText}>Cargando orden...</Text>
             </View>
         );
@@ -447,7 +449,7 @@ export default function OrderDetailScreen() {
                 {order.escrow && (
                     <TouchableOpacity style={styles.escrowCard} onPress={handleOpenEscrow} activeOpacity={0.8}>
                         <View style={styles.escrowIconWrap}>
-                            <ShieldCheck size={24} color="#7C3AED" />
+                            <ShieldCheck size={24} color="#2196F3" />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.escrowTitle}>Protección Escrow</Text>
@@ -516,7 +518,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = '#7C3AED';
+    const primary = '#2196F3';
 
     return StyleSheet.create({
         container: { flex: 1, backgroundColor: bg },
@@ -537,7 +539,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         iconBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.9)',
@@ -571,32 +573,32 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             alignItems: 'center',
             gap: 16,
             padding: 20,
-            borderRadius: 24,
+            borderRadius: Radius.xl,
             marginBottom: 16,
             borderWidth: 1,
         },
         heroIconWrap: {
             width: 64,
             height: 64,
-            borderRadius: 32,
+            borderRadius: Radius['2xl'],
             borderWidth: 2,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
         },
         heroStatus: { fontSize: 20, fontWeight: '800' },
         heroDate: { fontSize: 13, color: muted, marginTop: 4 },
         heroBadge: {
             paddingHorizontal: 10,
             paddingVertical: 5,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             borderWidth: 1,
         },
         heroBadgeText: { fontSize: 10, fontWeight: '800' },
 
         card: {
             backgroundColor: surface,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 18,
             marginBottom: 16,
             borderWidth: 1,
@@ -609,19 +611,16 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         timelineDot: {
             width: 36,
             height: 36,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             borderWidth: 2,
             borderColor: isDark ? '#3F3F46' : '#E5E7EB',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 8,
         },
         timelineDotCurrent: {
-            shadowColor: '#000',
-            shadowOpacity: 0.2,
-            shadowRadius: 6,
-            elevation: 4,
+            ...glassShadow(isDark),
         },
         timelineLabel: { fontSize: 10, fontWeight: '700', color: muted, textAlign: 'center' },
         timelineLine: {
@@ -630,11 +629,11 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             backgroundColor: border,
             marginTop: 16,
             marginHorizontal: 4,
-            borderRadius: 2,
+            borderRadius: Radius.sm,
         },
 
         itemRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-        itemImageWrap: { width: 60, height: 60, borderRadius: 14, overflow: 'hidden', backgroundColor: border },
+        itemImageWrap: { width: 60, height: 60, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: border },
         itemImage: { width: '100%', height: '100%' },
         itemImagePlaceholder: { justifyContent: 'center', alignItems: 'center' },
         itemBody: { flex: 1 },
@@ -646,7 +645,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         shippingIconWrap: {
             width: 44,
             height: 44,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#DBEAFE',
             justifyContent: 'center',
             alignItems: 'center',
@@ -674,7 +673,7 @@ function getStyles(isDark: boolean, insets: any, width: number) {
         pointsIconWrap: {
             width: 44,
             height: 44,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
             justifyContent: 'center',
             alignItems: 'center',
@@ -688,12 +687,12 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
             paddingHorizontal: 10,
             paddingVertical: 6,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
         },
         pointsBadgeText: { fontSize: 15, fontWeight: '800', color: isDark ? '#FCD34D' : '#B45309' },
         pointsBreakdown: {
             backgroundColor: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.6)',
-            borderRadius: 14,
+            borderRadius: Radius.md,
             padding: 14,
             marginBottom: 12,
         },
@@ -709,18 +708,18 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 14,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.08)' : '#FAFAFA',
-            borderRadius: 20,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.08)' : '#FAFAFA',
+            borderRadius: Radius.xl,
             padding: 18,
             marginBottom: 16,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(124, 58, 237, 0.25)' : '#DDD6FE',
+            borderColor: isDark ? 'rgba(33, 150, 243, 0.25)' : '#DDD6FE',
         },
         escrowIconWrap: {
             width: 48,
             height: 48,
-            borderRadius: 16,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#EDE9FE',
+            borderRadius: Radius.lg,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : '#EDE9FE',
             justifyContent: 'center',
             alignItems: 'center',
         },
@@ -742,12 +741,12 @@ function getStyles(isDark: boolean, insets: any, width: number) {
             justifyContent: 'center',
             gap: 8,
             width: '100%',
-            borderRadius: 14,
+            borderRadius: Radius.md,
             paddingVertical: 14,
         },
         footerBtnPrimary: { backgroundColor: '#10B981' },
         footerBtnPrimaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-        footerBtnSecondary: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: border },
+        footerBtnSecondary: { backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: border },
         footerBtnSecondaryText: { color: text, fontWeight: '700', fontSize: 15 },
     });
 }

@@ -8,6 +8,8 @@ import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 
@@ -162,13 +164,13 @@ export default function QRScannerScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1, backgroundColor: isDark ? '#111827' : '#000', justifyContent: 'center', alignItems: 'center' },
     message: { textAlign: 'center', paddingBottom: 10, color: isDark ? '#F9FAFB' : '#fff' },
-    btn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 8 },
+    btn: { backgroundColor: '#3B82F6', padding: 12, borderRadius: Radius.sm },
     btnText: { color: '#fff', fontWeight: 'bold' },
 
     overlay: { position: 'absolute', inset: 0, justifyContent: 'space-between', padding: 20 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     headerTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    iconBtn: { padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+    iconBtn: { padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: Radius.xl },
 
     focusContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 100 },
     cornerTL: { position: 'absolute', top: 0, left: 0, width: 40, height: 40, borderTopWidth: 4, borderLeftWidth: 4, borderColor: '#3B82F6' },
@@ -194,14 +196,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         maxWidth: 520,
         alignSelf: 'center',
         backgroundColor: '#10B981',
-        borderRadius: 24, padding: 32,
+        borderRadius: Radius.xl, padding: 32,
         alignItems: 'center',
-        shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, elevation: 10
-    },
+        ...glassShadow(isDark),},
     errorModal: { backgroundColor: '#EF4444' },
     resultTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 16 },
     resultSub: { color: 'rgba(255,255,255,0.9)', fontSize: 14, textAlign: 'center', marginVertical: 8 },
-    confirmBtn: { backgroundColor: 'rgba(255,255,255,0.62)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, marginTop: 16, minWidth: 150, alignItems: 'center' },
+    confirmBtn: { backgroundColor: 'rgba(255,255,255,0.62)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: Radius.xl, marginTop: 16, minWidth: 150, alignItems: 'center' },
     errorBtn: { backgroundColor: 'rgba(255,255,255,0.62)' },
     confirmBtnText: { color: '#10B981', fontWeight: 'bold', fontSize: 16 },
 });

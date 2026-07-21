@@ -4,6 +4,8 @@ import { Link } from "lucide-react-native";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Radius, colors } from '../../theme/tokens';
+
 
 export function ActiveCampaigns({
     styles,
@@ -51,7 +53,7 @@ export function ActiveCampaigns({
             {/* Pending invitations from businesses */}
             {pendingInvitations.length > 0 && (
                 <View style={{ marginTop: 12 }}>
-                    <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
+                    <Text style={{ fontWeight: '700', color: colors(isDark).text, marginBottom: 8 }}>
                         Invitaciones pendientes
                     </Text>
                     {pendingInvitations.map((c: any) => (
@@ -60,7 +62,7 @@ export function ActiveCampaigns({
                             style={{
                                 marginBottom: 12,
                                 padding: 12,
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+                                backgroundColor: colors(isDark).glass,
                                 borderWidth: 1,
                                 borderColor: isDark ? '#F59E0B' : '#FCD34D',
                             }}
@@ -73,7 +75,7 @@ export function ActiveCampaigns({
                                 <Badge variant="outline">Te invitaron</Badge>
                             </View>
                             {c.notes && (
-                                <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                                <Text style={{ fontSize: 12, color: colors(isDark).textMuted, marginTop: 6 }}>
                                     "{c.notes}"
                                 </Text>
                             )}
@@ -102,11 +104,11 @@ export function ActiveCampaigns({
             {/* My proposals waiting on the business to respond */}
             {myProposals.length > 0 && (
                 <View style={{ marginTop: 12 }}>
-                    <Text style={{ fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
+                    <Text style={{ fontWeight: '700', color: colors(isDark).text, marginBottom: 8 }}>
                         Esperando respuesta
                     </Text>
                     {myProposals.map((c: any) => (
-                        <Card key={c._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }}>
+                        <Card key={c._id} style={{ marginBottom: 12, padding: 12, backgroundColor: colors(isDark).glass }}>
                             <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
                                 {c.businessName}
                             </Text>
@@ -128,10 +130,10 @@ export function ActiveCampaigns({
                     style={{
                         marginTop: 12,
                         padding: 14,
-                        borderRadius: 14,
+                        borderRadius: Radius.md,
                         borderWidth: 1,
-                        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+                        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+                        backgroundColor: colors(isDark).glass,
                     }}
                 >
                     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
@@ -139,7 +141,7 @@ export function ActiveCampaigns({
                             style={{
                                 width: 36,
                                 height: 36,
-                                borderRadius: 10,
+                                borderRadius: Radius.md,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 backgroundColor: isDark ? 'rgba(79, 70, 229, 0.25)' : '#eef2ff',
@@ -150,10 +152,10 @@ export function ActiveCampaigns({
                             <Link size={18} color={isDark ? '#A5B4FC' : '#4f46e5'} />
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={{ fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827' }}>
+                            <Text style={{ fontWeight: '800', color: colors(isDark).text }}>
                                 Aún no tenés campañas activas
                             </Text>
-                            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6b7280', marginTop: 6 }}>
+                            <Text style={{ fontSize: 12, color: colors(isDark).textMuted, marginTop: 6 }}>
                                 Proponé una a un negocio o esperá a que te inviten. Con tu código personal {referralCode} acreditarás cada venta atribuida.
                             </Text>
                         </View>
@@ -161,7 +163,7 @@ export function ActiveCampaigns({
                 </Card>
             ) : (
                 activeCampaigns.map((camp: any) => (
-                    <Card key={camp._id} style={{ marginBottom: 12, padding: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }}>
+                    <Card key={camp._id} style={{ marginBottom: 12, padding: 12, backgroundColor: colors(isDark).glass }}>
                         <Text style={{ fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#000' }} numberOfLines={1}>
                             {camp.businessName}
                         </Text>

@@ -21,6 +21,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { api } from '../../../convex/_generated/api';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 export default function AddEditProductScreen({ navigation }: any) {
     const { createProduct } = useMarketplace();
@@ -339,7 +341,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
     const textMuted = isDark ? '#9CA3AF' : '#6B7280';
     const inputBg = isDark ? 'rgba(31, 41, 55, 0.9)' : '#F9FAFB';
     const inputBorder = isDark ? 'rgba(148, 163, 184, 0.25)' : '#E5E7EB';
-    const accent = '#7C3AED';
+    const accent = '#2196F3';
 
     return StyleSheet.create({
         page: { flex: 1, backgroundColor: pageBg },
@@ -358,7 +360,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             marginBottom: 16,
             backgroundColor: cardBg,
             padding: 16,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             borderWidth: 1,
             borderColor: cardBorder,
         },
@@ -370,7 +372,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         input: {
             borderWidth: 1,
             borderColor: inputBorder,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             paddingHorizontal: 12,
             paddingVertical: 12,
             fontSize: 16,
@@ -388,14 +390,14 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         categoryChip: {
             paddingHorizontal: 12,
             paddingVertical: 8,
-            borderRadius: 999,
+            borderRadius: Radius.full,
             borderWidth: 1,
             borderColor: inputBorder,
             backgroundColor: isDark ? 'rgba(31, 41, 55, 0.7)' : '#F9FAFB',
         },
         categoryChipActive: {
-            borderColor: isDark ? 'rgba(167, 139, 250, 0.7)' : accent,
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.28)' : '#EDE9FE',
+            borderColor: isDark ? 'rgba(93, 211, 243, 0.7)' : accent,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.28)' : '#EDE9FE',
         },
         categoryChipText: { fontSize: 13, color: textMuted, fontWeight: '600' },
         categoryChipTextActive: { color: isDark ? '#E9D5FF' : '#5B21B6', fontWeight: '800' },
@@ -403,19 +405,19 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         // Images
         imageScroll: { flexDirection: 'row', marginBottom: 8 },
         imageContainer: { marginRight: 12, position: 'relative' },
-        image: { width: 110, height: 110, borderRadius: 10 },
+        image: { width: 110, height: 110, borderRadius: Radius.md },
         removeBtn: {
             position: 'absolute',
             top: -8,
             right: -8,
             backgroundColor: '#EF4444',
-            borderRadius: 12,
+            borderRadius: Radius.md,
             padding: 4,
         },
         addBtn: {
             width: 110,
             height: 110,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             borderWidth: 2,
             borderColor: inputBorder,
             borderStyle: 'dashed',
@@ -427,13 +429,13 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
 
         // Toggle
         rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-        toggleContainer: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(31, 41, 55, 0.9)' : '#F3F4F6', borderRadius: 20, padding: 2, borderWidth: 1, borderColor: inputBorder },
-        toggleBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 18 },
+        toggleContainer: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(31, 41, 55, 0.9)' : '#F3F4F6', borderRadius: Radius.xl, padding: 2, borderWidth: 1, borderColor: inputBorder },
+        toggleBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.lg },
         toggleActive: {
             backgroundColor: isDark ? 'rgba(148, 163, 184, 0.18)' : '#fff',
             ...Platform.select({
                 web: { boxShadow: '0 4px 10px rgba(0,0,0,0.12)' } as any,
-                default: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+                default: { ...glassShadow(isDark),},
             }),
         },
         toggleText: { fontSize: 14, color: textMuted, fontWeight: '700' },
@@ -444,7 +446,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             backgroundColor: isDark ? 'rgba(234, 179, 8, 0.12)' : '#FFFBEB',
             borderWidth: 1,
             borderColor: isDark ? 'rgba(234, 179, 8, 0.35)' : '#FCD34D',
-            borderRadius: 10,
+            borderRadius: Radius.md,
             padding: 12,
         },
         warningLabel: { fontSize: 13, fontWeight: '800', color: isDark ? '#FDE68A' : '#92400E', marginBottom: 8 },
@@ -457,10 +459,10 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             justifyContent: 'center',
             alignItems: 'center',
             padding: 16,
-            borderRadius: 14,
+            borderRadius: Radius.md,
             marginTop: 8,
             ...Platform.select({
-                web: { boxShadow: '0 10px 24px rgba(124, 58, 237, 0.35)' } as any,
+                web: { boxShadow: '0 10px 24px rgba(33, 150, 243, 0.35)' } as any,
                 default: { shadowColor: accent, shadowOpacity: 0.35, shadowRadius: 10, elevation: 5 },
             }),
         },

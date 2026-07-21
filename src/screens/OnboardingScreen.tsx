@@ -6,6 +6,8 @@ import { Store, Users, Trophy, ArrowRight, Sparkles } from 'lucide-react-native'
 import { useTheme } from '../contexts/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const SLIDES = [
     {
@@ -27,7 +29,7 @@ const SLIDES = [
         title: 'Juega y Gana',
         description: 'Gana recompensas diarias, cuida a tu mascota virtual y obtén beneficios exclusivos.',
         icon: Trophy,
-        colors: ['#7C3AED', '#8B5CF6']
+        colors: ['#2196F3', '#4FC3F7']
     }
 ];
 
@@ -80,7 +82,7 @@ export default function OnboardingScreen() {
     };
 
     if (isChecking) {
-        return <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }} />;
+        return <View style={{ flex: 1, backgroundColor: colors(isDark).glass }} />;
     }
 
     const renderItem = ({ item }: { item: typeof SLIDES[0] }) => {
@@ -97,8 +99,8 @@ export default function OnboardingScreen() {
                     <Sparkles size={24} color="#FBBF24" style={styles.sparkle} />
                 </LinearGradient>
                 <View style={styles.textContainer}>
-                    <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#111827' }]}>{item.title}</Text>
-                    <Text style={[styles.description, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                    <Text style={[styles.title, { color: colors(isDark).text }]}>{item.title}</Text>
+                    <Text style={[styles.description, { color: colors(isDark).textMuted }]}>
                         {item.description}
                     </Text>
                 </View>
@@ -107,7 +109,7 @@ export default function OnboardingScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#09090B' : '#FAFAFA' }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors(isDark).bg }]}>
             <View style={{ flex: 3 }}>
                 <FlatList
                     data={SLIDES}
@@ -148,7 +150,7 @@ export default function OnboardingScreen() {
                                     {
                                         width: dotWidth,
                                         opacity,
-                                        backgroundColor: isDark ? '#8B5CF6' : '#7C3AED',
+                                        backgroundColor: isDark ? '#4FC3F7' : '#2196F3',
                                     },
                                 ]}
                             />
@@ -157,7 +159,7 @@ export default function OnboardingScreen() {
                 </View>
                 <TouchableOpacity style={styles.button} onPress={scrollToNext} activeOpacity={0.8}>
                     <LinearGradient
-                        colors={['#7C3AED', '#9333EA']}
+                        colors={['#2196F3', '#29B6F6']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={styles.gradientBtn}
@@ -186,15 +188,11 @@ const styles = StyleSheet.create({
     iconContainer: {
         width: 160,
         height: 160,
-        borderRadius: 80,
+        borderRadius: Radius.full,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 40,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-        elevation: 10,
+        ...glassShadow(false),
     },
     sparkle: {
         position: 'absolute',
@@ -230,23 +228,19 @@ const styles = StyleSheet.create({
     },
     dot: {
         height: 10,
-        borderRadius: 5,
+        borderRadius: Radius.sm,
         marginHorizontal: 8,
     },
     button: {
-        borderRadius: 16,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+        borderRadius: Radius.lg,
+        ...glassShadow(false),
     },
     gradientBtn: {
         flexDirection: 'row',
         height: 56,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         gap: 8,
     },
     buttonText: {

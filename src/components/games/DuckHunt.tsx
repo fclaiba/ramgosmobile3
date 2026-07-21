@@ -10,6 +10,8 @@ import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent } from './gameContracts';
 import { useTheme } from '../../contexts/ThemeContext';
 import { GameThemeTokens } from './gameContracts';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -426,7 +428,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 8,
         backgroundColor: 'rgba(255,255,255,0.8)',
         padding: 8,
-        borderRadius: 12
+        borderRadius: Radius.md
     },
     scoreText: {
         fontSize: 18,
@@ -444,20 +446,20 @@ const getStyles = (isDark: any) => StyleSheet.create({
         gap: 4,
         backgroundColor: 'rgba(255,255,255,0.8)',
         padding: 8,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     shell: {
         width: 12,
         height: 24,
         backgroundColor: '#EF4444',
-        borderRadius: 4,
+        borderRadius: Radius.sm,
         borderWidth: 1,
         borderColor: '#B91C1C',
     },
     timerContainer: {
         backgroundColor: 'rgba(255,255,255,0.8)',
         padding: 8,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         minWidth: 50,
         alignItems: 'center'
     },
@@ -509,16 +511,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#0D9488',
         paddingHorizontal: 24,
         paddingVertical: 12,
-        borderRadius: 30,
+        borderRadius: Radius['2xl'],
         alignItems: 'center',
         gap: 8,
         ...Platform.select({
             web: { boxShadow: '0 2px 4px rgba(0,0,0,0.2)' } as any,
             default: {
-                shadowColor: isDark ? '#F9FAFB' : '#000',
-                shadowOpacity: 0.2,
-                shadowRadius: 4,
-                shadowOffset: { width: 0, height: 2 },
+                ...glassShadow(isDark),shadowOffset: { width: 0, height: 2 },
             }
         }),
     },

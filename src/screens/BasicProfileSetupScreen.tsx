@@ -7,6 +7,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function BasicProfileSetupScreen({ navigation, route }: any) {
     const { user, updateProfile } = useAuth();
@@ -168,7 +170,7 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
                         disabled={isSubmitting}
                     >
                         <LinearGradient
-                            colors={['#7C3AED', '#EC4899']}
+                            colors={['#2196F3', '#EC4899']}
                             style={styles.btnGradient}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
@@ -186,23 +188,23 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     scrollContent: { padding: 24, paddingBottom: 100 },
 
     header: { alignItems: 'center', marginBottom: 32 },
-    title: { fontSize: 28, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
+    title: { fontSize: 28, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 8, textAlign: 'center' },
+    subtitle: { fontSize: 16, color: colors(isDark).textMuted, textAlign: 'center', paddingHorizontal: 20 },
 
     avatarContainer: { alignSelf: 'center', marginBottom: 40, position: 'relative' },
-    avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    avatar: { width: 120, height: 120, borderRadius: Radius.full, backgroundColor: colors(isDark).glass },
     cameraBtn: {
         position: 'absolute',
         bottom: 0,
         right: 0,
-        backgroundColor: '#7C3AED',
+        backgroundColor: '#2196F3',
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 3,
@@ -215,24 +217,24 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        borderRadius: 12,
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        borderRadius: Radius.md,
         height: 56,
         paddingHorizontal: 16
     },
     inputIcon: { marginRight: 12 },
-    input: { flex: 1, fontSize: 16, color: isDark ? '#F9FAFB' : '#1F2937', height: '100%' },
+    input: { flex: 1, fontSize: 16, color: colors(isDark).text, height: '100%' },
     hint: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', marginTop: 6, marginLeft: 4 },
 
     footer: {
         padding: 24,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)'
+        borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)'
     },
-    btn: { width: '100%', height: 56, borderRadius: 16, overflow: 'hidden' },
+    btn: { width: '100%', height: 56, borderRadius: Radius.lg, overflow: 'hidden' },
     btnGradient: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

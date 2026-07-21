@@ -11,6 +11,8 @@ import { Post as PostType, useSocial } from '../../contexts/SocialContext';
 import { useCart } from '../../contexts/CartContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { Radius, colors } from '../../theme/tokens';
+
 
 export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: string) => void }) => {
     const { isPostSaved, savePost, unsavePost, currentUser, deletePost } = useSocial();
@@ -53,7 +55,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity style={styles.userInfo} onPress={() => onUserClick(post.user.id)}>
-                    <Avatar style={{ width: 44, height: 44, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' }}>
+                    <Avatar style={{ width: 44, height: 44, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' }}>
                         <AvatarImage src={post.user.avatar} />
                         <AvatarFallback>{post.user.name[0]}</AvatarFallback>
                     </Avatar>
@@ -95,7 +97,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                             </Text>
                             <View style={styles.commercialActions}>
                                 <TouchableOpacity
-                                    style={[styles.commercialButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}
+                                    style={[styles.commercialButton, { backgroundColor: colors(isDark).glass }]}
                                     onPress={() => addToWishlist(post.commercialProduct!.id, post.commercialProduct!.referralLink)}
                                 >
                                     <Bookmark size={16} color={isDark ? '#D1D5DB' : '#374151'} />
@@ -160,31 +162,31 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
         marginBottom: 8,
         paddingHorizontal: 16,
         paddingVertical: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
     },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     userInfo: { flexDirection: 'row', alignItems: 'center' },
-    userName: { fontWeight: '700', fontSize: 16, color: isDark ? '#F9FAFB' : '#111827', letterSpacing: -0.3 },
+    userName: { fontWeight: '700', fontSize: 16, color: colors(isDark).text, letterSpacing: -0.3 },
     timestamp: { color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 13, marginTop: 2, fontWeight: '500' },
     moreBtn: { padding: 8, marginRight: -8 },
 
     content: { fontSize: 16, color: isDark ? '#D1D5DB' : '#1F2937', marginBottom: 12, lineHeight: 24, fontWeight: '400' },
 
-    imageContainer: { width: '100%', aspectRatio: 16 / 9, borderRadius: 24, overflow: 'hidden', marginBottom: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    imageContainer: { width: '100%', aspectRatio: 16 / 9, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 16, backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     postImage: { width: '100%', height: '100%' },
 
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 },
     actions: { flexDirection: 'row', gap: 24 },
     actionButton: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    actionText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#4B5563', fontWeight: '600' },
+    actionText: { fontSize: 14, color: colors(isDark).textMuted, fontWeight: '600' },
 
     // Commercial Product Styles
     commercialContainer: {
-        borderRadius: 12,
+        borderRadius: Radius.md,
         marginBottom: 16,
         overflow: 'hidden',
         borderWidth: 1,
@@ -238,7 +240,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     commercialButton: {
         paddingVertical: 8,
         paddingHorizontal: 12,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',

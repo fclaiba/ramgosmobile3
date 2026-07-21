@@ -15,6 +15,7 @@ import { BlurView } from 'expo-blur';
 import {
     LIMITS, MIN, clamp, formatReferralCode, formatSocialHandle,
 } from '../utils/inputLimits';
+import { glassShadow, Radius, colors } from '../theme/tokens';
 
 const BUSINESS_CATEGORIES = [
     'Restaurante / Gastronomía',
@@ -341,11 +342,11 @@ export default function RegisterScreen({ navigation, route }: any) {
                                 <View style={{ gap: 12 }}>
                                     {renderAccountTypeButton('consumer', Users, 'Consumidor', 'Explora productos, bonos y eventos', '#2563EB')}
                                     {renderAccountTypeButton('business', Store, 'Negocio', 'Vende productos y crea bonos', '#059669')}
-                                    {renderAccountTypeButton('influencer', Award, 'Influencer', 'Gana comisiones por referidos', '#7C3AED')}
+                                    {renderAccountTypeButton('influencer', Award, 'Influencer', 'Gana comisiones por referidos', '#2196F3')}
 
                                     <TouchableOpacity onPress={handleContinue} activeOpacity={0.9} style={styles.submitBtnContainer}>
                                         <LinearGradient
-                                            colors={['#7C3AED', '#9333EA']}
+                                            colors={['#2196F3', '#29B6F6']}
                                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                             style={styles.gradientBtn}
                                         >
@@ -382,7 +383,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                 <View style={styles.form}>
                                     <View style={{ alignItems: 'center', marginBottom: 12 }}>
                                         <Badge
-                                            color={accountType === 'consumer' ? '#2563EB' : accountType === 'business' ? '#059669' : '#7C3AED'}
+                                            color={accountType === 'consumer' ? '#2563EB' : accountType === 'business' ? '#059669' : '#2196F3'}
                                         >
                                             {accountType === 'consumer' ? 'Consumidor' : accountType === 'business' ? 'Negocio' : 'Influencer'}
                                         </Badge>
@@ -481,12 +482,12 @@ export default function RegisterScreen({ navigation, route }: any) {
                                     <View style={styles.inputContainer}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                                             <Text style={styles.label}>Código de referido (Opcional)</Text>
-                                            <Text style={{ fontSize: 10, color: isDark ? '#C4B5FD' : '#7C3AED', fontWeight: 'bold' }}>¡Gana puntos extra!</Text>
+                                            <Text style={{ fontSize: 10, color: isDark ? '#C4B5FD' : '#2196F3', fontWeight: 'bold' }}>¡Gana puntos extra!</Text>
                                         </View>
-                                        <View style={[styles.inputWrapper, { borderColor: formData.referralCode ? '#7C3AED' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referralCode ? (isDark ? '#2E1065' : '#FAFAFA') : (isDark ? '#374151' : '#fff') }]}>
-                                            <Tag size={20} color={formData.referralCode ? '#7C3AED' : '#9CA3AF'} style={styles.icon} />
+                                        <View style={[styles.inputWrapper, { borderColor: formData.referralCode ? '#2196F3' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referralCode ? (isDark ? '#2E1065' : '#FAFAFA') : (isDark ? '#374151' : '#fff') }]}>
+                                            <Tag size={20} color={formData.referralCode ? '#2196F3' : '#9CA3AF'} style={styles.icon} />
                                             <TextInput
-                                                style={[styles.input, { color: formData.referralCode ? '#7C3AED' : (isDark ? '#F9FAFB' : '#111827'), fontWeight: formData.referralCode ? '600' : '400' }]}
+                                                style={[styles.input, { color: formData.referralCode ? '#2196F3' : (isDark ? '#F9FAFB' : '#111827'), fontWeight: formData.referralCode ? '600' : '400' }]}
                                                 placeholder="Ej: RAMGOS-JUAN"
                                                 placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                 value={formData.referralCode}
@@ -494,7 +495,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                 autoCapitalize="characters"
                                                 maxLength={LIMITS.referralCode}
                                             />
-                                            {formData.referralCode.length > 0 && <CheckCircle2 size={16} color="#7C3AED" />}
+                                            {formData.referralCode.length > 0 && <CheckCircle2 size={16} color="#2196F3" />}
                                         </View>
                                     </View>
 
@@ -596,8 +597,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             style={[
                                                 styles.legalCheckbox,
                                                 {
-                                                    borderColor: formData.acceptTerms ? '#7C3AED' : (isDark ? '#4B5563' : '#D1D5DB'),
-                                                    backgroundColor: formData.acceptTerms ? '#7C3AED' : 'transparent'
+                                                    borderColor: formData.acceptTerms ? '#2196F3' : (isDark ? '#4B5563' : '#D1D5DB'),
+                                                    backgroundColor: formData.acceptTerms ? '#2196F3' : 'transparent'
                                                 }
                                             ]}
                                             onPress={() => {
@@ -621,8 +622,8 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             style={[
                                                 styles.legalCheckbox,
                                                 {
-                                                    borderColor: formData.acceptPrivacy ? '#7C3AED' : (isDark ? '#4B5563' : '#D1D5DB'),
-                                                    backgroundColor: formData.acceptPrivacy ? '#7C3AED' : 'transparent'
+                                                    borderColor: formData.acceptPrivacy ? '#2196F3' : (isDark ? '#4B5563' : '#D1D5DB'),
+                                                    backgroundColor: formData.acceptPrivacy ? '#2196F3' : 'transparent'
                                                 }
                                             ]}
                                             onPress={() => {
@@ -654,7 +655,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         style={[styles.submitBtnContainer, busy && { opacity: 0.8 }]}
                                     >
                                         <LinearGradient
-                                            colors={['#7C3AED', '#9333EA']}
+                                            colors={['#2196F3', '#29B6F6']}
                                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                             style={styles.gradientBtn}
                                         >
@@ -714,7 +715,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             formData.businessCategory === item && styles.categoryTextActive
                                         ]}>{item}</Text>
                                     </View>
-                                    {formData.businessCategory === item && <CheckCircle2 size={18} color="#7C3AED" />}
+                                    {formData.businessCategory === item && <CheckCircle2 size={18} color="#2196F3" />}
                                 </TouchableOpacity>
                             )}
                             contentContainerStyle={{ paddingBottom: 20 }}
@@ -765,32 +766,28 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             overflow: 'hidden',
             ...Platform.select({
                 web: {
-                    boxShadow: isDark ? '0 20px 40px rgba(0, 0, 0, 0.5)' : '0 20px 40px rgba(139, 92, 246, 0.15)',
+                    boxShadow: isDark ? '0 20px 40px rgba(0, 0, 0, 0.5)' : '0 20px 40px rgba(79, 195, 247, 0.15)',
                     backdropFilter: 'blur(24px)',
                     WebkitBackdropFilter: 'blur(24px)',
                 } as any,
                 default: {
-                    shadowColor: isDark ? '#000' : '#8B5CF6',
-                    shadowOffset: { width: 0, height: 12 },
-                    shadowOpacity: isDark ? 0.4 : 0.15,
-                    shadowRadius: 24,
-                    elevation: 12,
+                    ...glassShadow(isDark),
                 },
             }),
         },
 
         backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: isCompact ? 12 : 20 },
-        backText: { marginLeft: 8, color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '500' },
+        backText: { marginLeft: 8, color: colors(isDark).textMuted, fontWeight: '500' },
 
-        title: { fontSize: isCompact ? 22 : 26, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#7C3AED', marginBottom: 8, textAlign: 'center' },
-        subtitle: { fontSize: isCompact ? 13 : 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', marginBottom: isCompact ? 16 : 24 },
+        title: { fontSize: isCompact ? 22 : 26, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },
+        subtitle: { fontSize: isCompact ? 13 : 14, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: isCompact ? 16 : 24 },
 
         // Type Selection
         typeBtn: {
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             padding: isCompact ? 12 : 16,
             marginBottom: 12,
             borderWidth: 2,
@@ -799,12 +796,12 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         typeBtnSelected: {
             ...Platform.select({
                 web: { boxShadow: '0 4px 6px rgba(0,0,0,0.05)' } as any,
-                default: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+                default: { ...glassShadow(isDark),},
             }),
         },
-        typeIconBox: { width: isCompact ? 40 : 44, height: isCompact ? 40 : 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-        typeTitle: { fontSize: isCompact ? 15 : 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4 },
-        typeDesc: { fontSize: isCompact ? 11 : 12, color: isDark ? '#9CA3AF' : '#6B7280' },
+        typeIconBox: { width: isCompact ? 40 : 44, height: isCompact ? 40 : 44, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+        typeTitle: { fontSize: isCompact ? 15 : 16, fontWeight: '600', color: colors(isDark).text, marginBottom: 4 },
+        typeDesc: { fontSize: isCompact ? 11 : 12, color: colors(isDark).textMuted },
 
         // Form
         form: { gap: isCompact ? 12 : 16 },
@@ -814,15 +811,15 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
-            borderRadius: 12,
+            borderRadius: Radius.md,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
             height: isCompact ? 44 : 48,
             paddingHorizontal: 12,
             minWidth: 0,
         },
         icon: { marginRight: 12 },
-        input: { flex: 1, fontSize: isCompact ? 14 : 15, color: isDark ? '#F9FAFB' : '#111827' },
+        input: { flex: 1, fontSize: isCompact ? 14 : 15, color: colors(isDark).text },
 
         row: { flexDirection: isWide ? 'row' : 'column', gap: isCompact ? 10 : 12, width: '100%' },
         col: { flex: 1, minWidth: 0 },
@@ -830,30 +827,30 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         submitBtnContainer: {
             marginTop: isCompact ? 8 : 12,
             ...Platform.select({
-                web: { boxShadow: '0 6px 16px rgba(124, 58, 237, 0.3)' } as any,
-                default: { shadowColor: '#7C3AED', shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+                web: { boxShadow: '0 6px 16px rgba(33, 150, 243, 0.3)' } as any,
+                default: { ...glassShadow(isDark),},
             }),
         },
-        gradientBtn: { flexDirection: 'row', height: isCompact ? 50 : 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+        gradientBtn: { flexDirection: 'row', height: isCompact ? 50 : 56, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center' },
         btnText: { color: '#fff', fontSize: isCompact ? 15 : 16, fontWeight: '600' },
         legalRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: isCompact ? 10 : 14 },
-        legalCheckbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2 },
-        legalText: { fontSize: isCompact ? 12 : 13, color: isDark ? '#9CA3AF' : '#4B5563', flex: 1, flexWrap: 'wrap', lineHeight: isCompact ? 16 : 18 },
-        legalLink: { color: '#7C3AED', fontWeight: 'bold', textDecorationLine: 'underline' },
+        legalCheckbox: { width: 20, height: 20, borderRadius: Radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2 },
+        legalText: { fontSize: isCompact ? 12 : 13, color: colors(isDark).textMuted, flex: 1, flexWrap: 'wrap', lineHeight: isCompact ? 16 : 18 },
+        legalLink: { color: '#2196F3', fontWeight: 'bold', textDecorationLine: 'underline' },
 
         divider: { flexDirection: 'row', alignItems: 'center', marginVertical: isCompact ? 16 : 24 },
         line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
         orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
 
         socialRow: { flexDirection: 'row', gap: 12, justifyContent: 'center' },
-        socialBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', justifyContent: 'center', alignItems: 'center' },
+        socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },
 
         footer: { flexDirection: 'row', justifyContent: 'center', marginTop: isCompact ? 16 : 24, flexWrap: 'wrap' },
-        footerText: { color: isDark ? '#9CA3AF' : '#6B7280' },
-        registerLink: { color: '#7C3AED', fontWeight: '600' },
+        footerText: { color: colors(isDark).textMuted },
+        registerLink: { color: '#2196F3', fontWeight: '600' },
 
         // Badge (legacy)
-        badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
+        badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radius.xl },
 
         // Modal
         modalOverlay: {
@@ -874,7 +871,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             maxWidth: 400,
             maxHeight: '70%',
             backgroundColor: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)',
-            borderRadius: 24,
+            borderRadius: Radius.xl,
             padding: 20,
             borderWidth: 1,
             borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.5)',
@@ -896,28 +893,28 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         modalTitle: {
             fontSize: 18,
             fontWeight: 'bold',
-            color: isDark ? '#F9FAFB' : '#111827'
+            color: colors(isDark).text
         },
         categoryItem: {
             paddingVertical: 14,
             paddingHorizontal: 12,
             borderBottomWidth: 1,
-            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center'
         },
         categoryItemActive: {
-            backgroundColor: isDark ? 'rgba(124, 58, 237, 0.1)' : '#FAFAFA',
-            borderRadius: 8,
+            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.1)' : '#FAFAFA',
+            borderRadius: Radius.sm,
             borderBottomWidth: 0
         },
         categoryText: {
             fontSize: 15,
-            color: isDark ? '#D1D5DB' : '#4B5563'
+            color: colors(isDark).textMuted
         },
         categoryTextActive: {
-            color: '#7C3AED',
+            color: '#2196F3',
             fontWeight: '600'
         }
     });

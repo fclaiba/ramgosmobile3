@@ -25,6 +25,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { colors, Radius, Space } from '../theme/tokens';
 
+
 const formatDate = (isoString: string) => {
     const date = new Date(isoString);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -39,7 +40,7 @@ const getIconForType = (type: string, isDark: boolean) => {
             return <CreditCard size={20} color="#059669" />;
         case 'promo':
         case 'campaign':
-            return <Tag size={20} color="#7C3AED" />;
+            return <Tag size={20} color="#2196F3" />;
         case 'social':
         case 'dispute':
             return <MessageCircle size={20} color="#F59E0B" />;
@@ -242,12 +243,12 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
             alignItems: 'flex-start',
         },
         unreadItem: {
-            backgroundColor: isDark ? 'rgba(124,58,237,0.12)' : '#F5F3FF',
+            backgroundColor: isDark ? 'rgba(33, 150, 243,0.12)' : '#F5F3FF',
         },
         iconContainer: {
             width: 40,
             height: 40,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             backgroundColor: c.glass,
             alignItems: 'center',
             justifyContent: 'center',

@@ -26,11 +26,11 @@ export function ChromeGlass({ edge = 'top' }: Props) {
     const t = chromeFrost(isDark);
 
     return (
-        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             {Platform.OS === 'web' ? (
                 <View
                     style={[
-                        StyleSheet.absoluteFillObject,
+                        StyleSheet.absoluteFill,
                         {
                             backgroundColor: t.frost,
                             // @ts-expect-error web CSS
@@ -44,11 +44,11 @@ export function ChromeGlass({ edge = 'top' }: Props) {
                     <BlurView
                         intensity={t.blurNative}
                         tint={t.tint}
-                        style={StyleSheet.absoluteFillObject}
+                        style={StyleSheet.absoluteFill}
                     />
                     <View
                         style={[
-                            StyleSheet.absoluteFillObject,
+                            StyleSheet.absoluteFill,
                             { backgroundColor: t.frost },
                         ]}
                     />

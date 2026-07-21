@@ -6,6 +6,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 interface ReferralCardProps {
     code: string;
@@ -27,7 +29,7 @@ export const ReferralCard: React.FC<ReferralCardProps> = ({ code, onShare }) => 
     return (
         <View style={[styles.container, isDark && styles.containerDark]}>
             <LinearGradient
-                colors={isDark ? ['#4C1D95', '#2E1065'] : ['#8B5CF6', '#6D28D9']}
+                colors={isDark ? ['#4C1D95', '#2E1065'] : ['#4FC3F7', '#1565C0']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.gradient}
@@ -61,18 +63,13 @@ export const ReferralCard: React.FC<ReferralCardProps> = ({ code, onShare }) => 
 
 const getStyles = (isDark: any) => StyleSheet.create({
     container: {
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         overflow: 'hidden',
         marginVertical: 16,
         elevation: 8,
-        shadowColor: '#8B5CF6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-    },
+        ...glassShadow(isDark),},
     containerDark: {
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-    },
+        ...glassShadow(isDark),},
     gradient: {
         padding: 24,
     },
@@ -98,7 +95,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     codeContainer: {
         flexDirection: 'row',
         backgroundColor: 'rgba(255,255,255,0.2)',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         padding: 4,
         alignItems: 'center',
         marginBottom: 24,
@@ -116,7 +113,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     copyButton: {
         backgroundColor: 'rgba(255,255,255,0.9)',
         padding: 12,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         marginRight: 4,
     },
     shareButton: {
@@ -124,13 +121,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: '#F59E0B',
         paddingVertical: 14,
         paddingHorizontal: 32,
-        borderRadius: 100,
+        borderRadius: Radius.full,
         alignItems: 'center',
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
+        ...glassShadow(isDark),
     },
     shareButtonText: {
         color: isDark ? '#09090B' : '#FAFAFA',

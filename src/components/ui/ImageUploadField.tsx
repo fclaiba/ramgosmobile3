@@ -128,14 +128,14 @@ export const ImageUploadField = ({
                     >
                         {scanning ? (
                             <View style={isDocument ? styles.uploadRow : { alignItems: 'center' }}>
-                                <ActivityIndicator size="small" color="#8B5CF6" />
+                                <ActivityIndicator size="small" color="#4FC3F7" />
                                 <Text style={styles.scanningText}>Escaneando...</Text>
                             </View>
                         ) : (
                             isDocument ? (
                                 <View style={styles.uploadRow}>
                                     <View style={styles.uploadIconWrap}>
-                                        <UploadCloud size={22} color="#8B5CF6" />
+                                        <UploadCloud size={22} color="#4FC3F7" />
                                     </View>
                                     <View style={styles.uploadCopy}>
                                         <Text style={styles.uploadTextDoc}>Subir foto o archivo</Text>
@@ -231,7 +231,7 @@ const getStyles = (isDark: boolean, variant: 'grid' | 'document') => StyleSheet.
     uploadRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     uploadIconWrap: {
         width: 40, height: 40, borderRadius: 12,
-        backgroundColor: isDark ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.12)',
+        backgroundColor: isDark ? 'rgba(79, 195, 247,0.2)' : 'rgba(79, 195, 247,0.12)',
         alignItems: 'center', justifyContent: 'center',
     },
     uploadCopy: { flex: 1 },
@@ -250,7 +250,7 @@ const getStyles = (isDark: boolean, variant: 'grid' | 'document') => StyleSheet.
     },
     scanningText: {
         fontSize: 8,
-        color: '#8B5CF6',
+        color: '#4FC3F7',
         marginTop: 4,
         fontWeight: '600',
     }

@@ -16,6 +16,7 @@ import { glassTokens } from '../utils/glass';
 import {
     LIMITS, MIN, clamp, formatEin, isValidEin, isValidBusinessAddress, isValidSocialUrl,
 } from '../utils/inputLimits';
+import { Radius, colors } from '../theme/tokens';
 
 type Step = 'intro' | 'success';
 
@@ -138,7 +139,7 @@ export default function KYCScreen({ navigation, route }: any) {
             >
                 <View style={styles.hero}>
                     <View style={styles.iconContainer}>
-                        <ShieldCheck size={40} color="#8B5CF6" />
+                        <ShieldCheck size={40} color="#4FC3F7" />
                     </View>
                     <Text style={styles.title}>{title}</Text>
                     <Text style={styles.subtitle}>{subtitle}</Text>
@@ -286,7 +287,7 @@ function FormSection({ styles, icon: Icon, title, children }: {
         <View style={styles.section}>
             <View style={styles.sectionHeader}>
                 <View style={styles.sectionIcon}>
-                    <Icon size={16} color="#8B5CF6" />
+                    <Icon size={16} color="#4FC3F7" />
                 </View>
                 <Text style={styles.sectionTitle}>{title}</Text>
             </View>
@@ -358,13 +359,13 @@ const getStyles = (isDark: boolean) => {
             flex: 1,
             maxHeight: '94%',
             alignSelf: 'center',
-            borderRadius: 24,
+            borderRadius: Radius.xl,
             overflow: 'hidden',
             ...glass.shadow,
         },
         card: {
             flex: 1,
-            borderRadius: 24,
+            borderRadius: Radius.xl,
             borderWidth: 1,
             borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.5)',
             backgroundColor: isDark ? 'rgba(17,24,39,0.45)' : 'rgba(255,255,255,0.35)',
@@ -384,26 +385,26 @@ const getStyles = (isDark: boolean) => {
         iconContainer: {
             width: 72,
             height: 72,
-            borderRadius: 20,
-            backgroundColor: isDark ? 'rgba(139,92,246,0.18)' : 'rgba(139,92,246,0.12)',
+            borderRadius: Radius.xl,
+            backgroundColor: isDark ? 'rgba(79, 195, 247,0.18)' : 'rgba(79, 195, 247,0.12)',
             justifyContent: 'center',
             alignItems: 'center',
             marginBottom: 14,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(139,92,246,0.35)' : 'rgba(139,92,246,0.2)',
+            borderColor: isDark ? 'rgba(79, 195, 247,0.35)' : 'rgba(79, 195, 247,0.2)',
         },
         iconSuccess: { backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : '#D1FAE5', borderColor: 'rgba(16,185,129,0.35)' },
         title: {
             fontSize: 21,
             fontWeight: '800',
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
             marginBottom: 6,
             textAlign: 'center',
         },
         subtitle: {
             fontSize: 13,
             lineHeight: 19,
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: colors(isDark).textMuted,
             textAlign: 'center',
             paddingHorizontal: 8,
         },
@@ -414,7 +415,7 @@ const getStyles = (isDark: boolean) => {
             gap: 12,
         },
         section: {
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             padding: 14,
             ...glassCard,
         },
@@ -430,15 +431,15 @@ const getStyles = (isDark: boolean) => {
         sectionIcon: {
             width: 32,
             height: 32,
-            borderRadius: 10,
-            backgroundColor: isDark ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.1)',
+            borderRadius: Radius.md,
+            backgroundColor: isDark ? 'rgba(79, 195, 247,0.2)' : 'rgba(79, 195, 247,0.1)',
             alignItems: 'center',
             justifyContent: 'center',
         },
         sectionTitle: {
             fontSize: 15,
             fontWeight: '700',
-            color: isDark ? '#F3F4F6' : '#1F2937',
+            color: colors(isDark).text,
         },
         sectionBody: { gap: 4 },
 
@@ -447,7 +448,7 @@ const getStyles = (isDark: boolean) => {
         fieldLabel: {
             fontSize: 12,
             fontWeight: '600',
-            color: isDark ? '#D1D5DB' : '#4B5563',
+            color: colors(isDark).textMuted,
             flexShrink: 1,
         },
         fieldHint: {
@@ -460,7 +461,7 @@ const getStyles = (isDark: boolean) => {
             alignItems: 'center',
             gap: 10,
             height: 48,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             paddingHorizontal: 14,
             backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.65)',
             borderWidth: 1,
@@ -470,16 +471,16 @@ const getStyles = (isDark: boolean) => {
             flex: 1,
             height: '100%',
             fontSize: 14,
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
             ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
         },
         inputWithIcon: { paddingLeft: 0 },
 
         btn: {
-            backgroundColor: 'rgba(124, 58, 237, 0.92)',
+            backgroundColor: 'rgba(33, 150, 243, 0.92)',
             flexDirection: 'row',
             height: 52,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             paddingHorizontal: 24,
             justifyContent: 'center',
             alignItems: 'center',

@@ -7,6 +7,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Button } from './ui/button';
+import { Radius, colors } from '../theme/tokens';
+
 
 interface AddReviewModalProps {
     visible: boolean;
@@ -138,17 +140,17 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    container: { backgroundColor: isDark ? '#09090B' : '#FAFAFA', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32, maxHeight: '80%' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
-    title: { fontSize: 18, fontWeight: '700', color: isDark ? '#F9FAFB' : '#111827' },
+    container: { backgroundColor: colors(isDark).bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32, maxHeight: '80%' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    title: { fontSize: 18, fontWeight: '700', color: colors(isDark).text },
     closeBtn: { padding: 4 },
     content: { padding: 20 },
     label: { fontSize: 14, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12, marginTop: 12 },
     starsRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-    input: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, padding: 16, color: isDark ? '#F9FAFB' : '#111827', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', minHeight: 120 },
-    uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', borderRadius: 12, borderStyle: 'dashed', marginTop: 20, justifyContent: 'center' },
-    uploadText: { color: isDark ? '#D1D5DB' : '#4B5563', fontWeight: '500' },
+    input: { backgroundColor: colors(isDark).glass, borderRadius: Radius.md, padding: 16, color: colors(isDark).text, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', minHeight: 120 },
+    uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', borderRadius: Radius.md, borderStyle: 'dashed', marginTop: 20, justifyContent: 'center' },
+    uploadText: { color: colors(isDark).textMuted, fontWeight: '500' },
     footer: { padding: 20, paddingTop: 0 },
-    submitBtn: { width: '100%', backgroundColor: isDark ? '#374151' : '#111827', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
+    submitBtn: { width: '100%', backgroundColor: isDark ? '#374151' : '#111827', borderRadius: Radius.lg, paddingVertical: 16, alignItems: 'center' },
     submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' }
 });

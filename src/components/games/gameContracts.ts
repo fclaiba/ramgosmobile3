@@ -1,3 +1,5 @@
+import { glassShadow } from '../../theme/tokens';
+
 /**
  * Game Contracts (Parte 0)
  * ------------------------
@@ -211,17 +213,11 @@ const RADIUS = {
 
 const SHADOWS: GameThemeTokens['shadows'] = {
   elev1: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    ...(glassShadow(false) as any), shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
   elev2: {
-    shadowColor: '#000000',
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+    ...(glassShadow(false) as any), shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
 };
@@ -310,15 +306,15 @@ export const GAME_THEMES: Record<GameId, GameThemeTokens> = {
     colors: {
       ...BASE_ARCADE.colors,
       bg: '#DDD6FE',
-      accent: '#7C3AED',
-      accent2: '#A78BFA',
+      accent: '#2196F3',
+      accent2: '#5DD3F3',
       hudBg: 'rgba(255,255,255,0.85)',
       hudText: '#4B5563',
     },
     gradients: {
       ...BASE_ARCADE.gradients,
-      bg: ['#A78BFA', '#DDD6FE'],
-      cta: ['#7C3AED', '#8B5CF6'],
+      bg: ['#5DD3F3', '#DDD6FE'],
+      cta: ['#2196F3', '#4FC3F7'],
     },
   },
   dino: {

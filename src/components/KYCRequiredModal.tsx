@@ -5,6 +5,8 @@ import { ShieldAlert, ArrowRight, X } from 'lucide-react-native';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
+import { Radius, colors } from '../theme/tokens';
+
 
 interface KYCRequiredModalProps {
     visible: boolean;
@@ -50,7 +52,7 @@ export const KYCRequiredModal: React.FC<KYCRequiredModalProps> = ({ visible, onC
                             <ShieldAlert size={44} color="#EF4444" />
                         </View>
 
-                        <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+                        <Text style={[styles.title, { color: colors(isDark).text }]}>
                             Verificación requerida
                         </Text>
                         <Text style={[styles.message, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>
@@ -58,7 +60,7 @@ export const KYCRequiredModal: React.FC<KYCRequiredModalProps> = ({ visible, onC
                         </Text>
 
                         <TouchableOpacity
-                            style={[styles.primaryBtn, { backgroundColor: '#7C3AED' }]}
+                            style={[styles.primaryBtn, { backgroundColor: '#2196F3' }]}
                             onPress={() => {
                                 onClose();
                                 onVerify();
@@ -106,7 +108,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     iconContainer: {
         width: 80,
         height: 80,
-        borderRadius: 40,
+        borderRadius: Radius.full,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 20
@@ -126,8 +128,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
     primaryBtn: {
         width: '100%',
         height: 48,
-        backgroundColor: '#7C3AED', // Brand primary
-        borderRadius: 12,
+        backgroundColor: '#2196F3', // Brand primary
+        borderRadius: Radius.md,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',

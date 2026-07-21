@@ -7,6 +7,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../ui/button';
 import { DARK_MAP_STYLE, LIGHT_MAP_STYLE, MAP_DEFAULTS } from '../../constants/darkMapStyle';
+import { glassShadow, colors } from '../../theme/tokens';
+
 
 interface LocationPickerModalProps {
     visible: boolean;
@@ -80,9 +82,9 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
 
     return (
         <Modal visible={visible} animationType="slide" transparent={false}>
-            <View style={[styles.container, { backgroundColor: isDark ? '#09090B' : '#FAFAFA' }]}>
+            <View style={[styles.container, { backgroundColor: colors(isDark).bg }]}>
                 {/* Header */}
-                <View style={[styles.header, { paddingTop: insets.top, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+                <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors(isDark).glass }]}>
                     <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>Seleccionar Ubicación</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <X size={24} color={isDark ? '#fff' : '#000'} />
@@ -104,21 +106,21 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
                 </MapView>
 
                 {/* Bottom Sheet */}
-                <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+                <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colors(isDark).glass }]}>
                     {selectedCoord ? (
                         <View>
-                            <Text style={[styles.addressLabel, { color: isDark ? '#9CA3AF' : '#6B7280' }]}>Ubicación seleccionada:</Text>
+                            <Text style={[styles.addressLabel, { color: colors(isDark).textMuted }]}>Ubicación seleccionada:</Text>
                             {loading ? (
-                                <ActivityIndicator color="#8B5CF6" />
+                                <ActivityIndicator color="#4FC3F7" />
                             ) : (
                                 <Text style={[styles.addressText, { color: isDark ? '#fff' : '#111827' }]}>{address || 'Coordenadas seleccionadas'}</Text>
                             )}
-                            <Button onPress={handleConfirm} style={{ marginTop: 16, backgroundColor: '#8B5CF6' }}>
+                            <Button onPress={handleConfirm} style={{ marginTop: 16, backgroundColor: '#4FC3F7' }}>
                                 <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirmar Ubicación</Text>
                             </Button>
                         </View>
                     ) : (
-                        <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center' }}>
+                        <Text style={{ color: colors(isDark).textMuted, textAlign: 'center' }}>
                             Toca en el mapa para seleccionar una ubicación
                         </Text>
                     )}
@@ -130,11 +132,11 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
 
 const getStyles = (isDark: any) => StyleSheet.create({
     container: { flex: 1 },
-    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 4 },
+    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, ...glassShadow(isDark),},
     title: { fontSize: 18, fontWeight: 'bold' },
     closeBtn: { padding: 4 },
     map: { flex: 1 },
-    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, shadowColor: isDark ? '#F9FAFB' : '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, elevation: 10 },
+    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, ...glassShadow(isDark),},
     addressLabel: { fontSize: 14, marginBottom: 4 },
     addressText: { fontSize: 16, fontWeight: '500' },
 });

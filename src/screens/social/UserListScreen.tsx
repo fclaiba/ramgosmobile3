@@ -8,6 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { UserListItem } from '../../components/social/UserListItem';
 import { MobileHeader } from '../../components/MobileHeader';
+import { colors } from '../../theme/tokens';
+
 
 export default function UserListScreen() {
     const route = useRoute<any>();
@@ -110,7 +112,7 @@ export default function UserListScreen() {
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        backgroundColor: colors(isDark).bg,
     },
     list: {
         paddingTop: 8,
@@ -120,6 +122,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
     },
     emptyText: {
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
 });

@@ -10,6 +10,8 @@ import { Edit2, Trash2, Plus, PackageOpen, LayoutGrid, Search, ArrowLeft, MoreVe
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../components/ui/sheet';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const { width } = Dimensions.get('window');
 
@@ -45,7 +47,7 @@ export default function MyListingsScreen() {
 
     const renderLoading = () => (
         <View style={[styles.centerContainer, isDark && styles.containerDark]}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
+            <ActivityIndicator size="large" color="#4FC3F7" />
             <Text style={[styles.loadingText, isDark && styles.textDark]}>Cargando tus publicaciones...</Text>
         </View>
     );
@@ -53,14 +55,14 @@ export default function MyListingsScreen() {
     const renderEmpty = () => (
         <View style={styles.emptyState}>
             <View style={[styles.iconCircle, isDark && styles.iconCircleDark]}>
-                <PackageOpen size={48} color={isDark ? '#A78BFA' : '#7C3AED'} />
+                <PackageOpen size={48} color={isDark ? '#5DD3F3' : '#2196F3'} />
             </View>
             <Text style={[styles.emptyTitle, isDark && styles.textDark]}>No hay publicaciones</Text>
             <Text style={styles.emptySub}>Aún no has puesto nada a la venta. ¡Empieza hoy mismo!</Text>
 
             <TouchableOpacity onPress={() => navigation.navigate('CreateListing')} activeOpacity={0.8}>
                 <LinearGradient
-                    colors={['#7C3AED', '#EC4899']}
+                    colors={['#2196F3', '#EC4899']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.emptyBtn}
@@ -126,7 +128,7 @@ export default function MyListingsScreen() {
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, isDark && styles.textDark]}>Mis Publicaciones</Text>
                 <TouchableOpacity onPress={() => navigation.navigate('CreateListing')} style={styles.iconBtn}>
-                    <Plus size={24} color="#8B5CF6" />
+                    <Plus size={24} color="#4FC3F7" />
                 </TouchableOpacity>
             </View>
 
@@ -154,10 +156,10 @@ export default function MyListingsScreen() {
                     </SheetHeader>
                     <SheetFooter style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
                         <TouchableOpacity 
-                            style={[styles.actionButton, { flex: 1, justifyContent: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]} 
+                            style={[styles.actionButton, { flex: 1, justifyContent: 'center', backgroundColor: colors(isDark).glass }]} 
                             onPress={() => setConfirmDelete(null)}
                         >
-                            <Text style={[styles.actionText, { color: isDark ? '#D1D5DB' : '#4B5563', fontSize: 16 }]}>Cancelar</Text>
+                            <Text style={[styles.actionText, { color: colors(isDark).textMuted, fontSize: 16 }]}>Cancelar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
                             style={[styles.actionButton, styles.deleteButton, { flex: 1, justifyContent: 'center' }]} 
@@ -196,7 +198,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderBottomWidth: 1,
         borderBottomColor: isDark ? '#1F2937' : '#F3F4F6',
     },
@@ -211,15 +213,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
 
     // Card Styles
     card: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         marginBottom: 16,
         padding: 12,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 3,
+        ...glassShadow(isDark),
         borderWidth: 1,
         borderColor: 'transparent',
     },
@@ -231,7 +229,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     cardImageList: {
         width: 100,
         height: 100,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     cardContent: {
         flex: 1,
@@ -253,7 +251,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     cardPrice: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#7C3AED',
+        color: '#2196F3',
         marginTop: 4,
     },
     cardMeta: {
@@ -263,9 +261,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
 
     // Status Badge
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.md },
     statusActive: { backgroundColor: '#DCFCE7' },
-    statusInactive: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    statusInactive: { backgroundColor: colors(isDark).glass },
     statusText: { fontSize: 10, fontWeight: '700' },
     statusTextActive: { color: '#166534' },
     statusTextInactive: { color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
@@ -281,7 +279,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 6,
         paddingHorizontal: 10,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
         backgroundColor: '#FAFAFA',
     },
     actionButtonDark: {
@@ -300,8 +298,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
     iconCircle: {
         width: 80,
         height: 80,
-        borderRadius: 40,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.full,
+        backgroundColor: colors(isDark).glass,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 16,
@@ -314,12 +312,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         paddingHorizontal: 24,
-        borderRadius: 24,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        borderRadius: Radius.xl,
+        ...glassShadow(isDark),
     },
     emptyBtnText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: 'bold', fontSize: 16 },
 

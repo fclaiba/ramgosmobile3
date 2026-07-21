@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { glassShadow, Radius, colors } from '../../theme/tokens';
+
 
 export type MarketplaceItemType = 'product' | 'service' | 'event' | 'bono' | 'business';
 
@@ -22,7 +24,7 @@ interface MarketplaceMapMarkerProps {
 // Thematic colors by commercial unit type. Keep in sync with the
 // marketplace filter chips and the web marker implementation.
 export const MARKER_COLORS: Record<MarketplaceItemType, string> = {
-  product:  '#8B5CF6', // Violet
+  product:  '#4FC3F7', // Violet
   service:  '#38BDF8', // Sky/Cyan
   event:    '#F59E0B', // Amber
   bono:     '#10B981', // Emerald
@@ -114,17 +116,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     justifyContent: 'flex-start',
   },
   pin: {
-    backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+    backgroundColor: colors(isDark).bg,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 5,
+    ...glassShadow(isDark),
   },
   image: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+    backgroundColor: colors(isDark).glass,
   },
   triangle: {
     width: 0,
@@ -142,7 +140,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     backgroundColor: isDark ? 'rgba(17, 24, 39, 0.85)' : 'rgba(255, 255, 255, 0.92)',
     maxWidth: 96,
     borderWidth: 1,
@@ -155,7 +153,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
   labelText: {
     fontSize: 10,
     fontWeight: '600',
-    color: isDark ? '#F9FAFB' : '#111827',
+    color: colors(isDark).text,
     textAlign: 'center',
   },
   labelTextActive: {

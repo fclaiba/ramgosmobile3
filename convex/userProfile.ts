@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { assertSelfOrAdmin, requireActor, getActorOrNull } from "./authHelpers";
 
 // PHASE 1: User Addresses Management
 
@@ -183,8 +183,19 @@ export const updatePreferences = mutation({
 export const getPreferences = query({
     args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        assertSelfOrAdmin(actor, args.userId);
+        const actor = await getActorOrNull(ctx, args.sessionToken);
+        
+        if (!actor || actor.idString !== args.userId) {
+            return {
+                userId: args.userId,
+                language: 'es',
+                currency: 'USD',
+                notifications: { email: true, push: true, sms: false, marketingEmails: true },
+                searchRadius: 50,
+                preferredCategories: [],
+                updatedAt: new Date().toISOString(),
+            };
+        }
 
         const prefs = await ctx.db
             .query("userPreferences")

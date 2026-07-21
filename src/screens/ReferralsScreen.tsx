@@ -5,6 +5,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useReferral } from '../contexts/ReferralContext';
 import { ReferralCard } from '../components/referral/ReferralCard';
 import { ArrowLeft, Users, DollarSign, Award } from 'lucide-react-native';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function ReferralsScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -70,7 +72,7 @@ export default function ReferralsScreen({ navigation }: any) {
                         icon={Award}
                         value={stats.level}
                         label="Nivel"
-                        color="#8B5CF6"
+                        color="#4FC3F7"
                     />
                 </View>
 
@@ -81,7 +83,7 @@ export default function ReferralsScreen({ navigation }: any) {
                         {/* BOTÓN DEBUG: Solo para desarrollo */}
                         {__DEV__ ? (
                             <TouchableOpacity onPress={() => simulateReferral()}>
-                                <Text style={{ color: '#8B5CF6', fontSize: 12 }}>+ Simular</Text>
+                                <Text style={{ color: '#4FC3F7', fontSize: 12 }}>+ Simular</Text>
                             </TouchableOpacity>
                         ) : null}
                     </View>
@@ -125,14 +127,14 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 16,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     backButton: {
         padding: 8,
-        borderRadius: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.md,
+        backgroundColor: colors(isDark).glass,
     },
     headerTitle: {
         fontSize: 18,
@@ -151,7 +153,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
     heroSubtitle: {
         fontSize: 16,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 24,
@@ -171,9 +173,9 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
     statCard: {
         flex: 1,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         padding: 16,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
@@ -183,7 +185,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     iconBox: {
         width: 40,
         height: 40,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 12,
@@ -196,11 +198,11 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
     statLabel: {
         fontSize: 12,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     historySection: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 24,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.xl,
         padding: 20,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
@@ -220,7 +222,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
     },
     historyLeft: {
         flexDirection: 'row',
@@ -230,7 +232,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     dot: {
         width: 8,
         height: 8,
-        borderRadius: 4,
+        borderRadius: Radius.sm,
     },
     historyUser: {
         fontSize: 14,
@@ -239,7 +241,7 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
     historyAction: {
         fontSize: 12,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     },
     historyPoints: {
         fontSize: 14,
@@ -258,6 +260,6 @@ const getStyles = (isDark: boolean, insets: any) => StyleSheet.create({
     },
     emptySubtext: {
         fontSize: 14,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
     }
 });

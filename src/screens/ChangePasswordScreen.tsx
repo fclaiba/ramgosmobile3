@@ -17,6 +17,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { Radius, colors } from '../theme/tokens';
+
 
 export default function ChangePasswordScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
@@ -192,7 +194,7 @@ const CheckLine = ({
             style={{
                 width: 16,
                 height: 16,
-                borderRadius: 8,
+                borderRadius: Radius.sm,
                 backgroundColor: ok ? '#10B981' : isDark ? '#374151' : '#E5E7EB',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -215,7 +217,7 @@ const getStyles = (isDark: boolean) =>
     StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+            backgroundColor: colors(isDark).bg,
         },
         content: {
             padding: 20,
@@ -232,17 +234,17 @@ const getStyles = (isDark: boolean) =>
         inputRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+            backgroundColor: colors(isDark).glass,
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
             borderWidth: 1,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             paddingHorizontal: 14,
         },
         input: {
             flex: 1,
             paddingVertical: 14,
             fontSize: 15,
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: colors(isDark).text,
         },
         eyeBtn: {
             padding: 6,
@@ -252,9 +254,9 @@ const getStyles = (isDark: boolean) =>
             paddingVertical: 4,
         },
         submitBtn: {
-            backgroundColor: '#7C3AED',
+            backgroundColor: '#2196F3',
             paddingVertical: 16,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             alignItems: 'center',
             marginTop: 8,
         },

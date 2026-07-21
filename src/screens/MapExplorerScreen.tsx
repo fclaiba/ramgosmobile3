@@ -12,6 +12,8 @@ import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
 import { useUserLocation } from '../hooks/useUserLocation';
 import DarkMapView, { Marker, Circle } from '../components/map/DarkMapView';
 import { CustomMapMarker, type ListingType } from '../components/map/CustomMapMarker';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -87,7 +89,6 @@ export default function MapExplorerScreen() {
     const userLng = location?.coords.longitude ?? INITIAL_REGION.longitude;
 
     const filteredProducts = useMemo(() => {
-        // ponytail: don't hide far listings (BMW NYC vanished with BA GPS + 10km)
         return products.filter(p => {
             if (!p.location?.lat || !p.location?.lng) return false;
             const type = p.listingType || p.type;
@@ -97,7 +98,8 @@ export default function MapExplorerScreen() {
         }).map(p => {
             const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
             return { ...p, listingType: p.listingType || p.type, calculatedDistance: dist };
-        }).sort((a, b) => a.calculatedDistance - b.calculatedDistance);
+        }).filter(p => p.calculatedDistance <= radius)
+          .sort((a, b) => a.calculatedDistance - b.calculatedDistance);
     }, [products, activeFilter, searchQuery, userLat, userLng, radius]);
 
     const selectedMarker = useMemo(() => {
@@ -248,8 +250,8 @@ export default function MapExplorerScreen() {
                                     longitude: location.coords.longitude
                                 }}
                                 radius={radius * 1000}
-                                fillColor={isDark ? 'rgba(139, 92, 246, 0.12)' : 'rgba(124, 58, 237, 0.08)'}
-                                strokeColor={isDark ? 'rgba(139, 92, 246, 0.6)' : 'rgba(124, 58, 237, 0.5)'}
+                                fillColor={isDark ? 'rgba(79, 195, 247, 0.12)' : 'rgba(33, 150, 243, 0.08)'}
+                                strokeColor={isDark ? 'rgba(79, 195, 247, 0.6)' : 'rgba(33, 150, 243, 0.5)'}
                                 strokeWidth={1.5}
                             />
                         )}
@@ -381,45 +383,38 @@ const getStyles = (isDark: any) => StyleSheet.create({
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 12,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.md,
         paddingHorizontal: 12,
         paddingVertical: 10,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
+        ...glassShadow(isDark),
         gap: 8
     },
     searchBarDark: {
         backgroundColor: 'rgba(31,41,55,0.72)',
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-    },
+        ...glassShadow(isDark),},
     backButton: { padding: 4 },
     searchInput: { flex: 1, fontSize: 16, color: '#111827' },
     radiusScroll: { marginTop: 12, gap: 8, paddingBottom: 4 },
     radiusChip: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         marginRight: 8
     },
     radiusChipDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
-    activeRadiusChip: { backgroundColor: '#7C3AED' },
+    activeRadiusChip: { backgroundColor: '#2196F3' },
     radiusText: { fontSize: 12, fontWeight: '600', color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
     activeRadiusText: { color: isDark ? '#09090B' : '#FAFAFA' },
 
     filtersScroll: { marginTop: 8, gap: 8, paddingBottom: 4 },
     filterChip: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2,
+        borderRadius: Radius.xl,
+        ...glassShadow(isDark),
         marginRight: 8
     },
     filterChipDark: { backgroundColor: isDark ? '#D1D5DB' : '#374151' },
@@ -431,26 +426,21 @@ const getStyles = (isDark: any) => StyleSheet.create({
 
     cardContainer: { position: 'absolute', left: 16, right: 16, zIndex: 10 },
     card: {
-        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
-        borderRadius: 20,
+        backgroundColor: colors(isDark).bg,
+        borderRadius: Radius.xl,
         flexDirection: 'row',
         padding: 12,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8
-    },
+        ...glassShadow(isDark),},
     cardDark: { backgroundColor: 'rgba(31,41,55,0.72)' },
-    cardImage: { width: 80, height: 80, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    cardImage: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass },
     cardContent: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 12 },
     cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
     cardCategory: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', marginBottom: 4 },
-    cardPrice: { fontSize: 15, fontWeight: '800', color: '#7C3AED' },
+    cardPrice: { fontSize: 15, fontWeight: '800', color: '#2196F3' },
     actionBtn: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: Radius.xl,
         backgroundColor: '#111827',
         justifyContent: 'center',
         alignItems: 'center',
@@ -471,17 +461,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
         zIndex: 10
     },
     controlBtn: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         width: 48,
         height: 48,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5
-    },
+        ...glassShadow(isDark),},
     controlBtnDark: {
         backgroundColor: 'rgba(31,41,55,0.72)'
     },
@@ -497,15 +483,12 @@ const getStyles = (isDark: any) => StyleSheet.create({
     viewToggleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         paddingHorizontal: 20,
         paddingVertical: 12,
-        borderRadius: 24,
+        borderRadius: Radius.xl,
         gap: 8,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 8,
+        ...glassShadow(isDark),
     },
     viewToggleBtnDark: {
         backgroundColor: 'rgba(31,41,55,0.72)',
@@ -519,7 +502,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     // List View
     listView: {
         flex: 1,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
     },
     listViewDark: {
         backgroundColor: '#111827',
@@ -538,14 +521,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     listItem: {
         flexDirection: 'row',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-        borderRadius: 16,
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
         padding: 12,
         marginBottom: 12,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2,
+        ...glassShadow(isDark),
     },
     listItemDark: {
         backgroundColor: 'rgba(31,41,55,0.72)',
@@ -553,8 +533,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
     listItemImage: {
         width: 70,
         height: 70,
-        borderRadius: 12,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.md,
+        backgroundColor: colors(isDark).glass,
     },
     listItemContent: {
         flex: 1,
@@ -575,6 +555,6 @@ const getStyles = (isDark: any) => StyleSheet.create({
     listItemPrice: {
         fontSize: 14,
         fontWeight: '800',
-        color: '#7C3AED',
+        color: '#2196F3',
     },
 });

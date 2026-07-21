@@ -20,6 +20,8 @@ import { api } from '../../convex/_generated/api';
 import { ReviewsList } from './ReviewsList';
 import { AddReviewModal } from './AddReviewModal';
 import { useAuth } from '../contexts/AuthContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 // Removed static SCREEN_WIDTH — we use useWindowDimensions + onLayout instead
 
@@ -237,7 +239,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
                                 <TouchableOpacity style={styles.sellerCard} activeOpacity={0.7} onPress={handleSellerPress}>
                                     <View style={styles.sellerAvatar}>
                                         {sellerAvatar ? (
-                                            <ImageWithFallback src={sellerAvatar} style={{ width: 48, height: 48, borderRadius: 24 }} />
+                                            <ImageWithFallback src={sellerAvatar} style={{ width: 48, height: 48, borderRadius: Radius.xl }} />
                                         ) : (
                                             <User size={24} color="#9CA3AF" />
                                         )}
@@ -362,7 +364,7 @@ export const ItemDetailView: React.FC<ItemDetailViewProps> = ({ item, product, o
 
 const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     sheetContent: { 
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', 
+        backgroundColor: colors(isDark).glass, 
         height: '95%',
         padding: 0, // Reset default padding to allow edge-to-edge
         overflow: 'hidden',
@@ -376,15 +378,11 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     closeBtn: {
         width: 36, 
         height: 36, 
-        borderRadius: 18, 
+        borderRadius: Radius.lg, 
         backgroundColor: isDark ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.9)', 
         alignItems: 'center', 
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        ...glassShadow(isDark),
     },
     mainContainer: {
         flex: 1,
@@ -397,7 +395,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         position: 'relative',
         width: '100%',
         aspectRatio: 1, // 1:1 aspect ratio for product images
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         overflow: 'hidden',
     },
     heroSlide: {
@@ -416,7 +414,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 12,
+        borderRadius: Radius.md,
     },
     paginationText: {
         color: '#FFFFFF',
@@ -441,7 +439,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 8,
+        borderRadius: Radius.sm,
     },
     badgeText: {
         fontSize: 12,
@@ -450,7 +448,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     title: {
         fontSize: 26,
         fontWeight: '800',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         lineHeight: 32,
         marginBottom: 4,
     },
@@ -461,7 +459,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     },
     divider: {
         height: 1,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         marginVertical: 24,
     },
     section: {
@@ -470,19 +468,19 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 12,
     },
     sectionText: {
         fontSize: 15,
-        color: isDark ? '#D1D5DB' : '#4B5563',
+        color: colors(isDark).textMuted,
         lineHeight: 24,
     },
     warningCard: {
         flexDirection: 'row',
         padding: 16,
         backgroundColor: isDark ? 'rgba(180, 83, 9, 0.1)' : '#FFFBEB',
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         borderWidth: 1,
         borderColor: isDark ? 'rgba(180, 83, 9, 0.2)' : '#FDE68A',
     },
@@ -501,16 +499,16 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        backgroundColor: colors(isDark).glass,
     },
     sellerAvatar: {
         width: 48,
         height: 48,
-        borderRadius: 24,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.xl,
+        backgroundColor: colors(isDark).glass,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
@@ -521,12 +519,12 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     sellerName: {
         fontSize: 16,
         fontWeight: '700',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
         marginBottom: 2,
     },
     sellerUsername: {
         fontSize: 14,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
         marginBottom: 2,
     },
     sellerType: {
@@ -535,7 +533,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     },
     sellerMeta: {
         fontSize: 13,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: colors(isDark).textMuted,
         marginTop: 4,
         fontWeight: '500',
     },
@@ -549,8 +547,8 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     featureIconContainer: {
         width: 40,
         height: 40,
-        borderRadius: 20,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        borderRadius: Radius.xl,
+        backgroundColor: colors(isDark).glass,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
@@ -561,7 +559,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     featureTitle: {
         fontSize: 15,
         fontWeight: '600',
-        color: isDark ? '#E5E7EB' : '#374151',
+        color: colors(isDark).text,
     },
     featureSubtitle: {
         fontSize: 14,
@@ -572,7 +570,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: isDark ? 'rgba(37, 99, 235, 0.1)' : '#EFF6FF',
         padding: 20,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         borderWidth: 1,
         borderColor: isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE',
     },
@@ -594,7 +592,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         right: 0,
         backgroundColor: isDark ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
         borderTopWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -621,7 +619,7 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
         backgroundColor: '#FEE2E2',
         paddingHorizontal: 6,
         paddingVertical: 2,
-        borderRadius: 6,
+        borderRadius: Radius.sm,
     },
     discountBadgeText: {
         color: '#B91C1C',
@@ -631,18 +629,14 @@ const getStyles = (isDark: boolean, heroWidth: number) => StyleSheet.create({
     footerPrice: {
         fontSize: 28,
         fontWeight: '800',
-        color: isDark ? '#F9FAFB' : '#111827',
+        color: colors(isDark).text,
     },
     addToCartButton: {
-        backgroundColor: '#7C3AED', // Standard high-conversion blue
-        borderRadius: 100, // fully rounded pill
+        backgroundColor: '#2196F3', // Standard high-conversion blue
+        borderRadius: Radius.full, // fully rounded pill
         paddingVertical: 16,
         paddingHorizontal: 28,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        ...glassShadow(isDark),
     },
     addToCartText: {
         color: '#FFFFFF',

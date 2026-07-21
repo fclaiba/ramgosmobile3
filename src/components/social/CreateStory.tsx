@@ -11,6 +11,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent } from '../ui/sheet';
 import { useToast } from '../../contexts/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Radius } from '../../theme/tokens';
+
 
 export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const { createStory } = useSocial();
@@ -165,11 +167,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     title: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
     content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-    previewImage: { width: '100%', height: '80%', borderRadius: 16, resizeMode: 'cover' },
+    previewImage: { width: '100%', height: '80%', borderRadius: Radius.lg, resizeMode: 'cover' },
     placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, width: '100%' },
     placeholderText: { color: '#666', fontSize: 16 },
     footer: { padding: 20 },
-    createBtn: { backgroundColor: '#8B5CF6', padding: 16, borderRadius: 16, alignItems: 'center' },
+    createBtn: { backgroundColor: '#4FC3F7', padding: 16, borderRadius: Radius.lg, alignItems: 'center' },
     disabledBtn: { backgroundColor: '#4B5563', opacity: 0.5 },
     createBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });

@@ -8,6 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
+import { Radius, colors } from '../../theme/tokens';
+
 
 interface PostCommentsModalProps {
     postId: string;
@@ -129,27 +131,27 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         height: '85%',
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)' },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
     headerTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111' },
     closeBtn: { padding: 4 },
     listContent: { padding: 16 },
     commentItem: { flexDirection: 'row', marginBottom: 16 },
     commentAvatar: { width: 36, height: 36, marginRight: 12 },
-    commentContent: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 12, padding: 10, marginRight: 8 },
+    commentContent: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.md, padding: 10, marginRight: 8 },
     commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     commentUser: { fontWeight: '600', fontSize: 13, color: isDark ? '#F9FAFB' : '#111' },
     commentTime: { fontSize: 11, color: '#9CA3AF' },
     commentText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151' },
     emptyState: { alignItems: 'center', paddingVertical: 40 },
     emptyText: { color: '#9CA3AF', fontSize: 15 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)', backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass },
     inputAvatar: { width: 32, height: 32, marginRight: 10 },
-    input: { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, maxHeight: 100, fontSize: 15, color: isDark ? '#F9FAFB' : '#111' },
-    sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: isDark ? '#4F46E5' : '#000', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-    sendBtnDisabled: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' },
+    input: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.xl, paddingHorizontal: 16, paddingVertical: 8, maxHeight: 100, fontSize: 15, color: isDark ? '#F9FAFB' : '#111' },
+    sendBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: isDark ? '#4F46E5' : '#000', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+    sendBtnDisabled: { backgroundColor: colors(isDark).glass },
 });

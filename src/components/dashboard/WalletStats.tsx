@@ -4,6 +4,8 @@ import { DollarSign, TrendingUp, Wallet, ShieldCheck } from "lucide-react-native
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { formatCurrency } from "../../utils/formatters";
+import { colors } from '../../theme/tokens';
+
 
 export function WalletStats({
     styles,
@@ -32,7 +34,7 @@ export function WalletStats({
                     },
                 ]}
             >
-                <Card style={[styles.statCard, { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+                <Card style={[styles.statCard, { flex: 1, backgroundColor: colors(isDark).glass }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(5, 150, 105, 0.2)' : '#ecfdf5' }]}>
                             <DollarSign size={20} color={isDark ? '#34D399' : '#059669'} />
@@ -48,7 +50,7 @@ export function WalletStats({
                         </Text>
                     </TouchableOpacity>
                 </Card>
-                <Card style={[styles.statCard, { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' }]}>
+                <Card style={[styles.statCard, { flex: 1, backgroundColor: colors(isDark).glass }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <View style={[styles.iconBox, { backgroundColor: isDark ? 'rgba(234, 88, 12, 0.2)' : '#fff7ed' }]}>
                             <TrendingUp size={20} color={isDark ? '#FB923C' : '#ea580c'} />

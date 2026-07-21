@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Linking, Image, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { XCircle, Mail, ExternalLink } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 export default function BannedUserScreen() {
     const { colorScheme } = useTheme();
@@ -37,7 +39,7 @@ export default function BannedUserScreen() {
 
                 <TouchableOpacity style={styles.termsLink} onPress={() => Linking.openURL('https://ramgos.com/terms')}>
                     <Text style={styles.termsText}>Leer Términos y Condiciones</Text>
-                    <ExternalLink size={14} color="#7C3AED" />
+                    <ExternalLink size={14} color="#2196F3" />
                 </TouchableOpacity>
             </View>
 
@@ -54,49 +56,40 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     iconWrapper: {
         marginBottom: 24,
-        shadowColor: '#EF4444',
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 10 }
+        ...glassShadow(isDark),shadowOffset: { width: 0, height: 10 }
     },
     title: { fontSize: 28, fontWeight: 'bold', color: '#EF4444', marginBottom: 16 },
 
     messageBox: {
         backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
         padding: 24,
-        borderRadius: 16,
+        borderRadius: Radius.lg,
         width: '100%',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        marginBottom: 32,
+        ...glassShadow(isDark),marginBottom: 32,
         borderWidth: 1,
         borderColor: isDark ? '#4B5563' : 'transparent',
     },
-    subtitle: { fontSize: 16, color: isDark ? '#D1D5DB' : '#4B5563', textAlign: 'center', marginBottom: 24, lineHeight: 24 },
+    subtitle: { fontSize: 16, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 24, lineHeight: 24 },
     reasonLabel: { fontSize: 13, fontWeight: '600', color: '#EF4444', marginBottom: 4, textTransform: 'uppercase' },
-    reasonText: { fontSize: 15, fontWeight: '500', color: isDark ? '#F9FAFB' : '#1F2937' },
+    reasonText: { fontSize: 15, fontWeight: '500', color: colors(isDark).text },
 
     contactBtn: {
         flexDirection: 'row',
         backgroundColor: isDark ? '#111827' : '#111827',
         paddingVertical: 16,
         paddingHorizontal: 32,
-        borderRadius: 12,
+        borderRadius: Radius.md,
         alignItems: 'center',
         gap: 8,
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        marginBottom: 24,
+        ...glassShadow(isDark),marginBottom: 24,
         borderWidth: 1,
         borderColor: isDark ? '#374151' : 'transparent',
     },
     contactBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 
     termsLink: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    termsText: { color: '#7C3AED', fontWeight: '500' },
+    termsText: { color: '#2196F3', fontWeight: '500' },
 
     footer: { padding: 16, alignItems: 'center' },
     footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF' }

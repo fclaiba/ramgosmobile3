@@ -11,6 +11,8 @@ import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader } from '../ui/sheet';
+import { Radius, colors } from '../../theme/tokens';
+
 
 export const InstagramPost = ({ post }: { post: IGPostType }) => {
     const [showDetail, setShowDetail] = React.useState(false);
@@ -87,7 +89,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
         width: itemSize,
         height: itemSize,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         marginBottom: 2
     },
     image: { width: '100%', height: '100%' },
@@ -101,7 +103,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 0 // Remove default padding for full image
     },
     detailContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center' },
-    closeBtn: { position: 'absolute', top: 20, right: 20, zIndex: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
+    closeBtn: { position: 'absolute', top: 20, right: 20, zIndex: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: Radius.xl },
     fullImage: { width: width, height: width * 1.25, backgroundColor: '#000' },
     footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, paddingBottom: 40, backgroundColor: 'rgba(0,0,0,0.6)' },
     actions: { flexDirection: 'row', gap: 24, marginBottom: 12 },

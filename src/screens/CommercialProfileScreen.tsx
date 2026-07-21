@@ -41,7 +41,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
-import { useFavorites } from '../contexts/FavoritesContext';
+import { useFavorites } from '../hooks/useFavorites';
 import { useCart } from '../contexts/CartContext';
 import { useSocial } from '../contexts/SocialContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,6 +51,8 @@ import { DirectMessages } from '../components/social/DirectMessages';
 import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, interpolate, Extrapolation } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { glassShadow, Radius, colors } from '../theme/tokens';
+
 
 const HERO_HEIGHT = 260;
 const MIN_HEADER_HEIGHT = Platform.OS === 'ios' ? 90 : 72;
@@ -61,7 +63,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 type TabType = 'product' | 'service' | 'event' | 'bono';
 
 const typeMeta: Record<TabType, { label: string; icon: any; color: string }> = {
-    product: { label: 'Producto', icon: ShoppingBag, color: '#8B5CF6' },
+    product: { label: 'Producto', icon: ShoppingBag, color: '#4FC3F7' },
     service: { label: 'Servicio', icon: Wrench, color: '#38BDF8' },
     event: { label: 'Evento', icon: Calendar, color: '#F59E0B' },
     bono: { label: 'Bono', icon: Tag, color: '#10B981' },
@@ -469,7 +471,7 @@ function getStyles(isDark: boolean, insets: any) {
     const text = isDark ? '#FAFAFA' : '#111827';
     const muted = isDark ? '#A1A1AA' : '#6B7280';
     const border = isDark ? '#27272A' : '#E5E7EB';
-    const primary = isDark ? '#8B5CF6' : '#7C3AED';
+    const primary = isDark ? '#4FC3F7' : '#2196F3';
     const price = isDark ? '#34D399' : '#10B981';
 
     return StyleSheet.create({
@@ -529,7 +531,7 @@ function getStyles(isDark: boolean, insets: any) {
         glassBtn: {
             width: 42,
             height: 42,
-            borderRadius: 21,
+            borderRadius: Radius.xl,
             overflow: 'hidden',
             justifyContent: 'center',
             alignItems: 'center',
@@ -538,7 +540,7 @@ function getStyles(isDark: boolean, insets: any) {
 
         profileCard: {
             backgroundColor: bg,
-            borderRadius: 28,
+            borderRadius: Radius['2xl'],
             marginTop: -60,
             marginHorizontal: 16,
             padding: 24,
@@ -555,7 +557,7 @@ function getStyles(isDark: boolean, insets: any) {
         avatar: {
             width: 100,
             height: 100,
-            borderRadius: 50,
+            borderRadius: Radius.full,
             borderWidth: 4,
             borderColor: bg,
             backgroundColor: surface,
@@ -568,8 +570,8 @@ function getStyles(isDark: boolean, insets: any) {
             position: 'absolute',
             bottom: 4,
             right: 4,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
-            borderRadius: 12,
+            backgroundColor: colors(isDark).glass,
+            borderRadius: Radius.md,
             padding: 3,
         },
         name: {
@@ -593,7 +595,7 @@ function getStyles(isDark: boolean, insets: any) {
         roleTag: {
             paddingHorizontal: 10,
             paddingVertical: 4,
-            borderRadius: 10,
+            borderRadius: Radius.md,
         },
         roleTagBusiness: {
             backgroundColor: '#2563EB',
@@ -633,7 +635,7 @@ function getStyles(isDark: boolean, insets: any) {
         statsContainer: {
             flexDirection: 'row',
             backgroundColor: surface,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             paddingVertical: 16,
             paddingHorizontal: 20,
             width: '100%',
@@ -676,7 +678,7 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             backgroundColor: primary,
             paddingVertical: 14,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
@@ -691,7 +693,7 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             backgroundColor: surface,
             paddingVertical: 14,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
@@ -729,7 +731,7 @@ function getStyles(isDark: boolean, insets: any) {
             gap: 6,
             paddingHorizontal: 16,
             paddingVertical: 10,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             backgroundColor: surface,
             borderWidth: 1,
             borderColor: border,
@@ -756,7 +758,7 @@ function getStyles(isDark: boolean, insets: any) {
         },
         gridCard: {
             backgroundColor: surface,
-            borderRadius: 18,
+            borderRadius: Radius.lg,
             overflow: 'hidden',
             borderWidth: 1,
             borderColor: border,
@@ -781,7 +783,7 @@ function getStyles(isDark: boolean, insets: any) {
             gap: 4,
             paddingHorizontal: 8,
             paddingVertical: 4,
-            borderRadius: 10,
+            borderRadius: Radius.md,
         },
         typePillText: {
             fontSize: 10,
@@ -793,18 +795,15 @@ function getStyles(isDark: boolean, insets: any) {
             right: 10,
             width: 32,
             height: 32,
-            borderRadius: 16,
+            borderRadius: Radius.lg,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         },
         favBtnActive: {
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 2,
+            ...glassShadow(isDark),
         },
         gridContent: {
             padding: 12,
@@ -835,9 +834,9 @@ function getStyles(isDark: boolean, insets: any) {
         },
         btnSm: {
             flexDirection: 'row',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+            backgroundColor: colors(isDark).glass,
             paddingVertical: 9,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             alignItems: 'center',
             justifyContent: 'center',
         },

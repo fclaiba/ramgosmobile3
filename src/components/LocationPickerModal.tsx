@@ -8,6 +8,8 @@ import { Button } from './ui/button';
 import { X, MapPin, Check } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUserLocation } from '../hooks/useUserLocation';
+import { glassShadow, colors } from '../theme/tokens';
+
 
 interface LocationData {
     lat: number;
@@ -164,7 +166,7 @@ export default function LocationPickerModal({ visible, onClose, onSelect, initia
 }
 
 const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' },
+    container: { flex: 1, backgroundColor: colors(isDark).bg },
     containerDark: { backgroundColor: '#111827' },
     header: {
         paddingTop: 50,
@@ -173,7 +175,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         zIndex: 10
     },
     headerDark: { backgroundColor: '#111827' },
@@ -193,16 +195,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
     footer: {
         padding: 24,
         paddingBottom: 40,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
+        backgroundColor: colors(isDark).glass,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         marginTop: -20,
-        shadowColor: isDark ? '#F9FAFB' : '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 10
-    },
+        ...glassShadow(isDark),},
     footerDark: { backgroundColor: 'rgba(31,41,55,0.72)' },
     addressLabel: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280', textTransform: 'uppercase', marginBottom: 4 },
     addressLabelDark: { color: isDark ? '#6B7280' : '#9CA3AF' },

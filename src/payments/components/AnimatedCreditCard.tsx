@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { glassShadow, Radius } from '../../theme/tokens';
+
 
 const CARD_ASPECT = 0.63;
 const MAX_CARD_WIDTH = 360;
@@ -139,15 +141,11 @@ const s = StyleSheet.create({
     },
     face: {
         ...StyleSheet.absoluteFill,
-        borderRadius: 18,
+        borderRadius: Radius.lg,
         overflow: 'hidden',
         backfaceVisibility: 'hidden',
         // shadow
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.35,
-        shadowRadius: 16,
-        elevation: 14,
+        ...glassShadow(false),
     },
     gradientOverlay: {
         position: 'absolute',
@@ -173,7 +171,7 @@ const s = StyleSheet.create({
         width: 42,
         height: 30,
         backgroundColor: 'rgba(255,215,0,0.85)',
-        borderRadius: 5,
+        borderRadius: Radius.sm,
         justifyContent: 'center',
         paddingHorizontal: 6,
         gap: 3,
@@ -182,7 +180,7 @@ const s = StyleSheet.create({
         height: 2,
         width: '80%',
         backgroundColor: 'rgba(180,140,0,0.5)',
-        borderRadius: 1,
+        borderRadius: Radius.sm,
     },
     brandText: {
         color: '#fff',
@@ -241,13 +239,13 @@ const s = StyleSheet.create({
         flex: 1,
         height: 36,
         backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 4,
+        borderRadius: Radius.sm,
     },
     cvvBadge: {
         backgroundColor: 'rgba(255,255,255,0.62)',
         paddingHorizontal: 14,
         paddingVertical: 8,
-        borderRadius: 4,
+        borderRadius: Radius.sm,
         minWidth: 56,
         alignItems: 'center',
     },

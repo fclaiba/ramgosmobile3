@@ -13,7 +13,7 @@ export const glassTokens = (isDark: boolean, intensity: GlassIntensity = 'regula
         bg: intensity === 'prominent' ? c.glassStrong : c.glass,
         border: c.glassBorder,
         hairline: c.divider,
-        tint: isDark ? 'rgba(124,58,237,0.12)' : 'rgba(124,58,237,0.06)',
+        tint: isDark ? 'rgba(33, 150, 243,0.12)' : 'rgba(33, 150, 243,0.06)',
         blur,
         radius,
         shadow: glassShadow(isDark),

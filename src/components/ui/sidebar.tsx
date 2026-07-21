@@ -217,7 +217,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         height: '100%',
         backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)',
         borderRightWidth: 1,
-        borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(124,58,237,0.14)',
+        borderRightColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         overflow: 'hidden',
     },
     sidebarInner: { flex: 1 },

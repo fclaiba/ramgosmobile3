@@ -19,6 +19,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { colors, Radius, Space } from '../theme/tokens';
 
+
 const STORAGE_KEY = '@ramgos_privacy_security';
 
 type PrivacySecurityState = {
@@ -268,7 +269,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
         iconBox: {
             width: 36,
             height: 36,
-            borderRadius: 10,
+            borderRadius: Radius.md,
             backgroundColor: c.glass,
             alignItems: 'center',
             justifyContent: 'center',
