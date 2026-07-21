@@ -41,8 +41,7 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
         <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) }]}>
             {/* Logo / Brand */}
             <View style={styles.brandContainer}>
-                <Image source={require('../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
-                <Text style={styles.brandText}>Ramgos</Text>
+                <Image source={require('../../logo.png')} style={styles.logo} resizeMode="contain" />
             </View>
 
             {/* Navigation Links */}
@@ -103,8 +102,8 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         paddingHorizontal: 8,
     },
     logo: {
-        width: 32,
-        height: 32,
+        width: 160,
+        height: 44,
         marginRight: 12,
     },
     brandText: {

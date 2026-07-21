@@ -138,7 +138,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const [view, setView] = useState<'home' | 'consumos' | 'puntos'>('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [marketplaceParams, setMarketplaceParams] = useState<any>(null);
-    const [gridWidth, setGridWidth] = useState(windowWidth - 32);
+
 
     // Initial Tab from Params
     useEffect(() => {
@@ -237,7 +237,7 @@ export default function HomeScreen({ navigation, route }: any) {
                 {activeTab === 'home' && (
                     <>
                         <MobileHeader
-                            title="Ramgos"
+                            showLogo={true}
                             subtitle="Descubre la oportunidad"
                             onMenuPress={() => setIsSidebarOpen(true)}
                             actions={
@@ -360,11 +360,11 @@ export default function HomeScreen({ navigation, route }: any) {
                                         <Text style={styles.sectionTitle}>Categorías</Text>
                                     </View>
 
-                                    <View style={styles.grid2} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
+                                    <View style={styles.grid2}>
                                         {categoryCards.map((card) => (
                                             <TouchableOpacity
                                                 key={card.id}
-                                                style={[styles.catCard, { width: (gridWidth - 12) / 2 }]}
+                                                style={[styles.catCard, { width: '48%' }]}
                                                 onPress={() => {
                                                     if (card.action === 'social') {
                                                         handleNavigate('Social');
@@ -551,7 +551,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     featuredTitle: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
     featuredSub: { color: 'rgba(255,255,255,0.9)', fontSize: 9 },
 
-    grid2: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    grid2: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
     catCard: { height: 180, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors(isDark).glass },
     catImg: { width: '100%', height: '100%' },
     catOverlay: { position: 'absolute', inset: 0, padding: 16, justifyContent: 'space-between' },

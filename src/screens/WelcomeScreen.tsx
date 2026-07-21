@@ -58,34 +58,23 @@ export default function WelcomeScreen({ navigation }: any) {
 
     // Animations
     const iconScale = useRef(new Animated.Value(0)).current;
-    const iconRotate = useRef(new Animated.Value(0)).current;
-    // Staggered Entrance
     const titleOpacity = useRef(new Animated.Value(0)).current;
     const btn1Opacity = useRef(new Animated.Value(0)).current;
     const btn2Opacity = useRef(new Animated.Value(0)).current;
     const btn3Opacity = useRef(new Animated.Value(0)).current;
     const footerOpacity = useRef(new Animated.Value(0)).current;
     const bottomDecoOpacity = useRef(new Animated.Value(0)).current;
-
-    const sparkleScale = useRef(new Animated.Value(1)).current;
     const supportsNativeDriver = Platform.OS !== 'web';
 
     useEffect(() => {
         // Master Sequence
         Animated.sequence([
             // 1. Icon Entrance
-            Animated.parallel([
-                Animated.spring(iconScale, {
-                    toValue: 1,
-                    friction: 5,
-                    useNativeDriver: supportsNativeDriver,
-                }),
-                Animated.timing(iconRotate, {
-                    toValue: 1,
-                    duration: 800,
-                    useNativeDriver: supportsNativeDriver,
-                }),
-            ]),
+            Animated.spring(iconScale, {
+                toValue: 1,
+                friction: 5,
+                useNativeDriver: supportsNativeDriver,
+            }),
             // 2. Title & Subtitle
             Animated.timing(titleOpacity, {
                 toValue: 1,
@@ -113,20 +102,7 @@ export default function WelcomeScreen({ navigation }: any) {
                 useNativeDriver: supportsNativeDriver,
             }),
         ]).start();
-
-        // Sparkle loop
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(sparkleScale, { toValue: 1.2, duration: 1500, useNativeDriver: supportsNativeDriver }),
-                Animated.timing(sparkleScale, { toValue: 1, duration: 1500, useNativeDriver: supportsNativeDriver }),
-            ])
-        ).start();
     }, []);
-
-    const rotateInterp = iconRotate.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['-180deg', '0deg'],
-    });
 
     const handleSocialLogin = async (provider: Parameters<typeof loginWithSocial>[0]) => {
         if (busy) return;
@@ -152,31 +128,13 @@ export default function WelcomeScreen({ navigation }: any) {
 
                         {/* Card Container */}
                         <View style={styles.card}>
-                            {/* Icon Section */}
-                            <Animated.View style={[styles.iconContainer, { transform: [{ scale: iconScale }, { rotate: rotateInterp }] }]}>
-                                <View style={styles.iconGlowWrapper}>
-                                    <LinearGradient
-                                        colors={['#4FC3F7', '#29B6F6']}
-                                        style={styles.iconGlow}
-                                    />
-                                </View>
-
-                                <LinearGradient
-                                    colors={['#4FC3F7', '#29B6F6', '#EC4899']}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={styles.mainIcon}
-                                >
-                                    <Image
-                                        source={require('../../logo.png')}
-                                        style={styles.logoImage}
-                                        resizeMode="contain"
-                                    />
-                                </LinearGradient>
-
-                                <Animated.View style={[styles.sparkle, { transform: [{ scale: sparkleScale }] }]}>
-                                    <Sparkles size={24} color="#FBBF24" fill="#FBBF24" />
-                                </Animated.View>
+                            {/* Logo Section */}
+                            <Animated.View style={[styles.iconContainer, { transform: [{ scale: iconScale }] }]}>
+                                <Image
+                                    source={require('../../logo.png')}
+                                    style={styles.logoImage}
+                                    resizeMode="contain"
+                                />
                             </Animated.View>
 
                             {/* Title & Subtitle */}
@@ -281,11 +239,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Icon
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
-    iconGlowWrapper: { position: 'absolute', width: 100, height: 100 },
-    iconGlow: { flex: 1, borderRadius: Radius['2xl'], opacity: 0.5, transform: [{ scale: 1.2 }] },
-    mainIcon: { width: 112, height: 112, borderRadius: Radius['2xl'], justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? '#374151' : '#fff' },
-    logoImage: { width: 72, height: 72 },
-    sparkle: { position: 'absolute', top: -8, right: -8 },
+    logoImage: { width: 280, height: 96 },
 
     // Text
     title: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },
