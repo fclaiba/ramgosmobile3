@@ -159,7 +159,8 @@ const AppNavigator = () => {
                 prefixes: ['ramgos://', 'https://ramgos.app'],
                 config: {
                     screens: {
-                        Home: '',
+                        Welcome: '',
+                        Home: 'home',
                         Register: 'register',
                         Login: 'login',
                     }
@@ -241,7 +242,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
                     <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
-                    <Stack.Screen name="BusinessForms" component={BusinessFormsScreen} />
                     <Stack.Screen name="InfluencerBonuses" component={InfluencerBonusesScreen} />
                 </Stack.Navigator>
             </View>

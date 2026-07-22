@@ -1232,6 +1232,8 @@ Solo cuando tengas **usuarios y métricas reales**:
 | E-021 | 2026-07-21 | UI | RangeError en `tsc --noEmit` tras script de branding | `tsconfig.json` no excluía la carpeta `dist`, forzando a TS a analizar bundles minificados enormes. Errores sintácticos residuales (duplicated Radius, missing isDark). | Se añadió `dist` al exclude de `tsconfig.json`. Se corrigieron duplicados de Radius y variables en archivos de componentes. Todo compila. | ✅ Resuelto | `tsconfig.json`, `AnimatedCreditCard.tsx`, `PaymentSuccessBurst.tsx`, etc. |
 | E-022 | 2026-07-21 | 5 | typecheck falló por colisiones de variables en EscrowSheet y typos en SidebarMenu | Script de migración reemplazó variables locales erróneamente y generó camelCase typos | Variable local renombrada a toneC; typos de backgroundColor corregidos | ✅ Resuelto | EscrowSheet.tsx, SidebarMenu.tsx |
 | E-023 | 2026-07-21 | S1 | Deuda técnica mock emails | Reemplazar authEmailMocks con auth real vía Resend (Ponytail) | Integración de Resend en auth.ts, tabla users actualizada y borrado del mock | ✅ Resuelto | convex/auth.ts, AuthContext.tsx |
+| E-024 | 2026-07-22 | UI | A navigator cannot contain multiple 'Screen' components with the same name ('BusinessForms') | Duplicado accidental del Screen `BusinessForms` en el `Stack.Navigator` | Eliminado el `<Stack.Screen name="BusinessForms">` sobrante | ✅ Resuelto | App.tsx |
+| E-025 | 2026-07-22 | UI | La web abría directamente en Inicio como invitado en lugar de Bienvenida | `linking.config` en `App.tsx` mapeaba la ruta raíz `''` a la pantalla `Home` | Se cambió el mapeo de la ruta raíz `''` a `Welcome` y se asignó `home` a `Home` | ✅ Resuelto | App.tsx |
 **Plantilla para nuevas entradas:**
 
 ```markdown

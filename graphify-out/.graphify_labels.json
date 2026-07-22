@@ -224,10 +224,8 @@
   "222": "userProfile.ts",
   "223": "adminQueries.ts",
   "224": "find-native-dialogs.js",
-  "225": "CoinRain.tsx",
   "226": "InstagramPost.tsx",
   "227": "constitution.test.tsx",
-  "228": "BusinessDashboardScreen",
   "229": "expo-location",
   "230": "DesktopSidebar.tsx",
   "231": "tabs.tsx",
@@ -249,7 +247,6 @@
   "247": "9. Backend Convex",
   "248": "MapView.tsx",
   "249": "RaffleService",
-  "250": "3. Arquitectura de alto nivel",
   "251": "ImageUploadField.tsx",
   "252": "PaymentModeContext.tsx",
   "253": "checkApi.js",
@@ -356,7 +353,6 @@
   "395": "Theme Tokens (GAME_THEMES)",
   "396": "NativeMap.native.tsx",
   "398": "tailwind.config.js",
-  "408": "MarketplaceMapMarker.tsx",
   "409": "MobileNav.tsx",
   "411": "RoleSelectionScreen.tsx"
 }
