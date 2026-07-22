@@ -10,7 +10,7 @@ import { MobileNav } from '../components/MobileNav';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Post, ReelFeed, StoriesBar, StoryViewer, CreatePost, CreateStory, UserSearch, DirectMessages } from '../components/social';
+import { Post, LoopFeed, StoriesBar, StoryViewer, CreatePost, CreateStory, UserSearch, DirectMessages } from '../components/social';
 
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
@@ -58,7 +58,7 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                     onPress={() => setActiveTab('reels')}
                 >
                     <Film size={18} color={activeTab === 'reels' ? (isDark ? '#fff' : '#000') : '#6B7280'} />
-                    <Text style={[styles.tabText, activeTab === 'reels' && styles.tabTextActive]}>Reels</Text>
+                    <Text style={[styles.tabText, activeTab === 'reels' && styles.tabTextActive]}>Loops</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -126,11 +126,11 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
             ) : (
                 <View style={styles.reelsContainer}>
                     {reelPosts.length > 0 ? (
-                        <ReelFeed posts={reelPosts} onUserClick={handleUserClick} />
+                        <LoopFeed posts={reelPosts} onUserClick={handleUserClick} />
                     ) : (
                         <View style={styles.emptyReels}>
                             <Film size={48} color={isDark ? '#374151' : '#D1D5DB'} />
-                            <Text style={styles.emptyReelsText}>No hay reels disponibles</Text>
+                            <Text style={styles.emptyReelsText}>No hay loops disponibles</Text>
                         </View>
                     )}
                 </View>

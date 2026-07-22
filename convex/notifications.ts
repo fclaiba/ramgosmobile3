@@ -112,12 +112,43 @@ export const sendOTP = action({
                 to: args.email,
                 subject: subject,
                 html: `
-                    <div style="font-family: sans-serif; background-color: #FAFAFA; padding: 20px;">
-                        <h2 style="color: #7C3AED;">${title}</h2>
-                        <p>${message}</p>
-                        <h1 style="color: #111827; letter-spacing: 5px; font-weight: bold;">${args.code}</h1>
-                        <p>Este código expira en 10 minutos. No lo compartas con nadie.</p>
-                    </div>
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    </head>
+                    <body style="margin: 0; padding: 0; background-color: #09090B; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #09090B; width: 100%;">
+                            <tr>
+                                <td align="center" style="padding: 40px 20px;">
+                                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #111827; border-radius: 24px; border: 1px solid #374151; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+                                        <tr>
+                                            <td align="center" style="padding: 40px 30px;">
+                                                <h1 style="color: #FFFFFF; font-size: 28px; font-weight: 800; letter-spacing: 3px; margin: 0 0 12px 0;">RAMGOS</h1>
+                                                <div style="height: 4px; width: 48px; background: #2196F3; background: linear-gradient(90deg, #2196F3, #4FC3F7); border-radius: 2px; margin: 0 auto 32px auto;"></div>
+                                                
+                                                <h2 style="color: #F3F4F6; font-size: 22px; font-weight: 600; margin: 0 0 16px 0;">${title}</h2>
+                                                
+                                                <p style="color: #9CA3AF; font-size: 16px; line-height: 24px; margin: 0 0 36px 0;">${message}</p>
+                                                
+                                                <div style="background-color: #1F2937; border: 2px dashed #4B5563; border-radius: 16px; padding: 24px; margin-bottom: 36px; display: inline-block;">
+                                                    <h1 style="color: #60A5FA; font-size: 42px; letter-spacing: 12px; font-weight: 800; margin: 0; padding-left: 12px; text-shadow: 0 0 20px rgba(96, 165, 250, 0.4);">${args.code}</h1>
+                                                </div>
+                                                
+                                                <p style="color: #6B7280; font-size: 14px; line-height: 20px; margin: 0 0 32px 0;">Este código expira en 10 minutos. Por tu seguridad, no lo compartas con nadie.</p>
+                                                
+                                                <hr style="border: none; border-top: 1px solid #374151; margin: 0 0 24px 0; width: 100%;" />
+                                                
+                                                <p style="color: #4B5563; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} Ramgos App. Todos los derechos reservados.</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </body>
+                    </html>
                 `,
             });
             if (error) {
@@ -149,8 +180,39 @@ export const sendTestEmail = action({
         const { data, error } = await resend.emails.send({
             from: 'onboarding@resend.dev',
             to: args.to,
-            subject: 'Hello World',
-            html: '<p>Congrats on sending your <strong>first email</strong>!</p>'
+            subject: 'Prueba de Diseño - Ramgos',
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                </head>
+                <body style="margin: 0; padding: 0; background-color: #09090B; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #09090B; width: 100%;">
+                        <tr>
+                            <td align="center" style="padding: 40px 20px;">
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #111827; border-radius: 24px; border: 1px solid #374151; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+                                    <tr>
+                                        <td align="center" style="padding: 40px 30px;">
+                                            <h1 style="color: #FFFFFF; font-size: 28px; font-weight: 800; letter-spacing: 3px; margin: 0 0 12px 0;">RAMGOS</h1>
+                                            <div style="height: 4px; width: 48px; background: #10B981; background: linear-gradient(90deg, #10B981, #34D399); border-radius: 2px; margin: 0 auto 32px auto;"></div>
+                                            
+                                            <h2 style="color: #F3F4F6; font-size: 22px; font-weight: 600; margin: 0 0 16px 0;">¡Hola desde Ramgos!</h2>
+                                            
+                                            <p style="color: #9CA3AF; font-size: 16px; line-height: 24px; margin: 0 0 32px 0;">Este es un correo de prueba para verificar que el nuevo diseño "Liquid Glass" se está enviando correctamente a través de Resend. Si ves esto con un fondo oscuro, márgenes redondeados y texto claro, ¡está funcionando perfecto!</p>
+                                            
+                                            <hr style="border: none; border-top: 1px solid #374151; margin: 0 0 24px 0; width: 100%;" />
+                                            <p style="color: #4B5563; font-size: 12px; margin: 0;">© ${new Date().getFullYear()} Ramgos App. Todos los derechos reservados.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            `
         });
         
         if (error) throw new Error(error.message);
@@ -358,14 +420,41 @@ export const notifyUser = internalAction({
                         to: userData.email,
                         subject: args.title,
                         html: `
-                            <div style="font-family: sans-serif; background-color: #FAFAFA; padding: 20px;">
-                                <div style="background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto;">
-                                    <h2 style="color: #7C3AED; margin-top: 0;">${args.title}</h2>
-                                    <p style="color: #4B5563; font-size: 16px; line-height: 1.5;">${args.body}</p>
-                                    <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-                                    <p style="color: #9CA3AF; font-size: 14px; margin-bottom: 0;">Este es un mensaje automático de Ramgos. Por favor, no respondas a este correo.</p>
-                                </div>
-                            </div>
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset="utf-8">
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            </head>
+                            <body style="margin: 0; padding: 0; background-color: #09090B; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #09090B; width: 100%;">
+                                    <tr>
+                                        <td align="center" style="padding: 40px 20px;">
+                                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #111827; border-radius: 24px; border: 1px solid #374151; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+                                                <tr>
+                                                    <td style="padding: 40px 30px;">
+                                                        <!-- Header -->
+                                                        <div style="text-align: center;">
+                                                            <h1 style="color: #FFFFFF; font-size: 28px; font-weight: 800; letter-spacing: 3px; margin: 0 0 12px 0;">RAMGOS</h1>
+                                                            <div style="height: 4px; width: 48px; background: #EC4899; background: linear-gradient(90deg, #EC4899, #8B5CF6); border-radius: 2px; margin: 0 auto 32px auto;"></div>
+                                                        </div>
+                                                        
+                                                        <h2 style="color: #F3F4F6; font-size: 20px; font-weight: 600; margin: 0 0 20px 0;">${args.title}</h2>
+                                                        
+                                                        <p style="color: #D1D5DB; font-size: 16px; line-height: 26px; margin: 0 0 32px 0;">${args.body.replace(/\n/g, '<br/>')}</p>
+                                                        
+                                                        <hr style="border: none; border-top: 1px solid #374151; margin: 0 0 24px 0; width: 100%;" />
+                                                        
+                                                        <p style="color: #6B7280; font-size: 13px; line-height: 18px; margin: 0 0 12px 0; text-align: center;">Este es un mensaje automático del sistema Ramgos. Por favor, no respondas a este correo.</p>
+                                                        <p style="color: #4B5563; font-size: 12px; margin: 0; text-align: center;">© ${new Date().getFullYear()} Ramgos App. Todos los derechos reservados.</p>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </body>
+                            </html>
                         `,
                     });
                     emailSent = true;

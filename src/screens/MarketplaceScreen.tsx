@@ -15,7 +15,8 @@ import { useMarketplace } from '../contexts/MarketplaceContext';
 import { useMarketplaceProducts } from '../hooks/useMarketplaceProducts';
 import { useFavorites } from '../hooks/useFavorites';
 import { usePoints } from '../contexts/PointsContext';
-import { useTheme } from '../contexts/ThemeContext'; // Import useTheme
+import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 
 import { MobileHeader } from '../components/MobileHeader';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
@@ -119,6 +120,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const insets = useSafeAreaInsets();
     const { addItem, openCart, items: cartItems } = useCart();
     const { user, requireAuth } = useAuth();
+    const { show } = useToast();
     const { isFavorite, toggleFavorite } = useFavorites();
     const { } = useMarketplace();
     const products = useMarketplaceProducts();
@@ -613,7 +615,13 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
     const headerActions = (
         <View style={{ flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity
-                onPress={() => navigation.navigate('CreateListing')}
+                onPress={() => {
+                    if (user?.role === 'business' && user?.kycStatus !== 'approved') {
+                        show('Debes completar y aprobar tu verificación de negocio (KYC) en tu perfil para poder vender', 'error');
+                        return;
+                    }
+                    navigation.navigate('CreateListing');
+                }}
                 style={{ padding: 4 }}
             >
                 <PlusIcon size={24} color={isDark || viewMode === 'map' ? '#D1D5DB' : '#374151'} />
@@ -700,14 +708,12 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         pointerEvents="none"
                     />
                 )}
-                {viewMode !== 'map' && (
-                    <MobileHeader
-                        title="Marketplace"
-                        subtitle="Productos, Bonos y Eventos"
-                        onMenuPress={() => setIsSidebarOpen(true)}
-                        actions={headerActions}
-                    />
-                )}
+                <MobileHeader
+                    title="Marketplace"
+                    subtitle="Productos, Bonos y Eventos"
+                    onMenuPress={() => setIsSidebarOpen(true)}
+                    actions={headerActions}
+                />
 
                 {/* Header Controls (always visible) */}
                 <View style={[styles.headerControls, viewMode === 'map' && styles.mapHeaderControls]}>

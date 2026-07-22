@@ -19,6 +19,7 @@ export default function TermsScreen({ navigation, route }: any) {
     const isBlocking = route?.params?.mode === 'blocking';
     const isSignup = route?.params?.origin === 'signup';
     const returnKey = route?.params?.returnKey as string | undefined;
+    const accountType = route?.params?.accountType as string | undefined;
 
     const handleAccept = async () => {
         try {
@@ -98,33 +99,49 @@ export default function TermsScreen({ navigation, route }: any) {
 
                         <Text style={styles.sectionTitle}>3. ROLES DE USUARIO</Text>
 
-                        <Text style={styles.subTitle}>🧍‍♂️ USUARIOS (CONSUMIDORES)</Text>
-                        <Text style={styles.text}>
-                            Al registrarte como usuario aceptas los siguientes términos:{'\n'}
-                            • Podrás acceder a mapas, bonos, puntos y promociones exclusivas.{'\n'}
-                            • La información personal será tratada conforme a nuestra Política de Privacidad.{'\n'}
-                            • Los pagos dentro de la app se procesarán mediante pasarelas seguras y cifradas.{'\n'}
-                            • El usuario acepta que su cuenta es personal e intransferible.{'\n'}
-                            • Cualquier intento de fraude, manipulación de puntos o abuso de promociones podrá resultar en la suspensión o eliminación de la cuenta.
-                        </Text>
+                        {(!accountType || accountType === 'consumer') && (
+                            <>
+                                <Text style={styles.subTitle}>🧍‍♂️ USUARIOS (CONSUMIDORES)</Text>
+                                <Text style={styles.text}>
+                                    Al registrarte como usuario aceptas los siguientes términos:{'\n'}
+                                    • Podrás acceder a mapas, bonos, puntos y promociones exclusivas.{'\n'}
+                                    • La información personal será tratada conforme a nuestra Política de Privacidad.{'\n'}
+                                    • Los pagos dentro de la app se procesarán mediante pasarelas seguras y cifradas.{'\n'}
+                                    • El usuario acepta que su cuenta es personal e intransferible.{'\n'}
+                                    • Cualquier intento de fraude, manipulación de puntos o abuso de promociones podrá resultar en la suspensión o eliminación de la cuenta.
+                                </Text>
+                            </>
+                        )}
 
-                        <Text style={styles.subTitle}>🏪 NEGOCIOS O ESTABLECIMIENTOS</Text>
-                        <Text style={styles.text}>
-                            <Text style={styles.bold}>Veracidad:</Text> Toda la información suministrada (dirección, precios, fotos, promociones) debe ser veraz.{'\n'}
-                            <Text style={styles.bold}>Seguridad:</Text> Ramgos implementa medidas de seguridad y privacidad para proteger los datos del negocio.{'\n'}
-                            <Text style={styles.bold}>Ganancias:</Text> Los negocios recibirán bonos y porcentajes de ganancias según el acuerdo comercial vigente.{'\n'}
-                            <Text style={styles.bold}>Requisito:</Text> Se requerirá verificación KYC para la activación completa del perfil comercial.{'\n'}
-                            <Text style={styles.bold}>Retenciones:</Text> Ramgos podrá retener pagos temporalmente en casos de disputas o revisiones por fraude.
-                        </Text>
+                        {(!accountType || accountType === 'business') && (
+                            <>
+                                <Text style={[styles.subTitle, accountType === 'business' && { color: '#059669', fontSize: 15 }]}>
+                                    🏪 NEGOCIOS O ESTABLECIMIENTOS {accountType === 'business' && '(TU ROL)'}
+                                </Text>
+                                <Text style={styles.text}>
+                                    <Text style={styles.bold}>Veracidad:</Text> Toda la información suministrada (dirección, precios, fotos, promociones) debe ser veraz.{'\n'}
+                                    <Text style={styles.bold}>Seguridad:</Text> Ramgos implementa medidas de seguridad y privacidad para proteger los datos del negocio.{'\n'}
+                                    <Text style={styles.bold}>Ganancias:</Text> Los negocios recibirán bonos y porcentajes de ganancias según el acuerdo comercial vigente.{'\n'}
+                                    <Text style={styles.bold}>Requisito:</Text> Se requerirá verificación KYC para la activación completa del perfil comercial.{'\n'}
+                                    <Text style={styles.bold}>Retenciones:</Text> Ramgos podrá retener pagos temporalmente en casos de disputas o revisiones por fraude.
+                                </Text>
+                            </>
+                        )}
 
-                        <Text style={styles.subTitle}>🌟 INFLUENCERS</Text>
-                        <Text style={styles.text}>
-                            • Participarán en un sistema de porcentajes de ganancias por ventas o interacciones generadas mediante sus enlaces.{'\n'}
-                            • Recibirán niveles de puntos y premios por logros como número de seguidores o metas mensuales.{'\n'}
-                            • Obtendrán bonificaciones extras por alcanzar metas de ventas o de crecimiento de comunidad.{'\n'}
-                            • Los bonos de uso exclusivo podrán utilizarse o transferirse a sus seguidores según las políticas vigentes.{'\n'}
-                            • Toda actividad de influencer estará sujeta a verificación KYC para pagos y validación de identidad.
-                        </Text>
+                        {(!accountType || accountType === 'influencer') && (
+                            <>
+                                <Text style={[styles.subTitle, accountType === 'influencer' && { color: '#2196F3', fontSize: 15 }]}>
+                                    🌟 INFLUENCERS {accountType === 'influencer' && '(TU ROL)'}
+                                </Text>
+                                <Text style={styles.text}>
+                                    • Participarán en un sistema de porcentajes de ganancias por ventas o interacciones generadas mediante sus enlaces.{'\n'}
+                                    • Recibirán niveles de puntos y premios por logros como número de seguidores o metas mensuales.{'\n'}
+                                    • Obtendrán bonificaciones extras por alcanzar metas de ventas o de crecimiento de comunidad.{'\n'}
+                                    • Los bonos de uso exclusivo podrán utilizarse o transferirse a sus seguidores según las políticas vigentes.{'\n'}
+                                    • Toda actividad de influencer estará sujeta a verificación KYC para pagos y validación de identidad.
+                                </Text>
+                            </>
+                        )}
 
 
                         <Text style={styles.sectionTitle}>4. MARKETPLACE (PRODUCTOS NUEVOS Y USADOS)</Text>

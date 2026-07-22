@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, ScrollView, Alert, Platform, KeyboardAvoidingView, useWindowDimensions, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { Lock, Eye, EyeOff, Tag, CheckCircle2, Store, MapPin, Award, User, Mail, Sparkles, ArrowLeft, Users, ChevronDown, X } from 'lucide-react-native';
+import { Lock, Eye, EyeOff, Tag, CheckCircle2, Store, MapPin, Award, User, Mail, Sparkles, ArrowLeft, Users, ChevronDown, X, AtSign, Hash } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthBackground } from '../components/AuthBackground';
 import { Badge } from '../components/ui/badge';
@@ -12,6 +12,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
+import { GoogleIcon, AppleIcon } from '../components/ui/SocialIcons';
 import {
     LIMITS, MIN, clamp, formatReferralCode, formatSocialHandle,
 } from '../utils/inputLimits';
@@ -52,21 +53,7 @@ const INFLUENCER_CATEGORIES = [
 ];
 
 
-// SVG Icons matching Login/Welcome
-const GoogleIcon = () => (
-    <Svg width={20} height={20} viewBox="0 0 24 24">
-        <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-        <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-        <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-        <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-    </Svg>
-);
-
-const FacebookIcon = () => (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="#1877F2">
-        <Path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-    </Svg>
-);
+// Local icons removed as they are imported from SocialIcons
 
 export default function RegisterScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
@@ -82,7 +69,7 @@ export default function RegisterScreen({ navigation, route }: any) {
     const [formData, setFormData] = useState({
         name: '', email: '', password: '', confirmPassword: '',
         businessName: '', businessCategory: '', businessAddress: '', businessPhone: '',
-        referralCode: '',
+        username: '', referralCode: '', referredBy: '', instagramUrl: '', tiktokUrl: '',
         acceptTerms: false,
         acceptPrivacy: false
     });
@@ -139,7 +126,7 @@ export default function RegisterScreen({ navigation, route }: any) {
 
     const handleOpenTerms = () => {
         setLegalViews(prev => ({ ...prev, terms: true }));
-        navigation.navigate('Terms', { origin: 'signup', returnKey: route?.key });
+        navigation.navigate('Terms', { origin: 'signup', returnKey: route?.key, accountType });
     };
 
     const handleOpenPrivacy = () => {
@@ -159,6 +146,10 @@ export default function RegisterScreen({ navigation, route }: any) {
     };
 
     const busy = isLoading || isProcessing;
+
+    const handleSocialLogin = (provider: 'google' | 'apple') => {
+        show(`Iniciando sesión con ${provider} (Próximamente)`, 'info');
+    };
 
     const handleRegister = async () => {
         if (!formData.acceptTerms || !formData.acceptPrivacy) {
@@ -188,6 +179,21 @@ export default function RegisterScreen({ navigation, route }: any) {
             return;
         }
 
+        if (accountType === 'influencer') {
+            if (!formData.instagramUrl.trim() && !formData.tiktokUrl.trim()) {
+                show('Debes proporcionar al menos el enlace de Instagram o TikTok', 'error');
+                return;
+            }
+            if (formData.instagramUrl && !formData.instagramUrl.startsWith('https://')) {
+                show('El enlace de Instagram debe comenzar con https://', 'error');
+                return;
+            }
+            if (formData.tiktokUrl && !formData.tiktokUrl.startsWith('https://')) {
+                show('El enlace de TikTok debe comenzar con https://', 'error');
+                return;
+            }
+        }
+
         setIsLoading(true);
         try {
             const signupInput = {
@@ -199,16 +205,20 @@ export default function RegisterScreen({ navigation, route }: any) {
                 businessCategory: accountType === 'business' ? formData.businessCategory : undefined,
                 businessAddress: accountType === 'business' ? formData.businessAddress : undefined,
                 phone: accountType === 'business' ? formData.businessPhone : undefined,
-                referralCode: formData.referralCode || undefined
+                username: formData.username || undefined,
+                referralCode: formData.referralCode || undefined,
+                referredBy: formData.referredBy || undefined,
+                instagramUrl: accountType === 'influencer' ? formData.instagramUrl.trim() : undefined,
+                tiktokUrl: accountType === 'influencer' ? formData.tiktokUrl.trim() : undefined,
             };
 
             const result = await signUpWithEmail(signupInput);
 
             // Referral attribution: store pending code and redeem after auth is established.
-            if (formData.referralCode) {
+            if (formData.referredBy) {
                 await AsyncStorage.setItem(
                     `@ramgos/referrals/pending/${result.user.id}`,
-                    formData.referralCode.trim().toUpperCase()
+                    formData.referredBy.trim().toUpperCase()
                 );
             }
 
@@ -266,7 +276,7 @@ export default function RegisterScreen({ navigation, route }: any) {
             // Force KYC for ALL users during registration flow
             navigation.reset({
                 index: 0,
-                routes: [{ name: 'KYC', params: { accountType: accountType || 'consumer' } }]
+                routes: [{ name: 'Home' }]
             });
         } catch (error) {
             const message =
@@ -377,10 +387,10 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             style={styles.socialBtn}
-                                            onPress={() => handleSocialSignup('facebook')}
+                                            onPress={() => handleSocialSignup('apple')}
                                             disabled={busy}
                                         >
-                                            <FacebookIcon />
+                                            <AppleIcon isDark={isDark} />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
@@ -484,24 +494,56 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         </View>
                                     </View>
 
-                                    {/* Referral Code (Optional) */}
+                                    <View style={styles.row}>
+                                        <View style={[styles.inputContainer, styles.col]}>
+                                            <Text style={styles.label}>Nombre de usuario</Text>
+                                            <View style={styles.inputWrapper}>
+                                                <AtSign size={20} color="#9CA3AF" style={styles.icon} />
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="juanperez"
+                                                    placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                                    value={formData.username}
+                                                    onChangeText={t => setFormData({ ...formData, username: t.toLowerCase() })}
+                                                    autoCapitalize="none"
+                                                />
+                                            </View>
+                                        </View>
+                                        <View style={[styles.inputContainer, styles.col]}>
+                                            <Text style={styles.label}>Crea tu código de referido</Text>
+                                            <View style={styles.inputWrapper}>
+                                                <Hash size={20} color="#9CA3AF" style={styles.icon} />
+                                                <TextInput
+                                                    style={styles.input}
+                                                    placeholder="JUAN123"
+                                                    placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                                    value={formData.referralCode}
+                                                    onChangeText={t => setFormData({ ...formData, referralCode: formatReferralCode(t) })}
+                                                    autoCapitalize="characters"
+                                                    maxLength={LIMITS.referralCode}
+                                                />
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    {/* Referred By (Optional) */}
                                     <View style={styles.inputContainer}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                                            <Text style={styles.label}>Código de referido (Opcional)</Text>
+                                            <Text style={styles.label}>¿Te invitó alguien? (Opcional)</Text>
                                             <Text style={{ fontSize: 10, color: isDark ? '#C4B5FD' : '#2196F3', fontWeight: 'bold' }}>¡Gana puntos extra!</Text>
                                         </View>
-                                        <View style={[styles.inputWrapper, { borderColor: formData.referralCode ? '#2196F3' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referralCode ? (isDark ? '#2E1065' : '#FAFAFA') : (isDark ? '#374151' : '#fff') }]}>
-                                            <Tag size={20} color={formData.referralCode ? '#2196F3' : '#9CA3AF'} style={styles.icon} />
+                                        <View style={[styles.inputWrapper, { borderColor: formData.referredBy ? '#2196F3' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referredBy ? (isDark ? '#2E1065' : '#FAFAFA') : (isDark ? '#374151' : '#fff') }]}>
+                                            <Tag size={20} color={formData.referredBy ? '#2196F3' : '#9CA3AF'} style={styles.icon} />
                                             <TextInput
-                                                style={[styles.input, { color: formData.referralCode ? '#2196F3' : (isDark ? '#F9FAFB' : '#111827'), fontWeight: formData.referralCode ? '600' : '400' }]}
-                                                placeholder="Ej: RAMGOS-JUAN"
+                                                style={[styles.input, { color: formData.referredBy ? '#2196F3' : (isDark ? '#F9FAFB' : '#111827'), fontWeight: formData.referredBy ? '600' : '400' }]}
+                                                placeholder="Código de quien te invitó"
                                                 placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                                value={formData.referralCode}
-                                                onChangeText={t => setFormData({ ...formData, referralCode: formatReferralCode(t) })}
+                                                value={formData.referredBy}
+                                                onChangeText={t => setFormData({ ...formData, referredBy: formatReferralCode(t) })}
                                                 autoCapitalize="characters"
                                                 maxLength={LIMITS.referralCode}
                                             />
-                                            {formData.referralCode.length > 0 && <CheckCircle2 size={16} color="#2196F3" />}
+                                            {formData.referredBy.length > 0 && <CheckCircle2 size={16} color="#2196F3" />}
                                         </View>
                                     </View>
 
@@ -562,40 +604,59 @@ export default function RegisterScreen({ navigation, route }: any) {
 
                                     {/* Influencer Specific Fields */}
                                     {accountType === 'influencer' && (
-                                        <View style={styles.row}>
-                                            <View style={[styles.inputContainer, styles.col]}>
-                                                <Text style={styles.label}>Usuario (Instagram/TikTok)</Text>
-                                                <View style={styles.inputWrapper}>
-                                                    <Award size={20} color="#9CA3AF" style={styles.icon} />
-                                                    <TextInput
-                                                        style={styles.input}
-                                                        placeholder="@usuario"
-                                                        placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                                        value={formData.businessName}
-                                                        onChangeText={t => setFormData({ ...formData, businessName: formatSocialHandle(t) })}
-                                                        autoCapitalize="none"
-                                                        maxLength={LIMITS.socialHandle}
-                                                    />
+                                        <>
+                                            <View style={styles.row}>
+                                                <View style={[styles.inputContainer, styles.col]}>
+                                                    <Text style={styles.label}>Instagram (URL completa)</Text>
+                                                    <View style={styles.inputWrapper}>
+                                                        <Award size={20} color="#9CA3AF" style={styles.icon} />
+                                                        <TextInput
+                                                            style={styles.input}
+                                                            placeholder="https://instagram.com/usuario"
+                                                            placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                                            value={formData.instagramUrl}
+                                                            onChangeText={t => setFormData({ ...formData, instagramUrl: t.trim() })}
+                                                            autoCapitalize="none"
+                                                            maxLength={100}
+                                                        />
+                                                    </View>
+                                                </View>
+                                                <View style={[styles.inputContainer, styles.col]}>
+                                                    <Text style={styles.label}>TikTok (URL completa)</Text>
+                                                    <View style={styles.inputWrapper}>
+                                                        <Award size={20} color="#9CA3AF" style={styles.icon} />
+                                                        <TextInput
+                                                            style={styles.input}
+                                                            placeholder="https://tiktok.com/@usuario"
+                                                            placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                                            value={formData.tiktokUrl}
+                                                            onChangeText={t => setFormData({ ...formData, tiktokUrl: t.trim() })}
+                                                            autoCapitalize="none"
+                                                            maxLength={100}
+                                                        />
+                                                    </View>
                                                 </View>
                                             </View>
-                                            <View style={[styles.inputContainer, styles.col]}>
-                                                <Text style={styles.label}>Categoría</Text>
-                                                <TouchableOpacity
-                                                    style={styles.inputWrapper}
-                                                    onPress={() => setShowCategoryModal(true)}
-                                                >
-                                                    <Tag size={20} color="#9CA3AF" style={styles.icon} />
-                                                    <Text style={[
-                                                        styles.input,
-                                                        { lineHeight: isCompact ? 34 : 48 }, // Vertical center fix
-                                                        !formData.businessCategory && { color: isDark ? "#6B7280" : "#9CA3AF" }
-                                                    ]}>
-                                                        {formData.businessCategory || "Seleccionar categoría"}
-                                                    </Text>
-                                                    <ChevronDown size={20} color="#9CA3AF" />
-                                                </TouchableOpacity>
+                                            <View style={styles.row}>
+                                                <View style={[styles.inputContainer, styles.col]}>
+                                                    <Text style={styles.label}>Categoría</Text>
+                                                    <TouchableOpacity
+                                                        style={styles.inputWrapper}
+                                                        onPress={() => setShowCategoryModal(true)}
+                                                    >
+                                                        <Tag size={20} color="#9CA3AF" style={styles.icon} />
+                                                        <Text style={[
+                                                            styles.input,
+                                                            { lineHeight: isCompact ? 34 : 48 }, // Vertical center fix
+                                                            !formData.businessCategory && { color: isDark ? "#6B7280" : "#9CA3AF" }
+                                                        ]}>
+                                                            {formData.businessCategory || "Seleccionar categoría"}
+                                                        </Text>
+                                                        <ChevronDown size={20} color="#9CA3AF" />
+                                                    </TouchableOpacity>
+                                                </View>
                                             </View>
-                                        </View>
+                                        </>
                                     )}
 
                                     <View style={styles.legalRow}>
@@ -619,7 +680,11 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         </TouchableOpacity>
                                         <Text style={styles.legalText}>
                                             He leído y acepto los
-                                            <Text style={styles.legalLink} onPress={handleOpenTerms}> Términos y Condiciones</Text>
+                                            <Text style={styles.legalLink} onPress={handleOpenTerms}>
+                                                {accountType === 'business' ? ' Términos para Vendedores' : 
+                                                 accountType === 'influencer' ? ' T&C de Comisiones' : 
+                                                 ' Términos y Condiciones'}
+                                            </Text>
                                         </Text>
                                     </View>
 
@@ -846,9 +911,9 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
 
         divider: { flexDirection: 'row', alignItems: 'center', marginVertical: isCompact ? 16 : 24 },
         line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
-        orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
+        orText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 12 },
 
-        socialRow: { flexDirection: 'row', gap: 12, justifyContent: 'center' },
+        socialRow: { flexDirection: 'row', gap: 12, marginBottom: 24, justifyContent: 'center' },
         socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },
 
         footer: { flexDirection: 'row', justifyContent: 'center', marginTop: isCompact ? 16 : 24, flexWrap: 'wrap' },

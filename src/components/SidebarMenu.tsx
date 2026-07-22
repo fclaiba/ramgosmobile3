@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Switch, ActivityIndicator, AccessibilityInfo } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Switch, ActivityIndicator, AccessibilityInfo, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen } from 'lucide-react-native';
 import { useAuth, type UserRole } from '../contexts/AuthContext';
@@ -206,9 +206,11 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
 
                 <SafeAreaView style={{ flex: 1 }}>
                     <View style={styles.header}>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <X color={isDark ? "#9CA3AF" : "#6B7280"} size={24} />
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 24, paddingRight: 8 }}>
+                            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                                <X color={isDark ? "#9CA3AF" : "#6B7280"} size={24} />
+                            </TouchableOpacity>
+                        </View>
 
                         <View style={styles.profileSection}>
                             <View style={styles.avatarContainer} accessible={true} accessibilityLabel={`Avatar de ${effectiveUser?.name || 'usuario'}. Estado: ${statusLabel}`}>

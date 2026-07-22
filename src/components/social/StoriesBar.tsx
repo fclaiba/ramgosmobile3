@@ -24,9 +24,11 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
         <View style={styles.wrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container}>
                 <TouchableOpacity style={styles.storyItem} onPress={onAddStory}>
-                    <View style={styles.addStoryContainer}>
-                        <View style={styles.addStoryIcon}>
-                            <PlusIcon size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                    <View style={styles.addStoryWrapper}>
+                        <View style={styles.addStoryContainer}>
+                            <View style={styles.addStoryIcon}>
+                                <PlusIcon size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                            </View>
                         </View>
                         <View style={styles.absolutePlus}>
                             <View style={styles.plusBadge}>
@@ -34,7 +36,8 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
                             </View>
                         </View>
                     </View>
-                    <Text style={styles.name}>Crear</Text>
+                    {/* Empty text to keep alignment with other stories */}
+                    <Text style={styles.name}> </Text>
                 </TouchableOpacity>
 
                 {stories.map((story: Story) => {
@@ -82,9 +85,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     storyItem: { alignItems: 'center', gap: 6, width: 68 },
 
     // Add Story Style
+    addStoryWrapper: { position: 'relative', width: 64, height: 64 },
     addStoryContainer: { width: 64, height: 64, ...glassSurface(true, 'regular', { borderRadius: Radius['2xl'] }), justifyContent: 'center', alignItems: 'center' },
     addStoryIcon: { opacity: 0.5 },
-    absolutePlus: { position: 'absolute', bottom: 0, right: 0 },
+    absolutePlus: { position: 'absolute', bottom: -2, right: -2 },
     plusBadge: { width: 20, height: 20, borderRadius: Radius.md, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
 
     // Story Avatar Style

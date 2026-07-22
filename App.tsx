@@ -98,6 +98,7 @@ import SubscriptionPlansScreen from './src/screens/SubscriptionPlansScreen';
 import CreateListingScreen from './src/screens/CreateListingScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
 import AddEditProductScreen from './src/screens/marketplace/AddEditProductScreen';
+import FormFillScreen from './src/screens/FormFillScreen';
 import ProductDetailScreen from './src/screens/marketplace/ProductDetailScreen';
 import WalletScreen from './src/screens/finance/WalletScreen';
 import CampaignManagerScreen from './src/screens/marketing/CampaignManagerScreen';
@@ -112,6 +113,8 @@ import BusinessProfileScreen from './src/screens/business/BusinessProfileScreen'
 import PublicBusinessProfileScreen from './src/screens/BusinessProfileScreen';
 import BusinessKYCScreen from './src/screens/business/BusinessKYCScreen';
 import BusinessQRScannerScreen from './src/screens/business/BusinessQRScannerScreen';
+import BusinessFormsScreen from './src/screens/BusinessFormsScreen';
+import InfluencerBonusesScreen from './src/screens/InfluencerBonusesScreen';
 import UserListScreen from './src/screens/social/UserListScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import MapExplorerScreen from './src/screens/MapExplorerScreen';
@@ -156,11 +159,13 @@ const AppNavigator = () => {
                 prefixes: ['ramgos://', 'https://ramgos.app'],
                 config: {
                     screens: {
+                        Home: '',
                         Register: 'register',
                         Login: 'login',
                     }
                 }
-            }}>
+            }}
+            documentTitle={{ formatter: (options, route) => `${options?.title ?? route?.name} - RAMGOS` }}>
             <StatusBar style={isDark ? "light" : "dark"} />
             <View style={{ flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' }}>
                 <Stack.Navigator
@@ -215,6 +220,8 @@ const AppNavigator = () => {
                     <Stack.Screen name="VerifyBusiness" component={BusinessKYCScreen} />
                     <Stack.Screen name="Referrals" component={ReferralsScreen} />
                     <Stack.Screen name="BusinessQR" component={BusinessQRScannerScreen} />
+                    <Stack.Screen name="BusinessForms" component={BusinessFormsScreen} />
+                    <Stack.Screen name="FormFill" component={FormFillScreen} />
                     <Stack.Screen name="InfluencerDashboard" component={InfluencerDashboardScreen} />
                     <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
                     <Stack.Screen name="AdminFinance" component={AdminFinanceScreen} />
@@ -234,6 +241,8 @@ const AppNavigator = () => {
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
                     <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
+                    <Stack.Screen name="BusinessForms" component={BusinessFormsScreen} />
+                    <Stack.Screen name="InfluencerBonuses" component={InfluencerBonusesScreen} />
                 </Stack.Navigator>
             </View>
         </NavigationContainer>

@@ -78,6 +78,12 @@ export const register = mutation({
         nickname: v.optional(v.string()),
         phoneNumber: v.optional(v.string()),
         bio: v.optional(v.string()),
+        businessCategory: v.optional(v.string()),
+        username: v.optional(v.string()),
+        referralCode: v.optional(v.string()),
+        referredBy: v.optional(v.string()),
+        instagramUrl: v.optional(v.string()),
+        tiktokUrl: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         if (!ALLOWED_ROLES.has(args.role)) {
@@ -105,17 +111,37 @@ export const register = mutation({
             throw new Error("No se pudo registrar la cuenta. Si ya tienes una cuenta, intenta iniciar sesión.");
         }
 
+        if (args.username) {
+            const existingUsername = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", args.username!.trim()))
+                .first();
+            if (existingUsername) {
+                throw new Error("El nombre de usuario ya está en uso. Por favor, elige otro.");
+            }
+        }
+
+        const hashedPassword = hashPassword(args.password);
+        const initialInfluencerStatus = args.role === 'influencer' ? 'pending' : undefined;
+
         const userId = await ctx.db.insert("users", {
             uid: Math.random().toString(36).slice(2),
             email,
-            password: hashPassword(args.password),
+            password: hashedPassword,
             name,
             role: args.role as any,
             avatar: args.avatar,
             nickname: args.nickname?.trim() || undefined,
             phoneNumber: args.phoneNumber?.trim() || undefined,
             bio: args.bio?.trim() || undefined,
+            businessCategory: args.businessCategory?.trim() || undefined,
+            username: args.username?.trim() || undefined,
+            referralCode: args.referralCode?.trim() || undefined,
+            referredBy: args.referredBy?.trim() || undefined,
             kycStatus: "pending",
+            influencerStatus: initialInfluencerStatus as any,
+            instagramUrl: args.instagramUrl?.trim() || undefined,
+            tiktokUrl: args.tiktokUrl?.trim() || undefined,
             joinedAt: new Date().toISOString(),
             tier: "Bronze",
             subscriptionStatus: "inactive",
@@ -161,6 +187,47 @@ export const login = mutation({
     },
 });
 
+export const oauthLogin = mutation({
+    args: {
+        provider: v.string(), // 'google' | 'apple'
+        email: v.string(),
+        name: v.string(),
+        providerUserId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const email = args.email.trim().toLowerCase();
+        
+        let user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", email))
+            .first();
+
+        if (!user) {
+            // Auto-register consumer
+            const userId = await ctx.db.insert("users", {
+                uid: Math.random().toString(36).slice(2), // Use internal UID
+                email,
+                name: args.name.trim(),
+                role: "consumer",
+                kycStatus: "pending",
+                joinedAt: new Date().toISOString(),
+                tier: "Bronze",
+                subscriptionStatus: "inactive",
+                isTest: email.endsWith("@ramgos.com"),
+                // In a real app we might store providerUserId in a linkedAccounts table or directly
+            });
+            user = await ctx.db.get(userId);
+        }
+
+        if ((user as any).isBanned) {
+            throw new Error("ACCOUNT_BANNED");
+        }
+
+        const sessionToken = await createSession(ctx, user!._id);
+        return { ...sanitizeUser(user), sessionToken };
+    },
+});
+
 export const logout = mutation({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
@@ -179,6 +246,7 @@ export const logout = mutation({
 export const changePassword = mutation({
     args: {
         sessionToken: v.optional(v.string()),
+        code: v.string(),
         currentPassword: v.string(),
         newPassword: v.string(),
     },
@@ -196,12 +264,33 @@ export const changePassword = mutation({
             throw new Error("Usuario no encontrado.");
         }
 
+        if (user.otp !== args.code) {
+            throw new Error("El código de verificación es inválido.");
+        }
+        if (user.otpExpiresAt && user.otpExpiresAt < Date.now()) {
+            throw new Error("El código ha expirado.");
+        }
+
         if (!user.password || !verifyPassword(args.currentPassword, user.password)) {
             throw new Error("La contraseña actual es incorrecta.");
         }
 
+        // Password History check
+        const history = user.passwordHistory || [];
+        for (const oldHash of history) {
+            if (verifyPassword(args.newPassword, oldHash)) {
+                throw new Error("No puedes usar contraseñas anteriores por razones de seguridad.");
+            }
+        }
+
+        const newHash = hashPassword(args.newPassword);
+        const newHistory = [newHash, ...history].slice(0, 5); // Keep last 5
+
         await ctx.db.patch(actor.id, {
-            password: hashPassword(args.newPassword),
+            password: newHash,
+            passwordHistory: newHistory,
+            otp: undefined,
+            otpExpiresAt: undefined,
         });
         return { success: true };
     },
@@ -284,18 +373,50 @@ export const updateProfile = mutation({
             nickname: v.optional(v.string()),
             avatar: v.optional(v.string()),
             phoneNumber: v.optional(v.string()),
+            username: v.optional(v.string()),
+            referralCode: v.optional(v.string()),
         })
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, String(args.id));
 
-        await ctx.db.patch(args.id, {
-            name: args.updates.name,
-            nickname: args.updates.nickname,
-            avatar: args.updates.avatar,
-            phoneNumber: args.updates.phoneNumber
-        } as any);
+        const userDoc = await ctx.db.get(args.id);
+        if (!userDoc) throw new Error("Usuario no encontrado.");
+
+        const updates: any = {};
+        if (args.updates.name !== undefined) updates.name = args.updates.name.trim();
+        if (args.updates.nickname !== undefined) updates.nickname = args.updates.nickname.trim();
+        if (args.updates.avatar !== undefined) updates.avatar = args.updates.avatar;
+        if (args.updates.phoneNumber !== undefined) updates.phoneNumber = args.updates.phoneNumber.trim();
+        if (args.updates.referralCode !== undefined) updates.referralCode = args.updates.referralCode.trim();
+
+        if (args.updates.username !== undefined) {
+            const newUsername = args.updates.username.trim();
+            if (newUsername !== userDoc.username) {
+                const existing = await ctx.db
+                    .query("users")
+                    .filter((q) => q.eq(q.field("username"), newUsername))
+                    .first();
+                if (existing) {
+                    throw new Error("El nombre de usuario ya está en uso.");
+                }
+
+                const now = Date.now();
+                const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+                if (userDoc.usernameLastChangedAt && now - userDoc.usernameLastChangedAt < FIFTEEN_DAYS_MS) {
+                    const daysLeft = Math.ceil((FIFTEEN_DAYS_MS - (now - userDoc.usernameLastChangedAt)) / (1000 * 60 * 60 * 24));
+                    throw new Error(`Debes esperar ${daysLeft} días para volver a cambiar tu nombre de usuario.`);
+                }
+
+                updates.username = newUsername;
+                updates.usernameLastChangedAt = now;
+            }
+        }
+
+        if (Object.keys(updates).length > 0) {
+            await ctx.db.patch(args.id, updates);
+        }
     }
 });
 
@@ -677,7 +798,7 @@ export const getReferralDashboard = query({
 
         const referred = await ctx.db
             .query("users")
-            .filter((q) => q.eq(q.field("referredByUserId"), actor.idString))
+            .filter((q) => q.eq(q.field("referredBy"), actor.idString))
             .collect();
 
         const ledger = await ctx.db
@@ -958,6 +1079,8 @@ export const updateUserStripeCustomerId = internalMutation({
         }
     }
 });
+
+
 
 export const getUserActivityStats = query({
     args: {},

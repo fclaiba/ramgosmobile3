@@ -131,19 +131,19 @@ export default function BasicProfileSetupScreen({ navigation, route }: any) {
 
                     <View style={styles.formContainer}>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Nombre de Usuario (Nickname)</Text>
+                            <Text style={styles.label}>{role === 'business' ? 'Nombre Comercial' : 'Nombre de Usuario (Nickname)'}</Text>
                             <View style={styles.inputWrapper}>
                                 <AtSign size={20} color={isDark ? '#9CA3AF' : '#9CA3AF'} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Ej. JuanPerez, TacosMexico"
+                                    placeholder={role === 'business' ? "Ej. Mi Restaurante S.A." : "Ej. JuanPerez"}
                                     placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                                     value={nickname}
                                     onChangeText={setNickname}
-                                    autoCapitalize="none"
+                                    autoCapitalize={role === 'business' ? "words" : "none"}
                                 />
                             </View>
-                            <Text style={styles.hint}>Este será tu identificador público en la app.</Text>
+                            <Text style={styles.hint}>{role === 'business' ? 'Este será el nombre público de tu negocio.' : 'Este será tu identificador público en la app.'}</Text>
                         </View>
 
                         <View style={styles.inputGroup}>

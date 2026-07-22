@@ -237,7 +237,7 @@ export default function HomeScreen({ navigation, route }: any) {
                 {activeTab === 'home' && (
                     <>
                         <MobileHeader
-                            showLogo={true}
+                            title="Inicio"
                             subtitle="Descubre la oportunidad"
                             onMenuPress={() => setIsSidebarOpen(true)}
                             actions={
@@ -492,7 +492,7 @@ export default function HomeScreen({ navigation, route }: any) {
                 )}
 
                 {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={marketplaceInitialParams} />}
-                {activeTab === 'social' && <SocialScreen isTabMode={true} />}
+                {activeTab === 'social' && <SocialScreen isTabMode={true} onMenuPress={() => setIsSidebarOpen(true)} />}
                 {activeTab === 'dashboard' && (
                     user?.role === 'business' ? <BusinessDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :
                         user?.role === 'influencer' ? <InfluencerDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :

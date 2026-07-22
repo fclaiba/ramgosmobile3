@@ -14,6 +14,7 @@ import type * as approveAll from "../approveAll.js";
 import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as bonos from "../bonos.js";
+import type * as businessForms from "../businessForms.js";
 import type * as campaigns from "../campaigns.js";
 import type * as cart from "../cart.js";
 import type * as clearDatabase from "../clearDatabase.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authHelpers: typeof authHelpers;
   bonos: typeof bonos;
+  businessForms: typeof businessForms;
   campaigns: typeof campaigns;
   cart: typeof cart;
   clearDatabase: typeof clearDatabase;

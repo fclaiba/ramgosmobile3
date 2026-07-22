@@ -35,6 +35,7 @@ import {
   ExternalLink,
   UserPlus,
   X,
+  ListTodo,
 } from "lucide-react-native";
 import { MobileHeader } from "../components/MobileHeader";
 import { Badge } from "../components/ui/badge";
@@ -502,7 +503,25 @@ export default function BusinessDashboardScreen({
               <QrCode size={20} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => navigation.navigate("BusinessCreate")}
+              onPress={() => {
+                if (!isVerified) {
+                  show("Debes completar y tener aprobado el KYC para usar esta función.", "warning");
+                  return;
+                }
+                navigation.navigate("BusinessForms");
+              }}
+              style={[styles.scanBtn, { marginLeft: 8 }]}
+            >
+              <ListTodo size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                if (!isVerified) {
+                  show("Debes completar y tener aprobado el KYC para usar esta función.", "warning");
+                  return;
+                }
+                navigation.navigate("BusinessCreate");
+              }}
               style={styles.createBtn}
             >
               <PlusIcon size={20} color="#fff" />

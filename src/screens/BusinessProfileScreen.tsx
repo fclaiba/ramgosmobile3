@@ -1,10 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform, ImageBackground } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Clock, MapPin, Phone, ExternalLink, Ticket, ArrowRight, Share2, Star } from 'lucide-react-native';
+import { ArrowLeft, Clock, MapPin, Phone, ExternalLink, Ticket, ArrowRight, Share2, Star, FileText } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 
 // Mock Bonuses for the business
@@ -46,6 +48,8 @@ export default function BusinessProfileScreen() {
 
         if (url) Linking.openURL(url);
     };
+
+    const forms = useQuery(api.businessForms.getPublicForms, { businessId: data.id });
 
     return (
         <View style={styles.container}>
@@ -134,6 +138,29 @@ export default function BusinessProfileScreen() {
                     ))}
                 </View>
 
+                {/* Forms Section */}
+                {forms && forms.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Servicios y Contacto</Text>
+                        {forms.map((form) => (
+                            <TouchableOpacity
+                                key={form._id}
+                                style={styles.formCard}
+                                onPress={() => navigation.navigate('FormFill', { formId: form._id, businessName: data.name })}
+                            >
+                                <View style={styles.formIconBox}>
+                                    <FileText size={20} color="#2196F3" />
+                                </View>
+                                <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                                    <Text style={styles.formTitle}>{form.title}</Text>
+                                    <Text style={styles.formDesc}>{form.description}</Text>
+                                </View>
+                                <ArrowRight size={20} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+
                 {/* Marketplace Link */}
                 <TouchableOpacity style={styles.marketplaceCard} onPress={() => navigation.navigate('Marketplace', { searchQuery: data.name })}>
                     <LinearGradient colors={['#111827', '#374151']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
@@ -186,4 +213,8 @@ const getStyles = (isDark: any) => StyleSheet.create({
     marketplaceCard: { marginHorizontal: 16, height: 80, borderRadius: Radius.lg, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, overflow: 'hidden' },
     mpTitle: { color: isDark ? '#09090B' : '#FAFAFA', fontSize: 16, fontWeight: 'bold' },
     mpSub: { color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 12 },
+    formCard: { flexDirection: 'row', backgroundColor: colors(isDark).glass, borderRadius: Radius.md, padding: 16, marginBottom: 10, alignItems: 'center', ...glassShadow(isDark) },
+    formIconBox: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : '#E3F2FD', justifyContent: 'center', alignItems: 'center' },
+    formTitle: { fontSize: 15, fontWeight: 'bold', color: '#111827' },
+    formDesc: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
 });

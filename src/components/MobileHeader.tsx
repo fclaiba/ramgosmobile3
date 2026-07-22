@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, Radius, Type, Touch } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
 
-export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack, showLogo }: any) => {
+export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const insets = useSafeAreaInsets();
@@ -42,13 +42,9 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                         </TouchableOpacity>
                     ) : null}
                     <View style={styles.titles}>
-                        {showLogo ? (
-                            <Image source={require('../../logo.png')} style={{ width: 140, height: 36, marginLeft: -4 }} resizeMode="contain" />
-                        ) : (
-                            <Text style={styles.title} numberOfLines={1}>
-                                {title}
-                            </Text>
-                        )}
+                        <Text style={styles.title} numberOfLines={1}>
+                            {title}
+                        </Text>
                         {subtitle ? (
                             <Text style={styles.subtitle} numberOfLines={1}>
                                 {subtitle}

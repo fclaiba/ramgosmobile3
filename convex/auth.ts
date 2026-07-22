@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, action, internalMutation } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import { requireActor } from "./authHelpers";
-import { hashPassword } from "./passwordHelpers";
+import { hashPassword, verifyPassword } from "./passwordHelpers";
 
 // Internal mutation to save OTP in the users table
 export const saveOtp = internalMutation({
@@ -93,7 +93,8 @@ export const resetPasswordWithCode = mutation({
     args: { 
         email: v.string(), 
         code: v.string(), 
-        newPassword: v.string() 
+        newPassword: v.string(),
+        oldPassword: v.string()
     },
     handler: async (ctx, args) => {
         const email = args.email.trim().toLowerCase();
@@ -120,8 +121,25 @@ export const resetPasswordWithCode = mutation({
             throw new Error("La contraseña debe tener al menos 8 caracteres, una mayúscula y un número.");
         }
 
+        // Password History check
+        const history = user.passwordHistory || [];
+        for (const oldHash of history) {
+            if (verifyPassword(pass, oldHash)) {
+                throw new Error("No puedes usar contraseñas anteriores por razones de seguridad.");
+            }
+        }
+
+        // Verify oldPassword
+        if (!user.password || !verifyPassword(args.oldPassword, user.password)) {
+            throw new Error("La contraseña anterior no es correcta.");
+        }
+
+        const newHash = hashPassword(pass);
+        const newHistory = [newHash, ...history].slice(0, 5); // Keep last 5
+
         await ctx.db.patch(user._id, {
-            password: hashPassword(args.newPassword),
+            password: newHash,
+            passwordHistory: newHistory,
             otp: undefined,
             otpExpiresAt: undefined
         });

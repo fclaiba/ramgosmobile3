@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform } from 'react-native';
-import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown } from 'lucide-react-native';
+import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown, AtSign, Hash, ListTodo, Lock, LayoutDashboard, CheckCircle2, QrCode, Tag, Trophy, Flame, Coins, Map, Gamepad2, Building, AlertCircle, Copy } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -28,6 +28,8 @@ interface UserProfile {
     bio: string;
     joinDate: string;
     avatarUrl: string;
+    username: string;
+    referralCode: string;
 }
 
 interface UserStats {
@@ -43,7 +45,7 @@ export default function ProfileScreen({ navigation }: any) {
     const styles = getStyles(isDark);
     const { show } = useToast();
 
-    const { user, logout } = useAuth();
+    const { user, logout, sessionToken } = useAuth();
     const { points, currentTier, nextTier, lifetimePoints, transactions } = usePoints();
     const { referralSummary, referralCode } = useReferral() as any;
     const { unreadCount } = useNotifications();
@@ -59,7 +61,27 @@ export default function ProfileScreen({ navigation }: any) {
         bio: (user as any)?.bio || '',
         joinDate: (user as any)?.joinedAt ? new Date((user as any).joinedAt).toLocaleDateString() : '',
         avatarUrl: (user as any)?.avatarUrl || (user as any)?.avatar || '',
+        username: (user as any)?.username || '',
+        referralCode: (user as any)?.referralCode || '',
     });
+
+    React.useEffect(() => {
+        if (user) {
+            setProfile({
+                name: user.name || '',
+                email: user.email || '',
+                phone: (user as any).phone || '',
+                location: (user as any).location || '',
+                bio: (user as any).bio || '',
+                joinDate: (user as any).joinedAt ? new Date((user as any).joinedAt).toLocaleDateString() : '',
+                avatarUrl: (user as any).avatarUrl || (user as any).avatar || '',
+                username: (user as any).username || '',
+                referralCode: (user as any).referralCode || '',
+            });
+        }
+    }, [user]);
+
+    const updateProfileMutation = useMutation(api.users.updateProfile);
 
     const rawStats = useQuery(api.users.getUserActivityStats, user?.id ? {} : "skip");
     const stats = rawStats || {
@@ -71,14 +93,28 @@ export default function ProfileScreen({ navigation }: any) {
 
     const [editedProfile, setEditedProfile] = useState(profile);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!editedProfile.name.trim()) {
             show('El nombre es obligatorio', 'error');
             return;
         }
-        setProfile(editedProfile);
-        setIsEditing(false);
-        show('Perfil actualizado exitosamente', 'success');
+        
+        try {
+            await updateProfileMutation({
+                id: (user as any)?.id,
+                sessionToken: sessionToken || '',
+                updates: {
+                    name: editedProfile.name,
+                    username: editedProfile.username,
+                    referralCode: editedProfile.referralCode,
+                }
+            });
+            setProfile(editedProfile);
+            setIsEditing(false);
+            show('Perfil actualizado exitosamente', 'success');
+        } catch (error: any) {
+            show(error.message || 'Error al actualizar', 'error');
+        }
     };
 
     const handleCancel = () => {
@@ -86,7 +122,6 @@ export default function ProfileScreen({ navigation }: any) {
         setIsEditing(false);
     };
 
-    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [pointsHistoryVisible, setPointsHistoryVisible] = useState(false);
 
     const pointHistoryPreview = useMemo(() => transactions.slice(0, 6), [transactions]);
@@ -98,18 +133,6 @@ export default function ProfileScreen({ navigation }: any) {
         () => Math.abs(transactions.filter((t: any) => t.amount < 0).reduce((sum: any, t: any) => sum + t.amount, 0)),
         [transactions],
     );
-
-    const handleDeleteAccount = () => {
-        setDeleteModalVisible(true);
-    };
-
-    const confirmDelete = () => {
-        setDeleteModalVisible(false);
-        show("Cuenta eliminada. Tu cuenta ha sido marcada para eliminación.", "info");
-        setTimeout(() => {
-            logout().catch(() => { });
-        }, 2000);
-    };
 
     const quickActions = [
         { icon: ShoppingBag, label: 'Mis Compras', value: stats.purchases, color: '#06b6d4', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'products' }) },
@@ -325,6 +348,46 @@ export default function ProfileScreen({ navigation }: any) {
                         <View style={styles.divider} />
                         <View style={styles.formRow}>
                             <View style={styles.formIcon}>
+                                <AtSign size={18} color="#6B7280" />
+                            </View>
+                            <View style={styles.formContent}>
+                                <Text style={styles.formLabel}>Nombre de Usuario</Text>
+                                {isEditing ?
+                                    <TextInput
+                                        value={editedProfile.username}
+                                        onChangeText={t => setEditedProfile({ ...editedProfile, username: t })}
+                                        style={styles.inputObj}
+                                        placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                                        placeholder="Ej: ramgos123"
+                                        autoCapitalize="none"
+                                    /> :
+                                    <Text style={styles.formValue}>{profile.username ? `@${profile.username}` : 'No definido'}</Text>
+                                }
+                            </View>
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.formRow}>
+                            <View style={styles.formIcon}>
+                                <Hash size={18} color="#6B7280" />
+                            </View>
+                            <View style={styles.formContent}>
+                                <Text style={styles.formLabel}>Código de Referido Propio</Text>
+                                {isEditing ?
+                                    <TextInput
+                                        value={editedProfile.referralCode}
+                                        onChangeText={t => setEditedProfile({ ...editedProfile, referralCode: t.toUpperCase() })}
+                                        style={styles.inputObj}
+                                        placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                                        placeholder="Ej: MI-CODIGO"
+                                        autoCapitalize="characters"
+                                    /> :
+                                    <Text style={styles.formValue}>{profile.referralCode || 'No definido'}</Text>
+                                }
+                            </View>
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.formRow}>
+                            <View style={styles.formIcon}>
                                 <Mail size={18} color="#6B7280" />
                             </View>
                             <View style={styles.formContent}>
@@ -376,6 +439,40 @@ export default function ProfileScreen({ navigation }: any) {
                                 }
                             </View>
                         </View>
+                    </View>
+
+                    {/* KYC STATUS */}
+                    <Text style={styles.sectionHeader}>Seguridad e Identidad</Text>
+                    <View style={styles.card}>
+                        <View style={styles.kycRow}>
+                            <View style={styles.kycIconWrapper}>
+                                <Shield size={24} color={user?.kycStatus === 'approved' ? '#10B981' : (user?.kycStatus === 'pending' ? '#F59E0B' : '#EF4444')} />
+                            </View>
+                            <View style={styles.kycContent}>
+                                <Text style={styles.kycTitle}>
+                                    {user?.kycStatus === 'approved' ? 'Identidad verificada'
+                                        : user?.kycStatus === 'pending' ? 'Verificación en revisión'
+                                            : user?.kycStatus === 'rejected' ? 'Verificación rechazada'
+                                                : 'Verificación requerida'}
+                                </Text>
+                                <Text style={styles.kycSubtitle}>
+                                    {user?.kycStatus === 'approved' ? 'Tu cuenta está protegida y podés operar sin límites.'
+                                        : user?.kycStatus === 'pending' ? 'Estamos revisando tus documentos. Te avisaremos pronto.'
+                                            : user?.kycStatus === 'rejected' ? 'Hubo un problema con tu documentación. Por favor, volvé a enviarla.'
+                                                : 'Completá tu verificación KYC para vender, publicar o retirar fondos.'}
+                                </Text>
+                            </View>
+                        </View>
+                        {user?.kycStatus !== 'approved' && user?.kycStatus !== 'pending' && (
+                            <TouchableOpacity 
+                                style={styles.kycButton} 
+                                onPress={() => navigation.navigate('KYC', { accountType: user?.role || 'consumer' })}
+                            >
+                                <Text style={styles.kycButtonText}>
+                                    {user?.kycStatus === 'rejected' ? 'Volver a intentar' : 'Completar verificación'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* POINTS & REFERRALS */}
@@ -440,6 +537,37 @@ export default function ProfileScreen({ navigation }: any) {
                         </>
                     )}
 
+                    {/* HERRAMIENTAS */}
+                    {['business', 'influencer'].includes(user?.role as string) && (
+                        <>
+                            <Text style={styles.sectionHeader}>Herramientas</Text>
+                            <View style={styles.card}>
+                                {user?.role === 'business' && user?.kycStatus === 'approved' && (
+                                    <TouchableOpacity style={[styles.settingsItem, user?.role === 'influencer' && styles.borderBottom]} onPress={() => navigation.navigate('BusinessForms')}>
+                                        <View style={styles.settingsLeft}>
+                                            <View style={[styles.settingsIcon, { backgroundColor: isDark ? '#3730a3' : '#e0e7ff' }]}>
+                                                <ListTodo size={18} color={isDark ? '#818cf8' : '#4f46e5'} />
+                                            </View>
+                                            <Text style={styles.settingsLabel}>Mis Formularios</Text>
+                                        </View>
+                                        <ChevronRight size={18} color="#9CA3AF" />
+                                    </TouchableOpacity>
+                                )}
+                                {user?.role === 'influencer' && (user as any)?.influencerStatus === 'approved' && (
+                                    <TouchableOpacity style={styles.settingsItem} onPress={() => navigation.navigate('InfluencerBonuses')}>
+                                        <View style={styles.settingsLeft}>
+                                            <View style={[styles.settingsIcon, { backgroundColor: isDark ? '#064e3b' : '#d1fae5' }]}>
+                                                <Ticket size={18} color={isDark ? '#34d399' : '#059669'} />
+                                            </View>
+                                            <Text style={styles.settingsLabel}>Mis Bonos de Descuento</Text>
+                                        </View>
+                                        <ChevronRight size={18} color="#9CA3AF" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </>
+                    )}
+
                     <Text style={styles.sectionHeader}>Ajustes</Text>
                     <View style={styles.card}>
                         {settingsOptions.map((opt, i) => (
@@ -464,16 +592,6 @@ export default function ProfileScreen({ navigation }: any) {
                             </TouchableOpacity>
                         ))}
                     </View>
-
-                    {/* LOGOUT */}
-                    <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()}>
-                        <LogOut size={18} color="#EF4444" />
-                        <Text style={styles.logoutText}>Cerrar Sesión</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount}>
-                        <Text style={styles.deleteText}>Eliminar Cuenta</Text>
-                    </TouchableOpacity>
 
                 </View>
 
@@ -515,32 +633,7 @@ export default function ProfileScreen({ navigation }: any) {
                 </SheetContent>
             </Sheet>
 
-            <Sheet open={deleteModalVisible} onOpenChange={setDeleteModalVisible}>
-                <SheetContent side="bottom" style={styles.sheetContent}>
-                    <SheetHeader>
-                        <SheetTitle>Eliminar Cuenta</SheetTitle>
-                    </SheetHeader>
-                    <View style={styles.sheetBody}>
-                        <View style={[styles.confirmationIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}>
-                            <AlertTriangle size={32} color={isDark ? '#ef4444' : '#dc2626'} />
-                        </View>
-                        <Text style={styles.sheetText}>
-                            ¿Estás absolutamente seguro? Esta acción no se puede deshacer y perderás todos tus datos y puntos acumulados.
-                        </Text>
-                        <View style={styles.sheetActions}>
-                            <Button variant="outline" style={{ flex: 1 }} onPress={() => setDeleteModalVisible(false)}>
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#374151' }}>Cancelar</Text>
-                            </Button>
-                            <Button
-                                style={{ flex: 1, backgroundColor: '#dc2626' }}
-                                onPress={confirmDelete}
-                            >
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Sí, eliminar</Text>
-                            </Button>
-                        </View>
-                    </View>
-                </SheetContent>
-            </Sheet>
+
 
             <MobileNav
                 activeSection={'home'}
@@ -606,6 +699,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     formValue: { fontSize: 15, color: colors(isDark).text, fontWeight: '500' },
     inputObj: { fontSize: 15, color: colors(isDark).text, borderBottomWidth: 1, borderBottomColor: '#2196F3', paddingVertical: 2 },
     divider: { height: 1, backgroundColor: colors(isDark).glass, marginLeft: 68 },
+
+    // KYC Status
+    kycRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16 },
+    kycIconWrapper: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    kycContent: { flex: 1 },
+    kycTitle: { fontSize: 15, fontWeight: '700', color: colors(isDark).text, marginBottom: 2 },
+    kycSubtitle: { fontSize: 12, color: colors(isDark).textMuted, lineHeight: 16 },
+    kycButton: { backgroundColor: '#2196F3', marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, borderRadius: Radius.lg, alignItems: 'center' },
+    kycButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
     // Points & referrals
     pointsTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },

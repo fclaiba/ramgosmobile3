@@ -92,6 +92,8 @@ export interface SignUpInput {
     businessAddress?: string;
     phone?: string;
     referralCode?: string;
+    instagramUrl?: string;
+    tiktokUrl?: string;
 }
 
 export interface SignUpResult {
@@ -184,18 +186,8 @@ const resolveNextRoute = (user: PublicUser): AuthFlowDecision['nextRoute'] => {
         };
     }
 
-    // Force KYC for pending, unverified, or rejected statuses
-    if (user.requiresKyc && (
-        user.kycStatus === 'pending' ||
-        user.kycStatus === 'unverified' ||
-        user.kycStatus === 'rejected'
-    )) {
-        return {
-            screen: 'KYC',
-            params: { accountType: user.role }
-        };
-    }
-
+    // KYC is now optional and accessible from the Profile screen
+    // We no longer force it during login or registration flow
     // Only force BasicProfileSetup for brand-new accounts without any display name
     if (!user.nickname && !user.name) {
         return { screen: 'BasicProfileSetup' };
@@ -391,6 +383,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         : undefined,
                 phoneNumber: payload.phone?.trim() || undefined,
                 bio: payload.businessAddress?.trim() || undefined,
+                businessCategory: payload.businessCategory?.trim() || undefined,
+                instagramUrl: payload.instagramUrl?.trim() || undefined,
+                tiktokUrl: payload.tiktokUrl?.trim() || undefined,
             });
 
             const userId = String(registerResult?.userId ?? '');

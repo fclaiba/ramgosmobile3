@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Platform, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
-import { Mail, Send, CheckCircle2, ArrowLeft, Lock, Key, ArrowRight } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Mail, Send, CheckCircle2, ArrowLeft, Lock, Key, ArrowRight, RefreshCw } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
@@ -19,12 +20,14 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
     const [email, setEmail] = useState('');
     const [code, setCode] = useState(['', '', '', '', '', '']); // 6 digits
+    const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     
     // States: 'request' | 'verify' | 'success'
     const [step, setStep] = useState<'request' | 'verify' | 'success'>('request');
     const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
+    const [cooldown, setCooldown] = useState(0);
 
     const sendResetEmail = useAction(api.auth.sendPasswordResetEmail);
     const resetPassword = useMutation(api.auth.resetPasswordWithCode);
@@ -55,6 +58,40 @@ export default function ForgotPasswordScreen({ navigation }: any) {
             ]).start();
         }
     }, [step]);
+
+    useEffect(() => {
+        const loadCooldown = async () => {
+            try {
+                const val = await AsyncStorage.getItem('forgot_pwd_cooldown');
+                if (val) {
+                    const expires = parseInt(val, 10);
+                    const now = Date.now();
+                    if (expires > now) {
+                        setCooldown(Math.ceil((expires - now) / 1000));
+                    } else {
+                        await AsyncStorage.removeItem('forgot_pwd_cooldown');
+                    }
+                }
+            } catch (e) {}
+        };
+        loadCooldown();
+    }, []);
+
+    useEffect(() => {
+        if (cooldown > 0) {
+            const timer = setInterval(() => {
+                setCooldown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        AsyncStorage.removeItem('forgot_pwd_cooldown').catch(() => {});
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [cooldown]);
 
     useEffect(() => {
         // Animate scale on focus change
@@ -117,10 +154,15 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     };
 
     const handleSendEmail = async () => {
-        if (!email) return;
+        if (!email || cooldown > 0) return;
         setIsLoading(true);
         try {
             await sendResetEmail({ email });
+            
+            const expires = Date.now() + 60000;
+            await AsyncStorage.setItem('forgot_pwd_cooldown', expires.toString());
+            setCooldown(60);
+
             show("Instrucciones enviadas", "success");
             setStep('verify');
         } catch (error: any) {
@@ -132,13 +174,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
     const handleResetPassword = async () => {
         const codeValue = code.join('');
-        if (codeValue.length < 6 || !newPassword) {
-            show("Ingresa el código completo y la nueva contraseña", "warning");
+        if (codeValue.length < 6 || !newPassword || !oldPassword) {
+            show("Ingresa el código completo y ambas contraseñas", "warning");
             return;
         }
         setIsLoading(true);
         try {
-            await resetPassword({ email, code: codeValue, newPassword });
+            await resetPassword({ email, code: codeValue, newPassword, oldPassword });
             setStep('success');
         } catch (error: any) {
             show(error.message || "Código o contraseña inválidos", "error");
@@ -218,41 +260,69 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                                 Ingresa el código que enviamos a {email} y tu nueva contraseña.
                             </Text>
 
+                            <View style={styles.otpContainer}>
+                                {code.map((digit, idx) => {
+                                    const isFocused = focusedIndex === idx;
+                                    const isFilled = digit.length > 0;
+                                    return (
+                                        <Animated.View key={idx} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
+                                            <TextInput
+                                                ref={ref => { inputs.current[idx] = ref; }}
+                                                style={[
+                                                    styles.otpInput,
+                                                    isFilled && styles.otpInputFilled,
+                                                    isFocused && styles.otpInputActive
+                                                ]}
+                                                maxLength={6} // allow pasting full 6 digits
+                                                keyboardType="number-pad"
+                                                textContentType="oneTimeCode"
+                                                autoComplete="one-time-code"
+                                                value={digit}
+                                                onChangeText={(text) => handleChangeCode(text, idx)}
+                                                onKeyPress={(e) => handleKeyPress(e, idx)}
+                                                onFocus={() => setFocusedIndex(idx)}
+                                                onBlur={() => setFocusedIndex(null)}
+                                                textAlign="center"
+                                                selectionColor="#29B6F6"
+                                            />
+                                        </Animated.View>
+                                    );
+                                })}
+                            </View>
+
+                                
+                            <View style={styles.resendWrapper}>
+                                {cooldown > 0 ? (
+                                    <Text style={styles.timerText}>Reenviar código en {cooldown}s</Text>
+                                ) : (
+                                    <TouchableOpacity onPress={handleSendEmail} style={styles.resendBtn} disabled={isLoading}>
+                                        <RefreshCw size={14} color="#2196F3" style={{ marginRight: 6 }} />
+                                        <Text style={styles.resendText}>Reenviar código</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
                             <View style={styles.form}>
                                 <View style={styles.inputContainer}>
-                                    <Text style={[styles.label, { textAlign: 'center', marginBottom: 12 }]}>Código de recuperación</Text>
-                                    <View style={styles.otpContainer}>
-                                        {code.map((digit, idx) => {
-                                            const isFocused = focusedIndex === idx;
-                                            const isFilled = digit.length > 0;
-                                            return (
-                                                <Animated.View key={idx} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
-                                                    <TextInput
-                                                        ref={ref => { inputs.current[idx] = ref; }}
-                                                        style={[
-                                                            styles.otpInput,
-                                                            isFilled && styles.otpInputFilled,
-                                                            isFocused && styles.otpInputActive
-                                                        ]}
-                                                        maxLength={6} // allow pasting full 6 digits
-                                                        keyboardType="number-pad"
-                                                        textContentType="oneTimeCode"
-                                                        autoComplete="one-time-code"
-                                                        value={digit}
-                                                        onChangeText={(text) => handleChangeCode(text, idx)}
-                                                        onKeyPress={(e) => handleKeyPress(e, idx)}
-                                                        onFocus={() => setFocusedIndex(idx)}
-                                                        onBlur={() => setFocusedIndex(null)}
-                                                        textAlign="center"
-                                                        selectionColor="#29B6F6"
-                                                    />
-                                                </Animated.View>
-                                            );
-                                        })}
+                                    <Text style={styles.label}>Contraseña anterior</Text>
+                                    <View style={styles.inputWrapper}>
+                                        <Lock size={20} color={isDark ? "#9CA3AF" : "#9CA3AF"} style={styles.icon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Tu contraseña anterior"
+                                            placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                            value={oldPassword}
+                                            onChangeText={setOldPassword}
+                                            secureTextEntry
+                                            autoComplete="off"
+                                            textContentType="none"
+                                            importantForAutofill="no"
+                                            autoCorrect={false}
+                                        />
                                     </View>
                                 </View>
 
-                                <View style={styles.inputContainer}>
+                                <View style={[styles.inputContainer, { marginTop: 12 }]}>
                                     <Text style={styles.label}>Nueva contraseña</Text>
                                     <View style={styles.inputWrapper}>
                                         <Lock size={20} color={isDark ? "#9CA3AF" : "#9CA3AF"} style={styles.icon} />
@@ -350,8 +420,8 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
                             <TouchableOpacity
                                 onPress={handleSendEmail}
-                                style={styles.submitBtnContainer}
-                                disabled={isLoading}
+                                style={[styles.submitBtnContainer, cooldown > 0 && { opacity: 0.5 }]}
+                                disabled={isLoading || cooldown > 0}
                             >
                                 <LinearGradient
                                     colors={['#2196F3', '#29B6F6']}
@@ -362,8 +432,14 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                                         <Text style={styles.btnText}>Enviando...</Text>
                                     ) : (
                                         <>
-                                            <Send size={20} color="#fff" style={{ marginRight: 8 }} />
-                                            <Text style={styles.btnText}>Enviar instrucciones</Text>
+                                            {cooldown > 0 ? (
+                                                <Text style={styles.btnText}>Reintentar en {cooldown}s</Text>
+                                            ) : (
+                                                <>
+                                                    <Send size={20} color="#fff" style={{ marginRight: 8 }} />
+                                                    <Text style={styles.btnText}>Enviar instrucciones</Text>
+                                                </>
+                                            )}
                                         </>
                                     )}
                                 </LinearGradient>
@@ -420,15 +496,15 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     input: { flex: 1, fontSize: 16, color: colors(isDark).text },
 
     // OTP Styles
-    otpContainer: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 8 },
+    otpContainer: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 24 },
     otpInput: { 
-        width: 48, 
-        height: 48, 
+        width: 52, 
+        height: 52, 
         backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)', 
         borderRadius: Radius.lg, 
         borderWidth: 1.5, 
         borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.15)', 
-        fontSize: 22, 
+        fontSize: 24, 
         fontWeight: '700', 
         color: colors(isDark).text,
         textAlign: 'center',
@@ -451,16 +527,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     gradientBtn: { flexDirection: 'row', height: 56, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
+    resendWrapper: { alignItems: 'center', marginBottom: 24, minHeight: 20 },
+    resendBtn: { flexDirection: 'row', alignItems: 'center' },
+    resendText: { color: '#2196F3', fontSize: 13, fontWeight: '600' },
+    timerText: { color: colors(isDark).textMuted, fontSize: 13 },
+
     divider: { width: '100%', height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', marginVertical: 24 },
     footer: { flexDirection: 'row', justifyContent: 'center' },
 
     // Success State
     successIconContainer: { marginBottom: 32, alignItems: 'center', justifyContent: 'center' },
-    successIconGlowWrapper: { position: 'absolute', width: 100, height: 100 },
-    successIconGlow: { flex: 1, borderRadius: Radius.full, opacity: 0.6, transform: [{ scale: 1.3 }] },
-    successIconBg: { width: 100, height: 100, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: 5, borderColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#fff', ...glassShadow(isDark) },
+    successIconGlowWrapper: { position: 'absolute', width: 80, height: 80 },
+    successIconGlow: { flex: 1, borderRadius: Radius.xl, opacity: 0.6, transform: [{ scale: 1.3 }] },
+    successIconBg: { width: 80, height: 80, borderRadius: Radius.xl, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#fff', ...Platform.select({ web: { boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0 10px 20px rgba(16, 185, 129, 0.1)' } as any, default: { ...glassShadow(isDark) } }) },
     
     successTitle: { fontSize: 26, fontWeight: '800', textAlign: 'center', color: isDark ? '#34D399' : '#10B981', marginBottom: 12 },
     successSubtitle: { fontSize: 15, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 32, paddingHorizontal: 16, lineHeight: 22 },
-    successBtnContainer: { width: '100%', ...glassShadow(isDark), marginTop: 8 },
+    successBtnContainer: { width: '100%', ...Platform.select({ web: { boxShadow: '0 6px 16px rgba(16, 185, 129, 0.3)' } as any, default: { ...glassShadow(isDark) } }), marginTop: 8 },
 });

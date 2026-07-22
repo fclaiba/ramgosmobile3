@@ -193,7 +193,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
 
         return (
             <Animated.View
-                entering={FadeInDown.delay(300).springify()}
+                entering={Platform.OS === 'web' ? undefined : FadeInDown.delay(300).springify()}
                 style={[
                     styles.cardContainer,
                     {
@@ -253,7 +253,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                             {features.map((feature: string, index: number) => (
                                 <Animated.View
                                     key={index}
-                                    entering={FadeInDown.delay(400 + (index * 100)).duration(400)}
+                                    entering={Platform.OS === 'web' ? undefined : FadeInDown.delay(400 + (index * 100)).duration(400)}
                                     style={styles.featureItem}
                                 >
                                     <View style={[styles.checkCircle, { backgroundColor: color + '15' }]}>
@@ -315,7 +315,7 @@ export default function SubscriptionPlansScreen({ navigation }: any) {
                     showsVerticalScrollIndicator={false}
                 >
                     <Animated.View
-                        entering={FadeInDown.duration(600).springify()}
+                        entering={Platform.OS === 'web' ? undefined : FadeInDown.duration(600).springify()}
                         style={styles.header}
                     >
                         <View style={styles.headerTag}>

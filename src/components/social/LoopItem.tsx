@@ -14,13 +14,13 @@ import { SharePostModal } from './SharePostModal';
 
 const { height, width } = Dimensions.get('window');
 
-interface ReelItemProps {
-    post: PostType;
+interface LoopItemProps {
+    post: any;
     isActive: boolean;
-    onUserClick: (id: string) => void;
+    onUserClick: (userId: string) => void;
 }
 
-export const ReelItem = ({ post, isActive, onUserClick }: ReelItemProps) => {
+export const LoopItem = ({ post, isActive, onUserClick }: LoopItemProps) => {
     const videoRef = useRef<Video>(null);
     const { isDark } = useTheme();
     const { toggleLike } = useSocial();

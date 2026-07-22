@@ -67,19 +67,23 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
 
     const getIcon = () => {
         switch (type) {
-            case 'success': return <CheckCircle color="#10B981" size={24} fill={isDark ? "rgba(16, 185, 129, 0.2)" : "transparent"} />;
-            case 'error': return <AlertCircle color="#EF4444" size={24} fill={isDark ? "rgba(239, 68, 68, 0.2)" : "transparent"} />;
-            case 'warning': return <AlertTriangle color="#F59E0B" size={24} fill={isDark ? "rgba(245, 158, 11, 0.2)" : "transparent"} />;
-            default: return <Info color="#3B82F6" size={24} fill={isDark ? "rgba(59, 130, 246, 0.2)" : "transparent"} />;
+            case 'success': return <CheckCircle color="#10B981" size={24} />;
+            case 'error': return <AlertCircle color="#EF4444" size={24} />;
+            case 'warning': return <AlertTriangle color="#F59E0B" size={24} />;
+            default: return <Info color="#3B82F6" size={24} />;
         }
     };
 
     const getStyles = () => {
-        const baseStyle = {
-            borderLeftColor: type === 'success' ? '#10B981' : type === 'error' ? '#EF4444' : type === 'warning' ? '#F59E0B' : '#3B82F6',
-        };
-        return baseStyle;
+        switch (type) {
+            case 'success': return { border: '#10B981', glow: 'rgba(16, 185, 129, 0.25)' };
+            case 'error': return { border: '#EF4444', glow: 'rgba(239, 68, 68, 0.25)' };
+            case 'warning': return { border: '#F59E0B', glow: 'rgba(245, 158, 11, 0.25)' };
+            default: return { border: '#3B82F6', glow: 'rgba(59, 130, 246, 0.25)' };
+        }
     };
+
+    const styleVars = getStyles();
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: translateY.value }],
@@ -90,32 +94,32 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
             {children}
             {visible && (
                 <Animated.View style={[styles.container, animatedStyle, { zIndex: 9999 }]}>
-                    <TouchableOpacity onPress={hide} activeOpacity={0.9}>
+                    <TouchableOpacity onPress={hide} activeOpacity={0.9} style={{ width: '100%', alignItems: 'center' }}>
                         <BlurView
                             intensity={Platform.OS === 'ios' ? 80 : 100}
                             tint={isDark ? 'dark' : 'light'}
                             style={[
                                 styles.content,
                                 {
-                                    backgroundColor: isDark ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.9)',
+                                    backgroundColor: isDark ? 'rgba(17, 24, 39, 0.85)' : 'rgba(255, 255, 255, 0.9)',
                                     borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                    ...getStyles()
                                 }
                             ]}
                         >
                             <View style={styles.iconContainer}>
+                                <View style={[styles.iconGlow, { backgroundColor: styleVars.glow }]} />
                                 {getIcon()}
                             </View>
                             <View style={styles.textContainer}>
-                                <Text style={[styles.title, { color: isDark ? '#FFF' : '#1F2937' }]}>
-                                    {type === 'success' ? '¡Éxito!' : type === 'error' ? 'Error' : 'Información'}
+                                <Text style={[styles.title, { color: isDark ? '#F3F4F6' : '#111827' }]}>
+                                    {type === 'success' ? '¡Éxito!' : type === 'error' ? 'Error' : 'Aviso'}
                                 </Text>
-                                <Text style={[styles.message, { color: colors(isDark).textMuted }]} numberOfLines={2}>
+                                <Text style={[styles.message, { color: isDark ? '#9CA3AF' : '#6B7280' }]} numberOfLines={2}>
                                     {message}
                                 </Text>
                             </View>
-                            <TouchableOpacity onPress={hide} style={styles.closeBtn}>
-                                <X size={16} color={isDark ? '#9CA3AF' : '#9CA3AF'} />
+                            <TouchableOpacity onPress={hide} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <X size={18} color={isDark ? '#6B7280' : '#9CA3AF'} />
                             </TouchableOpacity>
                         </BlurView>
                     </TouchableOpacity>
@@ -123,26 +127,25 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
             )}
         </ToastContext.Provider>
     );
-};
+}
 
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
         top: 0,
-        left: 20,
-        right: 20,
+        left: 16,
+        right: 16,
         alignItems: 'center',
     },
     content: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: 14,
         paddingHorizontal: 16,
-        borderRadius: Radius.lg,
+        borderRadius: 24, // Liquid glass pill shape
         width: '100%',
         maxWidth: 400,
         borderWidth: 1,
-        borderLeftWidth: 4,
         ...Platform.select({
             web: {
                 boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.15)',
@@ -159,6 +162,17 @@ const styles = StyleSheet.create({
     },
     iconContainer: {
         marginRight: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    iconGlow: {
+        position: 'absolute',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        filter: 'blur(8px)',
+        transform: [{ scale: 1.2 }],
     },
     textContainer: {
         flex: 1,

@@ -196,7 +196,7 @@ export default function PaymentMethodsScreen({ navigation }: any) {
                     <SheetHeader>
                         <SheetTitle>Elegí una tarjeta de prueba</SheetTitle>
                     </SheetHeader>
-                    <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 10 }}>
+                    <ScrollView style={{ maxHeight: '80%' }} contentContainerStyle={{ padding: 16, gap: 10 }}>
                         {testCatalog.map((tc) => (
                             <TouchableOpacity
                                 key={tc.id}

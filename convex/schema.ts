@@ -21,13 +21,19 @@ export default defineSchema({
         termsAcceptedVersion: v.optional(v.number()), // Version of T&C accepted
 
         // PHASE 1 ADDITIONS - User Profile Enhancement
+        username: v.optional(v.string()),
+        usernameLastChangedAt: v.optional(v.number()),
+        referralCode: v.optional(v.string()),
+        referredBy: v.optional(v.string()),
         bio: v.optional(v.string()),
+        businessCategory: v.optional(v.string()),
         phoneNumber: v.optional(v.string()),
         nickname: v.optional(v.string()),
         phoneVerified: v.optional(v.boolean()),
         emailVerified: v.optional(v.boolean()),
         otp: v.optional(v.string()),
         otpExpiresAt: v.optional(v.number()),
+        passwordHistory: v.optional(v.array(v.string())),
         
         // Fase 2 - Push Notifications
         pushTokens: v.optional(v.array(v.string())),
@@ -57,13 +63,16 @@ export default defineSchema({
         lastActiveAt: v.optional(v.string()), // Kept only one instance
         followerCount: v.optional(v.number()), // For Influencer metrics
 
-        // back to this user. Resolved server-side at PaymentIntent time.
-        referralCode: v.optional(v.string()),
-        referredByUserId: v.optional(v.string()),
+        // Influencer Fields
+        influencerStatus: v.optional(v.union(v.literal('pending'), v.literal('approved'), v.literal('rejected'))),
+        instagramUrl: v.optional(v.string()),
+        tiktokUrl: v.optional(v.string()),
+
     })
         .index("by_email", ["email"])
         .index("by_uid", ["uid"])
         .index("by_tokenIdentifier", ["tokenIdentifier"])
+        .index("by_username", ["username"])
         .index("by_referral_code", ["referralCode"]),
 
     // FASE 1 — Auth server-side estricto.
@@ -988,4 +997,28 @@ export default defineSchema({
         windowStart: v.number(), // timestamp
         blockedUntil: v.optional(v.number()), // timestamp
     }).index("by_key", ["key"]),
+
+    // PHASE 2: Business Forms
+    businessForms: defineTable({
+        businessId: v.string(),
+        title: v.string(),
+        description: v.optional(v.string()),
+        type: v.union(v.literal('visit'), v.literal('call')),
+        isActive: v.boolean(),
+        createdAt: v.string(),
+        updatedAt: v.optional(v.string()),
+    }).index("by_business", ["businessId"]),
+
+    businessFormLeads: defineTable({
+        formId: v.string(),
+        businessId: v.string(),
+        userId: v.optional(v.string()), 
+        name: v.string(),
+        email: v.string(),
+        phone: v.string(),
+        message: v.optional(v.string()),
+        status: v.union(v.literal('new'), v.literal('contacted'), v.literal('resolved')),
+        createdAt: v.string(),
+    }).index("by_business", ["businessId"]).index("by_form", ["formId"]),
 });
+

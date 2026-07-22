@@ -91,19 +91,9 @@ export default function VerificationScreen({ navigation, route }: any) {
                 return;
             }
 
-            // Force KYC only for signup flow
-            const isSignup = route.params?.isSignup;
-
-            if (isSignup) {
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'KYC', params: { accountType: accountType || 'consumer' } }]
-                });
-                return;
-            }
-
+            // KYC is optional during signup, so we let the standard navigation handle it
+            // Users can complete KYC from their Profile screen later
             navigateFromDecision(decision);
-
 
         } catch (error) {
             const message =

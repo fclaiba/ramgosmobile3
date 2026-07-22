@@ -6,6 +6,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
 import { Post as PostType, useSocial } from '../../contexts/SocialContext';
 import { useCart } from '../../contexts/CartContext';
@@ -23,7 +25,10 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
     const [likes, setLikes] = useState(post.likeCount || post.likes?.length || 0);
     const [showComments, setShowComments] = useState(false);
     const [showShare, setShowShare] = useState(false);
-    const saved = isPostSaved(post.id);
+    const saved = isPostSaved(post.id) || isPostSaved(post._id);
+
+    const toggleLikeMut = useMutation(api.social.toggleLike);
+    const toggleSaveMut = useMutation(api.social.toggleSavePost);
 
     const { theme, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -32,11 +37,13 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
     const handleSave = () => {
         if (saved) unsavePost(post._id || post.id);
         else savePost(post._id || post.id);
+        toggleSaveMut({ postId: post._id || post.id }).catch(e => console.warn(e));
     };
 
     const handleLike = () => {
         setLiked(!liked);
         setLikes((prev: number) => liked ? prev - 1 : prev + 1);
+        toggleLikeMut({ postId: post._id || post.id }).catch(e => console.warn(e));
     };
 
     const handleDelete = async () => {
@@ -128,19 +135,27 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
             <View style={styles.footer}>
                 <View style={styles.actions}>
                     <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-                        <Heart size={24} color={liked ? "#EF4444" : isDark ? "#9CA3AF" : "#4B5563"} fill={liked ? "#EF4444" : "none"} />
+                        <View pointerEvents="none">
+                            <Heart size={24} color={liked ? "#EF4444" : isDark ? "#9CA3AF" : "#4B5563"} fill={liked ? "#EF4444" : "none"} />
+                        </View>
                         <Text style={[styles.actionText, liked && { color: "#EF4444" }]}>{likes}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton} onPress={() => setShowComments(true)}>
-                        <MessageCircle size={24} color={isDark ? "#9CA3AF" : "#4B5563"} />
+                        <View pointerEvents="none">
+                            <MessageCircle size={24} color={isDark ? "#9CA3AF" : "#4B5563"} />
+                        </View>
                         <Text style={styles.actionText}>{post.commentCount || post.comments?.length || 0}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton} onPress={() => setShowShare(true)}>
-                        <Share2 size={24} color={isDark ? "#9CA3AF" : "#4B5563"} />
+                        <View pointerEvents="none">
+                            <Share2 size={24} color={isDark ? "#9CA3AF" : "#4B5563"} />
+                        </View>
                     </TouchableOpacity>
                 </View>
                 <TouchableOpacity onPress={handleSave}>
-                    <Bookmark size={24} color={saved ? (isDark ? "#F9FAFB" : "#000") : (isDark ? "#9CA3AF" : "#4B5563")} fill={saved ? (isDark ? "#F9FAFB" : "#000") : "none"} />
+                    <View pointerEvents="none">
+                        <Bookmark size={24} color={saved ? (isDark ? "#F9FAFB" : "#000") : (isDark ? "#9CA3AF" : "#4B5563")} fill={saved ? (isDark ? "#F9FAFB" : "#000") : "none"} />
+                    </View>
                 </TouchableOpacity>
             </View>
 

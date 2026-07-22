@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { View, FlatList, Dimensions, StyleSheet } from 'react-native';
-import { ReelItem } from './ReelItem';
+import { LoopItem } from './LoopItem';
 import { Post as PostType } from '../../contexts/SocialContext';
 
 const { height } = Dimensions.get('window');
 
-interface ReelFeedProps {
+interface LoopFeedProps {
     posts: PostType[];
     onUserClick: (id: string) => void;
     onEndReached?: () => void;
 }
 
-export const ReelFeed = ({ posts, onUserClick, onEndReached }: ReelFeedProps) => {
+export const LoopFeed = ({ posts, onUserClick, onEndReached }: LoopFeedProps) => {
     const [activeIndex, setActiveIndex] = useState(0);
 
     const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
@@ -30,7 +30,7 @@ export const ReelFeed = ({ posts, onUserClick, onEndReached }: ReelFeedProps) =>
                 data={posts}
                 keyExtractor={(item) => item._id || item.id}
                 renderItem={({ item, index }) => (
-                    <ReelItem
+                    <LoopItem
                         post={item}
                         isActive={activeIndex === index}
                         onUserClick={onUserClick}

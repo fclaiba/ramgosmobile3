@@ -78,13 +78,10 @@ function cleanOnce(raw: string): string {
     let msg = raw.replace(/\r\n/g, '\n').trim();
     if (!msg) return '';
 
-    // Convex wraps: Uncaught Error: / Uncaught ConvexError:
-    const uncaught =
-        msg.match(/Uncaught ConvexError:\s*([^\n]+)/i) ||
-        msg.match(/Uncaught Error:\s*([^\n]+)/i);
-    if (uncaught?.[1]) {
-        msg = uncaught[1].trim();
-    } else if (/\[CONVEX/i.test(msg) || /Request ID/i.test(msg)) {
+    // Convex wraps: Uncaught Error: / Uncaught ConvexError: (sometimes nested)
+    msg = msg.replace(/(?:Uncaught (?:Convex)?Error:\s*)+/gi, '').trim();
+
+    if (/\[CONVEX/i.test(msg) || /Request ID/i.test(msg)) {
         msg = msg
             .replace(/\[CONVEX[^\]]*\]\s*/gi, '')
             .replace(/\[Request ID:[^\]]*\]\s*/gi, '')
