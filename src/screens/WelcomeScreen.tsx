@@ -131,7 +131,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                 <Animated.View style={{ opacity: btn1Opacity, transform: [{ translateX: btn1Opacity.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }] }}>
                                     <TouchableOpacity
                                         style={styles.primaryBtn}
-                                        onPress={() => navigation.navigate('Register')}
+                                        onPress={() => navigation.navigate('SignUp')}
                                         activeOpacity={0.9}
                                     >
                                         <LinearGradient
@@ -169,6 +169,20 @@ export default function WelcomeScreen({ navigation }: any) {
 
                             {/* Footer & Socials */}
                             <Animated.View style={{ opacity: footerOpacity, width: '100%', alignItems: 'center' }}>
+                                <View style={styles.divider}>
+                                    <View style={styles.line} />
+                                    <Text style={styles.orText}>o continuar con</Text>
+                                    <View style={styles.line} />
+                                </View>
+
+                                <View style={styles.socialRow}>
+                                    <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('google')} disabled={busy}>
+                                        <GoogleIcon />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('apple')} disabled={busy}>
+                                        <AppleIcon isDark={isDark} />
+                                    </TouchableOpacity>
+                                </View>
 
                                 <Text style={styles.footerText}>
                                     Al continuar, aceptas nuestros{' '}

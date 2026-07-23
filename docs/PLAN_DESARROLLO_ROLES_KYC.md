@@ -32,14 +32,14 @@ Agrupación de las grandes funcionalidades del sistema:
 **Objetivo del Sprint:** Permitir la creación de perfiles comerciales con un flujo de KYC obligatorio y restrictivo.
 
 **Historias de Usuario:**
-- **US2.1:** Como negocio, quiero registrarme con mi correo, pero creando un perfil tipo "Negocio" y seleccionando mi nombre comercial.
-- **US2.2:** Como negocio, debo leer y aceptar los T&C *específicos para vendedores*.
-- **US2.3:** Como sistema, debo exigir el KYC obligatorio para el negocio. Si no lo hace, se bloquean sus funciones de venta.
-- **US2.4:** Como negocio (con KYC completado), quiero crear formularios para que mis clientes agenden visitas o soliciten llamadas.
+- **[x] US2.1:** Como negocio, quiero registrarme con mi correo, pero creando un perfil tipo "Negocio" y seleccionando mi nombre comercial.
+- **[x] US2.2:** Como negocio, debo leer y aceptar los T&C *específicos para vendedores*.
+- **[x] US2.3:** Como sistema, debo exigir el KYC obligatorio para el negocio. Si no lo hace, se bloquean sus funciones de venta.
+- **[x] US2.4:** Como negocio (con KYC completado), quiero crear formularios para que mis clientes agenden visitas o soliciten llamadas.
 
 **Criterios de Aceptación:**
-- Se muestran los T&C correctos basados en el rol.
-- Es imposible para el rol "Negocio" vender o crear formularios si `kycStatus !== 'completed'`.
+- **[x]** Se muestran los T&C correctos basados en el rol.
+- **[x]** Es imposible para el rol "Negocio" vender o crear formularios si `kycStatus !== 'completed'`.
 
 ---
 

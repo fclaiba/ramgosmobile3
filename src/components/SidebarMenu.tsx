@@ -273,7 +273,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                 <MenuItem
                                     icon={Plus}
                                     label="Crear cuenta"
-                                    action={() => { onClose(); navigation.navigate('Register'); }}
+                                    action={() => { onClose(); navigation.navigate('SignUp'); }}
                                     color="#10B981"
                                 />
                             </View>

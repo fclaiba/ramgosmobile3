@@ -51,7 +51,7 @@ export default function TermsScreen({ navigation, route }: any) {
                     });
                 } else {
                     // Fallback if returnKey wasn't provided
-                    navigation.navigate('Register', { termsAccepted: true });
+                    navigation.navigate('SignUp', { termsAccepted: true });
                 }
                 navigation.goBack();
                 return;

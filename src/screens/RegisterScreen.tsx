@@ -335,11 +335,6 @@ export default function RegisterScreen({ navigation, route }: any) {
                             {/* Header */}
                             <TouchableOpacity
                                 onPress={() => {
-                                    if (step === 'form') {
-                                        setStep('type');
-                                        return;
-                                    }
-                                    // Ensure we always land on Welcome even if Register was opened via deep link
                                     navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
                                 }}
                                 style={styles.backBtn}

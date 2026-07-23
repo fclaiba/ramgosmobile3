@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform, ImageBackground } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { ArrowLeft, Clock, MapPin, Phone, ExternalLink, Ticket, ArrowRight, Share2, Star, FileText } from 'lucide-react-native';
+import { ArrowLeft, Clock, MapPin, Phone, ExternalLink, Ticket, ArrowRight, Share2, Star, FileText, Mail } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
@@ -139,27 +139,39 @@ export default function BusinessProfileScreen() {
                 </View>
 
                 {/* Forms Section */}
-                {forms && forms.length > 0 && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Servicios y Contacto</Text>
-                        {forms.map((form) => (
-                            <TouchableOpacity
-                                key={form._id}
-                                style={styles.formCard}
-                                onPress={() => navigation.navigate('FormFill', { formId: form._id, businessName: data.name })}
-                            >
-                                <View style={styles.formIconBox}>
-                                    <FileText size={20} color="#2196F3" />
-                                </View>
-                                <View style={{ flex: 1, paddingHorizontal: 12 }}>
-                                    <Text style={styles.formTitle}>{form.title}</Text>
-                                    <Text style={styles.formDesc}>{form.description}</Text>
-                                </View>
-                                <ArrowRight size={20} color="#9CA3AF" />
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Servicios y Contacto</Text>
+                    <TouchableOpacity
+                        style={styles.formCard}
+                        onPress={() => navigation.navigate('FormFill', { businessId: data.id, businessName: data.name })}
+                    >
+                        <View style={styles.formIconBox}>
+                            <Mail size={20} color="#2196F3" />
+                        </View>
+                        <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                            <Text style={styles.formTitle}>Enviar Consulta</Text>
+                            <Text style={styles.formDesc}>Comunicate directamente con el negocio</Text>
+                        </View>
+                        <ArrowRight size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+
+                    {forms && forms.map((form) => (
+                        <TouchableOpacity
+                            key={form._id}
+                            style={styles.formCard}
+                            onPress={() => navigation.navigate('FormFill', { formId: form._id, businessId: data.id, businessName: data.name })}
+                        >
+                            <View style={styles.formIconBox}>
+                                <FileText size={20} color="#2196F3" />
+                            </View>
+                            <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                                <Text style={styles.formTitle}>{form.title}</Text>
+                                <Text style={styles.formDesc}>{form.description}</Text>
+                            </View>
+                            <ArrowRight size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
                 {/* Marketplace Link */}
                 <TouchableOpacity style={styles.marketplaceCard} onPress={() => navigation.navigate('Marketplace', { searchQuery: data.name })}>

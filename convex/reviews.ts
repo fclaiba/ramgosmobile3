@@ -110,6 +110,35 @@ async function updateListingRating(ctx: any, listingId: string) {
                 averageRating: avgRating,
                 reviewCount: allReviews.length,
             });
+
+            // Ponytail: Update Global Seller Rating Accumulator
+            const listing = await ctx.db.get(normalizedId);
+            if (listing && listing.sellerId) {
+                const sellerListings = await ctx.db
+                    .query("listings")
+                    .withIndex("by_seller", (q: any) => q.eq("sellerId", listing.sellerId))
+                    .collect();
+                
+                let totalReviews = 0;
+                let sumRatings = 0;
+                for (const l of sellerListings) {
+                    if (l.reviewCount && l.averageRating) {
+                        totalReviews += l.reviewCount;
+                        sumRatings += (l.averageRating * l.reviewCount);
+                    }
+                }
+
+                if (totalReviews > 0) {
+                    const globalRating = sumRatings / totalReviews;
+                    const sellerUserId = ctx.db.normalizeId("users", listing.sellerId);
+                    if (sellerUserId) {
+                        await ctx.db.patch(sellerUserId, {
+                            sellerRating: globalRating,
+                            sellerReviewCount: totalReviews,
+                        });
+                    }
+                }
+            }
         }
     } catch (e) {
         console.error("Failed to update listing rating", e);

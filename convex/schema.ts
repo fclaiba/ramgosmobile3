@@ -68,6 +68,14 @@ export default defineSchema({
         instagramUrl: v.optional(v.string()),
         tiktokUrl: v.optional(v.string()),
 
+        // PHASE 5: Business Calendar & Appointments
+        businessAvailability: v.optional(v.object({
+            days: v.array(v.number()), // 0=Sunday, 1=Monday...
+            startTime: v.string(), // e.g. "09:00"
+            endTime: v.string(), // e.g. "18:00"
+            slotDurationMinutes: v.number(), // e.g. 30
+        })),
+
     })
         .index("by_email", ["email"])
         .index("by_uid", ["uid"])
@@ -103,7 +111,7 @@ export default defineSchema({
         currency: v.literal('USD'),
 
         // Core categorization
-        type: v.union(v.literal('product'), v.literal('service'), v.literal('event'), v.literal('bono')),
+        type: v.union(v.literal('product'), v.literal('service'), v.literal('event'), v.literal('bono'), v.literal('rental')),
         category: v.string(),
         tags: v.array(v.string()), // PHASE 2 ADDITION
 
@@ -143,6 +151,12 @@ export default defineSchema({
             name: v.string(),
             address: v.optional(v.string()),
             distanceKm: v.optional(v.number()),
+        })),
+
+        // Rental / Booking config
+        rentalConfig: v.optional(v.object({
+            pricePerNight: v.number(),
+            maxGuests: v.number(),
         })),
 
         // Shipping Profile - Enhanced
@@ -251,6 +265,25 @@ export default defineSchema({
         .index("by_seller", ["sellerId"])
         .index("by_status", ["status"])
         .index("by_user_idempotency", ["userId", "idempotencyKey"]),
+
+    // PHASE 5: Rentals and Bookings
+    bookings: defineTable({
+        listingId: v.string(),
+        orderId: v.string(), // linked to an order
+        buyerId: v.string(),
+        sellerId: v.string(),
+        checkInDate: v.string(),
+        checkOutDate: v.string(),
+        status: v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'), v.literal('completed')),
+        guests: v.number(),
+        totalPrice: v.number(),
+        createdAt: v.string(),
+    })
+        .index("by_listing", ["listingId"])
+        .index("by_seller", ["sellerId"])
+        .index("by_buyer", ["buyerId"])
+        .index("by_order", ["orderId"])
+        .index("by_status", ["status"]),
 
     // PHASE 1: User Profile Tables
     savedAddresses: defineTable({
@@ -863,6 +896,8 @@ export default defineSchema({
         // is dynamic and small.
         unreadCounts: v.optional(v.any()),
         createdAt: v.string(),
+        firstRepliedAt: v.optional(v.string()),
+        firstReplierId: v.optional(v.string()),
     })
         // No native "array contains" index — we store a flat
         // `participantsKey` (sorted ids joined by ":") so we can find
@@ -998,7 +1033,16 @@ export default defineSchema({
         blockedUntil: v.optional(v.number()), // timestamp
     }).index("by_key", ["key"]),
 
-    // PHASE 2: Business Forms
+    // PHASE 2: Business Forms & Settings
+    businessSettings: defineTable({
+        businessId: v.string(),
+        startHour: v.string(),
+        endHour: v.string(),
+        slotDurationMinutes: v.number(),
+        workingDays: v.array(v.number()),
+        updatedAt: v.string(),
+    }).index("by_business", ["businessId"]),
+
     businessForms: defineTable({
         businessId: v.string(),
         title: v.string(),
@@ -1017,6 +1061,8 @@ export default defineSchema({
         email: v.string(),
         phone: v.string(),
         message: v.optional(v.string()),
+        scheduledDate: v.optional(v.string()),
+        scheduledTime: v.optional(v.string()),
         status: v.union(v.literal('new'), v.literal('contacted'), v.literal('resolved')),
         createdAt: v.string(),
     }).index("by_business", ["businessId"]).index("by_form", ["formId"]),

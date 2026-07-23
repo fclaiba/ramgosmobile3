@@ -65,6 +65,7 @@ const sanitizeUser = (user: any) => ({
     sellerTotalSales: user.sellerTotalSales,
     sellerResponseTimeHours: user.sellerResponseTimeHours,
     isBanned: user.isBanned,
+    businessAvailability: user.businessAvailability,
 });
 
 export const register = mutation({
@@ -252,13 +253,7 @@ export const changePassword = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (args.newPassword.length < 8 || !/[A-Z]/.test(args.newPassword) || !/[0-9]/.test(args.newPassword)) {
-            throw new Error("La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.");
-        }
-        if (args.newPassword === args.currentPassword) {
-            throw new Error("La nueva contraseña debe ser distinta a la actual.");
-        }
-
+        
         const user = await ctx.db.get(actor.id);
         if (!user) {
             throw new Error("Usuario no encontrado.");
@@ -275,11 +270,19 @@ export const changePassword = mutation({
             throw new Error("La contraseña actual es incorrecta.");
         }
 
+        if (args.newPassword.length < 8 || !/[A-Z]/.test(args.newPassword) || !/[0-9]/.test(args.newPassword)) {
+            throw new Error("La nueva contraseña debe tener al menos 8 caracteres, una mayúscula y un número.");
+        }
+
+        if (args.newPassword === args.currentPassword) {
+            throw new Error("Por razones de seguridad, la nueva contraseña no puede ser igual a la actual.");
+        }
+
         // Password History check
         const history = user.passwordHistory || [];
         for (const oldHash of history) {
             if (verifyPassword(args.newPassword, oldHash)) {
-                throw new Error("No puedes usar contraseñas anteriores por razones de seguridad.");
+                throw new Error("Por razones de seguridad, la nueva contraseña no puede ser igual a contraseñas usadas recientemente.");
             }
         }
 
@@ -375,6 +378,12 @@ export const updateProfile = mutation({
             phoneNumber: v.optional(v.string()),
             username: v.optional(v.string()),
             referralCode: v.optional(v.string()),
+            businessAvailability: v.optional(v.object({
+                days: v.array(v.number()),
+                startTime: v.string(),
+                endTime: v.string(),
+                slotDurationMinutes: v.number(),
+            })),
         })
     },
     handler: async (ctx, args) => {
@@ -390,6 +399,7 @@ export const updateProfile = mutation({
         if (args.updates.avatar !== undefined) updates.avatar = args.updates.avatar;
         if (args.updates.phoneNumber !== undefined) updates.phoneNumber = args.updates.phoneNumber.trim();
         if (args.updates.referralCode !== undefined) updates.referralCode = args.updates.referralCode.trim();
+        if (args.updates.businessAvailability !== undefined) updates.businessAvailability = args.updates.businessAvailability;
 
         if (args.updates.username !== undefined) {
             const newUsername = args.updates.username.trim();
@@ -505,6 +515,16 @@ export const deleteUser = mutation({
         if (!isAdmin && !isSelf) {
             throw new Error("No autorizado.");
         }
+
+        // Clean up all sessions associated with this user
+        const userSessions = await ctx.db
+            .query("sessions")
+            .withIndex("by_user", (q) => q.eq("userId", String(args.id)))
+            .collect();
+        for (const session of userSessions) {
+            await ctx.db.delete(session._id);
+        }
+
         await ctx.db.delete(args.id);
     },
 });

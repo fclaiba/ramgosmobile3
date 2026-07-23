@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ramgos-mobile",
+    "name": "Ramgos App",
     "slug": "ramgos-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -34,7 +34,9 @@
       }
     },
     "web": {
-      "favicon": "./logo.png"
+      "favicon": "./logo.png",
+      "name": "Ramgos App",
+      "shortName": "Ramgos App"
     },
     "plugins": [
       "@sentry/react-native/expo",

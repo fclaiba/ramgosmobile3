@@ -161,12 +161,12 @@ const AppNavigator = () => {
                     screens: {
                         Welcome: '',
                         Home: 'home',
-                        Register: 'register',
+                        SignUp: 'signup',
                         Login: 'login',
                     }
                 }
             }}
-            documentTitle={{ formatter: (options, route) => `${options?.title ?? route?.name} - RAMGOS` }}>
+            documentTitle={{ formatter: () => 'Ramgos App' }}>
             <StatusBar style={isDark ? "light" : "dark"} />
             <View style={{ flex: 1, backgroundColor: isDark ? '#09090B' : '#FAFAFA' }}>
                 <Stack.Navigator
@@ -189,7 +189,7 @@ const AppNavigator = () => {
 
                     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     <Stack.Screen name="Home" component={HomeScreen} />
-                    <Stack.Screen name="Register" component={RegisterScreen} />
+                    <Stack.Screen name="SignUp" component={RegisterScreen} />
                     <Stack.Screen name="Social" component={SocialScreen} />
                     <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
                     <Stack.Screen name="CreateListing" component={CreateListingScreen} />

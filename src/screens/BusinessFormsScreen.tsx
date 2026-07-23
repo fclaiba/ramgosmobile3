@@ -50,7 +50,7 @@ export default function BusinessFormsScreen({ navigation, route }: any) {
     // Convex calls
     const listForms = useQuery(api.businessForms.listFormsByBusiness, { sessionToken }) || [];
     const listSubmissions = useQuery(api.businessForms.listLeads, 
-        selectedFormId ? { formId: selectedFormId, sessionToken } : "skip"
+        selectedFormId === 'general' ? { sessionToken } : (selectedFormId ? { formId: selectedFormId, sessionToken } : "skip")
     );
     const createFormMutation = useMutation(api.businessForms.createForm);
 
@@ -81,7 +81,7 @@ export default function BusinessFormsScreen({ navigation, route }: any) {
     };
 
     const copyFormLink = (formId: string) => {
-        const link = `https://ramgos.com/form/${formId}`;
+        const link = `https://ramgos.app/form/${formId}`;
         Clipboard.setStringAsync(link);
         show('Enlace copiado al portapapeles', 'success');
     };
@@ -104,6 +104,23 @@ export default function BusinessFormsScreen({ navigation, route }: any) {
                 </View>
             ) : (
                 <View style={styles.grid}>
+                    <TouchableOpacity 
+                        style={styles.card}
+                        onPress={() => {
+                            setSelectedFormId('general');
+                            setViewMode('responses');
+                        }}
+                    >
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.typeIcon, { backgroundColor: '#DBEAFE' }]}>
+                                <Mail size={20} color="#2563EB" />
+                            </View>
+                            <Badge status="success">Activo</Badge>
+                        </View>
+                        <Text style={styles.cardTitle}>Consultas Generales</Text>
+                        <Text style={styles.cardDesc} numberOfLines={2}>Mensajes recibidos desde tu perfil público.</Text>
+                    </TouchableOpacity>
+                    
                     {listForms.map((form: any) => (
                         <TouchableOpacity 
                             key={form._id} 
@@ -195,26 +212,34 @@ export default function BusinessFormsScreen({ navigation, route }: any) {
         </KeyboardAvoidingView>
     );
 
-    const renderResponses = () => (
+    const renderResponses = () => {
+        // Filter submissions if 'general' is selected to only show leads without formId
+        const displaySubmissions = selectedFormId === 'general' 
+            ? (listSubmissions || []).filter((s: any) => !s.formId)
+            : (listSubmissions || []).filter((s: any) => s.formId === selectedFormId);
+            
+        return (
         <View style={styles.content}>
             <View style={styles.headerActions}>
-                <Text style={styles.sectionTitle}>Respuestas</Text>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setViewMode('list')}>
+                <Text style={styles.sectionTitle}>
+                    {selectedFormId === 'general' ? 'Consultas Generales' : 'Respuestas Recibidas'}
+                </Text>
+                <TouchableOpacity style={styles.closeBtn} onPress={() => { setViewMode('list'); setSelectedFormId(null); }}>
                     <X size={20} color={isDark ? '#D1D5DB' : '#4B5563'} />
                 </TouchableOpacity>
             </View>
 
             {listSubmissions === undefined ? (
                 <ActivityIndicator color="#2196F3" style={{ marginTop: 40 }} />
-            ) : listSubmissions.length === 0 ? (
+            ) : displaySubmissions.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Mail size={48} color={isDark ? '#4B5563' : '#9CA3AF'} />
-                    <Text style={styles.emptyTitle}>Aún no hay respuestas</Text>
-                    <Text style={styles.emptyDesc}>Comparte el enlace de tu formulario para comenzar a recibir solicitudes.</Text>
+                    <ListTodo size={48} color={isDark ? '#4B5563' : '#9CA3AF'} />
+                    <Text style={styles.emptyTitle}>Sin respuestas aún</Text>
+                    <Text style={styles.emptyDesc}>Cuando los usuarios completen este formulario, aparecerán aquí.</Text>
                 </View>
             ) : (
                 <View style={{ gap: 12 }}>
-                    {listSubmissions.map((sub: any) => (
+                    {displaySubmissions.map((sub: any) => (
                         <View key={sub._id} style={styles.responseCard}>
                             <View style={styles.responseHeader}>
                                 <Badge status={sub.status === 'new' ? 'warning' : 'success'}>
@@ -233,7 +258,8 @@ export default function BusinessFormsScreen({ navigation, route }: any) {
                 </View>
             )}
         </View>
-    );
+        );
+    };
 
     return (
         <ResponsiveLayout

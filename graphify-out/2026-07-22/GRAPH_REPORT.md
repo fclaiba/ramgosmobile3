@@ -1,16 +1,16 @@
 # Graph Report - ramgos-mobile  (2026-07-22)
 
 ## Corpus Check
-- 480 files · ~465,560 words
+- 480 files · ~472,285 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3727 nodes · 7148 edges · 356 communities (250 shown, 106 thin omitted)
+- 3730 nodes · 7154 edges · 358 communities (254 shown, 104 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 60 edges (avg confidence: 0.68)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `fee7a5ba`
+- Built from commit: `e51ab7ee`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -228,11 +228,11 @@
 - Convex Setup Auth agent spec (openai.yaml)
 - events.ts
 - README.md
-- userProfile.ts
 - adminQueries.ts
 - find-native-dialogs.js
 - InstagramPost.tsx
 - constitution.test.tsx
+- glass.ts
 - expo-location
 - DesktopSidebar.tsx
 - tabs.tsx
@@ -244,7 +244,6 @@
 - CreateListingScreen.tsx
 - UserListScreen.tsx
 - ConfirmContext.tsx
-- DisputeChatScreen.tsx
 - MyListingsScreen.tsx
 - 21. Estado del proyecto y riesgos
 - 6. Frontend — capas y providers
@@ -253,9 +252,9 @@
 - 9. Backend Convex
 - MapView.tsx
 - RaffleService
+- ItemDetailScreen.tsx
 - ImageUploadField.tsx
 - PaymentModeContext.tsx
-- checkApi.js
 - ListPager.tsx
 - convex.test.ts
 - brand.ts
@@ -339,6 +338,9 @@
 - Convex auth guideline (ctx.auth.getUserIdentity, never client userId)
 - docs.convex.dev
 - Plan Maestro Cursor (roadmap + 4 sprints)
+- CartContext.tsx
+- LocationPickerModal.native.tsx
+- useActionGate
 - V2 thin webhook events (parseThinEvent + events.retrieve)
 - Stripe Connect V2 sample README
 - Game Adapter contract (gameContracts.ts)
@@ -377,11 +379,11 @@
 - **TypeScript error logging artifacts** — typecheck, tsc_output_utf8, tsc_output, typecheck_fix [INFERRED 0.85]
 - **Convex skill icon image set** — agents_skills_convex-create-component_assets_icon, agents_skills_convex-migration-helper_assets_icon, agents_skills_convex-performance-audit_assets_icon, agents_skills_convex-quickstart_assets_icon [INFERRED 0.75]
 
-## Communities (356 total, 106 thin omitted)
+## Communities (358 total, 104 thin omitted)
 
 ### Community 0 - "App.tsx"
-Cohesion: 0.16
-Nodes (27): DinoGame(), DinoGameProps, Obstacle, styles, { width }, DuckHunt(), DuckHuntProps, FlyingObject (+19 more)
+Cohesion: 0.06
+Nodes (69): DinoGame(), DinoGameProps, Obstacle, styles, { width }, DuckHunt(), DuckHuntProps, FlyingObject (+61 more)
 
 ### Community 1 - "dev_completeness_audit.py"
 Cohesion: 0.10
@@ -448,8 +450,8 @@ Cohesion: 0.15
 Nodes (15): cancelOrder, confirmReceipt, createOrder, enrichOrderItems(), escalateDispute, getMyOrders, getOrderById, getOrdersBySeller (+7 more)
 
 ### Community 19 - "PointsContext.tsx"
-Cohesion: 0.12
-Nodes (17): PointsManager(), triggerImpact(), AddPointsOpts, CHALLENGE_META, DailyChallenge, DEFAULT_CONTEXT, DEFAULT_PET_CONFIG, DEFAULT_PET_STATS (+9 more)
+Cohesion: 0.11
+Nodes (23): DailyChallenges(), getStyles(), getStyles(), PointsManager(), triggerImpact(), { width }, getStyles(), TierProgressBar() (+15 more)
 
 ### Community 20 - "Game Contract + Theme Tokens (Part 0)"
 Cohesion: 0.11
@@ -460,8 +462,8 @@ Cohesion: 0.13
 Nodes (21): ArcadeRewardResult, createDailyState(), createReferralState(), createStreakState(), DailyEngagementState, generateReferralCode(), getTodayKey(), LuckyWheelResult (+13 more)
 
 ### Community 22 - "Modulo de Pagos - Componentes a reescribir (respaldo)"
-Cohesion: 0.18
-Nodes (15): getArticleById(), getArticlesByCategory(), HELP_ARTICLES, HELP_CATEGORIES, HelpArticle, HelpCategory, HelpCategoryId, POPULAR_ARTICLE_IDS (+7 more)
+Cohesion: 0.17
+Nodes (18): InfluencersTab(), InventoryManager(), OverviewTab(), ReviewsTab(), WalletStats(), Badge(), BadgeVariant, getStyles() (+10 more)
 
 ### Community 23 - "ponytail skill"
 Cohesion: 0.22
@@ -533,12 +535,12 @@ Cohesion: 0.50
 Nodes (3): headers, outputDirectory, rewrites
 
 ### Community 49 - "AuthActor"
-Cohesion: 0.05
-Nodes (60): CodeVerificationCard(), CodeVerificationCardProps, getStyles(), ActiveCampaigns(), WalletStats(), BranchOption, getStyles(), ListingType (+52 more)
+Cohesion: 0.07
+Nodes (43): AddReviewModal(), AddReviewModalProps, getStyles(), CodeVerificationCard(), CodeVerificationCardProps, getStyles(), BranchOption, getStyles() (+35 more)
 
 ### Community 50 - "api"
-Cohesion: 0.20
-Nodes (17): PointsFeedback(), usePoints(), PaymentForm(), PaymentFormProps, styles, PaymentForm(), PaymentFormProps, styles (+9 more)
+Cohesion: 0.21
+Nodes (15): PaymentForm(), PaymentFormProps, styles, PaymentForm(), PaymentFormProps, styles, brandStyle(), detectBrand() (+7 more)
 
 ### Community 51 - "internal"
 Cohesion: 0.06
@@ -581,8 +583,8 @@ Cohesion: 0.08
 Nodes (23): adminForceReleaseEscrow, adminRefundEscrow, createConnectAccountLink, createPaymentIntent, createSetupIntent, detachPaymentMethod, executePayout, internalCompleteEscrowRelease (+15 more)
 
 ### Community 61 - "QueryCtx"
-Cohesion: 0.12
-Nodes (17): AddReviewModal(), AddReviewModalProps, getStyles(), getStyles(), ItemDetailView(), ItemDetailViewProps, ItemPreview, getStyles() (+9 more)
+Cohesion: 0.07
+Nodes (38): getStyles(), ReferralCard(), ReferralCardProps, getStyles(), ReviewsList(), ReviewsListProps, getStyles(), SidebarMenu() (+30 more)
 
 ### Community 62 - "httpAction"
 Cohesion: 0.10
@@ -661,12 +663,12 @@ Cohesion: 0.12
 Nodes (15): Cancel a Running Migration, Check Migration Status, Configuration Options, Custom Batch Size, Define a Migration, Dry Run, Installation, Migrate a Subset Using an Index (+7 more)
 
 ### Community 88 - "FilterState"
-Cohesion: 0.06
-Nodes (72): components, FilterState, SORT_OPTIONS, getStyles(), KYCRequiredModal(), KYCRequiredModalProps, SidebarMenuProps, CreateInstagramPost() (+64 more)
+Cohesion: 0.10
+Nodes (40): SidebarMenuProps, CreateInstagramPost(), getStyles(), CreatePost(), getStyles(), DirectMessages(), DirectMessagesProps, getStyles() (+32 more)
 
 ### Community 89 - "CrashHandler"
-Cohesion: 0.06
-Nodes (34): backgroundColor, foregroundImage, adaptiveIcon, config, edgeToEdgeEnabled, package, versionCode, googleMaps (+26 more)
+Cohesion: 0.05
+Nodes (36): backgroundColor, foregroundImage, adaptiveIcon, config, edgeToEdgeEnabled, package, versionCode, googleMaps (+28 more)
 
 ### Community 90 - "NavSection"
 Cohesion: 0.12
@@ -697,8 +699,8 @@ Cohesion: 0.13
 Nodes (14): 1.1 Metadatos y Assets Gráficos, 1.2 Compliance y Legales, 2.1 Variables de Entorno de Producción, 2.2 Generación de Binarios (EAS), 3.1 Google Play Console (Android), 3.2 App Store Connect (iOS), 4.1 Activación del Release, 4.2 Tareas de Monitoreo Post-Lanzamiento (+6 more)
 
 ### Community 97 - "GameId"
-Cohesion: 0.14
-Nodes (14): Props, styles, LiquidCardInput(), LiquidCardInputProps, styles, PaymentSuccessBurst(), Props, styles (+6 more)
+Cohesion: 0.13
+Nodes (27): FilterState, SORT_OPTIONS, CartSidebar(), getStyles(), getStyles(), KYCRequiredModal(), KYCRequiredModalProps, getStyles() (+19 more)
 
 ### Community 98 - "GameMetrics"
 Cohesion: 0.15
@@ -749,24 +751,24 @@ Cohesion: 0.17
 Nodes (11): Checklist, Concrete Steps, Convex Auth, Expected Files and Decisions, Gotchas, Human Handoff, Production, Validation (+3 more)
 
 ### Community 110 - "ListingType"
-Cohesion: 0.29
-Nodes (7): CustomMapMarker(), CustomMapMarkerProps, DEFAULT_COLOR, getStyles(), ICON_MAP, ListingType, MARKER_COLORS
+Cohesion: 0.16
+Nodes (15): CustomMapMarker(), CustomMapMarkerProps, DEFAULT_COLOR, getStyles(), ICON_MAP, ListingType, MARKER_COLORS, useMarketplaceProducts() (+7 more)
 
 ### Community 111 - "DarkMapViewProps"
 Cohesion: 0.20
 Nodes (10): 10. Modelo de datos (schema), Bonos / eventos / campañas, Campos clave de `bonoRedemptions`, Campos clave de listings (bonos), Economía / rewards, Identidad y sesión, Marketplace, Otros (+2 more)
 
 ### Community 112 - "EdgePadding"
-Cohesion: 0.05
-Nodes (32): getStyles(), LocationData, LocationPickerModal(), LocationPickerModalProps, { width, height }, DarkMapViewProps, DarkMapView, DarkMapViewProps (+24 more)
+Cohesion: 0.13
+Nodes (8): DarkMapView, DarkMapViewProps, EdgePadding, MapController, MapPressEvent, purplePinIcon, Region, userDotIcon
 
 ### Community 113 - "MapPressEvent"
 Cohesion: 0.20
 Nodes (9): Cierre operativo App Store Connect (paso a paso), Compliance Apple, Configuracion aplicada en codigo, Credenciales iOS (EAS), Evidencia obligatoria, Flujo de build y distribucion, iOS Release Enablement, Pre-requisitos de cuenta/plataforma (+1 more)
 
 ### Community 114 - "Region"
-Cohesion: 0.14
-Nodes (18): GAME_FAMILY_BY_ID, GAME_THEMES, GameAction, GameAdapterHandle, GameId, GameMetrics, GameSnapshot, GameStatus (+10 more)
+Cohesion: 0.13
+Nodes (24): getStyles(), MobileHeader(), getArticleById(), getArticlesByCategory(), HELP_ARTICLES, HELP_CATEGORIES, HelpArticle, HelpCategory (+16 more)
 
 ### Community 115 - "NavSection"
 Cohesion: 0.18
@@ -813,8 +815,8 @@ Cohesion: 0.22
 Nodes (10): finalReport, fs, IGNORE_DIRS, IGNORE_FILES, METRICS, path, PROJECT_ROOT, report (+2 more)
 
 ### Community 126 - "SocialProvider"
-Cohesion: 0.07
-Nodes (38): CartContext, CartContextData, CartItem, CartProvider(), SnapshotType, toSnapshotCondition(), toSnapshotType(), VALID_TYPES (+30 more)
+Cohesion: 0.06
+Nodes (38): { api }, usages, api, components, ItemDetailViewProps, ItemPreview, CartItem, defaultShippingQuote() (+30 more)
 
 ### Community 128 - "SubscriptionTier"
 Cohesion: 0.20
@@ -841,24 +843,24 @@ Cohesion: 0.09
 Nodes (22): Anti-Patterns, ARIA Attributes, aria-describedby, aria-expanded and aria-controls, aria-label vs aria-labelledby, aria-live for Dynamic Content, Checklist, Complete Accessible Form (+14 more)
 
 ### Community 134 - "FintechProvider"
-Cohesion: 0.13
-Nodes (16): MEMBERSHIP_TIERS, guestValue, REFERRAL_REWARDS, ReferralContext, ReferralContextValue, ReferralHistoryItem, ReferralProvider(), ReferralStats (+8 more)
+Cohesion: 0.15
+Nodes (11): getErrorMessage(), getStyles(), logMapError(), logMapEvent(), MapErrorBoundary, Props, State, getStyles() (+3 more)
 
 ### Community 135 - "MarketplaceProvider"
 Cohesion: 0.22
 Nodes (8): A-Z Test Report — Ramgos App, [ADSP-02] — El Admin no puede resolver disputas desde el Dashboard, [AUSR-03] — Funcionalidad de Baneo de usuarios no expuesta en Admin Dashboard, [CART-03] — Guest puede proceder al checkout sin autenticación, [IMP-01] — Funcionalidad de Impersonación sin interfaz de usuario, [JEST-01] — Fallo masivo en la suite de pruebas unitarias por falta de Mocks, Reporte de Bugs Detectados, Resumen de Ejecución
 
 ### Community 136 - "AppNotification"
-Cohesion: 0.19
-Nodes (12): ARCADE_REWARD_GAMES, GAMES, GameType, getStyles(), HATS, MiMascotaView(), PetMood, PetStats (+4 more)
+Cohesion: 0.13
+Nodes (16): MEMBERSHIP_TIERS, guestValue, REFERRAL_REWARDS, ReferralContext, ReferralContextValue, ReferralHistoryItem, ReferralProvider(), ReferralStats (+8 more)
 
 ### Community 138 - "ReferralProvider"
 Cohesion: 0.22
 Nodes (7): frontendFiles, fs, getFeedPath, path, screenPath, srcPath, usedApis
 
 ### Community 139 - "useReferral"
-Cohesion: 0.05
-Nodes (53): InfluencersTab(), InventoryManager(), OverviewTab(), ReviewsTab(), getStyles(), ImageUploadField(), ImageUploadFieldProps, pickWebImage() (+45 more)
+Cohesion: 0.12
+Nodes (23): AppleIcon(), GoogleIcon(), BusinessKYCScreen(), getStyles(), getStyles(), KYCScreen(), Step, BUSINESS_CATEGORIES (+15 more)
 
 ### Community 140 - "InstagramPost"
 Cohesion: 0.36
@@ -869,8 +871,8 @@ Cohesion: 0.25
 Nodes (7): COLOR_MAP, files, fs, path, processFile(), NOTE: We only target 'const styles' for now to be safe., SRC_DIR
 
 ### Community 142 - "SocialProvider"
-Cohesion: 0.05
-Nodes (56): AdvancedFilters(), getStyles(), DailyChallenges(), getStyles(), getStyles(), Props, State, getStyles() (+48 more)
+Cohesion: 0.07
+Nodes (47): AdvancedFilters(), getStyles(), BusinessLocationSearch(), getStyles(), Props, getStyles(), ItemDetailView(), getMarkerColor() (+39 more)
 
 ### Community 143 - "ThemeProvider"
 Cohesion: 0.22
@@ -885,8 +887,8 @@ Cohesion: 0.25
 Nodes (7): Configure Default Mode, Deactivate, Levels, More, Ponytail Help, Skills, Update
 
 ### Community 146 - "HelpArticle"
-Cohesion: 0.06
-Nodes (45): AppNavigator(), convex, Stack, styles, AuthBackground(), getStyles(), { width, height }, BusinessLocationSearch() (+37 more)
+Cohesion: 0.08
+Nodes (32): AppNavigator(), convex, Stack, styles, AuthBackground(), getStyles(), { width, height }, getStyles() (+24 more)
 
 ### Community 147 - "HelpCategory"
 Cohesion: 0.25
@@ -897,8 +899,8 @@ Cohesion: 0.29
 Nodes (7): fs, path, patterns, results, scanDirectory(), scanFile(), srcDir
 
 ### Community 149 - "CheckoutShippingDestination"
-Cohesion: 0.06
-Nodes (61): CartSidebar(), getStyles(), DesktopSidebar(), DesktopSidebarProps, getStyles(), navItems, NavSection, getStyles() (+53 more)
+Cohesion: 0.07
+Nodes (44): ActiveCampaigns(), DesktopSidebar(), DesktopSidebarProps, getStyles(), navItems, NavSection, getStyles(), MobileNav() (+36 more)
 
 ### Community 150 - "CheckoutShippingMethod"
 Cohesion: 0.22
@@ -937,8 +939,8 @@ Cohesion: 0.22
 Nodes (8): 1. Control de Acceso Basado en Roles (RBAC) en Convex, 2. Gestión Segura de Stripe Connect, Estrategia de Implementación (Teórica):, Logs y Datos Sensibles (PII):, Principios Fundamentales:, Protección de Secretos:, Seguridad Defensiva y Mejores Prácticas, Webhooks y Validación:
 
 ### Community 161 - "MiMascotaScreen"
-Cohesion: 0.33
-Nodes (8): AnimatedBlurView, DisputeScreen(), DisputeScreenProps, EmptyState(), formatCurrency(), formatDate(), getStyles(), REASONS
+Cohesion: 0.11
+Nodes (24): useAuth(), NotificationsProvider(), useUserPreferences(), AdminFinanceScreen(), getStyles(), Tab, TABS, AnimatedBlurView (+16 more)
 
 ### Community 162 - "PaymentMethodsScreen"
 Cohesion: 0.09
@@ -1005,24 +1007,24 @@ Cohesion: 0.33
 Nodes (5): crashPath, filesToFix, fs, path, toastPath
 
 ### Community 179 - "useActionGate"
-Cohesion: 0.32
-Nodes (6): FruitCatcher(), getStyles(), getStyles(), TierProgressBar(), ARCADE_REWARD_GAMES, GAMES
+Cohesion: 0.10
+Nodes (22): DailyChallenges(), getStyles(), Card(), CardContent(), CardTitle(), styles, GlassSurface(), Props (+14 more)
 
 ### Community 180 - "fix-ts-errors.js"
 Cohesion: 0.33
 Nodes (5): crashHandlerPath, filesToFix, fs, path, toastContextPath
 
 ### Community 181 - "NativeMap.web.tsx"
-Cohesion: 0.33
-Nodes (4): CoinProps, CoinRain(), TriggeredCoinRain(), { width, height }
+Cohesion: 0.29
+Nodes (5): CoinProps, CoinRain(), TriggeredCoinRain(), { width, height }, PointsFeedback()
 
 ### Community 182 - "tabs.tsx"
 Cohesion: 0.29
 Nodes (6): absoluteFillFiles, fs, path, pointsManagerPath, ROOT_DIR, tsExpectFiles
 
 ### Community 183 - "Store Metadata"
-Cohesion: 0.39
-Nodes (6): getStyles(), UserListItem(), UserListItemProps, User, getStyles(), UserListScreen()
+Cohesion: 0.17
+Nodes (13): getStyles(), ImageWithFallback(), CreateStory(), getStyles(), { height }, LoopFeed(), LoopFeedProps, styles (+5 more)
 
 ### Community 184 - "Convex"
 Cohesion: 0.40
@@ -1053,8 +1055,8 @@ Cohesion: 0.40
 Nodes (3): files, fs, path
 
 ### Community 191 - "Módulo de Pagos - Componentes a reescribir"
-Cohesion: 0.28
-Nodes (8): EscrowContext, EscrowContextValue, EscrowOrderItem, EscrowProvider(), EscrowState, normalizeEscrowState(), OpenEscrowOptions, toEscrowOrder()
+Cohesion: 0.16
+Nodes (14): StripeKeyGate(), EscrowContext, EscrowContextValue, EscrowOrderItem, EscrowProvider(), EscrowState, normalizeEscrowState(), OpenEscrowOptions (+6 more)
 
 ### Community 192 - "package.json"
 Cohesion: 0.40
@@ -1092,17 +1094,17 @@ Nodes (3): files, fs, path
 Cohesion: 0.50
 Nodes (3): content, fs, schemaContent
 
+### Community 201 - "AnimatedCreditCard.tsx"
+Cohesion: 0.43
+Nodes (6): AnimatedBlurView, DisputeChatScreen(), formatCurrency(), formatTime(), getStyles(), STATUS_TONE
+
 ### Community 202 - "ConfirmContext.tsx"
-Cohesion: 0.27
-Nodes (7): ConfirmContext, ConfirmContextType, ConfirmOptions, ConfirmProvider(), getStyles(), ConfirmHandler, setConfirmHandler()
+Cohesion: 0.29
+Nodes (8): ConfirmContext, ConfirmContextType, ConfirmProvider(), getStyles(), ConfirmHandler, ConfirmKind, ConfirmOpts, setConfirmHandler()
 
 ### Community 220 - "events.ts"
 Cohesion: 0.47
 Nodes (3): getStyles(), TabsList(), TabsTrigger()
-
-### Community 222 - "userProfile.ts"
-Cohesion: 0.39
-Nodes (7): Card(), CardItem, EMOJIS, getRandomLifeInterval(), getStyles(), MemoryGame(), MemoryGameProps
 
 ### Community 223 - "adminQueries.ts"
 Cohesion: 0.14
@@ -1120,9 +1122,13 @@ Nodes (4): inMemoryStorage, memoryStore, persistentStorage, StorageLike
 Cohesion: 0.70
 Nodes (4): _ctx_keep_page(), iter_files(), main(), patch_text()
 
+### Community 228 - "glass.ts"
+Cohesion: 0.10
+Nodes (15): ChromeGlass(), Edge, Props, styles, LiquidCardInput(), LiquidCardInputProps, styles, PaymentSuccessBurst() (+7 more)
+
 ### Community 229 - "expo-location"
-Cohesion: 0.19
-Nodes (9): DarkMapView, getStyles(), LocationPickerModal(), LocationPickerModalProps, CategoryType, UNIFIED_CATEGORIES, CreateListingScreen(), getStyles() (+1 more)
+Cohesion: 0.31
+Nodes (6): getStyles(), LocationData, LocationPickerModal(), LocationPickerModalProps, { width, height }, useUserLocation()
 
 ### Community 230 - "DesktopSidebar.tsx"
 Cohesion: 0.83
@@ -1164,10 +1170,6 @@ Nodes (9): addReview, addSellerResponse, canReviewListing, deleteReview, getBySe
 Cohesion: 0.29
 Nodes (6): 1. Configuración de la App (Pre-Lanzamiento), 2. Seguridad y Credenciales, 3. Play Console Settings, 4. Productos IAP (Suscripciones), 5. Artifact y Testing, Google Play Console Release Checklist
 
-### Community 241 - "DisputeChatScreen.tsx"
-Cohesion: 0.14
-Nodes (15): createMarketplaceMarkerIcon(), getMarkerColor(), MapViewComponent(), MarketplaceMapProps, s, FavoriteItem, useFavorites(), AnimatedBlurView (+7 more)
-
 ### Community 242 - "MyListingsScreen.tsx"
 Cohesion: 0.33
 Nodes (5): 1. Auditoría de Stripe (100% OK) ✅, 2. Plan de Lanzamiento (GTM) 🏁, 3. Estado de Sprints 📊, PRÓXIMOS PASOS (Mañana) 📅, REPORTE DE CIERRE - TURNO 02/06/2026 🚀
@@ -1200,6 +1202,10 @@ Nodes (5): Assets Visuales (Play Console & App Store), Categorización, Contacto
 Cohesion: 0.33
 Nodes (9): useEscrow(), AnimatedBlurView, formatCurrency(), formatDate(), getStyles(), normalizeOrder(), OrderDetailScreen(), STATUS_META (+1 more)
 
+### Community 250 - "ItemDetailScreen.tsx"
+Cohesion: 0.08
+Nodes (26): createMarketplaceMarkerIcon(), getMarkerColor(), MapViewComponent(), MarketplaceMapProps, s, CategoryType, UNIFIED_CATEGORIES, useCart() (+18 more)
+
 ### Community 251 - "ImageUploadField.tsx"
 Cohesion: 0.29
 Nodes (6): Anti-Patterns, Design Direction, Frontend Design Direction, Implementation Guidance, Review Checklist, When to Use
@@ -1225,8 +1231,8 @@ Cohesion: 0.40
 Nodes (4): Checklist Fundamental (Store Requirements), Estado de la Aplicación, Faltantes Operativos, Store Ready Baseline
 
 ### Community 261 - "PaymentModeContext.tsx"
-Cohesion: 0.16
-Nodes (16): StripeKeyGate(), PaymentMode, PaymentModeContext, PaymentModeContextValue, PaymentModeProvider(), usePaymentMode(), brandLabel(), loadLocal() (+8 more)
+Cohesion: 0.39
+Nodes (7): brandLabel(), loadLocal(), mapStripePm(), SavedPaymentMethod, saveLocal(), StoredPayload, useSavedPaymentMethods()
 
 ### Community 262 - "12. Auth y sesiones"
 Cohesion: 0.50
@@ -1272,13 +1278,25 @@ Nodes (4): TSC output (binary log), TSC output UTF8 (jest types + implicit any e
 Cohesion: 0.67
 Nodes (3): 9.1 Módulos por archivo (`convex/`), 9.2 Tipos de funciones Convex, 9. Backend Convex
 
+### Community 347 - "CartContext.tsx"
+Cohesion: 0.25
+Nodes (9): CartContext, CartContextData, CartProvider(), SnapshotType, toSnapshotCondition(), toSnapshotType(), VALID_TYPES, listeners (+1 more)
+
+### Community 348 - "LocationPickerModal.native.tsx"
+Cohesion: 0.24
+Nodes (11): DarkMapView, DarkMapViewProps, getStyles(), LocationPickerModal(), LocationPickerModalProps, getStyles(), LocationPickerModal(), LocationPickerModalProps (+3 more)
+
+### Community 349 - "useActionGate"
+Cohesion: 0.10
+Nodes (28): FintechContext, FintechContextValue, FintechProvider(), KycPayload, PaymentRecord, useFintech(), useFintechState(), WalletAccount (+20 more)
+
 ### Community 409 - "MobileNav.tsx"
-Cohesion: 0.04
-Nodes (75): api, getStyles(), ReferralCard(), ReferralCardProps, AuthContext, AuthContextType, AuthKycStatus, AuthProvider() (+67 more)
+Cohesion: 0.13
+Nodes (17): AuthContext, AuthContextType, AuthKycStatus, AuthProvider(), AuthState, AuthStatus, AuthUserRole, extractErrorMessage() (+9 more)
 
 ### Community 411 - "RoleSelectionScreen.tsx"
-Cohesion: 0.25
-Nodes (8): defaultValue, emptyWallet, useWalletState(), WalletContext, WalletContextValue, WalletProvider(), WalletSnapshot, WalletTransaction
+Cohesion: 0.24
+Nodes (9): defaultValue, emptyWallet, useWallet(), useWalletState(), WalletContext, WalletContextValue, WalletProvider(), WalletSnapshot (+1 more)
 
 ## Knowledge Gaps
 - **2051 isolated node(s):** `fs`, `path`, `{ getDefaultMode, getClaudeDir }`, `{ getPonytailInstructions }`, `{
@@ -1288,22 +1306,22 @@ Nodes (8): defaultValue, emptyWallet, useWalletState(), WalletContext, WalletCon
   writeHookOutput,
 }` (+2046 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **106 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **104 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `useTheme()` connect `AuthActor` to `App.tsx`, `EscrowSheet.tsx`, `PaymentModeContext.tsx`, `AppNotification`, `useReferral`, `SocialProvider`, `HelpArticle`, `PointsContext.tsx`, `CheckoutShippingDestination`, `Modulo de Pagos - Componentes a reescribir (respaldo)`, `MobileNav.tsx`, `MiMascotaScreen`, `PaymentMethodsScreen`, `actions.ts`, `useActionGate`, `NativeMap.web.tsx`, `Store Metadata`, `QueryCtx`, `ConfirmContext.tsx`, `Page`, `FilterState`, `events.ts`, `userProfile.ts`, `GameId`, `expo-location`, `tabs.tsx`, `ListingType`, `EdgePadding`, `DisputeChatScreen.tsx`, `Region`, `isSubscriptionActive`, `RaffleService`, `SocialProvider`, `SubscriptionStatus`?**
-  _High betweenness centrality (0.026) - this node is a cross-community bridge._
-- **Why does `colors()` connect `SocialProvider` to `App.tsx`, `EscrowSheet.tsx`, `PaymentModeContext.tsx`, `AppNotification`, `useReferral`, `HelpArticle`, `CheckoutShippingDestination`, `Modulo de Pagos - Componentes a reescribir (respaldo)`, `MobileNav.tsx`, `MiMascotaScreen`, `PaymentMethodsScreen`, `actions.ts`, `AuthActor`, `api`, `useActionGate`, `Store Metadata`, `QueryCtx`, `ConfirmContext.tsx`, `FilterState`, `userProfile.ts`, `GameId`, `expo-location`, `tabs.tsx`, `EdgePadding`, `DisputeChatScreen.tsx`, `isSubscriptionActive`, `RaffleService`, `SocialProvider`, `SubscriptionStatus`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **Why does `Radius` connect `HelpArticle` to `App.tsx`, `EscrowSheet.tsx`, `PaymentModeContext.tsx`, `AppNotification`, `useReferral`, `SocialProvider`, `CheckoutShippingDestination`, `Modulo de Pagos - Componentes a reescribir (respaldo)`, `MobileNav.tsx`, `MiMascotaScreen`, `PaymentMethodsScreen`, `actions.ts`, `RaffleService`, `AuthActor`, `api`, `useActionGate`, `Store Metadata`, `QueryCtx`, `AnimatedCreditCard.tsx`, `ConfirmContext.tsx`, `FilterState`, `userProfile.ts`, `GameId`, `expo-location`, `tabs.tsx`, `ListingType`, `EdgePadding`, `DisputeChatScreen.tsx`, `Region`, `isSubscriptionActive`, `RaffleService`, `SocialProvider`?**
-  _High betweenness centrality (0.007) - this node is a cross-community bridge._
+- **Why does `useTheme()` connect `HelpArticle` to `App.tsx`, `EscrowSheet.tsx`, `FintechProvider`, `useReferral`, `SocialProvider`, `PointsContext.tsx`, `CheckoutShippingDestination`, `Modulo de Pagos - Componentes a reescribir (respaldo)`, `MiMascotaScreen`, `PaymentMethodsScreen`, `actions.ts`, `AuthActor`, `useActionGate`, `NativeMap.web.tsx`, `Store Metadata`, `QueryCtx`, `AnimatedCreditCard.tsx`, `ConfirmContext.tsx`, `Page`, `FilterState`, `LocationPickerModal.native.tsx`, `events.ts`, `useActionGate`, `GameId`, `glass.ts`, `expo-location`, `tabs.tsx`, `ListingType`, `EdgePadding`, `Region`, `isSubscriptionActive`, `RaffleService`, `ItemDetailScreen.tsx`, `SocialProvider`, `SubscriptionStatus`?**
+  _High betweenness centrality (0.027) - this node is a cross-community bridge._
+- **Why does `colors()` connect `SocialProvider` to `App.tsx`, `EscrowSheet.tsx`, `FintechProvider`, `useReferral`, `HelpArticle`, `PointsContext.tsx`, `CheckoutShippingDestination`, `Modulo de Pagos - Componentes a reescribir (respaldo)`, `MiMascotaScreen`, `PaymentMethodsScreen`, `actions.ts`, `AuthActor`, `api`, `useActionGate`, `Store Metadata`, `QueryCtx`, `AnimatedCreditCard.tsx`, `ConfirmContext.tsx`, `FilterState`, `LocationPickerModal.native.tsx`, `useActionGate`, `GameId`, `glass.ts`, `expo-location`, `tabs.tsx`, `ListingType`, `Region`, `isSubscriptionActive`, `RaffleService`, `ItemDetailScreen.tsx`, `SocialProvider`, `SubscriptionStatus`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+- **Why does `useAuth()` connect `MiMascotaScreen` to `EscrowSheet.tsx`, `PaymentModeContext.tsx`, `AppNotification`, `useReferral`, `SocialProvider`, `HelpArticle`, `PointsContext.tsx`, `CheckoutShippingDestination`, `PaymentScreen.tsx`, `Modulo de Pagos - Componentes a reescribir (respaldo)`, `MobileNav.tsx`, `RoleSelectionScreen.tsx`, `PaymentMethodsScreen`, `actions.ts`, `AuthActor`, `api`, `Store Metadata`, `QueryCtx`, `Módulo de Pagos - Componentes a reescribir`, `AnimatedCreditCard.tsx`, `FilterState`, `useActionGate`, `GameId`, `tabs.tsx`, `Region`, `isSubscriptionActive`, `RaffleService`, `ItemDetailScreen.tsx`, `SocialProvider`?**
+  _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **What connects `fs`, `path`, `{ getDefaultMode, getClaudeDir }` to the rest of the system?**
   _2079 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `App.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.0629746835443038 - nodes in this community are weakly interconnected._
 - **Should `dev_completeness_audit.py` be split into smaller, more focused modules?**
   _Cohesion score 0.10158730158730159 - nodes in this community are weakly interconnected._
 - **Should `convex-create-component SKILL.md` be split into smaller, more focused modules?**
   _Cohesion score 0.07692307692307693 - nodes in this community are weakly interconnected._
-- **Should `convex-migration-helper SKILL.md` be split into smaller, more focused modules?**
-  _Cohesion score 0.10526315789473684 - nodes in this community are weakly interconnected._

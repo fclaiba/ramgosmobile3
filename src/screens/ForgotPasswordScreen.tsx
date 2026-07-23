@@ -20,7 +20,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
     const [email, setEmail] = useState('');
     const [code, setCode] = useState(['', '', '', '', '', '']); // 6 digits
-    const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     
@@ -174,13 +173,13 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
     const handleResetPassword = async () => {
         const codeValue = code.join('');
-        if (codeValue.length < 6 || !newPassword || !oldPassword) {
-            show("Ingresa el código completo y ambas contraseñas", "warning");
+        if (codeValue.length < 6 || !newPassword) {
+            show("Ingresa el código completo y la nueva contraseña", "warning");
             return;
         }
         setIsLoading(true);
         try {
-            await resetPassword({ email, code: codeValue, newPassword, oldPassword });
+            await resetPassword({ email, code: codeValue, newPassword });
             setStep('success');
         } catch (error: any) {
             show(error.message || "Código o contraseña inválidos", "error");
@@ -303,25 +302,6 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                             </View>
 
                             <View style={styles.form}>
-                                <View style={styles.inputContainer}>
-                                    <Text style={styles.label}>Contraseña anterior</Text>
-                                    <View style={styles.inputWrapper}>
-                                        <Lock size={20} color={isDark ? "#9CA3AF" : "#9CA3AF"} style={styles.icon} />
-                                        <TextInput
-                                            style={styles.input}
-                                            placeholder="Tu contraseña anterior"
-                                            placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                            value={oldPassword}
-                                            onChangeText={setOldPassword}
-                                            secureTextEntry
-                                            autoComplete="off"
-                                            textContentType="none"
-                                            importantForAutofill="no"
-                                            autoCorrect={false}
-                                        />
-                                    </View>
-                                </View>
-
                                 <View style={[styles.inputContainer, { marginTop: 12 }]}>
                                     <Text style={styles.label}>Nueva contraseña</Text>
                                     <View style={styles.inputWrapper}>

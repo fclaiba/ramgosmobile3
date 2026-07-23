@@ -157,24 +157,24 @@ export default function AdminDashboardScreen({ navigation }: any) {
     };
 
     const handleForceRelease = async (orderId: string) => {
-        if (!(await confirmAction('Forzar Pago', '¿Liberar el pago al vendedor? Esta acción no se puede deshacer.'))) return;
+        if (!(await confirmAction('Forzar Pago', '¿Liberar el pago al vendedor? Esta acción no se puede deshacer.', 'warning'))) return;
         runOp(orderId, () => adminForceReleaseEscrow({ sessionToken, orderId: orderId as any }), 'Pago liberado al vendedor.');
     };
 
     const handleRefund = async (orderId: string) => {
-        if (!(await confirmAction('Reembolsar', '¿Devolver el dinero al comprador? El vendedor no cobra.'))) return;
+        if (!(await confirmAction('Reembolsar', '¿Devolver el dinero al comprador? El vendedor no cobra.', 'warning'))) return;
         runOp(orderId, () => adminRefundEscrow({ sessionToken, orderId: orderId as any }), 'Reembolso procesado.');
     };
 
     const handleResolveDispute = async (orderId: string, inFavorOf: 'buyer' | 'seller') => {
         const who = inFavorOf === 'buyer' ? 'comprador (reembolso)' : 'vendedor (liberación)';
-        if (!(await confirmAction('Resolver Disputa', `¿Resolver a favor del ${who}?`))) return;
+        if (!(await confirmAction('Resolver Disputa', `¿Resolver a favor del ${who}?`, 'warning'))) return;
         runOp(orderId, () => resolveDispute({ sessionToken, orderId: orderId as any, resolveInFavorOf: inFavorOf }), 'Disputa resuelta.');
     };
 
     const handleBanToggle = async (u: any) => {
         if (u.isBanned) {
-            if (!(await confirmAction('Desbanear', `¿Restaurar el acceso de ${u.email}?`))) return;
+            if (!(await confirmAction('Desbanear', `¿Restaurar el acceso de ${u.email}?`, 'success'))) return;
             runOp(u._id, () => unbanUserMutation({ sessionToken, userId: u._id }), 'Usuario desbaneado.');
         } else {
             if (!(await confirmAction('Banear', `¿Banear permanentemente a ${u.email}? Se revocan sus sesiones.`))) return;
@@ -188,7 +188,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     };
 
     const handleApproveKyc = async (userId: string, email: string) => {
-        if (!(await confirmAction('Aprobar KYC', `¿Aprobar identidad de ${email}?`))) return;
+        if (!(await confirmAction('Aprobar KYC', `¿Aprobar identidad de ${email}?`, 'success'))) return;
         runOp(userId, () => approveKycMutation({ sessionToken, targetUserId: userId as any }), 'KYC aprobado.');
     };
 
@@ -535,6 +535,23 @@ export default function AdminDashboardScreen({ navigation }: any) {
             (includes(u.email, kycFilters.q) || includes(u.name, kycFilters.q) || includes(u._id, kycFilters.q))
             && (!kycFilters.role.trim() || u.role === kycFilters.role.trim())
         );
+
+        const handleBulkKyc = async (approve: boolean) => {
+            const action = approve ? 'Aprobar' : 'Rechazar';
+            if (!(await confirmAction(`${action} filtrados`, `¿${action} ${filtered.length} usuarios?`, approve ? 'success' : 'danger'))) return;
+            
+            let count = 0;
+            for (const u of filtered) {
+                setProcessingIds(prev => ({ ...prev, [u._id]: true }));
+                try {
+                    if (approve) await approveKycMutation({ sessionToken, targetUserId: u._id });
+                    else await rejectKycMutation({ sessionToken, targetUserId: u._id });
+                    count++;
+                } catch { /* ponytail: ignore individual errors in bulk, let them stay pending */ }
+                finally { setProcessingIds(prev => ({ ...prev, [u._id]: false })); }
+            }
+            show(`${count} usuarios ${approve ? 'aprobados' : 'rechazados'}`, 'success');
+        };
         const kycPage = paginate(filtered, pageOf('kyc'));
         return (
             <>
@@ -550,6 +567,18 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     values={kycFilters}
                     onChange={(k, v) => { setKycFilters((p) => ({ ...p, [k]: v })); resetPage('kyc'); }}
                 />
+                
+                {filtered.length > 0 && (
+                    <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#10B981', flex: 1, paddingVertical: 10 }]} onPress={() => handleBulkKyc(true)}>
+                            <Text style={[styles.actionBtnText, { textAlign: 'center' }]}>Aprobar todos ({filtered.length})</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#EF4444', flex: 1, paddingVertical: 10 }]} onPress={() => handleBulkKyc(false)}>
+                            <Text style={[styles.actionBtnText, { textAlign: 'center' }]}>Rechazar todos ({filtered.length})</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {filtered.length === 0 ? (
                     <Empty styles={styles} icon={FileCheck} label="No hay solicitudes KYC pendientes." />
                 ) : (

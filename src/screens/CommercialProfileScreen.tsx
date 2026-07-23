@@ -11,6 +11,7 @@ import {
     ScrollView,
     ActivityIndicator,
     Share,
+    Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -36,8 +37,9 @@ import {
     ShoppingBag,
     Wrench,
     Tag,
+    Mail,
 } from 'lucide-react-native';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
@@ -52,6 +54,7 @@ import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, i
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import FormFillScreen from './FormFillScreen';
 
 
 const HERO_HEIGHT = 260;
@@ -109,14 +112,24 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const { isFavorite, toggleFavorite } = useFavorites();
     const { addItem, openCart } = useCart();
-    const { followUser, unfollowUser, isFollowing, createChat } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
+    const currentUserId = (authUser as any)?.id;
+
+    const followMut = useMutation(api.social.follow);
+    const unfollowMut = useMutation(api.social.unfollow);
+    const createChatMut = useMutation(api.social.createChat);
+
+    const isFollowingResult = useQuery(api.social.isFollowing, (currentUserId && sellerId) ? { followerUserId: currentUserId, followeeUserId: sellerId, sessionToken: sessionToken || '' } : 'skip');
+    const alreadyFollowing = isFollowingResult === true;
+
+    const socialProfile = useQuery(api.social.lookupUserSocial, sellerId ? { userId: sellerId, sessionToken: sessionToken || '' } : 'skip');
 
     const [activeTab, setActiveTab] = useState<TabType>('product');
     const [followLoading, setFollowLoading] = useState(false);
     const [dmOpen, setDmOpen] = useState(false);
     const [contactLoading, setContactLoading] = useState(false);
+    const [formOpen, setFormOpen] = useState(false);
 
     const profile = useQuery(api.users.getUser, sellerId ? { id: sellerId as any } : "skip");
     const allListings = useQuery(api.listings.getFeed);
@@ -137,7 +150,6 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const isBusiness = profile?.role === 'business';
     const isVerified = isBusiness || profile?.kycStatus === 'approved';
-    const alreadyFollowing = sellerId ? isFollowing(sellerId) : false;
 
     const tabs: { id: TabType; label: string; icon: any }[] = [
         { id: 'product', label: 'Productos', icon: Package },
@@ -173,9 +185,9 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         setFollowLoading(true);
         try {
             if (alreadyFollowing) {
-                unfollowUser(sellerId);
+                await unfollowMut({ targetUserId: sellerId, sessionToken: sessionToken || '' });
             } else {
-                followUser(sellerId);
+                await followMut({ targetUserId: sellerId, sessionToken: sessionToken || '' });
             }
         } catch (err) {
             console.warn('[CommercialProfile] follow toggle failed', err);
@@ -192,7 +204,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         }
         setContactLoading(true);
         try {
-            await createChat(sellerId);
+            const chatId = await createChatMut({ participantId: sellerId, sessionToken: sessionToken || '' });
             setDmOpen(true);
         } catch (err) {
             console.warn('[CommercialProfile] createChat failed', err);
@@ -322,8 +334,15 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
                 <View style={styles.handleRow}>
                     <Text style={styles.handle}>@{profile?.name?.toLowerCase().replace(/\s+/g, '') || 'usuario'}</Text>
-                    <View style={[styles.roleTag, isBusiness ? styles.roleTagBusiness : styles.roleTagInfluencer]}>
-                        <Text style={styles.roleTagText}>{isBusiness ? 'Negocio verificado' : 'Vendedor'}</Text>
+                    <View style={[
+                        styles.roleTag, 
+                        profile?.role === 'business' ? styles.roleTagBusiness : 
+                        (profile?.role === 'influencer' ? styles.roleTagInfluencer : { backgroundColor: isDark ? '#4B5563' : '#9CA3AF' })
+                    ]}>
+                        <Text style={styles.roleTagText}>
+                            {profile?.role === 'business' ? 'Negocio verificado' : 
+                            (profile?.role === 'influencer' ? 'Influencer' : 'Consumidor')}
+                        </Text>
                     </View>
                 </View>
 
@@ -344,26 +363,47 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
                 {/* Stats */}
                 <View style={styles.statsContainer}>
-                    <View style={styles.statBox}>
-                        <View style={styles.statValueRow}>
-                            <Star size={16} color="#F59E0B" fill="#F59E0B" />
-                            <Text style={styles.statValue}>{profile?.sellerRating?.toFixed(1) || '4.9'}</Text>
-                        </View>
-                        <Text style={styles.statLabel}>{profile?.sellerReviewCount || 120} reseñas</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{profile?.sellerTotalSales || 350}+</Text>
-                        <Text style={styles.statLabel}>Ventas</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statBox}>
-                        <View style={styles.statValueRow}>
-                            <Clock size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                            <Text style={styles.statValue}>{profile?.sellerResponseTimeHours || '< 1'}h</Text>
-                        </View>
-                        <Text style={styles.statLabel}>Respuesta</Text>
-                    </View>
+                    {isBusiness ? (
+                        <>
+                            <View style={styles.statBox}>
+                                <View style={styles.statValueRow}>
+                                    <Star size={16} color="#F59E0B" fill="#F59E0B" />
+                                    <Text style={styles.statValue}>{profile?.sellerRating?.toFixed(1) || '4.9'}</Text>
+                                </View>
+                                <Text style={styles.statLabel}>{profile?.sellerReviewCount || 120} reseñas</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{socialProfile?.followerCount ?? 0}</Text>
+                                <Text style={styles.statLabel}>Seguidores</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statBox}>
+                                <View style={styles.statValueRow}>
+                                    <Clock size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                    <Text style={styles.statValue}>{profile?.sellerResponseTimeHours || '< 1'}h</Text>
+                                </View>
+                                <Text style={styles.statLabel}>Respuesta</Text>
+                            </View>
+                        </>
+                    ) : (
+                        <>
+                            <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{socialProfile?.followerCount ?? 0}</Text>
+                                <Text style={styles.statLabel}>Seguidores</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{socialProfile?.followingCount ?? 0}</Text>
+                                <Text style={styles.statLabel}>Siguiendo</Text>
+                            </View>
+                            <View style={styles.statDivider} />
+                            <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{socialProfile?.postCount ?? 0}</Text>
+                                <Text style={styles.statLabel}>Publicaciones</Text>
+                            </View>
+                        </>
+                    )}
                 </View>
 
                 {/* Actions */}
@@ -402,6 +442,22 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                         )}
                     </TouchableOpacity>
                 </View>
+                {profile?.role === 'business' && (
+                    <TouchableOpacity
+                        style={{ marginTop: 16, width: '100%', overflow: 'hidden', borderRadius: Radius.xl }}
+                        onPress={() => setFormOpen(true)}
+                        activeOpacity={0.85}
+                    >
+                        <LinearGradient
+                            colors={isDark ? ['#3B82F6', '#1D4ED8'] : ['#60A5FA', '#2563EB']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 10 }}
+                        >
+                            <Mail size={20} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 }}>Solicitar Información</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {/* Tabs */}
@@ -461,6 +517,15 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
             {dmOpen && (
                 <DirectMessages onClose={() => setDmOpen(false)} initialUserId={sellerId} />
             )}
+
+            {/* FormFill Modal */}
+            <Modal visible={formOpen} animationType="slide" onRequestClose={() => setFormOpen(false)}>
+                <FormFillScreen 
+                    businessId={sellerId} 
+                    businessName={profile?.name} 
+                    onClose={() => setFormOpen(false)} 
+                />
+            </Modal>
         </View>
     );
 }

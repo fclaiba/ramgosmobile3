@@ -161,7 +161,7 @@ export default function LoginScreen({ navigation }: any) {
                         <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
 
                             {/* Header */}
-                            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                            <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })} style={styles.backBtn}>
                                 <ArrowLeft size={20} color={isDark ? "#D1D5DB" : "#4B5563"} />
                                 <Text style={styles.backText}>Volver</Text>
                             </TouchableOpacity>
@@ -278,7 +278,7 @@ export default function LoginScreen({ navigation }: any) {
                             {/* Footer */}
                             <View style={styles.footer}>
                                 <Text style={styles.footerText}>¿No tienes cuenta? </Text>
-                                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                                <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
                                     <Text style={styles.registerLink}>Regístrate</Text>
                                 </TouchableOpacity>
                             </View>

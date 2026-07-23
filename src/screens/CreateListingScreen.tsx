@@ -209,7 +209,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                             <Text style={styles.buttonTextLight}>{publishBlock.ctaLabel}</Text>
                         </Button>
                         {publishBlock.reason === 'anonymous' && (
-                            <Button variant="outline" onPress={() => navigation.navigate('Register')} style={styles.blockedButtonSecondary}>
+                            <Button variant="outline" onPress={() => navigation.navigate('SignUp')} style={styles.blockedButtonSecondary}>
                                 <Text style={styles.buttonTextDark}>Crear cuenta</Text>
                             </Button>
                         )}

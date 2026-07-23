@@ -94,7 +94,6 @@ export const resetPasswordWithCode = mutation({
         email: v.string(), 
         code: v.string(), 
         newPassword: v.string(),
-        oldPassword: v.string()
     },
     handler: async (ctx, args) => {
         const email = args.email.trim().toLowerCase();
@@ -127,11 +126,6 @@ export const resetPasswordWithCode = mutation({
             if (verifyPassword(pass, oldHash)) {
                 throw new Error("No puedes usar contraseñas anteriores por razones de seguridad.");
             }
-        }
-
-        // Verify oldPassword
-        if (!user.password || !verifyPassword(args.oldPassword, user.password)) {
-            throw new Error("La contraseña anterior no es correcta.");
         }
 
         const newHash = hashPassword(pass);

@@ -231,7 +231,7 @@ export function useActionGate() {
           if (block.reason === 'anonymous') {
             promptBlocked(block, [
               { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
-              { text: 'Registrarme', onPress: () => navigation.navigate('Register') },
+              { text: 'Registrarme', onPress: () => navigation.navigate('SignUp') },
             ]);
           } else {
             promptBlocked(block, [{ text: 'Ok', onPress: () => { }, style: 'cancel' }]);
@@ -263,7 +263,7 @@ export function useActionGate() {
           if (block.reason === 'anonymous') {
             promptBlocked(block, [
               { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
-              { text: 'Registrarme', onPress: () => navigation.navigate('Register') },
+              { text: 'Registrarme', onPress: () => navigation.navigate('SignUp') },
             ]);
           } else {
             promptBlocked(block, [{ text: 'Cancelar', onPress: () => { }, style: 'cancel' }]);
@@ -319,7 +319,7 @@ export function useActionGate() {
           show(block.message, 'info');
           promptBlocked(block, [
             { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
-            { text: 'Registrarme', onPress: () => navigation.navigate('Register') },
+            { text: 'Registrarme', onPress: () => navigation.navigate('SignUp') },
           ]);
         }
         return false;

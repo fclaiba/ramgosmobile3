@@ -91,8 +91,15 @@ export default function VerificationScreen({ navigation, route }: any) {
                 return;
             }
 
-            // KYC is optional during signup, so we let the standard navigation handle it
-            // Users can complete KYC from their Profile screen later
+            // For business account type, route directly to business KYC
+            if (accountType === 'business') {
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'KYC', params: { accountType: 'business' } }],
+                });
+                return;
+            }
+
             navigateFromDecision(decision);
 
         } catch (error) {

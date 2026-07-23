@@ -36,6 +36,7 @@ import {
   UserPlus,
   X,
   ListTodo,
+  CalendarDays,
 } from "lucide-react-native";
 import { MobileHeader } from "../components/MobileHeader";
 import { Badge } from "../components/ui/badge";
@@ -56,11 +57,15 @@ import { OverviewTab } from "../components/dashboard/OverviewTab";
 import { InventoryManager } from "../components/dashboard/InventoryManager";
 import { ReviewsTab } from "../components/dashboard/ReviewsTab";
 import { InfluencersTab } from "../components/dashboard/InfluencersTab";
+import { LeadsTab } from "../components/dashboard/LeadsTab";
+import { AgendaConfigTab } from "../components/dashboard/AgendaConfigTab";
 
-type DashboardTab = "overview" | "bonos" | "reviews" | "influencers";
+type DashboardTab = "overview" | "leads" | "agenda" | "bonos" | "reviews" | "influencers";
 
 const TABS: Array<{ id: DashboardTab; label: string }> = [
   { id: "overview", label: "Resumen" },
+  { id: "leads", label: "Consultas" },
+  { id: "agenda", label: "Agenda" },
   { id: "bonos", label: "Mis Bonos" },
   { id: "reviews", label: "Reseñas" },
   { id: "influencers", label: "Influencers" },
@@ -769,6 +774,23 @@ export default function BusinessDashboardScreen({
               metrics={metrics}
               chartData={chartData}
               isDark={isDark}
+            />
+          )}
+
+          {/* --- LEADS TAB --- */}
+          {activeTab === "leads" && (
+            <LeadsTab
+              isDark={isDark}
+              sessionToken={sessionToken}
+            />
+          )}
+
+          {/* --- AGENDA TAB --- */}
+          {activeTab === "agenda" && (
+            <AgendaConfigTab
+              isDark={isDark}
+              sessionToken={sessionToken}
+              businessId={user?.id}
             />
           )}
 

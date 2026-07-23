@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCart } from '../../contexts/CartContext';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useToast } from '../../contexts/ToastContext';
-import { Heart, ShoppingCart, ArrowRight, Crosshair, Minus, Plus, Bell, BellOff, Settings, X, Check } from 'lucide-react-native';
+import { Heart, ShoppingCart, ArrowRight, Crosshair, Minus, Plus, Bell, BellOff, Settings, X, Check, Package, Briefcase, Calendar, Store, Tag } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 
 // react-leaflet imports (web only)
@@ -397,8 +397,9 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
 
             {/* Notification Config Modal */}
             {isNotifConfigOpen && (
-                <View style={[StyleSheet.absoluteFill, { zIndex: 10000, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-                    <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[s.notifConfigModal, { backgroundColor: isDark ? 'rgba(31,41,55,0.85)' : 'rgba(255,255,255,0.9)' }]}>
+                <Modal transparent visible={true} animationType="fade">
+                    <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.4)' }]}>
+                        <BlurView intensity={90} tint={isDark ? 'dark' : 'light'} style={[s.notifConfigModal, { backgroundColor: isDark ? 'rgba(31,41,55,0.85)' : 'rgba(255,255,255,0.9)' }]}>
                         <View style={s.notifConfigHeader}>
                             <View>
                                 <Text style={[s.notifConfigTitle, { color: colors(isDark).text }]}>Configurar Filtros</Text>
@@ -410,52 +411,79 @@ export const MapViewComponent: React.FC<MarketplaceMapProps> = ({
                         </View>
                         
                         {/* Tipo de Unidad Comercial */}
-                        <Text style={[s.notifSectionTitle, { color: colors(isDark).text }]}>Tipos de unidades</Text>
+                        <Text style={[s.notifSectionTitle, { color: colors(isDark).text }]}>Qué te interesa ver?</Text>
                         <View style={s.chipGroup}>
-                            {['product', 'service', 'event', 'business', 'bono'].map(type => {
-                                const isSelected = notifTypes.includes(type);
-                                const label = type === 'product' ? 'Productos' : type === 'service' ? 'Servicios' : type === 'event' ? 'Eventos' : type === 'business' ? 'Negocios' : 'Bonos';
+                            {[
+                                { id: 'product', label: 'Productos', Icon: Package },
+                                { id: 'service', label: 'Servicios', Icon: Briefcase },
+                                { id: 'event', label: 'Eventos', Icon: Calendar },
+                                { id: 'business', label: 'Negocios', Icon: Store },
+                                { id: 'bono', label: 'Bonos', Icon: Tag }
+                            ].map(({ id, label, Icon }) => {
+                                const isSelected = notifTypes.includes(id);
                                 return (
                                     <TouchableOpacity 
-                                        key={type} 
-                                        style={[s.configChip, isSelected && s.configChipActive, { borderColor: isSelected ? '#4FC3F7' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)') }]}
+                                        key={id} 
+                                        style={[s.typeCard, isSelected && s.typeCardActive, { 
+                                            borderColor: isSelected ? '#4FC3F7' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
+                                            backgroundColor: isSelected ? 'rgba(79, 195, 247, 0.15)' : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)')
+                                        }]}
                                         onPress={() => {
-                                            setNotifTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
+                                            setNotifTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
                                         }}
                                     >
-                                        {isSelected && <Check size={14} color="#fff" style={{ marginRight: 4 }} />}
-                                        <Text style={[s.configChipText, isSelected && { color: '#fff', fontWeight: 'bold' }]}>{label}</Text>
+                                        <Icon size={22} color={isSelected ? "#4FC3F7" : (isDark ? "#9CA3AF" : "#6B7280")} style={{ marginBottom: 6 }} />
+                                        <Text style={[s.typeCardText, isSelected && { color: '#4FC3F7', fontWeight: 'bold' }]}>{label}</Text>
+                                        {isSelected && <View style={s.typeCardCheck}><Check size={10} color="#fff" strokeWidth={3} /></View>}
                                     </TouchableOpacity>
                                 );
                             })}
                         </View>
 
-                        {/* Categorías Internas */}
+                        {/* Categorías Específicas por Tipo */}
                         {notifTypes.length > 0 && (
-                            <View style={{ marginTop: 20 }}>
-                                <Text style={[s.notifSectionTitle, { color: colors(isDark).text }]}>Categorías internas</Text>
-                                <View style={s.chipGroup}>
-                                    {Array.from(new Set(notifTypes.flatMap(t => (UNIFIED_CATEGORIES as any)[t] || []))).sort().map(cat => {
-                                        const isSelected = notifCategories.includes(cat as string);
-                                        return (
-                                            <TouchableOpacity 
-                                                key={cat as string} 
-                                                style={[s.configChip, isSelected && s.configChipActive, { borderColor: isSelected ? '#4FC3F7' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)') }]}
-                                                onPress={() => {
-                                                    setNotifCategories(prev => prev.includes(cat as string) ? prev.filter(c => c !== cat) : [...prev, cat as string]);
-                                                }}
-                                            >
-                                                {isSelected && <Check size={14} color="#fff" style={{ marginRight: 4 }} />}
-                                                <Text style={[s.configChipText, isSelected && { color: '#fff', fontWeight: 'bold' }]}>{cat as string}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                            <View style={{ marginTop: 24, flex: 1, minHeight: 150 }}>
+                                <Text style={[s.notifSectionTitle, { color: colors(isDark).text }]}>Filtros específicos</Text>
+                                <View style={[s.scrollGlassWrapper, { borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
+                                    <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+                                        {notifTypes.map((type, index) => {
+                                            const label = type === 'product' ? 'Productos' : type === 'service' ? 'Servicios' : type === 'event' ? 'Eventos' : type === 'business' ? 'Negocios' : 'Bonos';
+                                            const cats = (UNIFIED_CATEGORIES as any)[type] || [];
+                                            if (cats.length === 0) return null;
+                                            return (
+                                                <View key={type} style={{ marginBottom: index === notifTypes.length - 1 ? 0 : 24 }}>
+                                                    <Text style={[s.notifSubsectionTitle, { color: colors(isDark).text }]}>{label}</Text>
+                                                    <View style={s.chipGroup}>
+                                                        {[...cats].sort().map((cat: string) => {
+                                                            const isSelected = notifCategories.includes(cat);
+                                                            return (
+                                                                <TouchableOpacity 
+                                                                    key={cat} 
+                                                                    style={[s.configChip, isSelected && s.configChipActive, { 
+                                                                        borderColor: isSelected ? '#4FC3F7' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'),
+                                                                        backgroundColor: isSelected ? 'rgba(79, 195, 247, 0.15)' : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)')
+                                                                    }]}
+                                                                    onPress={() => {
+                                                                        setNotifCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+                                                                    }}
+                                                                >
+                                                                    {isSelected && <Check size={14} color="#4FC3F7" style={{ marginRight: 6 }} strokeWidth={3} />}
+                                                                    <Text style={[s.configChipText, isSelected && { color: '#4FC3F7', fontWeight: 'bold' }]}>{cat}</Text>
+                                                                </TouchableOpacity>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                </View>
+                                            );
+                                        })}
+                                    </ScrollView>
                                 </View>
                             </View>
                         )}
                         
-                    </BlurView>
-                </View>
+                        </BlurView>
+                    </View>
+                </Modal>
             )}
 
             {/* Recenter Button */}
@@ -777,18 +805,62 @@ const s = StyleSheet.create({
     configChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 14,
-        paddingVertical: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         borderRadius: Radius.full,
         borderWidth: 1,
-        backgroundColor: 'rgba(150,150,150,0.05)'
     },
     configChipActive: {
-        backgroundColor: '#4FC3F7'
+        // Active styles are handled dynamically
     },
     configChipText: {
         fontSize: 13,
         color: '#6B7280',
         fontWeight: '500'
     },
+    scrollGlassWrapper: {
+        borderRadius: Radius.lg,
+        borderWidth: 1,
+        backgroundColor: 'rgba(0,0,0,0.02)',
+        overflow: 'hidden'
+    },
+    typeCard: {
+        width: '31%', // Fits 3 in a row with gap 8
+        minWidth: 90,
+        flexGrow: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 8,
+        borderRadius: Radius.xl,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+    },
+    typeCardActive: {
+    },
+    typeCardText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '600',
+        textAlign: 'center'
+    },
+    typeCardCheck: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        backgroundColor: '#4FC3F7',
+        borderRadius: 10,
+        padding: 3,
+        ...Platform.select({
+            web: { boxShadow: '0 2px 8px rgba(79, 195, 247, 0.4)' }
+        })
+    },
+    notifSubsectionTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        opacity: 0.5,
+        marginBottom: 12
+    }
 });

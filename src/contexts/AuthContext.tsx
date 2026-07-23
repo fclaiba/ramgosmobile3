@@ -193,6 +193,10 @@ const resolveNextRoute = (user: PublicUser): AuthFlowDecision['nextRoute'] => {
         return { screen: 'BasicProfileSetup' };
     }
 
+    if (user.role === 'business' && user.kycStatus === 'unverified') {
+        return { screen: 'KYC', params: { accountType: 'business' } };
+    }
+
     return { screen: 'Home' };
 };
 
@@ -850,12 +854,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const deleteMyAccount = async () => {
         if (!state.user) return;
-        try {
-            await deleteUserMutation({ id: state.user.id as any });
-        } catch (e: any) {
-            console.error('Failed to delete account on backend', e);
-            // Even if backend fails, clear the local session so the user isn't stuck
-        }
+        const token = state.session?.sessionToken || sessionTokenStore.get();
+        await deleteUserMutation({
+            id: state.user.id as any,
+            sessionToken: token,
+        });
         await logout(true);
     };
     const clearPendingVerification = () => { };

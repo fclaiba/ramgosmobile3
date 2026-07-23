@@ -793,9 +793,13 @@ export const internalCreateSubOrder = internalMutation({
         })),
         total: v.number(),
         netAmountCents: v.number(),
-        commissionCents: v.number(),
+        commissionCents: v.optional(v.number()),
         transferGroup: v.string(),
         stripePaymentIntentId: v.string(),
+        // PHASE 5: Rentals
+        checkInDate: v.optional(v.string()),
+        checkOutDate: v.optional(v.string()),
+        guests: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         // Resolve storage IDs → HTTPS URLs so History/Activity can render immediately.
@@ -847,6 +851,23 @@ export const internalCreateSubOrder = internalMutation({
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
+
+        // Ponytail: Create booking if this is a rental
+        if (args.checkInDate && args.checkOutDate && items.length > 0) {
+            await ctx.db.insert("bookings", {
+                listingId: items[0].listingId,
+                orderId: orderId,
+                buyerId: args.userId,
+                sellerId: args.sellerId,
+                checkInDate: args.checkInDate,
+                checkOutDate: args.checkOutDate,
+                status: "confirmed",
+                guests: args.guests || 1,
+                totalPrice: args.total,
+                createdAt: new Date().toISOString(),
+            });
+        }
+
         return orderId;
     }
 });

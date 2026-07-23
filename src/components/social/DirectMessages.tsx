@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, SafeAr
 import { ArrowLeft, Search, Send, Image as ImageIcon, Phone, Video } from 'lucide-react-native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useSocial } from '../../contexts/SocialContext';
+
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -17,8 +17,10 @@ interface DirectMessagesProps {
 }
 
 export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) => {
-    const { currentUser, sendMessage, createChat } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
+    const currentUserId = (authUser as any)?.id;
+    const createChatMut = useMutation(api.social.createChat);
+    const sendMessageMut = useMutation(api.social.sendMessage);
     const [selectedChat, setSelectedChat] = useState<string | null>(null);
     const [messageText, setMessageText] = useState('');
     const [searchText, setSearchText] = useState('');
@@ -30,16 +32,16 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
     // Reactive queries.
     const chatsRows = useQuery(
         api.social.getMyChats,
-        authUser ? {} : 'skip',
+        authUser ? { sessionToken: sessionToken || '' } : 'skip',
     );
     const userSearchResult = useQuery(
         api.social.searchUsers,
-        authUser && searchText ? { term: searchText, limit: 20 } : 'skip',
+        authUser && searchText ? { term: searchText, limit: 20, sessionToken: sessionToken || '' } : 'skip',
     );
     const messagesResult = useQuery(
         api.social.getChatMessages,
         authUser && selectedChat
-            ? { chatId: selectedChat as any, limit: 100 }
+            ? { chatId: selectedChat as any, limit: 100, sessionToken: sessionToken || '' }
             : 'skip',
     );
     const markAsReadMut = useMutation(api.social.markChatAsRead);
@@ -47,7 +49,7 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
     // Mark chat as read whenever it's opened.
     useEffect(() => {
         if (selectedChat && authUser) {
-            markAsReadMut({ chatId: selectedChat as any }).catch(() => {});
+            markAsReadMut({ chatId: selectedChat as any, sessionToken: sessionToken || '' }).catch(() => {});
         }
     }, [selectedChat, authUser, markAsReadMut]);
 
@@ -57,7 +59,7 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
         let cancelled = false;
         (async () => {
             try {
-                const chatId = await Promise.resolve(createChat(initialUserId));
+                const chatId = await createChatMut({ participantId: initialUserId, sessionToken: sessionToken || '' });
                 if (!cancelled && chatId) {
                     setSelectedChat(chatId);
                 }
@@ -66,11 +68,11 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
             }
         })();
         return () => { cancelled = true; };
-    }, [initialUserId, authUser, createChat]);
+    }, [initialUserId, authUser, createChatMut]);
 
     const conversations = (chatsRows ?? []).map((chat: any) => {
         const other = chat.otherParticipants?.[0];
-        const otherUserId = chat.participantIds?.find((id: string) => id !== currentUser.id) ?? '';
+        const otherUserId = chat.participantIds?.find((id: string) => id !== currentUserId) ?? '';
         return {
             id: chat._id,
             userId: otherUserId,
@@ -91,7 +93,7 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
     }).filter((c: any) => c.otherUser);
 
     const searchResults = (userSearchResult ?? [])
-        .filter((u: any) => u.userId !== currentUser.id)
+        .filter((u: any) => u.userId !== currentUserId)
         .map((u: any) => ({
             id: u.userId,
             name: u.displayName,
@@ -101,7 +103,7 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
 
     const handleSelectUser = async (userId: string) => {
         try {
-            const chatId = await Promise.resolve(createChat(userId));
+            const chatId = await createChatMut({ participantId: userId, sessionToken: sessionToken || '' });
             setSelectedChat(chatId);
             setSearchText('');
         } catch (err) {
@@ -114,10 +116,15 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
         : null;
     const currentChatUser = activeChat?.otherUser ?? null;
 
-    const handleSendMessage = () => {
+    const handleSendMessage = async () => {
         if (!messageText.trim() || !selectedChat) return;
-        sendMessage(selectedChat, messageText);
+        const text = messageText;
         setMessageText('');
+        try {
+            await sendMessageMut({ chatId: selectedChat as any, body: text, sessionToken: sessionToken || '' });
+        } catch (err) {
+            console.warn('[DM] send failed', err);
+        }
     };
 
     const renderConversationList = () => (
@@ -213,7 +220,7 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
 
                 <ScrollView style={styles.chatContent} contentContainerStyle={{ padding: 16 }}>
                     {(messagesResult?.items ?? []).map((msg: any) => {
-                        const isMe = msg.senderUserId === currentUser.id;
+                        const isMe = msg.senderUserId === currentUserId;
                         return (
                             <View key={msg._id} style={[styles.messageBubble, isMe ? styles.messageSent : styles.messageReceived]}>
                                 <Text style={[styles.messageText, isMe && styles.sentText]}>{msg.body}</Text>

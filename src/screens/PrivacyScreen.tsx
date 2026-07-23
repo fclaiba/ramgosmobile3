@@ -23,7 +23,7 @@ export default function PrivacyScreen({ navigation, route }: any) {
                     source: returnKey,
                 });
             } else {
-                navigation.navigate('Register', { privacyAccepted: true });
+                navigation.navigate('SignUp', { privacyAccepted: true });
             }
             navigation.goBack();
             return;

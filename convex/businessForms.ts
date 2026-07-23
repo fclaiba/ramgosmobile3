@@ -62,19 +62,37 @@ export const getPublicForms = query({
     }
 });
 
+export const getForm = query({
+    args: { formId: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        if (!args.formId) return null;
+        return await ctx.db.get(args.formId as Id<"businessForms">);
+    }
+});
+
 export const submitLead = mutation({
     args: {
-        formId: v.string(),
+        formId: v.optional(v.string()),
+        businessId: v.optional(v.string()),
         name: v.string(),
         email: v.string(),
         phone: v.string(),
         message: v.optional(v.string()),
         sessionToken: v.optional(v.string()),
+        scheduledDate: v.optional(v.string()),
+        scheduledTime: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const form = await ctx.db.get(args.formId as Id<"businessForms">);
-        if (!form) throw new Error("Formulario no encontrado.");
-        if (!form.isActive) throw new Error("El formulario ya no está activo.");
+        let bId = args.businessId;
+        
+        if (args.formId) {
+            const form = await ctx.db.get(args.formId as Id<"businessForms">);
+            if (!form) throw new Error("Formulario no encontrado.");
+            if (!form.isActive) throw new Error("El formulario ya no está activo.");
+            bId = form.businessId;
+        }
+        
+        if (!bId) throw new Error("Se requiere businessId o formId.");
         
         let submitterId = undefined;
         if (args.sessionToken) {
@@ -87,12 +105,14 @@ export const submitLead = mutation({
         
         const submissionId = await ctx.db.insert("businessFormLeads", {
             formId: args.formId,
-            businessId: form.businessId,
+            businessId: bId,
             userId: submitterId,
             name: args.name,
             email: args.email,
             phone: args.phone,
             message: args.message,
+            scheduledDate: args.scheduledDate,
+            scheduledTime: args.scheduledTime,
             status: 'new',
             createdAt: new Date().toISOString(),
         });

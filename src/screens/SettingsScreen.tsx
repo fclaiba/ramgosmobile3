@@ -78,6 +78,10 @@ export default function SettingsScreen({ navigation }: any) {
         try {
             await deleteMyAccount();
             show('Cuenta eliminada correctamente.');
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'Welcome' }],
+            });
         } catch (error) {
             show('Error al eliminar cuenta.', 'error');
         }

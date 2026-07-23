@@ -324,7 +324,8 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                 (filter === 'products' && item.type !== 'product') ||
                 (filter === 'bonos' && item.type !== 'bono') ||
                 (filter === 'events' && item.type !== 'event') ||
-                (filter === 'services' && item.type !== 'service')
+                (filter === 'services' && item.type !== 'service') ||
+                (filter === 'businesses' && item.type !== 'business')
             )) return false;
 
             if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -497,7 +498,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                             style={[styles.btnSm, { backgroundColor: '#10B981' }]}
                             onPress={(e) => {
                                 e.stopPropagation();
-                                navigation.navigate('BusinessDetail', { businessId: item.id, business: item });
+                                navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
                             }}
                         >
                             <Text style={styles.btnSmText}>Ver Perfil</Text>
@@ -589,7 +590,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                                 style={[styles.btnSm, { backgroundColor: '#10B981', width: 'auto', paddingHorizontal: 16 }]}
                                 onPress={(e) => {
                                     e.stopPropagation();
-                                    navigation.navigate('BusinessDetail', { businessId: item.id, business: item });
+                                    navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
                                 }}
                             >
                                 <Text style={styles.btnSmText}>Ver Perfil</Text>
@@ -668,11 +669,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                     <MarketplaceMap
                         items={filteredItems}
                         onItemClick={(item: any) => {
-                            if (item.type === 'business') {
-                                navigation.navigate('BusinessDetail', { businessId: item.id, business: item });
-                            } else {
-                                navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
-                            }
+                            navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
                         }}
                         radius={radius}
                         searchLocation={advancedFilters.searchLocation}
@@ -684,7 +681,7 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                         }}
                         onRadiusChange={setRadius}
                         bottomInset={NAV_CONTENT_HEIGHT + insets.bottom}
-                        topInset={viewMode === 'map' ? (130 + insets.top) : (195 + insets.top)}
+                        topInset={viewMode === 'map' ? (200 + insets.top) : (220 + insets.top)}
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
                         filter={filter}
@@ -777,13 +774,14 @@ export default function MarketplaceScreen({ navigation, route, initialParams }: 
                             contentContainerStyle={styles.categoryChipsContent}
                             style={styles.categoryChipsScroll}
                         >
-                            {(['all', 'products', 'services', 'bonos', 'events'] as const).map((t) => {
+                            {(['all', 'products', 'services', 'bonos', 'events', 'businesses'] as const).map((t) => {
                                 const active = filter === t;
                                 const label =
                                     t === 'products' ? 'Productos' :
                                         t === 'services' ? 'Servicios' :
                                             t === 'bonos' ? 'Bonos' :
-                                                t === 'events' ? 'Eventos' : 'Todos';
+                                                t === 'events' ? 'Eventos' : 
+                                                    t === 'businesses' ? 'Tiendas' : 'Todos';
 
                                 return (
                                     <TouchableOpacity
