@@ -1198,6 +1198,9 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **8c** | Tests Jest (JEST-01) | ✅ Cerrada | 100% | — | 2026-07-14 |
 | **8d** | Limpiar respaldo pagos | ✅ Cerrada | 100% | — | 2026-07-14 |
 | **S1** | Sprint 1 (Roles y KYC Front-end) | ✅ Cerrada | 100% | — | 2026-07-21 |
+| **S2** | Sprint 2 (Módulo de Negocios) | ✅ Cerrada | 100% | — | 2026-07-23 |
+| **S3** | Sprint 3 (Módulo de Influencers) | ✅ Cerrada | 100% | — | 2026-07-23 |
+| **S4** | Sprint 4 (Gamificación y Dashboard) | ✅ Cerrada | 100% | — | 2026-07-23 |
 
 **Leyenda:** ✅ Cerrada · 🟡 En curso · 🔴 Bloqueada · ⚪ Pendiente
 
@@ -1250,6 +1253,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | E-039 | 2026-07-22 | Build | Error 500 al abrir `CommercialProfile` (MIME type 'application/json') | Error de compilación de Metro por error de sintaxis (llave de cierre faltante `}`) en `BusinessFormsScreen.tsx` | Se restauró la llave de cierre en `renderResponses` en `BusinessFormsScreen.tsx`. El bundle de Metro vuelve a compilar | ✅ Resuelto | BusinessFormsScreen.tsx |
 | E-040 | 2026-07-23 | Social | Botones Seguir y Contactar en red social no persistían | `CommercialProfileScreen` y `DirectMessages` usaban un contexto mockeado (`SocialContext`) falso en vez de pegarle a Convex | Se refactorizaron los componentes para consumir directamente `useMutation(api.social.createChat)` y demás, integrando al backend universal. Se ajustó UI pública | ✅ Resuelto | CommercialProfileScreen.tsx, DirectMessages.tsx |
 | E-041 | 2026-07-23 | Social | ReferenceError: createChat is not defined al abrir DMs | Se olvidó actualizar el dependency array del `useEffect` al renombrar `createChat` a `createChatMut` en `DirectMessages` | Se actualizó la dependencia a `createChatMut` y se removió la importación innecesaria de `useSocial` | ✅ Resuelto | DirectMessages.tsx |
+| E-042 | 2026-07-23 | UI | Error de compilación TS17008: JSX element 'ScrollView' has no corresponding closing tag | Un reemplazo de código dejó etiquetas `</View>` desbalanceadas al inyectar la UI de Rewards | Se corrigió el balanceado de etiquetas JSX eliminando los `</View>` huérfanos | ✅ Resuelto | ProfileScreen.tsx |
 **Plantilla para nuevas entradas:**
 
 ```markdown

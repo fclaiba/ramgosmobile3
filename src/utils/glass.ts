@@ -50,7 +50,7 @@ export const glassSurface = (
 export const glassGradient = (isDark: boolean): [string, string, string] =>
     isDark ? ['#09090B', '#0C0A14', '#09090B'] : ['#FAFAFA', '#F8F7FC', '#FAFAFA'];
 
-export const glassChip = (isDark: boolean, color = Brand.primary): ViewStyle => ({
+export const glassChip = (isDark: boolean, color: string = Brand.primary): ViewStyle => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,

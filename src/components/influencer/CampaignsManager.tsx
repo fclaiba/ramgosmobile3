@@ -41,8 +41,8 @@ export default function CampaignsManager({ pendingInvitations, myProposals, acti
                 <View style={styles.campaignFooter}>
                     <Text style={textSecondary}>Comisión: {c.rateType === 'percentage' ? `${c.ratePct}%` : formatCurrency(c.rateFixed || 0)}</Text>
                     <TouchableOpacity style={styles.btnAction}>
-                        <Text style={{ color: '#4f46e5', fontWeight: '600', fontSize: 13 }}>Ver detalles</Text>
-                        <ArrowRight size={14} color="#4f46e5" />
+                        <Text style={{ color: isDark ? '#818cf8' : '#4f46e5', fontWeight: '600', fontSize: 13 }}>Ver detalles</Text>
+                        <ArrowRight size={14} color={isDark ? '#818cf8' : '#4f46e5'} />
                     </TouchableOpacity>
                 </View>
             </View>

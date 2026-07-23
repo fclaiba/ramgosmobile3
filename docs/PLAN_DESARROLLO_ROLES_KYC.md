@@ -43,33 +43,33 @@ Agrupación de las grandes funcionalidades del sistema:
 
 ---
 
-### Sprint 3: Módulo de Influencers
+### Sprint 3: Módulo de Influencers ✅ [COMPLETADO]
 **Objetivo del Sprint:** Habilitar a los influencers para validar sus redes, aceptar condiciones comerciales y generar bonos de descuento.
 
 **Historias de Usuario:**
-- **US3.1:** Como influencer, quiero registrarme (correo/código) y agregar obligatoriamente los enlaces de mis redes sociales.
-- **US3.2:** Como influencer, debo aceptar los T&C para Influencers (explicaciones de % y pagos).
-- **US3.3:** Como sistema, debo validar el KYC y el perfil de redes del influencer antes de activarlo.
-- **US3.4:** Como influencer (activo), quiero crear "Bonos" de descuento definiendo su valor y el % (40%, 50%, 60%).
-- **US3.5:** Como influencer, quiero un botón para copiar mi enlace de afiliado y usarlo en Link in Bio, Historias de Instagram, WhatsApp, etc.
+- **[x] US3.1:** Como influencer, quiero registrarme (correo/código) y agregar obligatoriamente los enlaces de mis redes sociales.
+- **[x] US3.2:** Como influencer, debo aceptar los T&C para Influencers (explicaciones de % y pagos).
+- **[x] US3.3:** Como sistema, debo validar el KYC y el perfil de redes del influencer antes de activarlo.
+- **[x] US3.4:** Como influencer (activo), quiero crear "Bonos" de descuento definiendo su valor y el % (40%, 50%, 60%).
+- **[x] US3.5:** Como influencer, quiero un botón para copiar mi enlace de afiliado y usarlo en Link in Bio, Historias de Instagram, WhatsApp, etc.
 
 **Criterios de Aceptación:**
-- Base de datos guarda y exige los enlaces de redes sociales.
-- Generación de enlaces de afiliados 100% funcional y copiable al portapapeles.
+- **[x]** Base de datos guarda y exige los enlaces de redes sociales.
+- **[x]** Generación de enlaces de afiliados 100% funcional y copiable al portapapeles.
 
 ---
 
-### Sprint 4: Dashboard y Sistema de Puntos
+### Sprint 4: Dashboard y Sistema de Puntos ✅ [COMPLETADO]
 **Objetivo del Sprint:** Proveer herramientas de seguimiento a influencers y lanzar el sistema de puntos general.
 
 **Historias de Usuario:**
-- **US4.1:** Como influencer, quiero un panel de control (dashboard) exclusivo para monitorear las ventas generadas por mis bonos y mis ingresos.
-- **US4.2:** Como usuario de la app, quiero ganar puntos por registrarme, invitar amigos (referidos) y realizar compras. *(Nota: Puntos por mascota suspendidos).*
-- **US4.3:** Como sistema, debo asegurar que las interacciones base (Usuario<>App, Negocio<>App, Influencer<>Negocio) funcionen perfectamente sin fallos de estado.
+- **[x] US4.1:** Como influencer, quiero un panel de control (dashboard) exclusivo para monitorear las ventas generadas por mis bonos y mis ingresos.
+- **[x] US4.2:** Como usuario de la app, quiero ganar puntos por registrarme, invitar amigos (referidos) y realizar compras. *(Nota: Puntos por mascota suspendidos).*
+- **[x] US4.3:** Como sistema, debo asegurar que las interacciones base (Usuario<>App, Negocio<>App, Influencer<>Negocio) funcionen perfectamente sin fallos de estado.
 
 **Criterios de Aceptación:**
-- El dashboard de influencers muestra datos reales y en tiempo real.
-- Las tablas de puntos (transacciones) se actualizan correctamente según la acción del usuario.
+- **[x]** El dashboard de influencers muestra datos reales y en tiempo real.
+- **[x]** Las tablas de puntos (transacciones) se actualizan correctamente según la acción del usuario.
 
 ---
 

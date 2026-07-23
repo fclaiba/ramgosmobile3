@@ -16,7 +16,7 @@ export default function InfluencerBonusesScreen({ navigation }: any) {
 
     // Reusing the listings system for bonuses (type = 'bono')
     // We assume there's a way to query my listings
-    const myBonuses = useQuery(api.listings.getFeed, { category: 'social' });
+    const myBonuses = useQuery(api.listings.getFeed) || [];
     const createBono = useMutation(api.listings.createListing);
 
     const [isCreating, setIsCreating] = useState(false);

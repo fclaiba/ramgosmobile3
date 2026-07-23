@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "convex/_generated/api.d.ts": {
-    "mtime": 1784780678.9684758,
-    "ast_hash": "9333ba07068dbdafe538176b579cef13",
+    "mtime": 1784803729.6346126,
+    "ast_hash": "614513a2d15ebcd83f15f31c38a3b98e",
     "semantic_hash": ""
   },
   "convex/_generated/api.js": {
@@ -180,9 +180,9 @@
     "semantic_hash": "4657cb60a3a090bfcf8b82efb4ad07d7"
   },
   "convex/dashboard.ts": {
-    "mtime": 1783087581.788955,
-    "ast_hash": "837e63af8316d7bb1e196aa592a0a063",
-    "semantic_hash": "837e63af8316d7bb1e196aa592a0a063"
+    "mtime": 1784803705.7770114,
+    "ast_hash": "c491d2f66f04917291de12b5f83f6ff0",
+    "semantic_hash": ""
   },
   "convex/developer.ts": {
     "mtime": 1784629823.5098188,
@@ -255,8 +255,8 @@
     "semantic_hash": ""
   },
   "convex/listings.ts": {
-    "mtime": 1784629823.5135634,
-    "ast_hash": "b7190365b9dd15270c5f1b8441e87d7f",
+    "mtime": 1784802448.6716325,
+    "ast_hash": "3be24881d321ee4f162ef825f2b6bb94",
     "semantic_hash": ""
   },
   "convex/locations.ts": {
@@ -300,8 +300,8 @@
     "semantic_hash": ""
   },
   "convex/schema.ts": {
-    "mtime": 1784799897.749738,
-    "ast_hash": "f029297f34e3e46ca4d775f4bc2d5107",
+    "mtime": 1784803688.955446,
+    "ast_hash": "37b12c95dfcc97049d9ec0855611b85c",
     "semantic_hash": ""
   },
   "convex/seed.ts": {
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "convex/social.ts": {
-    "mtime": 1784799172.5172346,
-    "ast_hash": "70b0503377b1f5be27ab009619278274",
+    "mtime": 1784801929.8285306,
+    "ast_hash": "9c57653acf29a1e19b1f484c8eaee1db",
     "semantic_hash": ""
   },
   "convex/social/_helpers.ts": {
@@ -360,8 +360,8 @@
     "semantic_hash": ""
   },
   "convex/users.ts": {
-    "mtime": 1784784097.3153265,
-    "ast_hash": "6a384554e6b4112f6dcc51a4d4884bef",
+    "mtime": 1784803764.5480404,
+    "ast_hash": "58256b81ec9bcd83c64e9e66456e19b8",
     "semantic_hash": ""
   },
   "convex_fix.js": {
@@ -1330,8 +1330,8 @@
     "semantic_hash": ""
   },
   "src/screens/AdminDashboardScreen.tsx": {
-    "mtime": 1784753358.5551672,
-    "ast_hash": "15c0b11cc6d3a5b47391d145d6023473",
+    "mtime": 1784802708.858849,
+    "ast_hash": "4959c41df69d57746ffb7b2dfe89e72e",
     "semantic_hash": ""
   },
   "src/screens/AnalyticsDashboardScreen.tsx": {
@@ -1425,8 +1425,8 @@
     "semantic_hash": ""
   },
   "src/screens/InfluencerDashboardScreen.tsx": {
-    "mtime": 1784629824.7035973,
-    "ast_hash": "32dd5cd90c76340e10772e9cdbc8c86d",
+    "mtime": 1784803115.8870833,
+    "ast_hash": "ba4d38b7f3095f74b5e6b3727e5c53d9",
     "semantic_hash": ""
   },
   "src/screens/ItemDetailScreen.tsx": {
@@ -1490,8 +1490,8 @@
     "semantic_hash": ""
   },
   "src/screens/ProfileScreen.tsx": {
-    "mtime": 1784800094.3720686,
-    "ast_hash": "279f4285e9bc095c5f0f58dafe778324",
+    "mtime": 1784804691.799065,
+    "ast_hash": "36a9103cf301293426dfd60d92cb4e71",
     "semantic_hash": ""
   },
   "src/screens/ReferralsScreen.tsx": {
@@ -1505,8 +1505,8 @@
     "semantic_hash": ""
   },
   "src/screens/RoleSelectionScreen.tsx": {
-    "mtime": 1784629824.7189937,
-    "ast_hash": "57420aca5775094e5ef9e2f226b1f209",
+    "mtime": 1784802313.4123876,
+    "ast_hash": "ebace1f728aeebf06c3699ad37a7a8f9",
     "semantic_hash": ""
   },
   "src/screens/SavedScreen.tsx": {
@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "src/screens/SocialScreen.tsx": {
-    "mtime": 1784702262.7261791,
-    "ast_hash": "e6cce46e71e431184cebcc48aa1e2518",
+    "mtime": 1784801668.4631662,
+    "ast_hash": "e6e08d347196ad9409cfb4113f2429ea",
     "semantic_hash": ""
   },
   "src/screens/SubscriptionPlansScreen.tsx": {
@@ -2500,8 +2500,8 @@
     "semantic_hash": ""
   },
   "convex/businessForms.ts": {
-    "mtime": 1784800703.5945084,
-    "ast_hash": "5d3988c7e2a457f7476da59bcb9c3565",
+    "mtime": 1784803679.423956,
+    "ast_hash": "4d135759ef3cf6c17944b01328d2dbc8",
     "semantic_hash": ""
   },
   "scripts/audit_social_module.py": {
@@ -2530,8 +2530,8 @@
     "semantic_hash": ""
   },
   "src/screens/InfluencerBonusesScreen.tsx": {
-    "mtime": 1784702119.565244,
-    "ast_hash": "f312c83cabab724dae2eefcbcacadfe7",
+    "mtime": 1784803124.9564214,
+    "ast_hash": "ef0ec1660e080de6ddabd6512dc871c9",
     "semantic_hash": ""
   },
   "src/screens/business/BusinessFormsScreen.tsx": {
@@ -2620,8 +2620,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_DESARROLLO_ROLES_KYC.md": {
-    "mtime": 1784743826.6893685,
-    "ast_hash": "69a2cb683ddfa2bac1adde5a6ec84f02",
+    "mtime": 1784804777.2917192,
+    "ast_hash": "81cdc11f76d0cf5381519b69b396b355",
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
@@ -2700,8 +2700,38 @@
     "semantic_hash": ""
   },
   "src/screens/MyBookingsScreen.tsx": {
-    "mtime": 1784800459.6200476,
-    "ast_hash": "3d466c8d3eaffbcba9fed9a2d2d9f77e",
+    "mtime": 1784802684.176103,
+    "ast_hash": "d87a94bb684fcf373fa3b89e10cd7887",
+    "semantic_hash": ""
+  },
+  "convex/rewards.ts": {
+    "mtime": 1784803727.5292723,
+    "ast_hash": "7092161222376f8ab362bf0e95aafac8",
+    "semantic_hash": ""
+  },
+  "src/components/influencer/AffiliateLinkCard.tsx": {
+    "mtime": 1784802932.4807067,
+    "ast_hash": "55aa479ead71eb99d9e373547110ced3",
+    "semantic_hash": ""
+  },
+  "src/components/influencer/BonusGeneratorModal.tsx": {
+    "mtime": 1784802974.2591982,
+    "ast_hash": "8bfc420b0fad1ac3d0f3802c8219d5a2",
+    "semantic_hash": ""
+  },
+  "src/components/influencer/CampaignsManager.tsx": {
+    "mtime": 1784802991.8373694,
+    "ast_hash": "aba14d528a8b0f4092fd41c189e2232d",
+    "semantic_hash": ""
+  },
+  "src/components/influencer/InfluencerMetrics.tsx": {
+    "mtime": 1784802951.6768463,
+    "ast_hash": "d804b8a95cc7d1a259fb3e356ab4651f",
+    "semantic_hash": ""
+  },
+  "src/screens/InfluencerDashboardScreen.backup.tsx": {
+    "mtime": 1784802587.9382093,
+    "ast_hash": "5e750ff7788f4d6d67a06982a8636c1a",
     "semantic_hash": ""
   }
 }

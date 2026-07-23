@@ -151,6 +151,12 @@ export const register = mutation({
         });
 
         const sessionToken = await createSession(ctx, userId);
+        
+        // Gamificación: Puntos de registro
+        try {
+            await ctx.runMutation(internal.rewards.awardSignupPoints, { userId });
+        } catch (e) { console.error("Error otorgando puntos de registro:", e); }
+
         return { userId: String(userId), sessionToken };
     },
 });
@@ -225,6 +231,15 @@ export const oauthLogin = mutation({
         }
 
         const sessionToken = await createSession(ctx, user!._id);
+        
+        // Gamificación: Si es un usuario nuevo (kycStatus == 'pending') o balance 0, podríamos darle el bono, 
+        // pero mejor es dárselo solo cuando sabemos que acaba de registrarse.
+        // Dado que OAuth puede ser login o registro, verificamos.
+        // Para no romper la DB, llamamos al internal que ya tiene idempotencia por evento.
+        try {
+            await ctx.runMutation(internal.rewards.awardSignupPoints, { userId: user!._id });
+        } catch (e) { console.error("Error otorgando puntos OAuth:", e); }
+
         return { ...sanitizeUser(user), sessionToken };
     },
 });

@@ -48,6 +48,7 @@ import type * as payments_actions from "../payments/actions.js";
 import type * as points from "../points.js";
 import type * as reconciliation from "../reconciliation.js";
 import type * as reviews from "../reviews.js";
+import type * as rewards from "../rewards.js";
 import type * as seed from "../seed.js";
 import type * as seedListings from "../seedListings.js";
 import type * as seedMarketplace from "../seedMarketplace.js";
@@ -109,6 +110,7 @@ declare const fullApi: ApiFromModules<{
   points: typeof points;
   reconciliation: typeof reconciliation;
   reviews: typeof reviews;
+  rewards: typeof rewards;
   seed: typeof seed;
   seedListings: typeof seedListings;
   seedMarketplace: typeof seedMarketplace;

@@ -103,19 +103,30 @@ export const getInfluencerMetrics = query({
     }
 
     // Payments attributed to this influencer
-    // (This requires a scan on payments if no index exists, but we can filter by influencerId if there's no index or create one)
-    // There is no index "by_influencer" on payments. We'll filter all payments or use social likes/views.
-    // For now, we will return 0 for derived metrics or scan if small.
-    // Actually, `influencerId` is a field on `payments`.
-    // We can query all payments and filter (not optimal, but fine for now) or just return 0.
+    const payments = await ctx.db
+      .query("payments")
+      .withIndex("by_influencer", (q) => q.eq("influencerId", args.influencerId))
+      .collect();
+
+    const successfulPayments = payments.filter(p => p.status === 'succeeded' || p.status === 'released_to_seller');
     
+    const sales = successfulPayments.length;
+    const totalEarnings = successfulPayments.reduce((sum, p) => sum + p.influencerAmount, 0);
+
+    // Recent earnings (últimos 7 días)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const recentEarnings = successfulPayments
+      .filter(p => new Date(p.createdAt) >= sevenDaysAgo)
+      .map(p => ({ amount: p.influencerAmount, date: p.createdAt }));
+
     return {
-      totalEarnings: availableBalance, // Replace with actual lifetime earnings if needed
+      totalEarnings, 
       clicks: 0, // Mocked for now, needs analytics tracking
-      sales: 0, // Mocked for now
+      sales,
       conversionRate: 0,
       activeCampaigns,
-      recentEarnings: [],
+      recentEarnings,
     };
   },
 });

@@ -288,16 +288,40 @@ export default function ProfileScreen({ navigation }: any) {
                                 <Text style={[styles.statValue, { color: '#16A34A' }]}>${stats.savings}</Text>
                             </View>
                         </View>
-                        <View style={[styles.statCard, isDark ? { backgroundColor: '#451A03', borderColor: '#78350F' } : { backgroundColor: '#FFFBEB', borderColor: '#FEF3C7' }]}>
-                            <View style={[styles.statIconCircle, isDark ? { backgroundColor: '#78350F' } : { backgroundColor: '#FEF3C7' }]}>
-                                <Heart size={20} color="#D97706" fill="#D97706" />
-                            </View>
-                            <View>
-                                <Text style={styles.statLabel}>Puntos</Text>
-                                <Text style={[styles.statValue, { color: '#D97706' }]}>{points}</Text>
-                            </View>
-                        </View>
                     </View>
+
+                    {/* RAMGOS REWARDS CARD - LIQUID GLASS */}
+                    <TouchableOpacity 
+                        style={styles.rewardsPremiumCard} 
+                        onPress={() => setPointsHistoryVisible(true)}
+                        activeOpacity={0.9}
+                    >
+                        <LinearGradient
+                            colors={isDark ? ['rgba(245, 158, 11, 0.15)', 'rgba(217, 119, 6, 0.05)'] : ['rgba(252, 211, 77, 0.3)', 'rgba(251, 191, 36, 0.1)']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFill}
+                        />
+                        <View style={styles.rewardsHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <View style={styles.trophyIconBox}>
+                                    <Trophy size={18} color="#D97706" fill="#F59E0B" />
+                                </View>
+                                <Text style={styles.rewardsTitle}>Ramgos Rewards</Text>
+                            </View>
+                            <ChevronRight size={18} color="#D97706" />
+                        </View>
+                        <View style={styles.rewardsBody}>
+                            <Text style={styles.rewardsPoints}>{points}</Text>
+                            <Text style={styles.rewardsLabel}>Puntos Disponibles</Text>
+                        </View>
+                        <View style={styles.rewardsFooter}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Flame size={14} color="#EF4444" fill="#EF4444" />
+                                <Text style={styles.rewardsSubText}>+{totalEarnedPoints} ganados</Text>
+                            </View>
+                            <Text style={styles.rewardsActionText}>Ver Historial</Text>
+                        </View>
+                    </TouchableOpacity>
 
                     {/* QUICK ACTIONS */}
                     <Text style={styles.sectionHeader}>Actividad</Text>
@@ -777,5 +801,71 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         width: '100%'
-    }
+    },
+    // RAMGOS REWARDS PREMIUM CARD
+    rewardsPremiumCard: {
+        marginHorizontal: 16,
+        marginBottom: 24,
+        borderRadius: Radius.xl,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.4)',
+        ...glassShadow,
+    },
+    rewardsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+    },
+    trophyIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: isDark ? 'rgba(217, 119, 6, 0.2)' : 'rgba(252, 211, 77, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rewardsTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: isDark ? '#FCD34D' : '#B45309',
+        letterSpacing: 0.5,
+    },
+    rewardsBody: {
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+    },
+    rewardsPoints: {
+        fontSize: 36,
+        fontWeight: '900',
+        color: isDark ? '#FFF' : '#111827',
+    },
+    rewardsLabel: {
+        fontSize: 13,
+        color: isDark ? '#9CA3AF' : '#6B7280',
+        marginTop: 2,
+    },
+    rewardsFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        borderTopWidth: 1,
+        borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        paddingTop: 12,
+        marginTop: 4,
+    },
+    rewardsSubText: {
+        fontSize: 12,
+        color: isDark ? '#D1D5DB' : '#4B5563',
+        fontWeight: '500',
+    },
+    rewardsActionText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#D97706',
+    },
 });

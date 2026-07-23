@@ -1,7 +1,7 @@
 # Graph Report - ramgos-mobile  (2026-07-23)
 
 ## Corpus Check
-- 485 files · ~479,320 words
+- 485 files · ~479,358 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary

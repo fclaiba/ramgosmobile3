@@ -527,6 +527,7 @@ export default defineSchema({
     }).index("by_user", ["userId"])
         .index("by_order", ["orderId"])
         .index("by_seller", ["sellerId"])
+        .index("by_influencer", ["influencerId"])
         .index("by_stripe_intent", ["stripePaymentIntentId"])
         .index("by_status", ["status"]),
 

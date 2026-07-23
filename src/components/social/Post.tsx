@@ -19,7 +19,7 @@ import { glassSurface } from '../../utils/glass';
 
 export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: string) => void }) => {
     const { isPostSaved, savePost, unsavePost, currentUser, deletePost } = useSocial();
-    const { addToCart } = useCart();
+    
     const { addToWishlist } = useMarketplace();
     const [liked, setLiked] = useState(post.likedByUser || false);
     const [likes, setLikes] = useState(post.likeCount || post.likes?.length || 0);
@@ -43,7 +43,7 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
     const handleLike = () => {
         setLiked(!liked);
         setLikes((prev: number) => liked ? prev - 1 : prev + 1);
-        toggleLikeMut({ postId: post._id || post.id }).catch(e => console.warn(e));
+        toggleLikeMut({ targetType: 'post', targetId: post._id || post.id }).catch(e => console.warn(e));
     };
 
     const handleDelete = async () => {
@@ -112,7 +112,8 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.commercialButton, { backgroundColor: isDark ? '#2563EB' : '#2563EB' }]}
-                                    onPress={() => addToCart({
+                                    onPress={() => {
+                                        /* addToCart({
                                         id: post.commercialProduct!.id,
                                         name: post.commercialProduct!.name,
                                         price: post.commercialProduct!.price,
@@ -121,7 +122,8 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                                         sellerId: (post.author || post.user)?.userId || (post.author || post.user)?.id,
                                         sellerName: (post.author || post.user)?.displayName || (post.author || post.user)?.name,
                                         referralCode: post.commercialProduct!.referralLink,
-                                    })}
+                                    }) */
+                                    }}
                                 >
                                     <ShoppingBag size={16} color="#ffffff" />
                                     <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Agregar</Text>

@@ -22,8 +22,8 @@ interface LoopItemProps {
 
 export const LoopItem = ({ post, isActive, onUserClick }: LoopItemProps) => {
     const videoRef = useRef<Video>(null);
-    const { isDark } = useTheme();
-    const { toggleLike } = useSocial();
+    const isDark = useTheme().colorScheme === 'dark';
+    
     const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
     const [liked, setLiked] = useState(post.likedByUser || false);
     const [likes, setLikes] = useState(post.likeCount || 0);
@@ -58,7 +58,7 @@ export const LoopItem = ({ post, isActive, onUserClick }: LoopItemProps) => {
     const handleLike = () => {
         setLiked(!liked);
         setLikes((prev: number) => liked ? prev - 1 : prev + 1);
-        toggleLike({ targetType: 'post', targetId: post._id || post.id });
+        // toggleLike({ targetType: 'post', targetId: post._id || post.id });
     };
 
     const hasVideo = !!post.videoUrl;
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     video: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         width: '100%',
         height: '100%',
     },

@@ -94,7 +94,7 @@ export const submitLead = mutation({
         
         if (!bId) throw new Error("Se requiere businessId o formId.");
         
-        let submitterId = undefined;
+        let submitterId: string | undefined = undefined;
         let finalName = args.name || "Usuario Anónimo";
         let finalEmail = args.email || "Sin email";
 
@@ -128,9 +128,9 @@ export const submitLead = mutation({
         }
         
         const submissionId = await ctx.db.insert("businessFormLeads", {
-            formId: args.formId,
+            formId: args.formId || "direct",
             businessId: bId,
-            userId: submitterId,
+            ...(submitterId ? { userId: submitterId } : {}),
             name: finalName,
             email: finalEmail,
             phone: args.phone,
@@ -214,7 +214,7 @@ export const postponeLead = mutation({
         if (!lead || lead.userId !== actor.idString) throw new Error("No autorizado");
         
         const count = lead.postponementsCount || 0;
-        if (count >= 3) throw new Error("Has alcanzado el l�mite m�ximo de 3 postergaciones para esta cita.");
+        if (count >= 3) throw new Error("Has alcanzado el límite máximo de 3 postergaciones para esta cita.");
         
         await ctx.db.patch(args.leadId, {
             scheduledDate: args.scheduledDate,
