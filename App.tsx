@@ -98,6 +98,7 @@ import SubscriptionPlansScreen from './src/screens/SubscriptionPlansScreen';
 import CreateListingScreen from './src/screens/CreateListingScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
 import AddEditProductScreen from './src/screens/marketplace/AddEditProductScreen';
+import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import FormFillScreen from './src/screens/FormFillScreen';
 import ProductDetailScreen from './src/screens/marketplace/ProductDetailScreen';
 import WalletScreen from './src/screens/finance/WalletScreen';
@@ -223,6 +224,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="BusinessQR" component={BusinessQRScannerScreen} />
                     <Stack.Screen name="BusinessForms" component={BusinessFormsScreen} />
                     <Stack.Screen name="FormFill" component={FormFillScreen} />
+                    <Stack.Screen name="MyBookings" component={MyBookingsScreen} />
                     <Stack.Screen name="InfluencerDashboard" component={InfluencerDashboardScreen} />
                     <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
                     <Stack.Screen name="AdminFinance" component={AdminFinanceScreen} />

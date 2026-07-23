@@ -68,7 +68,7 @@ export const DirectMessages = ({ onClose, initialUserId }: DirectMessagesProps) 
             }
         })();
         return () => { cancelled = true; };
-    }, [initialUserId, authUser, createChatMut]);
+    }, [initialUserId, authUser?.id]);
 
     const conversations = (chatsRows ?? []).map((chat: any) => {
         const other = chat.otherParticipants?.[0];

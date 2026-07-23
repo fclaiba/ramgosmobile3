@@ -368,9 +368,9 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                             <View style={styles.statBox}>
                                 <View style={styles.statValueRow}>
                                     <Star size={16} color="#F59E0B" fill="#F59E0B" />
-                                    <Text style={styles.statValue}>{profile?.sellerRating?.toFixed(1) || '4.9'}</Text>
+                                    <Text style={styles.statValue}>{profile?.sellerRating ? profile.sellerRating.toFixed(1) : '0.0'}</Text>
                                 </View>
-                                <Text style={styles.statLabel}>{profile?.sellerReviewCount || 120} reseñas</Text>
+                                <Text style={styles.statLabel}>{profile?.sellerReviewCount || 0} reseñas</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statBox}>

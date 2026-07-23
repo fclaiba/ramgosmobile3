@@ -41,7 +41,9 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
     const feedPosts = posts.filter((p: any) => p.type !== 'video');
     const reelPosts = posts.filter((p: any) => p.type === 'video');
 
-    const handleUserClick = (userId: string) => console.log('user clicked', userId);
+    const handleUserClick = (userId: string) => {
+        navigation.navigate('CommercialProfile', { sellerId: userId });
+    };
 
     const renderTabs = () => (
         <View style={styles.tabContainer}>

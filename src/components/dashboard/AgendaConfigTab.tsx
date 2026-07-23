@@ -25,7 +25,7 @@ export function AgendaConfigTab({ isDark, sessionToken, businessId }: any) {
 
     const [startHour, setStartHour] = useState("09:00");
     const [endHour, setEndHour] = useState("18:00");
-    const [slotDuration, setSlotDuration] = useState(30);
+    const [slotDuration, setSlotDuration] = useState(60);
     const [workingDays, setWorkingDays] = useState<number[]>([1,2,3,4,5]);
     
     const [isSaving, setIsSaving] = useState(false);

@@ -50,8 +50,8 @@
     "semantic_hash": "0f8e010160ffb9c0d1da286b997e1921"
   },
   "App.tsx": {
-    "mtime": 1784747978.929415,
-    "ast_hash": "f6c13a2e32fcd7bcab032ef949cd6b42",
+    "mtime": 1784800074.218057,
+    "ast_hash": "7eddca4e271f348215a02c0d9a350f8e",
     "semantic_hash": ""
   },
   "app.json": {
@@ -295,13 +295,13 @@
     "semantic_hash": "cf89843e058c08f64c8caf11b0979a00"
   },
   "convex/reviews.ts": {
-    "mtime": 1784015228.866742,
-    "ast_hash": "e73c6016d69d7fd6d74480e47ed305f2",
+    "mtime": 1784784028.6936517,
+    "ast_hash": "138ecd93c8bc66c490a9d18fcac7ec4c",
     "semantic_hash": ""
   },
   "convex/schema.ts": {
-    "mtime": 1784780675.2678246,
-    "ast_hash": "a39b5b7ddda1ea70544bbaa332d2da7b",
+    "mtime": 1784799897.749738,
+    "ast_hash": "f029297f34e3e46ca4d775f4bc2d5107",
     "semantic_hash": ""
   },
   "convex/seed.ts": {
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "convex/social.ts": {
-    "mtime": 1784680970.0042782,
-    "ast_hash": "b7c7b6076797804224b0e02b5bba32a8",
+    "mtime": 1784799172.5172346,
+    "ast_hash": "70b0503377b1f5be27ab009619278274",
     "semantic_hash": ""
   },
   "convex/social/_helpers.ts": {
@@ -335,8 +335,8 @@
     "semantic_hash": ""
   },
   "convex/stripe.ts": {
-    "mtime": 1784669140.195091,
-    "ast_hash": "d7677335e675cf11a1da7f07fdc9b6d5",
+    "mtime": 1784784226.1315954,
+    "ast_hash": "41718352ff09b5c6d2b1f7789981be39",
     "semantic_hash": ""
   },
   "convex/subscriptions.ts": {
@@ -360,8 +360,8 @@
     "semantic_hash": ""
   },
   "convex/users.ts": {
-    "mtime": 1784745772.1053412,
-    "ast_hash": "ff821f8193e6f7ec60b3bbab01aadaed",
+    "mtime": 1784784097.3153265,
+    "ast_hash": "6a384554e6b4112f6dcc51a4d4884bef",
     "semantic_hash": ""
   },
   "convex_fix.js": {
@@ -1020,8 +1020,8 @@
     "semantic_hash": ""
   },
   "src/components/social/DirectMessages.tsx": {
-    "mtime": 1784781469.201481,
-    "ast_hash": "5aefe062d3709e90392e255cf8223d6d",
+    "mtime": 1784798948.1419916,
+    "ast_hash": "06ba4ee4bc7573bab68485a51ac5997d",
     "semantic_hash": ""
   },
   "src/components/social/InstagramPost.tsx": {
@@ -1385,8 +1385,8 @@
     "semantic_hash": ""
   },
   "src/screens/CommercialProfileScreen.tsx": {
-    "mtime": 1784781502.2893322,
-    "ast_hash": "a21c7082f9d135a8c351c22d059daa6d",
+    "mtime": 1784799186.2906497,
+    "ast_hash": "1201a1bc0a3f545d0ad384086e17f0a6",
     "semantic_hash": ""
   },
   "src/screens/CreateListingScreen.tsx": {
@@ -1490,8 +1490,8 @@
     "semantic_hash": ""
   },
   "src/screens/ProfileScreen.tsx": {
-    "mtime": 1784702074.7613928,
-    "ast_hash": "1ccdf31ef394bc085f6b2ec0749e0272",
+    "mtime": 1784800094.3720686,
+    "ast_hash": "279f4285e9bc095c5f0f58dafe778324",
     "semantic_hash": ""
   },
   "src/screens/ReferralsScreen.tsx": {
@@ -2500,8 +2500,8 @@
     "semantic_hash": ""
   },
   "convex/businessForms.ts": {
-    "mtime": 1784780712.436335,
-    "ast_hash": "c20dd779ffb1eb5eabf51f2e97475a12",
+    "mtime": 1784800273.964238,
+    "ast_hash": "c21301013df630707828923a5f8d0176",
     "semantic_hash": ""
   },
   "scripts/audit_social_module.py": {
@@ -2525,8 +2525,8 @@
     "semantic_hash": ""
   },
   "src/screens/FormFillScreen.tsx": {
-    "mtime": 1784780796.620955,
-    "ast_hash": "4cfb5a04adbad71df51a55e0e526a6d4",
+    "mtime": 1784800297.7963476,
+    "ast_hash": "cad275aa1092ace06aa1e4ff59ceceb4",
     "semantic_hash": ""
   },
   "src/screens/InfluencerBonusesScreen.tsx": {
@@ -2625,8 +2625,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1784755250.578555,
-    "ast_hash": "429acc8474c15fd5256392e343164d22",
+    "mtime": 1784781668.8437078,
+    "ast_hash": "d8ff341eceee27da80e59c090f0abf45",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -2685,8 +2685,8 @@
     "semantic_hash": ""
   },
   "src/components/dashboard/AgendaConfigTab.tsx": {
-    "mtime": 1784780714.449917,
-    "ast_hash": "0ecf5ee654a7d39933159643c441b305",
+    "mtime": 1784799009.4695573,
+    "ast_hash": "89f3bc01b2cf43a174426c85527b0c42",
     "semantic_hash": ""
   },
   "src/components/dashboard/LeadsTab.tsx": {
@@ -2697,6 +2697,11 @@
   ".agents/skills/superskill/SKILL.md": {
     "mtime": 1784781247.0754955,
     "ast_hash": "ab7e5190a04b5b019ce19ca64921434c",
+    "semantic_hash": ""
+  },
+  "src/screens/MyBookingsScreen.tsx": {
+    "mtime": 1784800050.8940828,
+    "ast_hash": "0ea8477f562cfa01728a873ffc026b11",
     "semantic_hash": ""
   }
 }

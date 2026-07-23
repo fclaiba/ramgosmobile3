@@ -104,6 +104,13 @@ export default function RoleSelectionScreen({ navigation }: any) {
                                                 <Text style={styles.benefitText}>{benefit}</Text>
                                             </View>
                                         ))}
+                                        {role.id === 'influencer' && (
+                                            <View style={[styles.benefitRow, { marginTop: 8, padding: 8, backgroundColor: isDark ? 'rgba(79, 195, 247, 0.1)' : 'rgba(79, 195, 247, 0.05)', borderRadius: 8 }]}>
+                                                <Text style={[styles.benefitText, { fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 16 }]}>
+                                                    Al continuar, aceptas nuestros Términos y Condiciones para Creadores, incluyendo el esquema de comisiones y pagos por referidos.
+                                                </Text>
+                                            </View>
+                                        )}
                                     </View>
                                 )}
                             </View>

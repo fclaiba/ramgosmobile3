@@ -16,7 +16,7 @@ export default function InfluencerBonusesScreen({ navigation }: any) {
 
     // Reusing the listings system for bonuses (type = 'bono')
     // We assume there's a way to query my listings
-    const myBonuses = useQuery(api.listings.listMyBonuses, { sessionToken: session?.sessionToken });
+    const myBonuses = useQuery(api.listings.getFeed, { category: 'social' });
     const createBono = useMutation(api.listings.createListing);
 
     const [isCreating, setIsCreating] = useState(false);
@@ -36,10 +36,10 @@ export default function InfluencerBonusesScreen({ navigation }: any) {
                 title,
                 description,
                 type: 'bono',
-                priceInCents: 0,
+                price: 0,
                 stock: 9999, // Ilimitado temporalmente
-                images: [],
-                discountValue, // % 40, 50, 60
+                category: 'social',
+                discountPercent: discountValue, // % 40, 50, 60
             });
             setIsCreating(false);
             setTitle('');

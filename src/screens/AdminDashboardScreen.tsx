@@ -571,10 +571,10 @@ export default function AdminDashboardScreen({ navigation }: any) {
                 {filtered.length > 0 && (
                     <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
                         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#10B981', flex: 1, paddingVertical: 10 }]} onPress={() => handleBulkKyc(true)}>
-                            <Text style={[styles.actionBtnText, { textAlign: 'center' }]}>Aprobar todos ({filtered.length})</Text>
+                            <Text style={[{ color: '#fff', fontSize: 13, fontWeight: '600' }, { textAlign: 'center' }]}>Aprobar todos ({filtered.length})</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#EF4444', flex: 1, paddingVertical: 10 }]} onPress={() => handleBulkKyc(false)}>
-                            <Text style={[styles.actionBtnText, { textAlign: 'center' }]}>Rechazar todos ({filtered.length})</Text>
+                            <Text style={[{ color: '#fff', fontSize: 13, fontWeight: '600' }, { textAlign: 'center' }]}>Rechazar todos ({filtered.length})</Text>
                         </TouchableOpacity>
                     </View>
                 )}

@@ -723,7 +723,12 @@ export const submitKyc = mutation({
             patch.bio = payload.businessAddress.trim();
         }
         if (typeof payload.socialLink === 'string' && payload.socialLink.trim()) {
-            patch.bio = payload.socialLink.trim();
+            const url = payload.socialLink.trim();
+            const socialData: any = { website: url };
+            if (url.includes('instagram.com')) { socialData.instagram = url; delete socialData.website; }
+            else if (url.includes('tiktok.com')) { socialData.tiktok = url; delete socialData.website; }
+            else if (url.includes('youtube.com')) { socialData.youtube = url; delete socialData.website; }
+            patch.socialLinks = socialData;
         }
         if (typeof payload.ein === 'string' && payload.ein.trim()) {
             const prevBio = typeof patch.bio === 'string' ? `${patch.bio} | ` : '';

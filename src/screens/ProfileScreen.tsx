@@ -135,6 +135,7 @@ export default function ProfileScreen({ navigation }: any) {
     );
 
     const quickActions = [
+        { icon: Calendar, label: 'Mis Turnos', value: null, color: '#3B82F6', action: () => navigation.navigate('MyBookings') },
         { icon: ShoppingBag, label: 'Mis Compras', value: stats.purchases, color: '#06b6d4', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'products' }) },
         { icon: Ticket, label: 'Mis Bonos', value: stats.bonuses, color: '#a855f7', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'bonos' }) },
         { icon: PartyPopper, label: 'Eventos', value: stats.events, color: '#ec4899', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'events' }) },
@@ -543,7 +544,7 @@ export default function ProfileScreen({ navigation }: any) {
                             <Text style={styles.sectionHeader}>Herramientas</Text>
                             <View style={styles.card}>
                                 {user?.role === 'business' && user?.kycStatus === 'approved' && (
-                                    <TouchableOpacity style={[styles.settingsItem, user?.role === 'influencer' && styles.borderBottom]} onPress={() => navigation.navigate('BusinessForms')}>
+                                    <TouchableOpacity style={[styles.settingsItem, styles.borderBottom]} onPress={() => navigation.navigate('BusinessForms')}>
                                         <View style={styles.settingsLeft}>
                                             <View style={[styles.settingsIcon, { backgroundColor: isDark ? '#3730a3' : '#e0e7ff' }]}>
                                                 <ListTodo size={18} color={isDark ? '#818cf8' : '#4f46e5'} />

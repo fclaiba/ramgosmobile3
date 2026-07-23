@@ -74,9 +74,9 @@ export const submitLead = mutation({
     args: {
         formId: v.optional(v.string()),
         businessId: v.optional(v.string()),
-        name: v.string(),
-        email: v.string(),
-        phone: v.string(),
+        name: v.optional(v.string()),
+        email: v.optional(v.string()),
+        phone: v.optional(v.string()),
         message: v.optional(v.string()),
         sessionToken: v.optional(v.string()),
         scheduledDate: v.optional(v.string()),
@@ -95,11 +95,35 @@ export const submitLead = mutation({
         if (!bId) throw new Error("Se requiere businessId o formId.");
         
         let submitterId = undefined;
+        let finalName = args.name || "Usuario Anónimo";
+        let finalEmail = args.email || "Sin email";
+
         if (args.sessionToken) {
             try {
                 const actor = await requireActor(ctx, args.sessionToken);
                 submitterId = actor.idString;
-            } catch (e) {
+                
+                const userDoc = await ctx.db.get(actor.id);
+                if (userDoc) {
+                    finalName = userDoc.name || finalName;
+                    finalEmail = userDoc.email || finalEmail;
+                }
+                
+                if (submitterId === bId) {
+                    throw new Error("No puedes enviarle una solicitud de consulta a tu propio negocio. Esta función es exclusiva para clientes terceros.");
+                }
+
+                const existingLeads = await ctx.db
+                    .query("businessFormLeads")
+                    .withIndex("by_business", q => q.eq("businessId", bId as string))
+                    .filter(q => q.eq(q.field("userId"), submitterId))
+                    .collect();
+
+                if (existingLeads.some(l => l.status === 'new')) {
+                    throw new Error("Ya tienes una consulta pendiente con este negocio. Espera a que te respondan antes de enviar otra.");
+                }
+            } catch (e: any) {
+                if (e.message.includes("Ya tienes una consulta")) throw e;
             }
         }
         
@@ -107,8 +131,8 @@ export const submitLead = mutation({
             formId: args.formId,
             businessId: bId,
             userId: submitterId,
-            name: args.name,
-            email: args.email,
+            name: finalName,
+            email: finalEmail,
             phone: args.phone,
             message: args.message,
             scheduledDate: args.scheduledDate,
@@ -141,5 +165,62 @@ export const listLeads = query({
             .query("businessFormLeads")
             .withIndex("by_business", q => q.eq("businessId", actor.idString))
             .collect();
+    }
+});
+
+export const getMyLeads = query({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const leads = await ctx.db
+            .query("businessFormLeads")
+            .filter(q => q.eq(q.field("userId"), actor.idString))
+            .collect();
+            
+        const enrichedLeads = await Promise.all(leads.map(async (lead) => {
+            const business = await ctx.db.get(lead.businessId as Id<"users">);
+            return { ...lead, businessName: business?.name || 'Negocio' };
+        }));
+        
+        return enrichedLeads;
+    }
+});
+
+export const cancelLead = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        leadId: v.id("businessFormLeads"),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const lead = await ctx.db.get(args.leadId);
+        if (!lead || lead.userId !== actor.idString) throw new Error("No autorizado");
+        
+        await ctx.db.patch(args.leadId, { status: 'cancelled' });
+        return { success: true };
+    }
+});
+
+export const postponeLead = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        leadId: v.id("businessFormLeads"),
+        scheduledDate: v.string(),
+        scheduledTime: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const lead = await ctx.db.get(args.leadId);
+        if (!lead || lead.userId !== actor.idString) throw new Error("No autorizado");
+        
+        const count = lead.postponementsCount || 0;
+        if (count >= 3) throw new Error("Has alcanzado el l�mite m�ximo de 3 postergaciones para esta cita.");
+        
+        await ctx.db.patch(args.leadId, {
+            scheduledDate: args.scheduledDate,
+            scheduledTime: args.scheduledTime,
+            postponementsCount: count + 1,
+        });
+        return { success: true };
     }
 });

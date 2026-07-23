@@ -161,6 +161,7 @@ export const createListing = mutation({
         // with role='business'.
         openPromotion: v.optional(v.boolean()),
         openCommissionRate: v.optional(v.number()), // 0–0.5
+        discountPercent: v.optional(v.number()), // For influencers 40, 50, 60
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
@@ -180,9 +181,17 @@ export const createListing = mutation({
         const role = seller.role;
         const type = args.type;
 
-        if (type === 'event' || type === 'bono') {
+        if (type === 'event') {
             if (role !== 'business' && role !== 'admin') {
-                throw new Error(`Los usuarios de tipo ${role} no pueden crear ${type}s. Exclusivo para Negocios.`);
+                throw new Error(`Los usuarios de tipo ${role} no pueden crear eventos. Exclusivo para Negocios.`);
+            }
+        }
+        if (type === 'bono') {
+            if (role !== 'business' && role !== 'admin' && role !== 'influencer') {
+                throw new Error(`Los usuarios de tipo ${role} no pueden crear bonos.`);
+            }
+            if (role === 'influencer' && seller.kycStatus !== 'completed') {
+                throw new Error('Debes completar la verificación KYC para crear bonos como influencer.');
             }
         }
 
@@ -250,6 +259,7 @@ export const createListing = mutation({
                     : args.validityDays,
             discountValue: args.discountValue,
             discountType: args.discountType,
+            discountPercent: args.discountPercent,
             condition: args.condition,
             openPromotion: args.openPromotion,
             openCommissionRate: args.openCommissionRate,

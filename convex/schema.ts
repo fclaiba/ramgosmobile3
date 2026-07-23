@@ -49,6 +49,14 @@ export default defineSchema({
         sellerResponseTimeHours: v.optional(v.number()),
         sellerTotalSales: v.optional(v.number()),
 
+        // Influencer Social Links
+        socialLinks: v.optional(v.object({
+            instagram: v.optional(v.string()),
+            tiktok: v.optional(v.string()),
+            youtube: v.optional(v.string()),
+            website: v.optional(v.string()),
+        })),
+
         // Verification Documents
         verificationDocuments: v.optional(v.array(v.object({
             type: v.string(), // 'id', 'address_proof', 'business_license'
@@ -123,6 +131,9 @@ export default defineSchema({
 
         // Status
         status: v.union(v.literal('active'), v.literal('paused'), v.literal('closed')),
+
+        // Influencer Bono Discount
+        discountPercent: v.optional(v.number()), // For 'bono' type: 40, 50, 60
 
         // PHASE 2 ADDITIONS
         slug: v.string(), // URL-friendly identifier
@@ -1059,11 +1070,12 @@ export default defineSchema({
         userId: v.optional(v.string()), 
         name: v.string(),
         email: v.string(),
-        phone: v.string(),
+        phone: v.optional(v.string()),
         message: v.optional(v.string()),
         scheduledDate: v.optional(v.string()),
         scheduledTime: v.optional(v.string()),
-        status: v.union(v.literal('new'), v.literal('contacted'), v.literal('resolved')),
+        postponementsCount: v.optional(v.number()),
+        status: v.union(v.literal('new'), v.literal('contacted'), v.literal('resolved'), v.literal('cancelled')),
         createdAt: v.string(),
     }).index("by_business", ["businessId"]).index("by_form", ["formId"]),
 });

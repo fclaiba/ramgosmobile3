@@ -48,9 +48,6 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
     const [selectedForm, setSelectedForm] = useState<any>(null); // from publicForms
     
     // User Inputs
-    const [name, setName] = useState(user?.name || '');
-    const [email, setEmail] = useState(user?.email || '');
-    const [phone, setPhone] = useState(user?.phoneNumber || '');
     const [message, setMessage] = useState('');
     const [queryType, setQueryType] = useState('general');
 
@@ -137,12 +134,17 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
     };
 
     const handleSubmit = async () => {
-        if (!name.trim() || !email.trim() || !phone.trim() || (!isVisit && !message.trim())) {
-            show('Por favor, completa todos los campos requeridos.', 'error');
+        if (!isVisit && !message.trim()) {
+            show('Por favor, ingresa el motivo de la consulta.', 'error');
             return;
         }
 
-        if (businessSettings && (!selectedDate || !selectedTime)) {
+        if (isVisit && !businessSettings) {
+            show('Este negocio aún no tiene horarios configurados. Por favor intenta otro tipo de consulta.', 'error');
+            return;
+        }
+
+        if (isVisit && businessSettings && (!selectedDate || !selectedTime)) {
             show('Por favor, selecciona una fecha y hora.', 'error');
             return;
         }
@@ -155,9 +157,6 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
             await submitLead({
                 formId: finalFormId,
                 businessId,
-                name,
-                email,
-                phone,
                 message: finalMessage,
                 scheduledDate: selectedDate || undefined,
                 scheduledTime: selectedTime || undefined,
@@ -288,13 +287,19 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
                             </View>
                         )}
 
-                        {businessSettings && nextDays.length === 0 && (
+                        {isVisit && businessSettings === null && (
+                            <View style={{ padding: 16, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: Radius.md, marginBottom: 20 }}>
+                                <Text style={{ color: '#ef4444', textAlign: 'center', fontWeight: '600' }}>El negocio no tiene horarios disponibles configurados. Por favor elegí otro tipo de consulta o contactalo directamente.</Text>
+                            </View>
+                        )}
+
+                        {isVisit && businessSettings && nextDays.length === 0 && (
                             <View style={{ padding: 16, backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: Radius.md, marginBottom: 20 }}>
                                 <Text style={{ color: '#ef4444', textAlign: 'center', fontWeight: '600' }}>El negocio no tiene horarios disponibles configurados.</Text>
                             </View>
                         )}
 
-                        {businessSettings && nextDays.length > 0 && (
+                        {isVisit && businessSettings && nextDays.length > 0 && (
                             <View style={styles.fieldGroup}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
                                     <Calendar size={16} color={isDark ? '#e5e7eb' : '#374151'} />
@@ -350,42 +355,9 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
                             </View>
                         )}
 
-                        <View style={styles.fieldGroup}>
-                            <Text style={styles.label}>Nombre completo <Text style={styles.asterisk}>*</Text></Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Ej. Juan Pérez"
-                                placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                                value={name}
-                                onChangeText={setName}
-                                autoCapitalize="words"
-                            />
-                        </View>
 
-                        <View style={styles.fieldGroup}>
-                            <Text style={styles.label}>Email <Text style={styles.asterisk}>*</Text></Text>
-                            <TextInput
-                                style={styles.input}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                placeholder="tu@correo.com"
-                                placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                                value={email}
-                                onChangeText={setEmail}
-                            />
-                        </View>
 
-                        <View style={styles.fieldGroup}>
-                            <Text style={styles.label}>Teléfono <Text style={styles.asterisk}>*</Text></Text>
-                            <TextInput
-                                style={styles.input}
-                                keyboardType="phone-pad"
-                                placeholder="+54 11 1234 5678"
-                                placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                                value={phone}
-                                onChangeText={setPhone}
-                            />
-                        </View>
+
 
                         <View style={styles.fieldGroup}>
                             <Text style={styles.label}>{selectedForm ? 'Mensaje adicional' : 'Tu consulta'} <Text style={styles.asterisk}>*</Text></Text>
