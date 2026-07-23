@@ -6,8 +6,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     TextInput,
-    useWindowDimensions,
-, KeyboardAvoidingView, Platform} from 'react-native';
+    useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { Store, MapPin, Phone, Clock4, Factory, Sparkles, Pause, Play } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { Card } from '../../components/ui/card';

@@ -1,4 +1,3 @@
-import { KeyboardAvoidingView, Platform } from 'react-native';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Platform } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';

@@ -10,8 +10,8 @@ import {
   Linking,
   ActivityIndicator,
   Modal,
-  TextInput,
-, KeyboardAvoidingView} from 'react-native';
+  TextInput, KeyboardAvoidingView
+} from 'react-native';
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";

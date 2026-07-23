@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Linking , KeyboardAvoidingView, Platform} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Linking, KeyboardAvoidingView, Platform } from 'react-native';
 import { MessageCircle, Mail, Phone, Send, ChevronRight, Inbox } from 'lucide-react-native';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';

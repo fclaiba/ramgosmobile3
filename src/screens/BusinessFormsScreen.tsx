@@ -27,7 +27,6 @@ import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { useResponsive } from '../hooks/useResponsive';
 import * as Clipboard from 'expo-clipboard';
-import { withKeyboardAvoidingView } from '../hoc/withKeyboardAvoidingView';
 
 function BusinessFormsScreen({ navigation, route }: any) {
     const { user, sessionToken } = useAuth();

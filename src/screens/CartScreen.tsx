@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput , KeyboardAvoidingView, Platform} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { ShoppingCart as CartIcon, Trash2, Plus as PlusIcon, Minus, X, Star, ArrowLeft, Truck } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Button } from '../components/ui/button';

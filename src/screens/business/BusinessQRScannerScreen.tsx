@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput , KeyboardAvoidingView, Platform} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Search, Building, KeyRound, AlertTriangle } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { Button } from '../../components/ui/button';
