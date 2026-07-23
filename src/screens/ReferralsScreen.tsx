@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput , KeyboardAvoidingView, Platform} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useReferral } from '../contexts/ReferralContext';
@@ -12,7 +12,7 @@ import { ArrowLeft, Users, DollarSign, Award, ShieldAlert, Edit2, Check, X } fro
 import { Radius, colors, glassShadow } from '../theme/tokens';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export default function ReferralsScreen({ navigation }: any) {
+function ReferralsScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const c = colors(isDark);
@@ -480,3 +480,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         color: colors(isDark).textMuted,
     }
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_ReferralsScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ReferralsScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_ReferralsScreen;

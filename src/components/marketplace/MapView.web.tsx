@@ -594,7 +594,7 @@ const s = StyleSheet.create({
     sliderPanel: {
         position: 'absolute' as any,
         alignSelf: 'center',
-        width: 320,
+        width: '100%', maxWidth: 320,
         borderRadius: Radius.xl,
         overflow: 'hidden',
         zIndex: 9999,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, TextInput , KeyboardAvoidingView, Platform} from 'react-native';
 import { Heart, ShoppingBag, Ticket, Calendar, MapPin, Star, Trash2, Search, X, Share2, ExternalLink, Tag } from 'lucide-react-native';
 
 import { Card, CardContent } from '../components/ui/card';
@@ -16,7 +16,7 @@ import { AlertTriangle } from 'lucide-react-native';
 import { Radius, colors } from '../theme/tokens';
 
 
-export default function SavedScreen({ navigation }: any) {
+function SavedScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -325,3 +325,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: '100%'
     }
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_SavedScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <SavedScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_SavedScreen;

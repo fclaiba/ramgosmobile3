@@ -395,7 +395,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     circle: {
         position: 'absolute',
-        width: 400,
+        width: '100%', maxWidth: 400,
         height: 400,
         borderRadius: Radius.full,
     },

@@ -1,3 +1,4 @@
+import { KeyboardAvoidingView, Platform } from 'react-native';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Platform } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
@@ -6,7 +7,7 @@ import { api } from '../../../convex/_generated/api';
 import { Plus, ChevronLeft, Calendar, Phone } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export default function BusinessFormsScreen({ navigation }: any) {
+function BusinessFormsScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const { session, user } = useAuth();
@@ -147,3 +148,10 @@ export default function BusinessFormsScreen({ navigation }: any) {
         </View>
     );
 }
+
+const HOC_KeyboardAvoidingView_BusinessFormsScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BusinessFormsScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_BusinessFormsScreen;

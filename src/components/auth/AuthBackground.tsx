@@ -78,7 +78,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
                             backgroundColor: blob1Color,
                             transform: [{ scale: blob1Scale }],
                             opacity: blob1Opacity,
-                            width: 288, height: 288, // w-72 h-72
+                            width: '100%', maxWidth: 288, height: 288, // w-72 h-72
                         }
                     ]}
                 />
@@ -92,7 +92,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
                             backgroundColor: blob2Color,
                             transform: [{ scale: blob2Scale }],
                             opacity: blob2Opacity,
-                            width: 384, height: 384, // w-96 h-96
+                            width: '100%', maxWidth: 384, height: 384, // w-96 h-96
                         }
                     ]}
                 />
@@ -106,7 +106,7 @@ export const AuthBackground = ({ children }: { children: React.ReactNode }) => {
                             backgroundColor: blob3Color,
                             transform: [{ scale: blob3Scale }],
                             opacity: blob3Opacity,
-                            width: 320, height: 320, // w-80 h-80
+                            width: '100%', maxWidth: 320, height: 320, // w-80 h-80
                         }
                     ]}
                 />

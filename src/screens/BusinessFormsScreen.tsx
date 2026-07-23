@@ -27,8 +27,9 @@ import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { useResponsive } from '../hooks/useResponsive';
 import * as Clipboard from 'expo-clipboard';
+import { withKeyboardAvoidingView } from '../hoc/withKeyboardAvoidingView';
 
-export default function BusinessFormsScreen({ navigation, route }: any) {
+function BusinessFormsScreen({ navigation, route }: any) {
     const { user, sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -365,3 +366,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     answerLabel: { width: 120, fontSize: 14, color: colors(isDark).textMuted, fontWeight: '500' },
     answerValue: { flex: 1, fontSize: 14, color: colors(isDark).text, fontWeight: '600' },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_BusinessFormsScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BusinessFormsScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_BusinessFormsScreen;

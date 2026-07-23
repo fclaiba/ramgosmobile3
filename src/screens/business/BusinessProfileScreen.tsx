@@ -7,7 +7,7 @@ import {
     TouchableOpacity,
     TextInput,
     useWindowDimensions,
-} from 'react-native';
+, KeyboardAvoidingView, Platform} from 'react-native';
 import { Store, MapPin, Phone, Clock4, Factory, Sparkles, Pause, Play } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { Card } from '../../components/ui/card';
@@ -23,7 +23,7 @@ import { Radius, colors } from '../../theme/tokens';
 const formatCurrency = (value: number) =>
     `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function BusinessProfileScreen({ navigation }: any) {
+function BusinessProfileScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -708,3 +708,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
     modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
 });
 
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_BusinessProfileScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BusinessProfileScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_BusinessProfileScreen;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView, Platform, useWindowDimensions, Image, Modal, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ScrollView, Platform, useWindowDimensions, Image, Modal, StatusBar , KeyboardAvoidingView} from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Extrapolation, useAnimatedScrollHandler, FadeInUp, Layout } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -115,7 +115,7 @@ const getStableFallbackLocation = (id: string | number, name: string = '') => {
 };
 
 
-export default function MarketplaceScreen({ navigation, route, initialParams }: any) {
+function MarketplaceScreen({ navigation, route, initialParams }: any) {
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const { addItem, openCart, items: cartItems } = useCart();
@@ -970,3 +970,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     closeListBtn: { position: 'absolute', right: 16, top: 16, padding: 4 },
     mapListTitle: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text, margin: 16 },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_MarketplaceScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <MarketplaceScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_MarketplaceScreen;

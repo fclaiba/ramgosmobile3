@@ -87,7 +87,7 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: {
-        width: 250,
+        width: '100%', maxWidth: 250,
         height: '100%',
         backgroundColor: colors(isDark).bg,
         borderRightWidth: 1,

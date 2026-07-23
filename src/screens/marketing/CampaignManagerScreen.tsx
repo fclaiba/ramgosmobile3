@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator , KeyboardAvoidingView, Platform} from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -22,7 +22,7 @@ import { glassShadow, Radius, colors } from '../../theme/tokens';
  * (`api.campaigns.getCampaignStats`); for now we render zeros until that
  * lands so the UI stays honest about what's wired up.
  */
-export default function CampaignManagerScreen() {
+function CampaignManagerScreen() {
     const { user } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -386,3 +386,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         color: '#fff',
     },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_CampaignManagerScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <CampaignManagerScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_CampaignManagerScreen;

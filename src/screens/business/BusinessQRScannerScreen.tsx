@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput , KeyboardAvoidingView, Platform} from 'react-native';
 import { Search, Building, KeyRound, AlertTriangle } from 'lucide-react-native';
 import { MobileHeader } from '../../components/MobileHeader';
 import { Button } from '../../components/ui/button';
@@ -13,7 +13,7 @@ import { toUserErrorTitle, toUserMessage } from '../../utils/errors';
 import { Radius, colors } from '../../theme/tokens';
 
 
-export default function BusinessQRScannerScreen({ navigation }: any) {
+function BusinessQRScannerScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -259,3 +259,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderRadius: Radius.lg
     },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_BusinessQRScannerScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BusinessQRScannerScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_BusinessQRScannerScreen;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform, TextInput, ScrollView, Keyboard, Animated, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform, TextInput, ScrollView, Keyboard, Animated, FlatList , KeyboardAvoidingView} from 'react-native';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Search, Navigation as NavIcon, Star, ArrowRight, MapPin, Globe, List, Map as MapIcon, X } from 'lucide-react-native';
@@ -54,7 +54,7 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 let cachedViewMode: 'map' | 'list' = 'map';
 
-export default function MapExplorerScreen() {
+function MapExplorerScreen() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
@@ -558,3 +558,11 @@ const getStyles = (isDark: any) => StyleSheet.create({
         color: '#2196F3',
     },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_MapExplorerScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <MapExplorerScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_MapExplorerScreen;

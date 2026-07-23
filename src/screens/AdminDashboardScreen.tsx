@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Platform, Image , KeyboardAvoidingView} from 'react-native';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '../../convex/_generated/api';
@@ -822,6 +822,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     };
 
     return (
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.root}>
             <LinearGradient
                 colors={glassGradient(isDark)}
@@ -865,6 +866,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                 {activeTab === 'logs' && renderLogs()}
             </ScrollView>
         </View>
+        </KeyboardAvoidingView>
     );
 }
 

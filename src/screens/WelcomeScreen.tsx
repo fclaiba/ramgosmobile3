@@ -234,7 +234,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     // Icon
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
-    logoImage: { width: 280, height: 96 },
+    logoImage: { width: '100%', maxWidth: 280, height: 96 },
 
     // Text
     title: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },

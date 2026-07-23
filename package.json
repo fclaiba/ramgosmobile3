@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
+    "lint:responsive": "node scripts/responsive_auditor.js",
     "build": "expo export",
     "android": "expo run:android",
     "ios": "expo run:ios",

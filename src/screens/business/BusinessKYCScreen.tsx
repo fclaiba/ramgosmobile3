@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, useWindowDimensions, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, useWindowDimensions, Linking , KeyboardAvoidingView} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthBackground } from '../../components/auth/AuthBackground';
 import { Store, FileText, CheckCircle2, ArrowRight, Upload, ShieldCheck, MapPin } from 'lucide-react-native';
@@ -16,7 +16,7 @@ import { glassShadow, Radius, colors } from '../../theme/tokens';
 
 
 
-export default function BusinessKYCScreen({ navigation }: any) {
+function BusinessKYCScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -298,3 +298,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     summaryLabel: { color: colors(isDark).textMuted, fontSize: 12, marginBottom: 2 },
     summaryVal: { color: colors(isDark).text, fontSize: 16, fontWeight: '600', marginBottom: 12 }
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_BusinessKYCScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BusinessKYCScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_BusinessKYCScreen;

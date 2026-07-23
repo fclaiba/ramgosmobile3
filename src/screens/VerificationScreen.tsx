@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { Mail, CheckCircle2, RefreshCw, ArrowLeft, Sparkles } from 'lucide-react-native';
@@ -164,8 +164,9 @@ export default function VerificationScreen({ navigation, route }: any) {
 
     return (
         <AuthBackground>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
-                <View style={styles.content}>
+                <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
                     {/* Card */}
                     <View style={styles.card}>
@@ -279,15 +280,16 @@ export default function VerificationScreen({ navigation, route }: any) {
                         <Text style={styles.footerText}>El código es válido por 10 minutos</Text>
                     </View>
 
-                </View>
+                </ScrollView>
             </SafeAreaView>
+            </KeyboardAvoidingView>
         </AuthBackground>
     );
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
-    content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
+    scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
 
     card: {
         width: '100%',

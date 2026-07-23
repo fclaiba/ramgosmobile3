@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Modal, TextInput, useWindowDimensions, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Modal, TextInput, useWindowDimensions, Linking, ActivityIndicator , KeyboardAvoidingView, Platform} from 'react-native';
 import { Share2, Copy, TrendingUp, Users, DollarSign, Award, Link, ArrowUpRight, Gift, Send, MousePointer2, ShoppingCart, Target, ArrowDownRight, Wallet, ShieldCheck, X, Wrench, CreditCard, CheckCircle2, ExternalLink } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { WalletStats } from "../components/dashboard/WalletStats";
@@ -27,7 +27,7 @@ import { glassTokens, glassGradient } from '../utils/glass';
 import { Radius, colors } from '../theme/tokens';
 
 
-export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
+function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
     const navigation = useNavigation<any>();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -1077,3 +1077,11 @@ const MetricTrend = ({ value }: { value: number }) => {
         </View>
     );
 };
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_InfluencerDashboardScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <InfluencerDashboardScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_InfluencerDashboardScreen;

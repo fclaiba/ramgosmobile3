@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Platform, Animated, Easing } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Platform, Animated, Easing, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -191,8 +191,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     if (step === 'success') {
         return (
             <AuthBackground>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <SafeAreaView style={styles.container}>
-                    <View style={styles.content}>
+                    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                         <Animated.View style={[styles.card, { opacity: successOpacity, transform: [{ scale: successScale }] }]}>
                             <View style={styles.successIconContainer}>
                                 <View style={styles.successIconGlowWrapper}>
@@ -225,8 +226,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                                 </LinearGradient>
                             </TouchableOpacity>
                         </Animated.View>
-                    </View>
+                    </ScrollView>
                 </SafeAreaView>
+                </KeyboardAvoidingView>
             </AuthBackground>
         );
     }
@@ -234,8 +236,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     if (step === 'verify') {
         return (
             <AuthBackground>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                 <SafeAreaView style={styles.container}>
-                    <View style={styles.content}>
+                    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                         <View style={styles.card}>
                             <TouchableOpacity onPress={() => setStep('request')} style={styles.backBtn}>
                                 <ArrowLeft size={18} color={isDark ? "#D1D5DB" : "#4B5563"} />
@@ -343,8 +346,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </View>
+                    </ScrollView>
                 </SafeAreaView>
+                </KeyboardAvoidingView>
             </AuthBackground>
         );
     }
@@ -352,8 +356,9 @@ export default function ForgotPasswordScreen({ navigation }: any) {
     // Step 1: Request Email
     return (
         <AuthBackground>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
-                <View style={styles.content}>
+                <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
                     <View style={styles.card}>
 
                         {/* Back */}
@@ -435,15 +440,16 @@ export default function ForgotPasswordScreen({ navigation }: any) {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </ScrollView>
             </SafeAreaView>
+            </KeyboardAvoidingView>
         </AuthBackground>
     );
 }
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     container: { flex: 1 },
-    content: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
+    scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
 
     card: {
         width: '100%',

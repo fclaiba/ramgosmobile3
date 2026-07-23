@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Platform , KeyboardAvoidingView} from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -8,7 +8,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import * as Clipboard from 'expo-clipboard';
 
-export default function InfluencerBonusesScreen({ navigation }: any) {
+function InfluencerBonusesScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const { session, user } = useAuth();
@@ -158,3 +158,11 @@ export default function InfluencerBonusesScreen({ navigation }: any) {
         </View>
     );
 }
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_InfluencerBonusesScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <InfluencerBonusesScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_InfluencerBonusesScreen;

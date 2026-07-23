@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Linking , KeyboardAvoidingView, Platform} from 'react-native';
 import { MessageCircle, Mail, Phone, Send, ChevronRight, Inbox } from 'lucide-react-native';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -13,7 +13,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Radius, colors } from '../theme/tokens';
 
 
-export default function SupportScreen({ navigation }: any) {
+function SupportScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -323,3 +323,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     submitButton: { backgroundColor: isDark ? '#F9FAFB' : '#111', borderRadius: Radius.md, paddingVertical: 14 },
     submitButtonDisabled: { opacity: 0.7 },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_SupportScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <SupportScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_SupportScreen;

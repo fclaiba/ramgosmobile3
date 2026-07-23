@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-} from "react-native";
+, KeyboardAvoidingView} from 'react-native';
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -76,7 +76,7 @@ import { glassTokens, glassGradient } from "../utils/glass";
 import { Radius, colors } from '../theme/tokens';
 
 
-export default function BusinessDashboardScreen({
+function BusinessDashboardScreen({
   isTabMode,
   onMenuPress,
   route,
@@ -1421,3 +1421,11 @@ const getStyles = (isDark: boolean) => {
     },
   });
 };
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_BusinessDashboardScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <BusinessDashboardScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_BusinessDashboardScreen;

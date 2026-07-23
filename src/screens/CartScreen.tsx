@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, TextInput , KeyboardAvoidingView, Platform} from 'react-native';
 import { ShoppingCart as CartIcon, Trash2, Plus as PlusIcon, Minus, X, Star, ArrowLeft, Truck } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Button } from '../components/ui/button';
@@ -14,7 +14,7 @@ import { useActionGate } from '../utils/useActionGate';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 
 
-export default function CartScreen({ navigation }: any) {
+function CartScreen({ navigation }: any) {
     const { items, removeItem, updateQuantity, totalItems, totalPrice, clearCart } = useCart();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -399,3 +399,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     checkoutButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
+
+// HOC inyectado automáticamente para soporte de teclado
+const HOC_KeyboardAvoidingView_CartScreen = (props: any) => (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <CartScreen {...props} />
+    </KeyboardAvoidingView>
+);
+export default HOC_KeyboardAvoidingView_CartScreen;
