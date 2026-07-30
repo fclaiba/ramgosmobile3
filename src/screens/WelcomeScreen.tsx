@@ -49,11 +49,11 @@ export default function WelcomeScreen({ navigation }: any) {
 
     useEffect(() => {
         // Master Sequence
-        Animated.sequence([
+        Animated.parallel([
             // 1. Icon Entrance
-            Animated.spring(iconScale, {
+            Animated.timing(iconScale, {
                 toValue: 1,
-                friction: 5,
+                duration: 600,
                 useNativeDriver: supportsNativeDriver,
             }),
             // 2. Title & Subtitle
@@ -72,14 +72,14 @@ export default function WelcomeScreen({ navigation }: any) {
             Animated.timing(footerOpacity, {
                 toValue: 1,
                 duration: 500,
-                delay: 100,
+                delay: 200,
                 useNativeDriver: supportsNativeDriver,
             }),
             // 5. Bottom Decoration
             Animated.timing(bottomDecoOpacity, {
                 toValue: 1,
                 duration: 500,
-                delay: 200,
+                delay: 300,
                 useNativeDriver: supportsNativeDriver,
             }),
         ]).start();
@@ -175,7 +175,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                     <View style={styles.line} />
                                 </View>
 
-                                <View style={styles.socialRow}>
+                                <View style={[styles.socialRow, { display: 'none' }]}>
                                     <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('google')} disabled={busy}>
                                         <GoogleIcon />
                                     </TouchableOpacity>
@@ -233,7 +233,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
 
     // Icon
-    iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center' },
+    iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center', width: '100%' },
     logoImage: { width: '100%', maxWidth: 280, height: 96 },
 
     // Text

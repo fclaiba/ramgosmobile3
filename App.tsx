@@ -160,7 +160,7 @@ const AppNavigator = () => {
                 prefixes: ['ramgos://', 'https://ramgos.app'],
                 config: {
                     screens: {
-                        Welcome: '',
+                        Welcome: 'Welcome',
                         Home: 'home',
                         SignUp: 'signup',
                         Login: 'login',

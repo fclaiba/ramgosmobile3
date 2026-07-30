@@ -276,7 +276,7 @@ export default function RegisterScreen({ navigation, route }: any) {
             // Force KYC for ALL users during registration flow
             navigation.reset({
                 index: 0,
-                routes: [{ name: 'Home' }]
+                routes: [{ name: 'KYC', params: { accountType } }]
             });
         } catch (error) {
             const message =
@@ -372,7 +372,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         <Text style={styles.orText}>O continúa con</Text>
                                         <View style={styles.line} />
                                     </View>
-                                    <View style={styles.socialRow}>
+                                    <View style={[styles.socialRow, { display: 'none' }]}>
                                         <TouchableOpacity
                                             style={styles.socialBtn}
                                             onPress={() => handleSocialSignup('google')}
@@ -486,38 +486,32 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     {showConfirmPassword ? <EyeOff size={20} color="#9CA3AF" /> : <Eye size={20} color="#9CA3AF" />}
                                                 </TouchableOpacity>
                                             </View>
+                                            {/* Dynamic Match Requirement */}
+                                            {formData.confirmPassword.length > 0 && (
+                                                <View style={{ marginTop: 8, gap: 4 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                        <CheckCircle2 size={12} color={formData.password === formData.confirmPassword ? '#10B981' : (isDark ? '#4B5563' : '#D1D5DB')} />
+                                                        <Text style={{ fontSize: 11, color: formData.password === formData.confirmPassword ? (isDark ? '#D1D5DB' : '#374151') : (isDark ? '#4B5563' : '#9CA3AF') }}>
+                                                            Las contraseñas coinciden
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            )}
                                         </View>
                                     </View>
 
-                                    <View style={styles.row}>
-                                        <View style={[styles.inputContainer, styles.col]}>
-                                            <Text style={styles.label}>Nombre de usuario</Text>
-                                            <View style={styles.inputWrapper}>
-                                                <AtSign size={20} color="#9CA3AF" style={styles.icon} />
-                                                <TextInput
-                                                    style={styles.input}
-                                                    placeholder="juanperez"
-                                                    placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                                    value={formData.username}
-                                                    onChangeText={t => setFormData({ ...formData, username: t.toLowerCase() })}
-                                                    autoCapitalize="none"
-                                                />
-                                            </View>
-                                        </View>
-                                        <View style={[styles.inputContainer, styles.col]}>
-                                            <Text style={styles.label}>Crea tu código de referido</Text>
-                                            <View style={styles.inputWrapper}>
-                                                <Hash size={20} color="#9CA3AF" style={styles.icon} />
-                                                <TextInput
-                                                    style={styles.input}
-                                                    placeholder="JUAN123"
-                                                    placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                                    value={formData.referralCode}
-                                                    onChangeText={t => setFormData({ ...formData, referralCode: formatReferralCode(t) })}
-                                                    autoCapitalize="characters"
-                                                    maxLength={LIMITS.referralCode}
-                                                />
-                                            </View>
+                                    <View style={styles.inputContainer}>
+                                        <Text style={styles.label}>Nombre de usuario</Text>
+                                        <View style={styles.inputWrapper}>
+                                            <AtSign size={20} color="#9CA3AF" style={styles.icon} />
+                                            <TextInput
+                                                style={styles.input}
+                                                placeholder="juanperez"
+                                                placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                                value={formData.username}
+                                                onChangeText={t => setFormData({ ...formData, username: t.toLowerCase() })}
+                                                autoCapitalize="none"
+                                            />
                                         </View>
                                     </View>
 
@@ -888,7 +882,7 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         input: { flex: 1, fontSize: isCompact ? 14 : 15, color: colors(isDark).text },
 
         row: { flexDirection: isWide ? 'row' : 'column', gap: isCompact ? 10 : 12, width: '100%' },
-        col: { flex: 1, minWidth: 0 },
+        col: { flex: isWide ? 1 : undefined, minWidth: 0, width: isWide ? 'auto' : '100%' },
 
         submitBtnContainer: {
             marginTop: isCompact ? 8 : 12,

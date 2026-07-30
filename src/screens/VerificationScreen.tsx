@@ -75,6 +75,7 @@ export default function VerificationScreen({ navigation, route }: any) {
     };
 
     const accountType = route.params?.accountType || 'consumer';
+    const isSignup = route.params?.isSignup === true;
 
     const handleVerify = async () => {
         const codeValue = code.join('');
@@ -91,11 +92,11 @@ export default function VerificationScreen({ navigation, route }: any) {
                 return;
             }
 
-            // For business account type, route directly to business KYC
-            if (accountType === 'business') {
+            // Route all to KYC screen so they can complete or skip, but ONLY on signup
+            if (isSignup && ['business', 'influencer', 'consumer'].includes(accountType)) {
                 navigation.reset({
                     index: 0,
-                    routes: [{ name: 'KYC', params: { accountType: 'business' } }],
+                    routes: [{ name: 'KYC', params: { accountType } }],
                 });
                 return;
             }
@@ -190,13 +191,12 @@ export default function VerificationScreen({ navigation, route }: any) {
                             <Text style={{ fontWeight: '600', color: colors(isDark).textMuted }}>{displayEmail}</Text>
                         </Text>
 
-                        {/* OTP Inputs */}
                         <View style={styles.otpContainer}>
                             {code.map((digit, idx) => {
                                 const isFocused = focusedIndex === idx;
                                 const isFilled = digit.length > 0;
                                 return (
-                                    <Animated.View key={idx} style={{ transform: [{ scale: scaleAnims[idx] }] }}>
+                                    <Animated.View key={idx} style={[styles.otpSlot, { transform: [{ scale: scaleAnims[idx] }] }]}>
                                         <TextInput
                                             ref={ref => { inputs.current[idx] = ref; }}
                                             style={[
@@ -268,7 +268,7 @@ export default function VerificationScreen({ navigation, route }: any) {
 
                         <View style={styles.divider} />
 
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backLink}>
+                        <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })} style={styles.backLink}>
                             <Text style={styles.backLinkText}>Volver al inicio</Text>
                         </TouchableOpacity>
 
@@ -316,19 +316,20 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', color: colors(isDark).text, marginBottom: 8 },
     subtitle: { fontSize: 14, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: 32, lineHeight: 20 },
 
-    otpContainer: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 32 },
+    otpContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32, width: '100%' },
+    otpSlot: { flex: 1, maxWidth: 48, marginHorizontal: 3 },
     otpInput: { 
-        width: 52, 
-        height: 52, 
+        width: '100%',
+        height: 48,
         backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)', 
         borderRadius: Radius.lg, 
         borderWidth: 1.5, 
         borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.15)', 
-        fontSize: 24, 
+        fontSize: 22, 
         fontWeight: '700', 
         color: colors(isDark).text,
         textAlign: 'center',
-        padding: 0, // fix centering
+        padding: 0,
     },
     otpInputFilled: { 
         borderColor: '#4FC3F7',

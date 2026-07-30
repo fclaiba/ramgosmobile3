@@ -29,7 +29,9 @@ export default function KYCScreen({ navigation, route }: any) {
     const { show } = useToast();
 
     const accountType = route.params?.accountType || 'consumer';
-    const [step, setStep] = useState<Step>('intro');
+    const totalSteps = accountType === 'consumer' ? 2 : 3;
+    const [status, setStatus] = useState<'intro' | 'success'>('intro');
+    const [formStep, setFormStep] = useState(1);
 
     const [idFront, setIdFront] = useState<string | null>(null);
     const [idBack, setIdBack] = useState<string | null>(null);
@@ -62,40 +64,40 @@ export default function KYCScreen({ navigation, route }: any) {
         }
     };
 
-    const transitionTo = (nextStep: Step) => {
+    const transitionTo = (nextStatus: 'intro' | 'success') => {
         Animated.sequence([
             Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
             Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
         ]).start();
-        setTimeout(() => setStep(nextStep), 200);
+        setTimeout(() => setStatus(nextStatus), 200);
     };
 
-    const businessReady = isValidEin(ein) && incorporationDoc
-        && isValidBusinessAddress(businessAddress) && premisesPhoto;
+    const businessReady = isValidEin(ein) && incorporationDoc && isValidBusinessAddress(businessAddress) && premisesPhoto;
     const influencerReady = isValidSocialUrl(socialLink);
-    const canSubmit = idFront && idBack && (
-        accountType === 'business' ? businessReady
-            : accountType === 'influencer' ? influencerReady
-                : true
-    );
+
+    const handleNext = () => {
+        if (formStep === 1) {
+            if (!idFront || !idBack) {
+                show('Adjuntá el frente y dorso del documento', 'error');
+                return;
+            }
+        } else if (formStep === 2 && accountType !== 'consumer') {
+            if (accountType === 'business' && !businessReady) {
+                show('Completá los datos requeridos (EIN, docs, foto)', 'error');
+                return;
+            } else if (accountType === 'influencer' && !influencerReady) {
+                show('Ingresá una URL válida (ej. instagram.com/tuusuario)', 'error');
+                return;
+            }
+        }
+        setFormStep(s => Math.min(s + 1, totalSteps));
+    };
+
+    const handleBack = () => setFormStep(s => Math.max(s - 1, 1));
 
     const handleStartVerification = async () => {
         if (!user) {
             show('Debes iniciar sesión primero', 'error');
-            return;
-        }
-        if (!canSubmit) {
-            if (!idFront || !idBack) {
-                show('Adjuntá el frente y dorso del documento', 'error');
-            } else if (accountType === 'business' && !isValidEin(ein)) {
-                show('EIN inválido — formato XX-XXXXXXX (9 dígitos)', 'error');
-            } else if (accountType === 'business' && !isValidBusinessAddress(businessAddress)) {
-                show(`Dirección: mínimo ${MIN.businessAddress} caracteres`, 'error');
-            } else if (accountType === 'influencer' && !isValidSocialUrl(socialLink)) {
-                show('Ingresá una URL válida (ej. instagram.com/tuusuario)', 'error');
-            } else {
-                show('Completá todos los campos obligatorios', 'error');
-            }
             return;
         }
         await handleKycSuccess();
@@ -153,118 +155,134 @@ export default function KYCScreen({ navigation, route }: any) {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={styles.hero}>
-                    <View style={styles.iconContainer}>
-                        <ShieldCheck size={40} color="#4FC3F7" />
+                {/* Progress */}
+                <View style={styles.progressRow}>
+                    <View style={[styles.stepDot, formStep >= 1 ? styles.stepActive : null]}>
+                        <Text style={[styles.stepNum, formStep >= 1 && { color: '#fff' }]}>1</Text>
                     </View>
-                    <Text style={styles.title}>{title}</Text>
-                    <Text style={styles.subtitle}>{subtitle}</Text>
-                </View>
-
-                <View style={styles.formBody}>
-                    <FormSection styles={styles} icon={User} title="Identidad">
-                        <ImageUploadField
-                            variant="document"
-                            title="Documento de identidad — Frente"
-                            images={idFront ? [idFront] : []}
-                            onChange={(imgs) => setIdFront(imgs[0] ?? null)}
-                            maxImages={1}
-                        />
-                        <ImageUploadField
-                            variant="document"
-                            title="Documento de identidad — Dorso"
-                            images={idBack ? [idBack] : []}
-                            onChange={(imgs) => setIdBack(imgs[0] ?? null)}
-                            maxImages={1}
-                        />
-                    </FormSection>
-
-                    {accountType === 'business' && (
+                    <View style={styles.stepLine} />
+                    <View style={[styles.stepDot, formStep >= 2 ? styles.stepActive : null]}>
+                        <Text style={[styles.stepNum, formStep >= 2 && { color: '#fff' }]}>2</Text>
+                    </View>
+                    {totalSteps === 3 && (
                         <>
-                            <FormSection styles={styles} icon={Building2} title="Empresa">
-                                <FormField
-                                    styles={styles}
-                                    label="Número EIN"
-                                    value={ein}
-                                    onChangeText={(t) => setEin(formatEin(t))}
-                                    placeholder="XX-XXXXXXX"
-                                    isDark={isDark}
-                                    maxLength={LIMITS.ein}
-                                    hint="9 dígitos · formato XX-XXXXXXX"
-                                    keyboardType="number-pad"
-                                />
-                                <ImageUploadField
-                                    variant="document"
-                                    title="Certificado de incorporación"
-                                    images={incorporationDoc ? [incorporationDoc] : []}
-                                    onChange={(imgs) => setIncorporationDoc(imgs[0] ?? null)}
-                                    maxImages={1}
-                                />
-                            </FormSection>
-
-                            <FormSection styles={styles} icon={MapPin} title="Ubicación física">
-                                <FormField
-                                    styles={styles}
-                                    label="Dirección del local"
-                                    value={businessAddress}
-                                    onChangeText={(t) => setBusinessAddress(clamp(t, LIMITS.businessAddress))}
-                                    placeholder="Calle, ciudad, NY"
-                                    isDark={isDark}
-                                    maxLength={LIMITS.businessAddress}
-                                    hint={`${businessAddress.length}/${LIMITS.businessAddress} · mín. ${MIN.businessAddress}`}
-                                />
-                                <ImageUploadField
-                                    variant="document"
-                                    title="Foto del local comercial"
-                                    images={premisesPhoto ? [premisesPhoto] : []}
-                                    onChange={(imgs) => setPremisesPhoto(imgs[0] ?? null)}
-                                    maxImages={1}
-                                />
-                            </FormSection>
+                            <View style={styles.stepLine} />
+                            <View style={[styles.stepDot, formStep >= 3 ? styles.stepActive : null]}>
+                                <Text style={[styles.stepNum, formStep >= 3 && { color: '#fff' }]}>3</Text>
+                            </View>
                         </>
                     )}
+                </View>
 
-                    {accountType === 'influencer' && (
-                        <FormSection styles={styles} icon={LinkIcon} title="Red social">
-                            <FormField
-                                styles={styles}
-                                label="Perfil principal"
-                                value={socialLink}
-                                onChangeText={(t) => setSocialLink(clamp(t, LIMITS.socialUrl))}
-                                placeholder="https://instagram.com/tuusuario"
-                                isDark={isDark}
-                                autoCapitalize="none"
-                                keyboardType="url"
-                                maxLength={LIMITS.socialUrl}
-                                hint="URL pública de Instagram, TikTok, YouTube, etc."
-                                icon={LinkIcon}
+                {formStep === 1 && (
+                    <View style={styles.stepContent}>
+                        <View style={styles.iconContainer}>
+                            <ShieldCheck size={48} color="#4FC3F7" />
+                        </View>
+                        <Text style={styles.title}>Identidad</Text>
+                        <Text style={styles.subtitle}>Sube el frente y dorso de tu documento.</Text>
+                        
+                        <View style={styles.formBody}>
+                            <ImageUploadField
+                                variant="document"
+                                title="Documento de identidad — Frente"
+                                images={idFront ? [idFront] : []}
+                                onChange={(imgs) => setIdFront(imgs[0] ?? null)}
+                                maxImages={1}
                             />
-                        </FormSection>
+                            <ImageUploadField
+                                variant="document"
+                                title="Documento de identidad — Dorso"
+                                images={idBack ? [idBack] : []}
+                                onChange={(imgs) => setIdBack(imgs[0] ?? null)}
+                                maxImages={1}
+                            />
+                        </View>
+                    </View>
+                )}
+
+                {formStep === 2 && accountType !== 'consumer' && (
+                    <View style={styles.stepContent}>
+                        <View style={styles.iconContainer}>
+                            {accountType === 'business' ? <Building2 size={48} color="#4FC3F7" /> : <LinkIcon size={48} color="#4FC3F7" />}
+                        </View>
+                        <Text style={styles.title}>{accountType === 'business' ? 'Empresa' : 'Red Social'}</Text>
+                        <Text style={styles.subtitle}>{subtitle}</Text>
+
+                        <View style={styles.formBody}>
+                            {accountType === 'business' && (
+                                <>
+                                    <FormField styles={styles} label="Número EIN" value={ein} onChangeText={(t) => setEin(formatEin(t))} placeholder="XX-XXXXXXX" isDark={isDark} maxLength={LIMITS.ein} hint="9 dígitos · formato XX-XXXXXXX" keyboardType="number-pad" />
+                                    <ImageUploadField variant="document" title="Certificado de incorporación" images={incorporationDoc ? [incorporationDoc] : []} onChange={(imgs) => setIncorporationDoc(imgs[0] ?? null)} maxImages={1} />
+                                    <FormField styles={styles} label="Dirección del local" value={businessAddress} onChangeText={(t) => setBusinessAddress(clamp(t, LIMITS.businessAddress))} placeholder="Calle, ciudad, NY" isDark={isDark} maxLength={LIMITS.businessAddress} hint={`${businessAddress.length}/${LIMITS.businessAddress} · mín. ${MIN.businessAddress}`} />
+                                    <ImageUploadField variant="document" title="Foto del local comercial" images={premisesPhoto ? [premisesPhoto] : []} onChange={(imgs) => setPremisesPhoto(imgs[0] ?? null)} maxImages={1} />
+                                </>
+                            )}
+                            {accountType === 'influencer' && (
+                                <FormField styles={styles} label="Perfil principal" value={socialLink} onChangeText={(t) => setSocialLink(clamp(t, LIMITS.socialUrl))} placeholder="https://instagram.com/tuusuario" isDark={isDark} autoCapitalize="none" keyboardType="url" maxLength={LIMITS.socialUrl} hint="URL pública de Instagram, TikTok, YouTube, etc." icon={LinkIcon} />
+                            )}
+                        </View>
+                    </View>
+                )}
+
+                {formStep === totalSteps && (
+                    <View style={styles.stepContent}>
+                        <View style={styles.iconContainer}>
+                            <ShieldCheck size={48} color="#4FC3F7" />
+                        </View>
+                        <Text style={styles.title}>Confirmar Verificación</Text>
+                        <Text style={styles.subtitle}>Tus datos serán revisados manualmente.</Text>
+
+                        <View style={styles.summaryBox}>
+                            <Text style={styles.summaryLabel}>Tipo de Cuenta:</Text>
+                            <Text style={styles.summaryVal}>{accountType === 'business' ? 'Negocio' : accountType === 'influencer' ? 'Influencer' : 'Consumidor'}</Text>
+
+                            <Text style={styles.summaryLabel}>Documento de Identidad:</Text>
+                            <Text style={styles.summaryVal}>{idFront && idBack ? 'Adjuntado' : 'Faltante'}</Text>
+
+                            {accountType === 'business' && (
+                                <>
+                                    <Text style={styles.summaryLabel}>EIN:</Text>
+                                    <Text style={styles.summaryVal}>{ein}</Text>
+                                    <Text style={styles.summaryLabel}>Dirección:</Text>
+                                    <Text style={styles.summaryVal}>{businessAddress}</Text>
+                                </>
+                            )}
+                            {accountType === 'influencer' && (
+                                <>
+                                    <Text style={styles.summaryLabel}>Red Social:</Text>
+                                    <Text style={styles.summaryVal}>{socialLink}</Text>
+                                </>
+                            )}
+                        </View>
+
+                        <TouchableOpacity style={[styles.btn, isSubmitting && styles.btnDisabled]} onPress={handleStartVerification} disabled={isSubmitting}>
+                            <Text style={styles.btnText}>{isSubmitting ? 'Enviando...' : 'Enviar para Verificación'}</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                <View style={styles.navButtonsRow}>
+                    {formStep > 1 && (
+                        <TouchableOpacity style={styles.btnGhostSquare} onPress={handleBack} disabled={isSubmitting}>
+                            <Text style={styles.btnGhostTextSquare}>Atrás</Text>
+                        </TouchableOpacity>
+                    )}
+                    
+                    {formStep < totalSteps && (
+                        <TouchableOpacity style={[styles.btnGhostSquare, { flex: 1, backgroundColor: '#2196F3', borderColor: '#2196F3' }]} onPress={handleNext}>
+                            <Text style={[styles.btnGhostTextSquare, { color: '#fff' }]}>Siguiente</Text>
+                            <ArrowRight size={18} color="#fff" />
+                        </TouchableOpacity>
                     )}
 
-                    <TouchableOpacity
-                        style={[styles.btn, (isSubmitting || !canSubmit) && styles.btnDisabled]}
-                        disabled={isSubmitting || !canSubmit}
-                        onPress={handleStartVerification}
-                        activeOpacity={0.9}
-                    >
-                        <Text style={styles.btnText}>
-                            {isSubmitting ? 'Enviando…' : 'Enviar para Verificación'}
-                        </Text>
-                        {!isSubmitting && <ArrowRight size={20} color="#fff" />}
-                    </TouchableOpacity>
-
-                    {accountType === 'consumer' && (
-                        <TouchableOpacity
-                            style={styles.btnGhost}
-                            onPress={handleSkip}
-                            activeOpacity={0.9}
-                            disabled={isSubmitting}
-                        >
-                            <Text style={styles.btnGhostText}>Saltar por ahora</Text>
+                    {formStep === 1 && accountType === 'consumer' && (
+                         <TouchableOpacity style={[styles.btnGhostSquare, { marginTop: 12, borderWidth: 0 }]} onPress={handleSkip} disabled={isSubmitting}>
+                            <Text style={[styles.btnGhostTextSquare, { fontSize: 13 }]}>Saltar por ahora</Text>
                         </TouchableOpacity>
                     )}
                 </View>
+
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -295,8 +313,8 @@ export default function KYCScreen({ navigation, route }: any) {
                         tint={isDark ? 'dark' : 'light'}
                         style={styles.card}
                     >
-                        {step === 'intro' && renderIntro()}
-                        {step === 'success' && renderSuccess()}
+                        {status === 'intro' && renderIntro()}
+                        {status === 'success' && renderSuccess()}
                     </BlurView>
                 </Animated.View>
             </SafeAreaView>
@@ -402,11 +420,18 @@ const getStyles = (isDark: boolean) => {
         scrollContent: {
             flexGrow: 1,
             paddingBottom: 24,
+            paddingTop: 12,
         },
+        progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24, marginTop: 12 },
+        stepDot: { width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: glass.bg, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: glass.border },
+        stepActive: { backgroundColor: '#4FC3F7', borderColor: '#4FC3F7' },
+        stepNum: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#9CA3AF' : '#6B7280' },
+        stepLine: { width: 40, height: 2, backgroundColor: glass.border, marginHorizontal: 4 },
+        stepContent: { alignItems: 'stretch' },
+
         hero: {
             alignItems: 'center',
             paddingHorizontal: 20,
-            paddingTop: 24,
             paddingBottom: 8,
         },
         iconContainer: {
@@ -416,6 +441,7 @@ const getStyles = (isDark: boolean) => {
             backgroundColor: isDark ? 'rgba(79, 195, 247,0.18)' : 'rgba(79, 195, 247,0.12)',
             justifyContent: 'center',
             alignItems: 'center',
+            alignSelf: 'center',
             marginBottom: 14,
             borderWidth: 1,
             borderColor: isDark ? 'rgba(79, 195, 247,0.35)' : 'rgba(79, 195, 247,0.2)',
@@ -434,6 +460,7 @@ const getStyles = (isDark: boolean) => {
             color: colors(isDark).textMuted,
             textAlign: 'center',
             paddingHorizontal: 8,
+            marginBottom: 16,
         },
 
         formBody: {
@@ -537,6 +564,30 @@ const getStyles = (isDark: boolean) => {
         },
         btnGhostText: { color: isDark ? '#D1D5DB' : '#2196F3', fontWeight: '600', fontSize: 15 },
 
+        summaryBox: { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.4)', padding: 16, borderRadius: Radius.md, marginBottom: 24, borderWidth: 1, borderColor: glass.border },
+        summaryLabel: { color: colors(isDark).textMuted, fontSize: 12, marginBottom: 2 },
+        summaryVal: { color: colors(isDark).text, fontSize: 16, fontWeight: '600', marginBottom: 12 },
+
+        navButtonsRow: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 12,
+            marginTop: 24,
+            flexWrap: 'wrap'
+        },
+        btnGhostSquare: {
+            flexDirection: 'row',
+            height: 48,
+            borderRadius: Radius.md,
+            paddingHorizontal: 20,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(33, 150, 243, 0.3)',
+        },
+        btnGhostTextSquare: { color: isDark ? '#D1D5DB' : '#2196F3', fontWeight: '600', fontSize: 14, marginRight: 6 },
+        
         successBody: {
             flex: 1,
             alignItems: 'center',

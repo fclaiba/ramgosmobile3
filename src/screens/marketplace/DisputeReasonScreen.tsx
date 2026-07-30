@@ -80,7 +80,7 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
 
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({});
+            const uploadUrl = await generateUploadUrl({ sessionToken, actorId: user.id as any });
             const asset = result.assets[0];
             let blob: Blob;
             try {

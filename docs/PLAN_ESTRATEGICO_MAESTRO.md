@@ -1254,6 +1254,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | E-040 | 2026-07-23 | Social | Botones Seguir y Contactar en red social no persistían | `CommercialProfileScreen` y `DirectMessages` usaban un contexto mockeado (`SocialContext`) falso en vez de pegarle a Convex | Se refactorizaron los componentes para consumir directamente `useMutation(api.social.createChat)` y demás, integrando al backend universal. Se ajustó UI pública | ✅ Resuelto | CommercialProfileScreen.tsx, DirectMessages.tsx |
 | E-041 | 2026-07-23 | Social | ReferenceError: createChat is not defined al abrir DMs | Se olvidó actualizar el dependency array del `useEffect` al renombrar `createChat` a `createChatMut` en `DirectMessages` | Se actualizó la dependencia a `createChatMut` y se removió la importación innecesaria de `useSocial` | ✅ Resuelto | DirectMessages.tsx |
 | E-042 | 2026-07-23 | UI | Error de compilación TS17008: JSX element 'ScrollView' has no corresponding closing tag | Un reemplazo de código dejó etiquetas `</View>` desbalanceadas al inyectar la UI de Rewards | Se corrigió el balanceado de etiquetas JSX eliminando los `</View>` huérfanos | ✅ Resuelto | ProfileScreen.tsx |
+| E-043 | 2026-07-29 | Auth | Falta Autenticación 2FA (Email OTP) en Login | Requerimiento de seguridad para envío de email con código al loguearse | Se interceptó la mutación `login` (no emite token), se envía OTP y se verifica en `verifyEmailCode` que ahora acepta email para emitir la sesión final. | ✅ Resuelto | AuthContext.tsx, users.ts, auth.ts |
 **Plantilla para nuevas entradas:**
 
 ```markdown

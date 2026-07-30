@@ -263,7 +263,7 @@ export default function LoginScreen({ navigation }: any) {
                                 </View>
 
                                 {/* Social Login Buttons */}
-                                <View style={styles.socialRow}>
+                                <View style={[styles.socialRow, { display: 'none' }]}>
                                     <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('google')} activeOpacity={0.8}>
                                         <GoogleIcon />
                                     </TouchableOpacity>

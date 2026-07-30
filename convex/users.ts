@@ -112,13 +112,45 @@ export const register = mutation({
             throw new Error("No se pudo registrar la cuenta. Si ya tienes una cuenta, intenta iniciar sesión.");
         }
 
-        if (args.username) {
+        let finalUsername = args.username?.trim();
+        if (!finalUsername) {
+            const base = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const randomSuffix = Math.floor(100 + Math.random() * 900);
+            finalUsername = `${base}${randomSuffix}`;
             const existingUsername = await ctx.db
                 .query("users")
-                .withIndex("by_username", (q) => q.eq("username", args.username!.trim()))
+                .withIndex("by_username", (q) => q.eq("username", finalUsername!))
+                .first();
+            if (existingUsername) {
+                finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
+            }
+        } else {
+            const existingUsername = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", finalUsername))
                 .first();
             if (existingUsername) {
                 throw new Error("El nombre de usuario ya está en uso. Por favor, elige otro.");
+            }
+        }
+
+        let finalReferralCode = finalUsername;
+
+        let finalReferredBy = undefined;
+        if (args.referredBy?.trim()) {
+            const inputReferredBy = args.referredBy.trim().replace(/^@/, '');
+            const referrer = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", inputReferredBy.toLowerCase()))
+                .first() 
+                || 
+                await ctx.db
+                .query("users")
+                .withIndex("by_referral_code", (q) => q.eq("referralCode", inputReferredBy.toUpperCase()))
+                .first();
+
+            if (referrer) {
+                finalReferredBy = referrer.username;
             }
         }
 
@@ -136,9 +168,9 @@ export const register = mutation({
             phoneNumber: args.phoneNumber?.trim() || undefined,
             bio: args.bio?.trim() || undefined,
             businessCategory: args.businessCategory?.trim() || undefined,
-            username: args.username?.trim() || undefined,
-            referralCode: args.referralCode?.trim() || undefined,
-            referredBy: args.referredBy?.trim() || undefined,
+            username: finalUsername,
+            referralCode: finalReferralCode,
+            referredBy: finalReferredBy,
             kycStatus: "pending",
             influencerStatus: initialInfluencerStatus as any,
             instagramUrl: args.instagramUrl?.trim() || undefined,
@@ -152,9 +184,21 @@ export const register = mutation({
 
         const sessionToken = await createSession(ctx, userId);
         
-        // Gamificación: Puntos de registro
+        // Gamificación: Puntos de registro y referidos
         try {
             await ctx.runMutation(internal.rewards.awardSignupPoints, { userId });
+            if (finalReferredBy) {
+                const referrerUser = await ctx.db
+                    .query("users")
+                    .withIndex("by_username", q => q.eq("username", finalReferredBy!))
+                    .first();
+                if (referrerUser) {
+                    await ctx.runMutation(internal.rewards.awardReferralPoints, { 
+                        referrerId: referrerUser._id, 
+                        referredId: userId 
+                    });
+                }
+            }
         } catch (e) { console.error("Error otorgando puntos de registro:", e); }
 
         return { userId: String(userId), sessionToken };
@@ -189,8 +233,12 @@ export const login = mutation({
             throw new Error("Credenciales incorrectas.");
         }
 
-        const sessionToken = await createSession(ctx, user._id);
-        return { ...sanitizeUser(user), sessionToken };
+        // ponytail: no emitimos token de sesión todavía (2FA)
+        return { 
+            requiresOtp: true, 
+            email: user.email, 
+            userId: user._id 
+        };
     },
 });
 
@@ -211,11 +259,21 @@ export const oauthLogin = mutation({
 
         if (!user) {
             // Auto-register consumer
+            let finalUsername = args.name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() + Math.floor(100 + Math.random() * 900);
+            const existingUsername = await ctx.db.query("users").withIndex("by_username", (q) => q.eq("username", finalUsername)).first();
+            if (existingUsername) {
+                finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
+            }
+
+            let finalReferralCode = finalUsername;
+
             const userId = await ctx.db.insert("users", {
                 uid: Math.random().toString(36).slice(2), // Use internal UID
                 email,
                 name: args.name.trim(),
                 role: "consumer",
+                username: finalUsername,
+                referralCode: finalReferralCode,
                 kycStatus: "pending",
                 joinedAt: new Date().toISOString(),
                 tier: "Bronze",
@@ -365,12 +423,22 @@ export const syncUser = mutation({
 
         const isTestAccount = email.endsWith('@ramgos.com') || (args as any).isTest;
 
+        let finalUsername = args.name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() + Math.floor(100 + Math.random() * 900);
+        const existingUsername = await ctx.db.query("users").withIndex("by_username", (q) => q.eq("username", finalUsername)).first();
+        if (existingUsername) {
+            finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
+        }
+
+        let finalReferralCode = finalUsername;
+
         const newUserId = await ctx.db.insert("users", {
             uid: args.uid,
             email,
             name: args.name.trim(),
             role: args.role as any,
             avatar: args.avatar,
+            username: finalUsername,
+            referralCode: finalReferralCode,
             kycStatus: "pending",
             joinedAt: new Date().toISOString(),
             tier: "Bronze",
@@ -435,6 +503,7 @@ export const updateProfile = mutation({
                 }
 
                 updates.username = newUsername;
+                updates.referralCode = newUsername; // Sincronizado
                 updates.usernameLastChangedAt = now;
             }
         }

@@ -16,7 +16,7 @@ import { Radius } from '../../theme/tokens';
 
 export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const { createStory } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
     const [imageUrl, setImageUrl] = useState('');
     const [uploading, setUploading] = useState(false);
@@ -52,7 +52,7 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
         if (result.canceled || !result.assets[0]) return;
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({});
+            const uploadUrl = await generateUploadUrl({ sessionToken, actorId: authUser?.id as any });
             const asset = result.assets[0];
             
             // Standard fetch works for getting blobs in recent Expo versions

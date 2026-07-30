@@ -68,9 +68,10 @@ export default function SettingsScreen({ navigation }: any) {
     const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         setLogoutModalVisible(false);
-        logout();
+        await logout();
+        navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
     };
 
     const handleDelete = async () => {

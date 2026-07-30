@@ -388,6 +388,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 phoneNumber: payload.phone?.trim() || undefined,
                 bio: payload.businessAddress?.trim() || undefined,
                 businessCategory: payload.businessCategory?.trim() || undefined,
+                username: payload.username?.trim() || undefined,
                 instagramUrl: payload.instagramUrl?.trim() || undefined,
                 tiktokUrl: payload.tiktokUrl?.trim() || undefined,
             });
@@ -454,13 +455,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const result = await loginMutation({ email, password });
 
-            let finalRole = result.role as UserRole;
+            if ((result as any).requiresOtp) {
+                const pendingUserId = (result as any).userId;
+                await sendOtpActionCall({ email }).catch(console.error);
+                setState(prev => ({
+                    ...prev,
+                    status: 'pending_verification',
+                    pendingVerification: {
+                        userId: pendingUserId,
+                        email: email,
+                        expiresAt: Date.now() + 10 * 60 * 1000,
+                    }
+                }));
+                return {
+                    user: { id: pendingUserId, email } as PublicUser,
+                    nextRoute: { screen: 'Verification', params: { email, isSignup: false } },
+                    requiresKyc: false,
+                    kycStatus: 'pending'
+                };
+            }
+
+            const fullResult = result as any;
+            let finalRole = fullResult.role as UserRole;
             
             // If dev account and roleOverride is passed, update in DB
             if (roleOverride && roleOverride !== finalRole && (email.endsWith('@ramgos.com') || email.endsWith('@test.com'))) {
                 try {
                     await updateUserMutation({
-                        id: result._id as any,
+                        id: fullResult._id,
                         updates: { role: roleOverride }
                     });
                     finalRole = roleOverride;
@@ -470,23 +492,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             const user: PublicUser = {
-                id: result._id as string,
-                email: result.email,
-                name: result.name,
-                nickname: result.nickname,
+                id: fullResult._id,
+                email: fullResult.email,
+                name: fullResult.name,
+                nickname: fullResult.nickname,
                 role: finalRole,
-                isTest: result.isTest,
-                avatar: result.avatar,
+                isTest: fullResult.isTest,
+                avatar: fullResult.avatar,
                 status: 'active',
                 emailVerified: true,
                 requiresKyc: true,
-                termsAcceptedVersion: result.termsAcceptedVersion || 1,
-                createdAt: result.joinedAt || new Date().toISOString(),
+                termsAcceptedVersion: fullResult.termsAcceptedVersion || 1,
+                createdAt: fullResult.joinedAt || new Date().toISOString(),
                 providers: ['password'],
-                kycStatus: result.kycStatus || 'pending',
-                tier: result.tier || 'Bronze',
-                subscriptionStatus: result.subscriptionStatus || 'inactive',
-                subscriptionTier: result.subscriptionTier || 'free',
+                kycStatus: fullResult.kycStatus || 'pending',
+                tier: fullResult.tier || 'Bronze',
+                subscriptionStatus: fullResult.subscriptionStatus || 'inactive',
+                subscriptionTier: fullResult.subscriptionTier || 'free',
             };
 
             const session = createSessionMock(user.id, (result as any).sessionToken);
@@ -650,12 +672,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 throw new Error("No hay usuario para verificar");
             }
             
-            await verifyEmailCodeMutation({
+            const emailToVerify = state.pendingVerification?.email;
+            const res = await verifyEmailCodeMutation({
                 sessionToken: state.session?.sessionToken,
-                code
+                code,
+                email: state.session?.sessionToken ? undefined : emailToVerify,
             });
 
             // At this point OTP is valid.
+            const sessionToken = (res as any)?.sessionToken;
+            let newSession = state.session;
+            
+            if (sessionToken && emailToVerify) {
+                newSession = createSessionMock(state.pendingVerification!.userId, sessionToken);
+                await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...newSession, userId: state.pendingVerification!.userId }));
+            }
+
             // Move from pending_verification to authenticated
             
             setState(prev => {
@@ -670,6 +702,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     ...prev,
                     status: 'authenticated',
                     user: optimisticUser,
+                    session: newSession || prev.session,
                     pendingVerification: undefined
                 };
             });

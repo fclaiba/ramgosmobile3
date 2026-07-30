@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, action, internalMutation } from "./_generated/server";
 import { internal, api } from "./_generated/api";
-import { requireActor } from "./authHelpers";
+import { requireActor, createSession } from "./authHelpers";
 import { hashPassword, verifyPassword } from "./passwordHelpers";
 
 // Internal mutation to save OTP in the users table
@@ -43,12 +43,22 @@ export const sendVerificationEmail = action({
 export const verifyEmailCode = mutation({
     args: { 
         sessionToken: v.optional(v.string()), 
-        code: v.string() 
+        code: v.string(),
+        email: v.optional(v.string())
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.sessionToken);
-        const user = await ctx.db.get(actor.id);
+        let user;
         
+        if (args.sessionToken) {
+            const actor = await requireActor(ctx, args.sessionToken);
+            user = await ctx.db.get(actor.id);
+        } else if (args.email) {
+            user = await ctx.db
+                .query("users")
+                .withIndex("by_email", (q) => q.eq("email", args.email!.trim().toLowerCase()))
+                .first();
+        }
+
         if (!user) {
             throw new Error("Usuario no encontrado.");
         }
@@ -62,11 +72,16 @@ export const verifyEmailCode = mutation({
         }
 
         // Marcar email como verificado y borrar OTP
-        await ctx.db.patch(actor.id, {
+        await ctx.db.patch(user._id, {
             emailVerified: true,
             otp: undefined,
             otpExpiresAt: undefined
         });
+        
+        if (!args.sessionToken) {
+            const sessionToken = await createSession(ctx, user._id);
+            return { success: true, sessionToken };
+        }
         
         return { success: true };
     }

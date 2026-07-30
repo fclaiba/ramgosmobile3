@@ -54,16 +54,12 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
     }, []);
 
     const handleLogout = async () => {
-        triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
+        if (isLoggingOut) return;
         setIsLoggingOut(true);
         try {
             await logout();
             onClose();
-            // Reset navigation to Welcome screen to prevent going back
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'Welcome' }],
-            });
+            navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
         } catch (error) {
             show('Error al cerrar sesión. Intenta de nuevo.', 'error');
         } finally {

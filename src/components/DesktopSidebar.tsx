@@ -75,7 +75,10 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
             {/* Bottom Actions (User Profile / Logout) */}
             <View style={styles.bottomContent}>
                 {isAuthenticated ? (
-                    <TouchableOpacity style={styles.actionItem} onPress={() => logout()}>
+                    <TouchableOpacity style={styles.actionItem} onPress={async () => {
+                        await logout();
+                        navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+                    }}>
                         <LogOut size={20} color={isDark ? '#EF4444' : '#DC2626'} />
                         <Text style={[styles.actionLabel, { color: isDark ? '#EF4444' : '#DC2626' }]}>Cerrar Sesión</Text>
                     </TouchableOpacity>
