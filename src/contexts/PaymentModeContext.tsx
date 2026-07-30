@@ -12,7 +12,6 @@ interface PaymentModeContextValue {
     stripePublishableKey: string | undefined;
 }
 
-// Fase 5: la app opera SOLO en modo test hasta Bloque D (pagos live).
 const PaymentModeContext = createContext<PaymentModeContextValue>({
     mode: 'test',
     isTest: true,
@@ -31,9 +30,7 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
         (async () => {
             try {
                 const stored = await AsyncStorage.getItem(STORAGE_KEY);
-                // Fase 5: 'live' persistido de sesiones viejas se ignora hasta
-                // Bloque D — la app queda clavada en test.
-                if (stored === 'test') {
+                if (stored === 'test' || stored === 'live') {
                     setModeState(stored);
                 }
             } catch {}
@@ -41,15 +38,12 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
     }, []);
 
     const setMode = useCallback((newMode: PaymentMode) => {
-        // Fase 5: pagos live deshabilitados hasta Bloque D.
-        const clamped: PaymentMode = newMode === 'live' ? 'test' : newMode;
-        setModeState(clamped);
-        AsyncStorage.setItem(STORAGE_KEY, clamped).catch(() => {});
+        setModeState(newMode);
+        AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});
     }, []);
 
     const toggle = useCallback(() => {
-        // Fase 5: no hay modo live al que alternar; se mantiene test.
-        setMode('test');
+        setMode(prev => prev === 'test' ? 'live' : 'test');
     }, [setMode]);
 
     const stripePublishableKey = mode === 'test'

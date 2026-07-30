@@ -1,9 +1,11 @@
 import { mutation } from "./_generated/server";
+import { hashPassword } from "./passwordHelpers";
 
 export const run = mutation({
     args: {},
     handler: async (ctx) => {
         const email = "Ramgospublicidad@gmail.com".toLowerCase();
+        const hashedPassword = hashPassword("Seguridadjulio55#");
         
         // Comprobar si ya existe
         const existing = await ctx.db
@@ -15,7 +17,7 @@ export const run = mutation({
             await ctx.db.patch(existing._id, {
                 role: 'admin',
                 kycStatus: 'approved',
-                password: 'Seguridadjulio55#'
+                password: hashedPassword
             });
             return `Usuario ${email} actualizado a admin.`;
         }

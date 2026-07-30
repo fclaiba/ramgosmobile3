@@ -120,9 +120,8 @@ export default function WelcomeScreen({ navigation }: any) {
 
                             {/* Title & Subtitle */}
                             <Animated.View style={{ opacity: titleOpacity, width: '100%', alignItems: 'center', marginBottom: 32 }}>
-                                <Text style={styles.title}>Ramgos App</Text>
                                 <Text style={styles.subtitle}>
-                                    Descubre la oportunidad de conectarte con una comunidad latina latente
+                                    Social commerce para descubrir tu ciudad
                                 </Text>
                             </Animated.View>
 

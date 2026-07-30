@@ -20,14 +20,30 @@ import { internal } from "./_generated/api";
 import Stripe from "stripe";
 import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 
-const stripeKey = process.env.STRIPE_SECRET_KEY;
+const stripeKeyTest = process.env.STRIPE_SECRET_KEY_TEST ?? process.env.STRIPE_SECRET_KEY;
+const stripeKeyLive = process.env.STRIPE_SECRET_KEY;
+
 const isStripeMock =
     process.env.STRIPE_MOCK_MODE === "true" ||
-    !stripeKey ||
-    stripeKey.includes("mock");
-const stripe = new Stripe(stripeKey ?? "sk_test_mock_fallback", {
+    !stripeKeyTest ||
+    stripeKeyTest.includes("mock");
+
+export const stripeTest = new Stripe(stripeKeyTest ?? "sk_test_mock_fallback", {
     apiVersion: "2026-06-24.dahlia" as any,
 });
+
+export const stripeLive = new Stripe(stripeKeyLive ?? "sk_live_mock_fallback", {
+    apiVersion: "2026-06-24.dahlia" as any,
+});
+
+export const getStripeClient = (mode: "test" | "live" = "test") => {
+    return mode === "live" ? stripeLive : stripeTest;
+};
+
+// Mantenemos la instancia global 'stripe' apuntando a test mode para retrocompatibilidad
+// de los procesos de escrow (webhooks, transfers, etc) hasta refactorizarlos.
+const stripe = stripeTest;
+
 
 /**
  * Crea un PaymentIntent en Stripe y persiste el registro en la tabla 'payments'.
@@ -59,11 +75,13 @@ export const createPaymentIntent = action({
         cartId: v.optional(v.string()),
         // ponytail: UI test mode — never hit Stripe confirm (avoids pk/sk mismatch 404)
         simulate: v.optional(v.boolean()),
+        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
         const useMock = isStripeMock || !!args.simulate;
+        const stripe = getStripeClient(args.mode ?? "test");
 
         let totalAmountCents = args.amountInCents || 0;
         if (args.lineItems) {
@@ -111,9 +129,12 @@ export const createPaymentIntent = action({
                 status = "succeeded";
             } else {
                 // 2. Crear y opcionalmente confirmar el PaymentIntent en Stripe
+                
+                const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
                 const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
                     amount: totalAmountCents,
                     currency: "usd",
+                    customer: user?.stripeCustomerId,
                     metadata: {
                         userId,
                         lineItemsCount: args.lineItems?.length || 0,
@@ -206,9 +227,11 @@ export const listPaymentMethods = action({
     args: {
         sessionToken: v.optional(v.string()),
         userId: v.string(),
+        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
     },
     handler: async (ctx, args) => {
         await requireActor(ctx, (args as any).sessionToken);
+        const stripeClient = getStripeClient(args.mode ?? "test");
         
         // Obtener el usuario mediante internalQuery para acceder al stripeCustomerId
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: args.userId });
@@ -218,7 +241,7 @@ export const listPaymentMethods = action({
         }
 
         try {
-            const paymentMethods = await stripe.paymentMethods.list({
+            const paymentMethods = await stripeClient.paymentMethods.list({
                 customer: user.stripeCustomerId,
                 type: 'card',
             });
@@ -1127,3 +1150,4 @@ export const internalGetOrderForAdminEscrow = internalQuery({
         return await ctx.db.get(args.orderId);
     }
 });
+

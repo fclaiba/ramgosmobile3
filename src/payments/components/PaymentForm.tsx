@@ -14,6 +14,9 @@ import { api } from '../../../convex/_generated/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePoints } from '../../contexts/PointsContext';
+import { useStripe } from '@stripe/stripe-react-native';
+import { usePaymentMode } from '../../contexts/PaymentModeContext';
+import { Switch } from 'react-native';
 import { glassTokens } from '../../utils/glass';
 import { STRIPE_TEST_CARDS, formatCardNumber } from '../testCards';
 import { SimulatedCardsPanel, type WalletCard } from './SimulatedCardsPanel';
@@ -49,7 +52,7 @@ interface PaymentFormProps {
     };
 }
 
-export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, theme }: PaymentFormProps) {
+export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, theme, userId }: PaymentFormProps) {
     const createPaymentIntent = useAction(api.stripe.createPaymentIntent);
     const [loading, setLoading] = useState(false);
     const [selectedId, setSelectedId] = useState(STRIPE_TEST_CARDS[0].id);
@@ -59,6 +62,26 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
     const [applyPoints, setApplyPoints] = useState(false);
     const { show } = useToast();
     const { sessionToken } = useAuth();
+    const { mode, toggle, isLive } = usePaymentMode();
+    const { initPaymentSheet, presentPaymentSheet, confirmPayment } = useStripe();
+    const createSetupIntent = useAction(api.stripe.createSetupIntent);
+    const listPaymentMethods = useAction(api.stripe.listPaymentMethods);
+    const [realCards, setRealCards] = useState<any[]>([]);
+    const [selectedRealCardId, setSelectedRealCardId] = useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (isLive && sessionToken && userId) {
+            listPaymentMethods({ sessionToken, userId, mode: 'live' })
+                .then(cards => {
+                    setRealCards(cards);
+                    if (cards.length > 0 && !selectedRealCardId) {
+                        setSelectedRealCardId(cards[0].id);
+                    }
+                })
+                .catch(e => console.error("Error loading real cards", e));
+        }
+    }, [isLive, sessionToken, userId, mode]);
+
     const { points, redeemPoints } = usePoints();
     const isDark = !!theme?.dark || theme?.colors?.background === '#1E293B';
     const glass = glassTokens(isDark);
@@ -102,6 +125,36 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
         return items;
     };
 
+    
+    const handleAddCard = async () => {
+        try {
+            setLoading(true);
+            const { clientSecret } = await createSetupIntent({ sessionToken, mode });
+            
+            const { error: initError } = await initPaymentSheet({
+                setupIntentClientSecret: clientSecret || undefined,
+                merchantDisplayName: 'Ramgos',
+                returnURL: 'ramgos://stripe-redirect',
+            });
+            if (initError) throw new Error(initError.message);
+            
+            const { error: presentError } = await presentPaymentSheet();
+            if (presentError) throw new Error(presentError.message);
+            
+            show('Tarjeta agregada exitosamente', 'success');
+            // Refresh cards
+            if (userId) {
+                const cards = await listPaymentMethods({ sessionToken, userId, mode: 'live' });
+                setRealCards(cards);
+                if (cards.length > 0) setSelectedRealCardId(cards[cards.length - 1].id);
+            }
+        } catch (e: any) {
+            show(e.message || 'Error al agregar tarjeta', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handlePay = async () => {
         if (!canPay) return;
         setLoading(true);
@@ -116,20 +169,41 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
             }
 
             const items = buildLineItems(chargeAmount);
+            // En modo live, si usamos PaymentSheet para cobrar, necesitamos client_secret.
+            // Pero en la FASE 5, el createPaymentIntent en "simulate" no requiere confirmar en cliente.
+            // Para mantener compatibilidad con tarjetas guardadas, usamos el paymentMethodId.
+            // Si es live, intentamos usar stripe_payment_intent pero por ahora, solo simularemos si isTest.
             const result = await createPaymentIntent({
                 sessionToken,
                 amountInCents: Math.round(chargeAmount * 100),
                 lineItems: items.length > 0 ? items : undefined,
                 cartId,
-                simulate: true,
+                simulate: !isLive,
+                mode: mode,
             });
+
+            if (isLive && result.clientSecret) {
+                // Confirm the payment with the selected saved card
+                if (!selectedRealCardId) throw new Error("Selecciona una tarjeta para pagar");
+                
+                const { error: confirmError, paymentIntent } = await confirmPayment(result.clientSecret, {
+                    paymentMethodType: 'Card',
+                    paymentMethodData: {
+                        paymentMethodId: selectedRealCardId,
+                    }
+                });
+                
+                if (confirmError) {
+                    throw new Error(confirmError.message);
+                }
+            }
 
             if (pointsToUse > 0) await redeemPoints(pointsToUse, result.paymentIntentId);
             const pts = Number((result as any)?.pointsAwarded) || 0;
             show(
                 pts > 0
-                    ? `Pago OK · +${pts} pts · ${selectedCard.label} •••• ${selectedCard.last4}`
-                    : `Pago simulado OK · ${selectedCard.label} •••• ${selectedCard.last4}`,
+                    ? `Pago OK · +${pts} pts`
+                    : `Pago OK`,
                 'success',
             );
             onSuccess(result.paymentIntentId, { pointsRedeemed: pointsToUse });
@@ -149,17 +223,55 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
 
     return (
         <View style={styles.root}>
-            <Text style={[styles.sectionLabel, { color: textColor }]}>Medio de pago (simulado)</Text>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: 12, backgroundColor: glass.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: glass.border }}>
+                <View>
+                    <Text style={{ color: textColor, fontWeight: '700' }}>{isLive ? 'Modo Real' : 'Modo Prueba'}</Text>
+                    <Text style={{ color: muted, fontSize: 12 }}>{isLive ? 'Usarás tarjetas verdaderas' : 'Transacciones simuladas'}</Text>
+                </View>
+                <Switch 
+                    value={isLive} 
+                    onValueChange={toggle}
+                    trackColor={{ false: '#9CA3AF', true: accent }}
+                />
+            </View>
 
-            <SimulatedCardsPanel
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                onSelectedCard={onSelectedCard}
-                accent={accent}
-                textColor={textColor}
-                muted={muted}
-                isDark={isDark}
-            />
+            <Text style={[styles.sectionLabel, { color: textColor }]}>Medio de pago {isLive ? '(real)' : '(simulado)'}</Text>
+
+
+            {isLive ? (
+                <View style={{ gap: 10 }}>
+                    {realCards.length === 0 ? (
+                        <Text style={{ color: muted, textAlign: 'center', padding: 20 }}>No tienes tarjetas guardadas.</Text>
+                    ) : (
+                        realCards.map(card => (
+                            <TouchableOpacity
+                                key={card.id}
+                                onPress={() => setSelectedRealCardId(card.id)}
+                                style={[styles.cheatToggle, { borderColor: selectedRealCardId === card.id ? accent : glass.border, backgroundColor: glass.bg }]}
+                            >
+                                <Text style={[styles.cheatToggleText, { color: textColor }]}>
+                                    {card.card?.brand?.toUpperCase()} •••• {card.card?.last4}
+                                </Text>
+                            </TouchableOpacity>
+                        ))
+                    )}
+                    <TouchableOpacity onPress={handleAddCard} style={[styles.cheatToggle, { borderColor: glass.border, backgroundColor: glass.bg, justifyContent: 'center' }]}>
+                        <Text style={[styles.cheatToggleText, { color: accent, textAlign: 'center' }]}>+ Agregar Nueva Tarjeta</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <SimulatedCardsPanel
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    onSelectedCard={onSelectedCard}
+                    accent={accent}
+                    textColor={textColor}
+                    muted={muted}
+                    isDark={isDark}
+                />
+            )}
+
 
             <TouchableOpacity
                 onPress={() => setShowCheat((v) => !v)}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions, Platform } from 'react-native';
 import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -237,6 +237,7 @@ export default function HomeScreen({ navigation, route }: any) {
                 {activeTab === 'home' && (
                     <>
                         <MobileHeader
+                            logo={Platform.OS !== 'web'}
                             title="Inicio"
                             subtitle="Descubre la oportunidad"
                             onMenuPress={() => setIsSidebarOpen(true)}

@@ -8,6 +8,8 @@ import { Card, CardContent } from '../components/ui/card';
 import { useCart } from '../contexts/CartContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useMarketplace, ShippingMethod, ShippingQuote } from '../contexts/MarketplaceContext';
+import { usePaymentMode } from '../contexts/PaymentModeContext';
+import { Switch } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
@@ -294,18 +296,32 @@ function CartScreen({ navigation }: any) {
                     </ScrollView>
 
                     <View style={styles.checkoutBar}>
-                        <View>
-                            <Text style={styles.checkoutLabel}>Total</Text>
-                            <Text style={styles.checkoutAmount}>${finalPrice.toFixed(2)}</Text>
-                            <Text style={styles.checkoutHint}>
-                                {requiresShipping
-                                    ? `Incluye envío ${shippingLabels[selectedShippingMethod]}`
-                                    : 'Retiro sin costo'}
-                            </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
+                            <View>
+                                <Text style={{ color: isDark ? '#fff' : '#111', fontWeight: 'bold', fontSize: 14 }}>{isLive ? 'Transacción Real' : 'Modo Simulador'}</Text>
+                                <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 12 }}>{isLive ? 'Cargos verdaderos a tarjeta' : 'Pagos de prueba'}</Text>
+                            </View>
+                            <Switch 
+                                value={isLive} 
+                                onValueChange={toggle}
+                                trackColor={{ false: '#9CA3AF', true: '#3b82f6' }}
+                                thumbColor={'#ffffff'}
+                            />
                         </View>
-                        <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
-                            <Text style={styles.checkoutButtonText}>Continuar al pago</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View>
+                                <Text style={styles.checkoutLabel}>Total</Text>
+                                <Text style={styles.checkoutAmount}>${finalPrice.toFixed(2)}</Text>
+                                <Text style={styles.checkoutHint}>
+                                    {requiresShipping
+                                        ? `Incluye envío ${shippingLabels[selectedShippingMethod]}`
+                                        : 'Retiro sin costo'}
+                                </Text>
+                            </View>
+                            <TouchableOpacity style={[styles.checkoutButton, { backgroundColor: isLive ? '#3b82f6' : '#8B5CF6' }]} onPress={handleCheckout}>
+                                <Text style={styles.checkoutButtonText}>Continuar al pago</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             )}

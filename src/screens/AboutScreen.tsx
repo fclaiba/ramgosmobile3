@@ -41,8 +41,8 @@ export default function AboutScreen({ navigation }: any) {
                         style={styles.heroGradient}
                     >
                         <Text style={styles.heroEmoji}>🎉</Text>
-                        <Text style={styles.heroTitle}>Ramgos App</Text>
-                        <Text style={styles.heroSubtitle}>Descubre la oportunidad de conectarte con una comunidad latina latente</Text>
+                        <Text style={styles.heroTitle}>RAMGOS</Text>
+                        <Text style={styles.heroSubtitle}>Social commerce para descubrir tu ciudad</Text>
                         <View style={styles.versionBadge}>
                             <Text style={styles.versionText}>Versión 1.0.0</Text>
                         </View>
@@ -73,7 +73,7 @@ export default function AboutScreen({ navigation }: any) {
                                 <Target size={24} color="#2196F3" />
                             </View>
                             <Text style={styles.missionText}>
-                                Conectar a la comunidad latina con negocios locales, el descubrimiento, ahorro y participación en experiencias que fortalecen nuestra identidad cultural.
+                                Conectar a los usuarios con negocios locales, impulsando el descubrimiento, el ahorro y la participación en experiencias que fortalecen la economía local.
                             </Text>
                         </CardContent>
                     </Card>

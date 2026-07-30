@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, Radius, Type, Touch } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
 
-export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack }: any) => {
+export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack, logo }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const insets = useSafeAreaInsets();
@@ -42,14 +42,23 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                         </TouchableOpacity>
                     ) : null}
                     <View style={styles.titles}>
-                        <Text style={styles.title} numberOfLines={1}>
-                            {title}
-                        </Text>
-                        {subtitle ? (
-                            <Text style={styles.subtitle} numberOfLines={1}>
-                                {subtitle}
-                            </Text>
-                        ) : null}
+                        {logo ? (
+                            <Image 
+                                source={require('../../logo.png')} 
+                                style={{ width: 140, height: 40, resizeMode: 'contain', marginLeft: -4 }} 
+                            />
+                        ) : (
+                            <>
+                                <Text style={styles.title} numberOfLines={1}>
+                                    {title}
+                                </Text>
+                                {subtitle ? (
+                                    <Text style={styles.subtitle} numberOfLines={1}>
+                                        {subtitle}
+                                    </Text>
+                                ) : null}
+                            </>
+                        )}
                     </View>
                 </View>
                 <View style={styles.actions}>{actions}</View>
