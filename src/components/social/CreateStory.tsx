@@ -141,7 +141,7 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#000' },
     overlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0,0,0,0.1)',
     },
     topBar: {

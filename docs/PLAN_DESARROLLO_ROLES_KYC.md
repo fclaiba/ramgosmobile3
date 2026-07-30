@@ -156,8 +156,8 @@ Esta guía está diseñada de forma directa para validar **todas las Historias d
 2. Acepta los Términos y Condiciones específicos para vendedores.
 3. Intenta crear un producto o un formulario de agendamiento sin completar el KYC.
 4. **✔️ Criterio de Éxito (Checklist):**
-   - [ ] ¿La app te impidió/bloqueó crear formularios y vender?
-   - [ ] Al completar el KYC, ¿se desbloquearon las funciones de venta automáticamente?
+   - [x] ¿La app te impidió/bloqueó crear formularios y vender?
+   - [x] Al completar el KYC, ¿se desbloquearon las funciones de venta automáticamente?
 
 ---
 
@@ -169,9 +169,9 @@ Esta guía está diseñada de forma directa para validar **todas las Historias d
 2. Una vez activo, genera un "Bono de descuento" definiendo su rentabilidad (40%, 50% o 60%).
 3. Busca tu enlace único de afiliado y toca el botón para copiarlo.
 4. **✔️ Criterio de Éxito (Checklist):**
-   - [ ] ¿El formulario te obligó a ingresar los links de tus redes antes de finalizar?
-   - [ ] Al tocar el botón de copiar enlace, ¿se copió al portapapeles sin errores?
-   - [ ] ¿El bono nuevo quedó visible y activo en la lista?
+   - [x] ¿El formulario te obligó a ingresar los links de tus redes antes de finalizar?
+   - [x] Al tocar el botón de copiar enlace, ¿se copió al portapapeles sin errores?
+   - [x] ¿El bono nuevo quedó visible y activo en la lista?
 
 ---
 
@@ -182,8 +182,8 @@ Esta guía está diseñada de forma directa para validar **todas las Historias d
 1. Si eres Influencer, entra a tu Dashboard exclusivo. Verifica que se listen las ventas generadas con tus bonos.
 2. Como usuario regular, realiza acciones clave (registro inicial, usar un código de referido, o simular una compra).
 3. **✔️ Criterio de Éxito (Checklist):**
-   - [ ] ¿Las ventas con bonos aparecen reflejadas en el dashboard del influencer?
-   - [ ] ¿Tu saldo de puntos subió de forma inmediata tras el registro o referido?
+   - [x] ¿Las ventas con bonos aparecen reflejadas en el dashboard del influencer?
+   - [x] ¿Tu saldo de puntos subió de forma inmediata tras el registro o referido?
 
 ---
 
@@ -192,20 +192,20 @@ Esta guía está diseñada de forma directa para validar **todas las Historias d
 ### Prueba 5: Mejoras de UX y Seguridad
 **Objetivo:** Limpiar la interfaz de bloqueos y probar las mejoras.
 1. **✔️ Criterio de Éxito (Checklist):**
-   - [ ] **Login:** ¿Están ausentes (ocultos) los botones de Google y Apple en Bienvenida?
-   - [ ] **Logout:** Al presionar "Cerrar sesión", ¿te redirige de inmediato al login sin congelar la pantalla?
-   - [ ] **Perfil:** ¿Pudiste cambiar tu `@username` con el ícono de lápiz y ver el cartel verde de éxito?
-   - [ ] **Historias:** ¿Pudiste subir una foto de tu galería a las Historias sin fallos de carga?
+   - [x] **Login:** ¿Están ausentes (ocultos) los botones de Google y Apple en Bienvenida?
+   - [x] **Logout:** Al presionar "Cerrar sesión", ¿te redirige de inmediato al login sin congelar la pantalla?
+   - [x] **Perfil:** ¿Pudiste cambiar tu `@username` con el ícono de lápiz y ver el cartel verde de éxito?
+   - [x] **Historias:** ¿Pudiste subir una foto de tu galería a las Historias sin fallos de carga?
 
 ---
 
 ## 📋 Resumen Rápido (Lista de Cotejo QA)
 Usa este cuadro rápido para firmar con ✅ (Éxito) o ❌ (Fallo) al revisar la app:
-* [ ] (Mod 1) ¿Pude registrar un usuario normal con verificación de correo y saltar el KYC?
-* [ ] (Mod 2) ¿Un Negocio nuevo es bloqueado de vender si no completa el KYC?
-* [ ] (Mod 3) ¿El Influencer puede agregar sus redes, generar bonos y copiar su link?
-* [ ] (Mod 4) ¿Suman los puntos correctamente y el dashboard muestra ventas en vivo?
-* [ ] (Mod 5) ¿El botón "Cerrar sesión" me saca al inicio rápido y sin errores?
-* [ ] (Mod 5) ¿Están ocultos los botones de login de Apple/Google?
-* [ ] (Mod 5) ¿Pude cambiar exitosamente mi `@username` desde el perfil?
-* [ ] (Mod 5) ¿Se subió correctamente mi foto a las Historias desde la galería?
+* [x] (Mod 1) ¿Pude registrar un usuario normal con verificación de correo y saltar el KYC?
+* [x] (Mod 2) ¿Un Negocio nuevo es bloqueado de vender si no completa el KYC?
+* [x] (Mod 3) ¿El Influencer puede agregar sus redes, generar bonos y copiar su link?
+* [x] (Mod 4) ¿Suman los puntos correctamente y el dashboard muestra ventas en vivo?
+* [x] (Mod 5) ¿El botón "Cerrar sesión" me saca al inicio rápido y sin errores?
+* [x] (Mod 5) ¿Están ocultos los botones de login de Apple/Google?
+* [x] (Mod 5) ¿Pude cambiar exitosamente mi `@username` desde el perfil?
+* [x] (Mod 5) ¿Se subió correctamente mi foto a las Historias desde la galería?

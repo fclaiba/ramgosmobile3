@@ -47,6 +47,7 @@ const StorySlide = ({
     const toggleLike = useMutation(api.social.toggleLike);
     const deleteStory = useMutation(api.social.deleteStory);
     const sendDirectMessage = useMutation(api.social.sendDirectMessage);
+    const createChat = useMutation(api.social.createChat);
     
     const isMyStory = authUser && author?.userId === (authUser as any).id;
 
@@ -176,10 +177,11 @@ const StorySlide = ({
                                 onSubmitEditing={async () => {
                                     if (!message.trim()) return;
                                     try {
+                                        const chatId = await createChat({ sessionToken, participantId: author.userId });
                                         await sendDirectMessage({
                                             sessionToken,
-                                            receiverUserId: author.userId,
-                                            content: `(Respondiendo a tu historia): ${message}`,
+                                            chatId,
+                                            body: `(Respondiendo a tu historia): ${message}`,
                                         });
                                         show('Mensaje enviado', 'success');
                                         setMessage('');
@@ -306,7 +308,7 @@ export const StoryViewer = ({
 const getStyles = (isDark: any) => StyleSheet.create({
     slideContainer: { flex: 1, backgroundColor: '#000', position: 'relative' },
     image: { width, height, position: 'absolute' },
-    gradient: { ...StyleSheet.absoluteFillObject },
+    gradient: { ...StyleSheet.absoluteFill },
     safeArea: { flex: 1, flexDirection: 'column' },
 
     progressContainer: { flexDirection: 'row', paddingHorizontal: 10, paddingTop: 10, gap: 4, height: 14 },
@@ -334,7 +336,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
     input: { color: '#fff', fontSize: 16 },
     actionBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
 
-    tapContainer: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+    tapContainer: { ...StyleSheet.absoluteFill, flexDirection: 'row' },
     tapLeft: { width: width * 0.3, height: '100%' },
     tapRight: { width: width * 0.7, height: '100%' },
 });

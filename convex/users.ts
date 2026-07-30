@@ -49,6 +49,15 @@ const sanitizeUser = async (ctx: any, user: any) => {
         const url = await ctx.storage.getUrl(avatarUrl.replace("convex-storage:", "") || avatarUrl);
         if (url) avatarUrl = url;
     }
+    // ponytail: [techo/limitación] Global toggle para desactivar KYC por defecto
+    const requireKyc = await ctx.db
+        .query("global_settings")
+        .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
+        .first();
+    const isKycEnabled = requireKyc?.value === true; // Default is FALSE (Desactivado por defecto)
+
+    const effectiveKycStatus = isKycEnabled ? user.kycStatus : "approved";
+
     return {
     _id: user._id,
     uid: user.uid,
@@ -57,7 +66,7 @@ const sanitizeUser = async (ctx: any, user: any) => {
     nickname: user.nickname,
     role: user.role,
     avatar: avatarUrl,
-    kycStatus: user.kycStatus,
+    kycStatus: effectiveKycStatus,
     joinedAt: user.joinedAt,
     tier: user.tier,
     subscriptionStatus: user.subscriptionStatus,
@@ -209,7 +218,13 @@ export const register = mutation({
             }
         } catch (e) { console.error("Error otorgando puntos de registro:", e); }
 
-        return { userId: String(userId), sessionToken };
+        const require2FA = await ctx.db
+            .query("global_settings")
+            .withIndex("by_key", (q) => q.eq("key", "require_2fa"))
+            .first();
+        const is2FAEnabled = require2FA?.value !== false;
+
+        return { userId: String(userId), sessionToken, requiresOtp: is2FAEnabled };
     },
 });
 
@@ -248,12 +263,26 @@ export const login = mutation({
             throw new Error("Credenciales incorrectas.");
         }
 
-        // ponytail: no emitimos token de sesión todavía (2FA)
-        return { 
-            requiresOtp: true, 
-            email: user.email, 
-            userId: user._id 
-        };
+        // ponytail: [techo/limitación] Este switch global de 2FA debe ser borrado antes de producción
+        const require2FA = await ctx.db
+            .query("global_settings")
+            .withIndex("by_key", (q) => q.eq("key", "require_2fa"))
+            .first();
+        const is2FAEnabled = require2FA?.value !== false;
+
+        if (is2FAEnabled && !(user as any).isTest) {
+            // ponytail: emitimos requireOtp
+            return { 
+                requiresOtp: true, 
+                email: user.email, 
+                userId: user._id 
+            };
+        }
+
+        // Bypassing 2FA
+        const sessionToken = await createSession(ctx, user._id);
+        const userObj = await sanitizeUser(ctx, user);
+        return { ...userObj, sessionToken };
     },
 });
 

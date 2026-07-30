@@ -53,6 +53,7 @@ import type * as seed from "../seed.js";
 import type * as seedListings from "../seedListings.js";
 import type * as seedMarketplace from "../seedMarketplace.js";
 import type * as seedUsers from "../seedUsers.js";
+import type * as settings from "../settings.js";
 import type * as social from "../social.js";
 import type * as social__helpers from "../social/_helpers.js";
 import type * as stripe from "../stripe.js";
@@ -116,6 +117,7 @@ declare const fullApi: ApiFromModules<{
   seedListings: typeof seedListings;
   seedMarketplace: typeof seedMarketplace;
   seedUsers: typeof seedUsers;
+  settings: typeof settings;
   social: typeof social;
   "social/_helpers": typeof social__helpers;
   stripe: typeof stripe;

@@ -95,6 +95,7 @@ export interface SignUpInput {
     referralCode?: string;
     instagramUrl?: string;
     tiktokUrl?: string;
+    username?: string;
 }
 
 export interface SignUpResult {
@@ -424,26 +425,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const session = createSessionMock(userId, registerSessionToken);
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
 
-            setState(prev => ({
-                ...prev,
-                status: 'pending_verification',
-                session: { ...session, userId },
-                user,
-                pendingVerification: {
-                    userId,
-                    email,
-                    expiresAt: Date.now() + 10 * 60 * 1000,
+            const requiresOtp = registerResult?.requiresOtp !== false && !email.endsWith('@ramgos.com');
+
+            if (requiresOtp) {
+                setState(prev => ({
+                    ...prev,
+                    status: 'pending_verification',
+                    session: { ...session, userId },
                     user,
-                }
-            }));
+                    pendingVerification: {
+                        userId,
+                        email,
+                        expiresAt: Date.now() + 10 * 60 * 1000,
+                        user,
+                    }
+                }));
 
-            // Enviar el OTP real a través de Resend
-            sendOtpActionCall({ email }).catch(console.error);
+                // Enviar el OTP real a través de Resend
+                sendOtpActionCall({ email }).catch(console.error);
 
-            return {
-                user,
-                requiresVerification: true,
-            };
+                return {
+                    user,
+                    requiresVerification: true,
+                };
+            } else {
+                setState(prev => ({
+                    ...prev,
+                    status: 'authenticated',
+                    session: { ...session, userId },
+                    user,
+                    originalUser: null
+                }));
+
+                return {
+                    user,
+                    requiresVerification: false,
+                    nextRoute: resolveNextRoute(user)
+                };
+            }
         } catch (error: any) {
             show(extractErrorMessage(error, 'Error de registro'), 'error');
             throw error;
@@ -455,7 +474,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loginWithEmail = async (email: string, password: string, roleOverride?: UserRole): Promise<AuthFlowDecision> => {
         setIsProcessing(true);
         try {
-            const result = await loginMutation({ email, password });
+            const result = await loginMutation({ emailOrUsername: email, password });
 
             if ((result as any).requiresOtp) {
                 const pendingUserId = (result as any).userId;

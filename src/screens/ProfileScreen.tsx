@@ -4,6 +4,7 @@ import { api } from '../../convex/_generated/api';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform , KeyboardAvoidingView, Image} from 'react-native';
 import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown, AtSign, Hash, ListTodo, Lock, LayoutDashboard, CheckCircle2, QrCode, Tag, Trophy, Flame, Coins, Map, Gamepad2, Building, AlertCircle, Copy } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -277,39 +278,47 @@ function ProfileScreen({ navigation }: any) {
                         <TouchableOpacity 
                             style={styles.avatarWrapper} 
                             onPress={handleAvatarPress}
-                            activeOpacity={isEditing ? 0.7 : 1}
+                            activeOpacity={isEditing ? 0.8 : 1}
                         >
                             <Avatar style={styles.avatar}>
                                 <AvatarImage src={isEditing ? editedProfile.avatarUrl : profile.avatarUrl} />
                                 <AvatarFallback style={isDark ? { backgroundColor: '#374151' } : {}} textStyle={isDark ? { color: '#F9FAFB' } : {}}>{(isEditing ? editedProfile.name : profile.name)[0]}</AvatarFallback>
                             </Avatar>
                             {isEditing && (
-                                <View style={styles.cameraBtn}>
-                                    <Camera size={16} color="#000" />
-                                </View>
+                                <BlurView intensity={60} tint="light" style={styles.cameraBtnGlass}>
+                                    <View style={styles.cameraBtnInner}>
+                                        <Camera size={16} color="#0F172A" />
+                                    </View>
+                                </BlurView>
                             )}
                         </TouchableOpacity>
                         
                         {isEditing ? (
-                            <View style={{ alignItems: 'center', width: '100%', paddingHorizontal: 20 }}>
-                                <TextInput
-                                    style={[styles.editInput, { fontSize: 24, fontWeight: '800', textAlign: 'center', marginBottom: 4 }]}
-                                    value={editedProfile.name}
-                                    onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
-                                    placeholder="Tu Nombre"
-                                    placeholderTextColor="rgba(255,255,255,0.5)"
-                                />
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>@</Text>
+                            <View style={{ alignItems: 'center', width: '100%', paddingHorizontal: 20, marginTop: 4 }}>
+                                <BlurView intensity={30} tint="light" style={styles.glassInputWrapper}>
                                     <TextInput
-                                        style={[styles.editInput, { fontSize: 16, textAlign: 'center', padding: 0 }]}
-                                        value={editedProfile.username}
-                                        onChangeText={(text) => setEditedProfile({ ...editedProfile, username: text })}
-                                        placeholder="usuario"
-                                        placeholderTextColor="rgba(255,255,255,0.5)"
-                                        autoCapitalize="none"
+                                        style={[styles.editInputGlass, { fontSize: 22, fontWeight: '800' }]}
+                                        value={editedProfile.name}
+                                        onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
+                                        placeholder="Tu Nombre"
+                                        placeholderTextColor="rgba(255,255,255,0.6)"
+                                        selectionColor="rgba(255,255,255,0.8)"
                                     />
-                                </View>
+                                </BlurView>
+                                <BlurView intensity={20} tint="light" style={[styles.glassInputWrapper, { marginTop: 8, paddingVertical: 4, borderRadius: 20 }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: '500', marginRight: 2 }}>@</Text>
+                                        <TextInput
+                                            style={[styles.editInputGlass, { fontSize: 16, fontWeight: '500' }]}
+                                            value={editedProfile.username}
+                                            onChangeText={(text) => setEditedProfile({ ...editedProfile, username: text })}
+                                            placeholder="usuario"
+                                            placeholderTextColor="rgba(255,255,255,0.5)"
+                                            autoCapitalize="none"
+                                            selectionColor="rgba(255,255,255,0.8)"
+                                        />
+                                    </View>
+                                </BlurView>
                             </View>
                         ) : (
                             <>
@@ -774,12 +783,35 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 24, marginBottom: 24 },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     screenTitle: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
-    editBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+    editBtn: { backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderRadius: Radius.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
 
     profileHeader: { alignItems: 'center', width: '100%' },
-    avatarWrapper: { position: 'relative', marginBottom: 16 },
+    avatarWrapper: { marginBottom: 12, position: 'relative' },
     avatar: { width: 100, height: 100, borderRadius: Radius.full, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
     cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.62)', padding: 8, borderRadius: Radius.xl },
+    cameraBtnGlass: {
+        position: 'absolute', bottom: -4, right: -4, borderRadius: Radius.full, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+    },
+    cameraBtnInner: {
+        backgroundColor: 'rgba(255,255,255,0.5)', padding: 10, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center'
+    },
+    glassInputWrapper: {
+        width: '100%',
+        maxWidth: 280,
+        borderRadius: 24,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+    },
+    editInputGlass: {
+        color: '#FFFFFF',
+        textAlign: 'center',
+        padding: 0,
+        margin: 0,
+    },
 
     name: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
     email: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginBottom: 16 },

@@ -277,6 +277,12 @@ export default defineSchema({
         .index("by_status", ["status"])
         .index("by_user_idempotency", ["userId", "idempotencyKey"]),
 
+    // FASE 6 - Ajustes globales administrables
+    global_settings: defineTable({
+        key: v.string(),
+        value: v.any(),
+    }).index("by_key", ["key"]),
+
     // PHASE 5: Rentals and Bookings
     bookings: defineTable({
         listingId: v.string(),

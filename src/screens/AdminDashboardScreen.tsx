@@ -134,7 +134,12 @@ export default function AdminDashboardScreen({ navigation }: any) {
     const security = useQuery(api.adminQueries.getSecurityOverview, activeTab === 'seguridad' || activeTab === 'resumen' ? queryArgs : 'skip');
     const sessions = useQuery(api.adminQueries.getActiveSessions, activeTab === 'seguridad' ? queryArgs : 'skip');
     const auditLogs = useQuery(api.adminQueries.getAuditLogs, activeTab === 'logs' ? queryArgs : 'skip');
-
+    
+    // ponytail: [techo/limitación] Global switch para 2FA
+    const require2Fa = useQuery(api.settings?.getSetting ?? (() => null as any), { key: "require_2fa" });
+    const setRequire2Fa = useMutation(api.settings?.setSetting ?? (() => null as any));
+    const requireKyc = useQuery(api.settings?.getSetting ?? (() => null as any), { key: "require_kyc" });
+    const setRequireKyc = useMutation(api.settings?.setSetting ?? (() => null as any));
     const adminForceReleaseEscrow = useAction(api.stripe.adminForceReleaseEscrow);
     const adminRefundEscrow = useAction(api.stripe.adminRefundEscrow);
     const resolveDispute = useAction(api.disputes.resolveDispute);
@@ -676,6 +681,45 @@ export default function AdminDashboardScreen({ navigation }: any) {
                 }}
             />
             <SectionTitle styles={styles} icon={KeyRound} label="Hashes de contraseñas" />
+            
+            {/* PONYTAIL 2FA TOGGLE */}
+            <View style={[styles.card, { marginBottom: 16, borderColor: require2Fa === false ? '#EF4444' : '#10B981' }]}>
+                <View style={[styles.rowWrap, { justifyContent: 'space-between', marginBottom: 8 }]}>
+                    <View style={styles.rowWrap}>
+                        <Shield size={16} color={require2Fa !== false ? "#10B981" : "#EF4444"} />
+                        <Text style={styles.cardTitle}>Forzar 2FA (Código OTP)</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.actionBtn, require2Fa !== false ? styles.btnDanger : styles.btnSuccess]}
+                        onPress={() => setRequire2Fa({ sessionToken: sessionToken, key: "require_2fa", value: require2Fa === false })}
+                    >
+                        <Text style={styles.btnText}>{require2Fa !== false ? 'Desactivar 2FA' : 'Activar 2FA'}</Text>
+                    </TouchableOpacity>
+                </View>
+                <Text style={styles.cardMeta}>
+                    ponytail: [techo/limitación] Este switch global desactiva la validación 2FA (OTP al correo) para testing. Debe ser borrado antes de producción.
+                </Text>
+            </View>
+
+            {/* PONYTAIL KYC TOGGLE */}
+            <View style={[styles.card, { marginBottom: 16, borderColor: requireKyc === true ? '#10B981' : '#EF4444' }]}>
+                <View style={[styles.rowWrap, { justifyContent: 'space-between', marginBottom: 8 }]}>
+                    <View style={styles.rowWrap}>
+                        <FileCheck size={16} color={requireKyc === true ? "#10B981" : "#EF4444"} />
+                        <Text style={styles.cardTitle}>Forzar KYC (Veridad de Identidad)</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.actionBtn, requireKyc === true ? styles.btnDanger : styles.btnSuccess]}
+                        onPress={() => setRequireKyc({ sessionToken: sessionToken, key: "require_kyc", value: requireKyc !== true })}
+                    >
+                        <Text style={styles.btnText}>{requireKyc === true ? 'Desactivar KYC' : 'Activar KYC'}</Text>
+                    </TouchableOpacity>
+                </View>
+                <Text style={styles.cardMeta}>
+                    ponytail: [techo/limitación] Si está desactivado, todos los usuarios recién logueados o creados se considerarán como KYC completado ('approved').
+                </Text>
+            </View>
+
             {!security ? <Loading styles={styles} label="Cargando…" /> : (
                 <>
                     <View style={styles.statsGrid}>
