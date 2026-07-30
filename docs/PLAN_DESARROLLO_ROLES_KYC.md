@@ -142,9 +142,9 @@ Esta guía está diseñada de forma directa para validar **todas las Historias d
 2. Ingresa el **código de verificación de 6 dígitos** (Email Verification) que llega a tu correo para activar la cuenta.
 3. Lee y acepta los Términos y Condiciones generales.
 4. **✔️ Criterio de Éxito (Checklist):**
-   - [ ] ¿Te dio la opción de "Saltar" el KYC?
-   - [ ] Al saltarlo, ¿pudiste navegar por la app sin bloqueos?
-   - [ ] Si completas el KYC, ¿se guardó el estado y no te lo volvió a pedir al reiniciar la app?
+   - [X] ¿Te dio la opción de "Saltar" el KYC?
+   - [X] Al saltarlo, ¿pudiste navegar por la app sin bloqueos?
+   - [X] Si completas el KYC, ¿se guardó el estado y no te lo volvió a pedir al reiniciar la app?
 
 ---
 

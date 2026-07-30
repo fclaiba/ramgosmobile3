@@ -188,12 +188,7 @@ const resolveNextRoute = (user: PublicUser): AuthFlowDecision['nextRoute'] => {
         };
     }
 
-    // KYC is now optional and accessible from the Profile screen
     // We no longer force it during login or registration flow
-    // Only force BasicProfileSetup for brand-new accounts without any display name
-    if (!user.nickname && !user.name) {
-        return { screen: 'BasicProfileSetup' };
-    }
 
     if (user.role === 'business' && user.kycStatus === 'unverified') {
         return { screen: 'KYC', params: { accountType: 'business' } };
@@ -743,7 +738,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // If user data hasn't synced yet, we return optimistc next route.
             return {
                  user: { id: state.pendingVerification!.userId } as any,
-                 nextRoute: { screen: 'BasicProfileSetup' },
+                 nextRoute: { screen: 'Home' },
                  requiresKyc: true,
                  kycStatus: 'pending'
             };

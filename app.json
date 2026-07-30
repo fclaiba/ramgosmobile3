@@ -54,7 +54,8 @@
           "enableGooglePay": true
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-video"
     ],
     "extra": {
       "eas": {

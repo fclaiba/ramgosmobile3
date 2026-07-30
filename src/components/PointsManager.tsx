@@ -272,6 +272,22 @@ export function PointsManager() {
                     <>
                         <View style={styles.howItWorksDivider} />
                         
+                        {/* Golden Rule Section */}
+                        <Text style={styles.howItWorksSectionTitle}>⚠️ REGLA DE ORO</Text>
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' }]}>
+                                <Lock size={14} color="#EF4444" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Intransferibles</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Los puntos se ganan individualmente frente al sistema (jugando, comprando, interactuando). No se pueden transferir a otros usuarios ni usarse para pagar comisiones.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksDivider} />
+
                         {/* Earning Section */}
                         <Text style={styles.howItWorksSectionTitle}>💰 GANAR PUNTOS</Text>
                         

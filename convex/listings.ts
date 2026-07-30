@@ -190,8 +190,19 @@ export const createListing = mutation({
             if (role !== 'business' && role !== 'admin' && role !== 'influencer') {
                 throw new Error(`Los usuarios de tipo ${role} no pueden crear bonos.`);
             }
-            if (role === 'influencer' && seller.kycStatus !== 'completed' && seller.kycStatus !== 'skipped') {
-                throw new Error('Debes completar la verificación KYC para crear bonos como influencer.');
+            if (role === 'influencer') {
+                const requireKyc = await ctx.db
+                    .query("global_settings")
+                    .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
+                    .first();
+                const isKycEnabled = requireKyc?.value === true;
+                const effectiveKycStatus = seller.kycStatus 
+                    ? seller.kycStatus 
+                    : (isKycEnabled ? "pending" : "approved");
+                
+                if (effectiveKycStatus !== 'completed' && effectiveKycStatus !== 'skipped' && effectiveKycStatus !== 'approved') {
+                    throw new Error('Debes completar la verificación KYC para crear bonos como influencer.');
+                }
             }
         }
 

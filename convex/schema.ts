@@ -1086,4 +1086,3 @@ export default defineSchema({
         createdAt: v.string(),
     }).index("by_business", ["businessId"]).index("by_form", ["formId"]),
 });
-

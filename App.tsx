@@ -84,7 +84,6 @@ import AboutScreen from './src/screens/AboutScreen';
 import BusinessDashboardScreen from './src/screens/BusinessDashboardScreen';
 import BannedUserScreen from './src/screens/BannedUserScreen';
 import RoleSelectionScreen from './src/screens/RoleSelectionScreen';
-import BasicProfileSetupScreen from './src/screens/BasicProfileSetupScreen';
 import BusinessCreateScreen from './src/screens/BusinessCreateScreen';
 import InfluencerDashboardScreen from './src/screens/InfluencerDashboardScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
@@ -217,7 +216,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
                     <Stack.Screen name="BannedUser" component={BannedUserScreen} options={{ gestureEnabled: false }} />
                     <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-                    <Stack.Screen name="BasicProfileSetup" component={BasicProfileSetupScreen} />
                     <Stack.Screen name="BusinessCreate" component={BusinessCreateScreen} />
                     <Stack.Screen name="VerifyBusiness" component={BusinessKYCScreen} />
                     <Stack.Screen name="Referrals" component={ReferralsScreen} />

@@ -56,7 +56,11 @@ const sanitizeUser = async (ctx: any, user: any) => {
         .first();
     const isKycEnabled = requireKyc?.value === true; // Default is FALSE (Desactivado por defecto)
 
-    const effectiveKycStatus = isKycEnabled ? user.kycStatus : "approved";
+    // Si el usuario ya tiene un estado de KYC (ej. pending porque acaba de enviarlo), respetamos ese estado.
+    // Solo forzamos 'approved' si el usuario NO tiene estado y el KYC global está desactivado.
+    const effectiveKycStatus = user.kycStatus 
+        ? user.kycStatus 
+        : (isKycEnabled ? "pending" : "approved");
 
     return {
     _id: user._id,

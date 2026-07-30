@@ -697,7 +697,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
                 <Text style={styles.cardMeta}>
-                    ponytail: [techo/limitación] Este switch global desactiva la validación 2FA (OTP al correo) para testing. Debe ser borrado antes de producción.
+                    Este switch global desactiva la validación 2FA (OTP al correo) para testing. Debe ser borrado antes de producción.
                 </Text>
             </View>
 
@@ -716,7 +716,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     </TouchableOpacity>
                 </View>
                 <Text style={styles.cardMeta}>
-                    ponytail: [techo/limitación] Si está desactivado, todos los usuarios recién logueados o creados se considerarán como KYC completado ('approved').
+                    Si está desactivado, todos los usuarios recién logueados o creados se considerarán como KYC completado ('approved').
                 </Text>
             </View>
 

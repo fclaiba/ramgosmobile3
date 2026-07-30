@@ -1411,5 +1411,138 @@ export const getHighlights = query({
     },
 });
 
+// ---------------------------------------------------------------------------
+// Social Commerce & Gamification (Sprint 3)
+// ---------------------------------------------------------------------------
+
+export const simulateSocialCommercePayment = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        postId: v.id("socialPosts"),
+        pointsToRedeem: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        const buyerUser = await ctx.db.get(actor.id);
+        if (!buyerUser) throw new Error("Buyer not found");
+
+        // 1. Fetch Post
+        const post = await ctx.db.get(args.postId);
+        if (!post) throw new Error("Post no encontrado");
+        if (!post.commercialProduct || !post.commercialProduct.listingId) {
+            throw new Error("Este post no tiene un producto comercial vinculado");
+        }
+
+        // 2. Fetch Listing to get the seller
+        const listingId = post.commercialProduct.listingId as Id<"listings">;
+        const listing = await ctx.db.get(listingId);
+        if (!listing) throw new Error("Producto no encontrado");
+
+        // 3. Prevent buying own product
+        if (listing.sellerId === actor.idString) {
+            throw new Error("No puedes comprar tu propio producto");
+        }
+
+        const price = listing.price;
+        let finalPrice = price;
+
+        // 4. Redeem Points (Gamification)
+        if (args.pointsToRedeem && args.pointsToRedeem > 0) {
+            const economyState = await ctx.db
+                .query("economyState")
+                .withIndex("by_user", (q) => q.eq("userId", actor.idString))
+                .first();
+            
+            const pointsBalance = economyState?.pointsState?.pointsBalance || 0;
+            if (pointsBalance < args.pointsToRedeem) {
+                throw new Error("No tienes suficientes puntos");
+            }
+            
+            // Simular descuento: 100 puntos = $1 de descuento
+            const discount = args.pointsToRedeem / 100;
+            finalPrice = Math.max(0, price - discount);
+
+            // Restar puntos al comprador
+            if (economyState) {
+                await ctx.db.patch(economyState._id, {
+                    pointsState: {
+                        ...economyState.pointsState,
+                        pointsBalance: pointsBalance - args.pointsToRedeem
+                    }
+                });
+            }
+        }
+
+        // 5. Split Payment
+        // 80% to Seller
+        // 10% to Creator (Influencer)
+        // 10% to Platform (simulated)
+        const sellerId = listing.sellerId;
+        const creatorId = post.actorId; // Assuming socialPosts stores actorId as string
+        
+        const sellerCut = finalPrice * 0.8;
+        const creatorCut = finalPrice * 0.1;
+
+        // Add to Seller
+        const sellerUser = await ctx.db.query("users").withIndex("by_uid", q => q.eq("uid", sellerId)).first() 
+            || await ctx.db.get(sellerId as Id<"users">); // Fallback si sellerId era ObjectId
+        
+        if (sellerUser) {
+            await ctx.db.patch(sellerUser._id, {
+                balance: (sellerUser.balance || 0) + sellerCut
+            });
+        }
+
+        // Add to Creator (if different from Seller)
+        if (creatorId !== sellerId) {
+            const creatorUser = await ctx.db.query("users").withIndex("by_uid", q => q.eq("uid", creatorId)).first()
+                || await ctx.db.get(creatorId as Id<"users">);
+            
+            if (creatorUser) {
+                await ctx.db.patch(creatorUser._id, {
+                    balance: (creatorUser.balance || 0) + creatorCut
+                });
+            }
+        }
+
+        // 6. Award Gamification Points for buying
+        const pointsEarned = Math.floor(finalPrice * 5); // 5 points per dollar
+        const currentEco = await ctx.db
+            .query("economyState")
+            .withIndex("by_user", (q) => q.eq("userId", actor.idString))
+            .first();
+        
+        if (currentEco) {
+            await ctx.db.patch(currentEco._id, {
+                pointsState: {
+                    ...currentEco.pointsState,
+                    pointsBalance: (currentEco.pointsState?.pointsBalance || 0) + pointsEarned
+                }
+            });
+        } else {
+            await ctx.db.insert("economyState", {
+                userId: actor.idString,
+                pointsState: {
+                    pointsBalance: pointsEarned,
+                    energyBalance: 100,
+                },
+                updatedAt: new Date().toISOString(),
+            });
+        }
+
+        // Add Ledger entry for Gamification
+        await ctx.db.insert("pointsLedger", {
+            userId: actor.idString,
+            eventKey: "purchase_" + Date.now(),
+            type: "earn",
+            description: "Compra Social Commerce",
+            amount: pointsEarned,
+            createdAt: new Date().toISOString()
+        });
+
+        return { success: true, finalPrice, pointsEarned };
+    }
+});
+
 export const followUser = follow;
 export const sendMessage = sendDirectMessage;

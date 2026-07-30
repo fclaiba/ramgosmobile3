@@ -78,7 +78,7 @@ function ProfileScreen({ navigation }: any) {
                 joinDate: (user as any).joinedAt ? new Date((user as any).joinedAt).toLocaleDateString() : '',
                 avatarUrl: (user as any).avatarUrl || (user as any).avatar || '',
                 username: (user as any).username || '',
-                referralCode: (user as any).referralCode || '',
+                referralCode: (user as any).referralCode || (user as any).username || '',
             });
         }
     }, [user]);
@@ -294,8 +294,8 @@ function ProfileScreen({ navigation }: any) {
                         </TouchableOpacity>
                         
                         {isEditing ? (
-                            <View style={{ alignItems: 'center', width: '100%', paddingHorizontal: 20, marginTop: 4 }}>
-                                <BlurView intensity={30} tint="light" style={styles.glassInputWrapper}>
+                            <View style={{ alignItems: 'center', marginTop: 16, width: '100%', gap: 10 }}>
+                                <BlurView intensity={20} tint="light" style={[styles.glassInputWrapper, { borderRadius: 24, maxWidth: 280 }]}>
                                     <TextInput
                                         style={[styles.editInputGlass, { fontSize: 22, fontWeight: '800' }]}
                                         value={editedProfile.name}
@@ -305,11 +305,11 @@ function ProfileScreen({ navigation }: any) {
                                         selectionColor="rgba(255,255,255,0.8)"
                                     />
                                 </BlurView>
-                                <BlurView intensity={20} tint="light" style={[styles.glassInputWrapper, { marginTop: 8, paddingVertical: 4, borderRadius: 20 }]}>
+                                <BlurView intensity={20} tint="light" style={[styles.glassInputWrapper, { borderRadius: 20, maxWidth: 240, paddingVertical: 6 }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: '500', marginRight: 2 }}>@</Text>
+                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 16, fontWeight: '500', marginRight: 4 }}>@</Text>
                                         <TextInput
-                                            style={[styles.editInputGlass, { fontSize: 16, fontWeight: '500' }]}
+                                            style={[styles.editInputGlass, { fontSize: 16, fontWeight: '500', minWidth: 100 }]}
                                             value={editedProfile.username}
                                             onChangeText={(text) => setEditedProfile({ ...editedProfile, username: text })}
                                             placeholder="usuario"
@@ -319,15 +319,40 @@ function ProfileScreen({ navigation }: any) {
                                         />
                                     </View>
                                 </BlurView>
+                                <BlurView intensity={20} tint="light" style={[styles.glassInputWrapper, { borderRadius: 20, maxWidth: 200, paddingVertical: 4 }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500', marginRight: 4 }}>Ref:</Text>
+                                        <TextInput
+                                            style={[styles.editInputGlass, { fontSize: 13, fontWeight: '500', minWidth: 80 }]}
+                                            value={editedProfile.referralCode}
+                                            onChangeText={(text) => {
+                                                const alphanumeric = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                                                setEditedProfile({ ...editedProfile, referralCode: alphanumeric.slice(0, 15) });
+                                            }}
+                                            placeholder="REFERIDO"
+                                            placeholderTextColor="rgba(255,255,255,0.5)"
+                                            autoCapitalize="characters"
+                                            selectionColor="rgba(255,255,255,0.8)"
+                                            maxLength={15}
+                                        />
+                                    </View>
+                                </BlurView>
                             </View>
                         ) : (
-                            <>
+                            <View style={{ alignItems: 'center', marginTop: 12 }}>
                                 <Text style={styles.name}>{profile.name}</Text>
-                                <Text style={[styles.email, { opacity: 0.9 }]}>@{profile.username || 'usuario'}</Text>
-                            </>
+                                <Text style={[styles.email, { opacity: 0.9, marginBottom: 4 }]}>@{profile.username || 'usuario'}</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500' }}>
+                                    Cód. Referido: <Text style={{ color: '#fff', fontWeight: 'bold' }}>{profile.referralCode || profile.username || 'N/A'}</Text>
+                                </Text>
+                            </View>
                         )}
 
-                        <View style={styles.badgesRow}>
+                        <View style={[styles.badgesRow, { marginTop: isEditing ? 16 : 12 }]}>
+                            <View style={[styles.badge, { backgroundColor: 'rgba(245, 158, 11, 0.2)', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' }]}>
+                                <Flame size={12} color="#FCD34D" fill="#FCD34D" />
+                                <Text style={[styles.badgeText, { color: '#FCD34D' }]}>{points} pts</Text>
+                            </View>
                             <View style={styles.badge}>
                                 <Award size={12} color="#FBBF24" fill="#FBBF24" />
                                 <Text style={styles.badgeText}>Nivel {currentTier?.label || 'Bronze'}</Text>
@@ -816,7 +841,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     name: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
     email: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginBottom: 16 },
 
-    badgesRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+    badgesRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 24 },
     badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.md, gap: 4 },
     badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
 
