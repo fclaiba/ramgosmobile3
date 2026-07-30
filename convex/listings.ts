@@ -190,7 +190,7 @@ export const createListing = mutation({
             if (role !== 'business' && role !== 'admin' && role !== 'influencer') {
                 throw new Error(`Los usuarios de tipo ${role} no pueden crear bonos.`);
             }
-            if (role === 'influencer' && seller.kycStatus !== 'completed') {
+            if (role === 'influencer' && seller.kycStatus !== 'completed' && seller.kycStatus !== 'skipped') {
                 throw new Error('Debes completar la verificación KYC para crear bonos como influencer.');
             }
         }

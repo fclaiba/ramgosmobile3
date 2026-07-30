@@ -5,6 +5,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { glassSurface } from '../../utils/glass';
 import { useResponsive } from '../../hooks/useResponsive';
 
@@ -19,6 +20,7 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
     const isDark = colorScheme === 'dark';
     const { show } = useToast();
     const { width: windowWidth, height: windowHeight } = useResponsive();
+    const { sessionToken } = useAuth();
 
     const [bonoTitle, setBonoTitle] = useState('');
     const [bonoDiscount, setBonoDiscount] = useState('40'); // 40, 50, 60
@@ -45,6 +47,7 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
         setIsSubmitting(true);
         try {
             await createListingMutation({
+                sessionToken,
                 title: bonoTitle,
                 description: bonoDescription,
                 price: 0,

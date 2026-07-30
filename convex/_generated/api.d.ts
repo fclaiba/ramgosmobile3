@@ -57,6 +57,7 @@ import type * as social from "../social.js";
 import type * as social__helpers from "../social/_helpers.js";
 import type * as stripe from "../stripe.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as temp from "../temp.js";
 import type * as testMock from "../testMock.js";
 import type * as testMock2 from "../testMock2.js";
 import type * as testQuery from "../testQuery.js";
@@ -119,6 +120,7 @@ declare const fullApi: ApiFromModules<{
   "social/_helpers": typeof social__helpers;
   stripe: typeof stripe;
   subscriptions: typeof subscriptions;
+  temp: typeof temp;
   testMock: typeof testMock;
   testMock2: typeof testMock2;
   testQuery: typeof testQuery;

@@ -43,14 +43,20 @@ export const checkInfluencerMetrics = internalMutation({
 
 const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
 
-const sanitizeUser = (user: any) => ({
+const sanitizeUser = async (ctx: any, user: any) => {
+    let avatarUrl = user.avatar;
+    if (avatarUrl && avatarUrl.startsWith("convex-storage:") && typeof ctx.storage.getUrl === 'function') {
+        const url = await ctx.storage.getUrl(avatarUrl.replace("convex-storage:", "") || avatarUrl);
+        if (url) avatarUrl = url;
+    }
+    return {
     _id: user._id,
     uid: user.uid,
     email: user.email,
     name: user.name,
     nickname: user.nickname,
     role: user.role,
-    avatar: user.avatar,
+    avatar: avatarUrl,
     kycStatus: user.kycStatus,
     joinedAt: user.joinedAt,
     tier: user.tier,
@@ -66,7 +72,9 @@ const sanitizeUser = (user: any) => ({
     sellerResponseTimeHours: user.sellerResponseTimeHours,
     isBanned: user.isBanned,
     businessAvailability: user.businessAvailability,
-});
+    username: user.username,
+    };
+};
 
 export const register = mutation({
     args: {
@@ -207,17 +215,24 @@ export const register = mutation({
 
 export const login = mutation({
     args: {
-        email: v.string(),
+        emailOrUsername: v.string(),
         password: v.string(),
     },
     handler: async (ctx, args) => {
-        const email = args.email.trim().toLowerCase();
-        await checkRateLimit(ctx, `login_${email}`, 5, 900000);
+        const input = args.emailOrUsername.trim().toLowerCase();
+        await checkRateLimit(ctx, `login_${input}`, 5, 900000);
 
-        const user = await ctx.db
+        let user = await ctx.db
             .query("users")
-            .withIndex("by_email", (q) => q.eq("email", email))
+            .withIndex("by_email", (q) => q.eq("email", input))
             .first();
+
+        if (!user) {
+            user = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", input))
+                .first();
+        }
 
         if (!user) {
             // Anti-enumeration: Generic error message
@@ -298,7 +313,7 @@ export const oauthLogin = mutation({
             await ctx.runMutation(internal.rewards.awardSignupPoints, { userId: user!._id });
         } catch (e) { console.error("Error otorgando puntos OAuth:", e); }
 
-        return { ...sanitizeUser(user), sessionToken };
+        return { ...(await sanitizeUser(ctx, user)), sessionToken };
     },
 });
 
@@ -331,7 +346,7 @@ export const changePassword = mutation({
         if (!user) {
             throw new Error("Usuario no encontrado.");
         }
-
+        return { ...(await sanitizeUser(ctx, user)), sessionToken: (args as any).sessionToken };
         if (user.otp !== args.code) {
             throw new Error("El código de verificación es inválido.");
         }
@@ -383,7 +398,7 @@ export const getUser = query({
                  }
             }
             const user = await ctx.db.get(args.id);
-            return user ? sanitizeUser(user) : null;
+            return user ? await sanitizeUser(ctx, user) : null;
         } catch (e) {
             return null;
         }
@@ -496,12 +511,6 @@ export const updateProfile = mutation({
                 }
 
                 const now = Date.now();
-                const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
-                if (userDoc.usernameLastChangedAt && now - userDoc.usernameLastChangedAt < FIFTEEN_DAYS_MS) {
-                    const daysLeft = Math.ceil((FIFTEEN_DAYS_MS - (now - userDoc.usernameLastChangedAt)) / (1000 * 60 * 60 * 24));
-                    throw new Error(`Debes esperar ${daysLeft} días para volver a cambiar tu nombre de usuario.`);
-                }
-
                 updates.username = newUsername;
                 updates.referralCode = newUsername; // Sincronizado
                 updates.usernameLastChangedAt = now;
@@ -529,9 +538,8 @@ export const listUsers = query({
         }
         let q = ctx.db.query("users");
         const users = await q.collect();
-        const sanitized = users
-            .map(sanitizeUser)
-            .sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
+        const sanitized = await Promise.all(users.map(u => sanitizeUser(ctx, u)));
+        sanitized.sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
         if (args.role) {
             return sanitized.filter(u => u.role === args.role);
         }
@@ -552,6 +560,8 @@ export const updateUser = mutation({
             avatar: v.optional(v.string()),
             email: v.optional(v.string()),
             isTest: v.optional(v.boolean()),
+            username: v.optional(v.string()),
+            nickname: v.optional(v.string()),
         })
     },
     handler: async (ctx, args) => {

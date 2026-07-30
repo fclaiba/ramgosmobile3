@@ -8,24 +8,24 @@ const FALLBACK = 'Algo salió mal. Intentá de nuevo.';
 /** Known server phrases → clearer UX copy (never show "No autorizado…" raw). */
 const MESSAGE_MAP: Array<{ match: RegExp; text: string }> = [
     {
-        match: /pertenece a otro negocio|otro negocio|no autorizado/i,
+        match: /pertenece a otro negocio/i,
         text: 'Este bono es de otro negocio. Pedile al cliente el QR correcto.',
     },
     {
-        match: /ya fue canjeado|ya canjeado/i,
+        match: /bono ya fue canjeado/i,
         text: 'Este bono ya fue canjeado.',
     },
     {
-        match: /está vencido|expirad|vencid/i,
+        match: /bono.*está vencido/i,
         text: 'Este bono está vencido.',
     },
     {
-        match: /fue cancelado|cancelad/i,
+        match: /bono.*fue cancelado/i,
         text: 'Este bono fue cancelado.',
     },
     {
-        match: /código de bono inválido|inválid|no encontr/i,
-        text: 'No encontramos ese código. Revisalo e intentá de nuevo.',
+        match: /código de bono inválido/i,
+        text: 'No encontramos ese código de bono. Revisalo e intentá de nuevo.',
     },
 ];
 

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, Animated, TextInput,
-    ScrollView, Platform, KeyboardAvoidingView,
+    ScrollView, Platform, KeyboardAvoidingView, useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -25,7 +25,9 @@ type Step = 'intro' | 'success';
 export default function KYCScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = useMemo(() => getStyles(isDark), [isDark]);
+    const { width: windowWidth } = useWindowDimensions();
+    const isWide = windowWidth >= 768;
+    const styles = useMemo(() => getStyles(isDark, isWide), [isDark, isWide]);
     const { show } = useToast();
 
     const accountType = route.params?.accountType || 'consumer';
@@ -44,7 +46,7 @@ export default function KYCScreen({ navigation, route }: any) {
 
     const [socialLink, setSocialLink] = useState('');
 
-    const { user, markKycSubmitted } = useAuth();
+    const { user, sessionToken, markKycSubmitted } = useAuth();
     const { refreshKyc } = useFintech();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,7 +57,7 @@ export default function KYCScreen({ navigation, route }: any) {
     const handleSkip = async () => {
         setIsSubmitting(true);
         try {
-            await skipKycMutation({});
+            await skipKycMutation({ sessionToken });
             navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
         } catch (error: any) {
             show(error.message || 'Error al saltar KYC', 'error');
@@ -183,20 +185,26 @@ export default function KYCScreen({ navigation, route }: any) {
                         <Text style={styles.subtitle}>Sube el frente y dorso de tu documento.</Text>
                         
                         <View style={styles.formBody}>
-                            <ImageUploadField
-                                variant="document"
-                                title="Documento de identidad — Frente"
-                                images={idFront ? [idFront] : []}
-                                onChange={(imgs) => setIdFront(imgs[0] ?? null)}
-                                maxImages={1}
-                            />
-                            <ImageUploadField
-                                variant="document"
-                                title="Documento de identidad — Dorso"
-                                images={idBack ? [idBack] : []}
-                                onChange={(imgs) => setIdBack(imgs[0] ?? null)}
-                                maxImages={1}
-                            />
+                            <View style={styles.docsRow}>
+                                <View style={styles.docCol}>
+                                    <ImageUploadField
+                                        variant="document"
+                                        title="Identidad — Frente"
+                                        images={idFront ? [idFront] : []}
+                                        onChange={(imgs) => setIdFront(imgs[0] ?? null)}
+                                        maxImages={1}
+                                    />
+                                </View>
+                                <View style={styles.docCol}>
+                                    <ImageUploadField
+                                        variant="document"
+                                        title="Identidad — Dorso"
+                                        images={idBack ? [idBack] : []}
+                                        onChange={(imgs) => setIdBack(imgs[0] ?? null)}
+                                        maxImages={1}
+                                    />
+                                </View>
+                            </View>
                         </View>
                     </View>
                 )}
@@ -255,30 +263,32 @@ export default function KYCScreen({ navigation, route }: any) {
                                 </>
                             )}
                         </View>
-
-                        <TouchableOpacity style={[styles.btn, isSubmitting && styles.btnDisabled]} onPress={handleStartVerification} disabled={isSubmitting}>
-                            <Text style={styles.btnText}>{isSubmitting ? 'Enviando...' : 'Enviar para Verificación'}</Text>
-                        </TouchableOpacity>
                     </View>
                 )}
 
-                <View style={styles.navButtonsRow}>
-                    {formStep > 1 && (
-                        <TouchableOpacity style={styles.btnGhostSquare} onPress={handleBack} disabled={isSubmitting}>
-                            <Text style={styles.btnGhostTextSquare}>Atrás</Text>
-                        </TouchableOpacity>
-                    )}
-                    
-                    {formStep < totalSteps && (
-                        <TouchableOpacity style={[styles.btnGhostSquare, { flex: 1, backgroundColor: '#2196F3', borderColor: '#2196F3' }]} onPress={handleNext}>
-                            <Text style={[styles.btnGhostTextSquare, { color: '#fff' }]}>Siguiente</Text>
-                            <ArrowRight size={18} color="#fff" />
-                        </TouchableOpacity>
-                    )}
+                <View style={styles.navButtonsContainer}>
+                    <View style={styles.navButtonsRow}>
+                        {formStep > 1 && (
+                            <TouchableOpacity style={styles.btnGhostSquare} onPress={handleBack} disabled={isSubmitting}>
+                                <Text style={styles.btnGhostTextSquare}>Atrás</Text>
+                            </TouchableOpacity>
+                        )}
+                        
+                        {formStep < totalSteps ? (
+                            <TouchableOpacity style={[styles.btnGhostSquare, styles.btnPrimary]} onPress={handleNext}>
+                                <Text style={styles.btnPrimaryText}>Siguiente</Text>
+                                <ArrowRight size={18} color="#fff" />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity style={[styles.btnGhostSquare, styles.btnPrimary, isSubmitting && styles.btnDisabled]} onPress={handleStartVerification} disabled={isSubmitting}>
+                                <Text style={styles.btnPrimaryText}>{isSubmitting ? 'Enviando...' : 'Enviar'}</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
-                    {formStep === 1 && accountType === 'consumer' && (
-                         <TouchableOpacity style={[styles.btnGhostSquare, { marginTop: 12, borderWidth: 0 }]} onPress={handleSkip} disabled={isSubmitting}>
-                            <Text style={[styles.btnGhostTextSquare, { fontSize: 13 }]}>Saltar por ahora</Text>
+                    {formStep === 1 && (
+                         <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} disabled={isSubmitting}>
+                            <Text style={styles.skipBtnText}>Saltar por ahora</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -377,7 +387,7 @@ function FormField({ styles, label, value, onChangeText, placeholder, isDark, au
     );
 }
 
-const getStyles = (isDark: boolean) => {
+const getStyles = (isDark: boolean, isWide: boolean) => {
     const glass = glassTokens(isDark);
     const glassCard = {
         backgroundColor: glass.bg,
@@ -468,6 +478,8 @@ const getStyles = (isDark: boolean) => {
             paddingTop: 12,
             gap: 12,
         },
+        docsRow: { flexDirection: isWide ? 'row' : 'column', gap: 16 },
+        docCol: { flex: isWide ? 1 : undefined, minWidth: 0, width: isWide ? 'auto' : '100%' },
         section: {
             borderRadius: Radius.lg,
             padding: 14,
@@ -568,17 +580,20 @@ const getStyles = (isDark: boolean) => {
         summaryLabel: { color: colors(isDark).textMuted, fontSize: 12, marginBottom: 2 },
         summaryVal: { color: colors(isDark).text, fontSize: 16, fontWeight: '600', marginBottom: 12 },
 
+        navButtonsContainer: {
+            marginTop: 32,
+            paddingHorizontal: 8,
+            alignItems: 'stretch',
+            gap: 16
+        },
         navButtonsRow: {
             flexDirection: 'row',
-            justifyContent: 'center',
             gap: 12,
-            marginTop: 24,
-            flexWrap: 'wrap'
         },
         btnGhostSquare: {
             flexDirection: 'row',
-            height: 48,
-            borderRadius: Radius.md,
+            height: 52,
+            borderRadius: Radius.lg,
             paddingHorizontal: 20,
             justifyContent: 'center',
             alignItems: 'center',
@@ -586,7 +601,31 @@ const getStyles = (isDark: boolean) => {
             borderWidth: 1,
             borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(33, 150, 243, 0.3)',
         },
-        btnGhostTextSquare: { color: isDark ? '#D1D5DB' : '#2196F3', fontWeight: '600', fontSize: 14, marginRight: 6 },
+        btnGhostTextSquare: { color: isDark ? '#D1D5DB' : '#2196F3', fontWeight: '600', fontSize: 15, marginRight: 6 },
+        btnPrimary: {
+            flex: 1,
+            backgroundColor: '#2196F3',
+            borderColor: '#2196F3',
+            ...Platform.select({
+                web: { boxShadow: '0 4px 12px rgba(33, 150, 243, 0.3)' } as any,
+                default: { elevation: 4, shadowColor: '#2196F3', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+            }),
+        },
+        btnPrimaryText: {
+            color: '#fff',
+            fontWeight: '700',
+            fontSize: 15,
+            marginRight: 6
+        },
+        skipBtn: {
+            alignItems: 'center',
+            paddingVertical: 12,
+        },
+        skipBtnText: {
+            color: colors(isDark).textMuted,
+            fontSize: 14,
+            fontWeight: '600',
+        },
         
         successBody: {
             flex: 1,

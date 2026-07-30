@@ -76,6 +76,7 @@ export default function VerificationScreen({ navigation, route }: any) {
 
     const accountType = route.params?.accountType || 'consumer';
     const isSignup = route.params?.isSignup === true;
+    const rememberMe = route.params?.rememberMe ?? true;
 
     const handleVerify = async () => {
         const codeValue = code.join('');
@@ -83,14 +84,9 @@ export default function VerificationScreen({ navigation, route }: any) {
 
         setIsLoading(true);
         try {
-            const decision = await verifyEmailCode(codeValue);
+            const decision = await verifyEmailCode(codeValue, rememberMe);
 
-            // Check if we need to setup profile first
-            const nextScreen = decision.nextRoute?.screen;
-            if (nextScreen === 'BasicProfileSetup') {
-                navigateFromDecision(decision);
-                return;
-            }
+            // Profile setup is no longer required as a separate step
 
             // Route all to KYC screen so they can complete or skip, but ONLY on signup
             if (isSignup && ['business', 'influencer', 'consumer'].includes(accountType)) {

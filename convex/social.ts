@@ -872,6 +872,21 @@ export const createStory = mutation({
     },
 });
 
+export const deleteStory = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        storyId: v.id('socialStories'),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        const story = await ctx.db.get(args.storyId);
+        if (!story) throw new Error('Historia no encontrada');
+        if (story.authorUserId !== actor.idString) throw new Error('No autorizado');
+        await ctx.db.patch(args.storyId, { deletedAt: NOW() });
+    }
+});
+
 export const viewStory = mutation({
     args: {
         sessionToken: v.optional(v.string()),
@@ -930,11 +945,35 @@ export const getStoriesForFollowing = query({
                 .filter((s: any) => !s.deletedAt && s.expiresAt > now)
                 .sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt));
             if (active.length === 0) continue;
-            const author = await ctx.db
+            let author: any = await ctx.db
                 .query('socialUsers')
                 .withIndex('by_user', (q) => q.eq('userId', userId))
                 .first();
-            groups.push({ author, stories: active });
+            // ponytail: Fallback to main users table if socialUsers doesn't exist yet
+            if (!author) {
+                const mainUser: any = await ctx.db.get(userId as any);
+                if (mainUser) {
+                    author = {
+                        userId: String(mainUser._id),
+                        displayName: mainUser.name || mainUser.username || 'Usuario',
+                        username: mainUser.username || mainUser.email?.split('@')[0] || 'usuario',
+                        avatar: mainUser.avatar,
+                    };
+                    if (author.avatar && author.avatar.startsWith('convex-storage:')) {
+                        const resolved = await ctx.storage.getUrl(author.avatar.replace('convex-storage:', ''));
+                        if (resolved) author.avatar = resolved;
+                    }
+                }
+            }
+            const resolvedActive = await Promise.all(active.map(async (s: any) => {
+                const raw = s.url || s.imageUrl;
+                if (raw && raw.startsWith('convex-storage:')) {
+                    const resolved = await ctx.storage.getUrl(raw.replace('convex-storage:', ''));
+                    if (resolved) return { ...s, url: resolved, imageUrl: resolved };
+                }
+                return { ...s, imageUrl: s.url };
+            }));
+            groups.push({ author: author || { userId, displayName: 'Usuario', username: 'user' }, stories: resolvedActive });
         }
         return groups;
     },

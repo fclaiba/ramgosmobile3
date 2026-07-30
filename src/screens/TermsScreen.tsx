@@ -30,9 +30,7 @@ export default function TermsScreen({ navigation, route }: any) {
                 const next =
                     !user
                         ? { screen: 'Welcome', params: undefined as any }
-                        : (!user.nickname && !user.name)
-                            ? { screen: 'BasicProfileSetup', params: undefined as any }
-                            : { screen: 'Home', params: undefined as any };
+                        : { screen: 'Home', params: undefined as any };
 
                 navigation.reset({
                     index: 0,

@@ -1,84 +1,60 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
-import { X, Image as ImageIcon, Camera } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, Modal } from 'react-native';
+import { X, Send } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useSocial } from '../../contexts/SocialContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Sheet, SheetContent } from '../ui/sheet';
 import { useToast } from '../../contexts/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Radius } from '../../theme/tokens';
-
 
 export const CreateStory = ({ onClose }: { onClose: () => void }) => {
-    const { createStory } = useSocial();
     const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
-    const [imageUrl, setImageUrl] = useState('');
+    const [localUri, setLocalUri] = useState('');
+    const [uploadedStorageId, setUploadedStorageId] = useState('');
     const [uploading, setUploading] = useState(false);
     const insets = useSafeAreaInsets();
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+    const createStoryMutation = useMutation(api.social.createStory);
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
 
-    const handlePickImage = () => {
-        if (!authUser) { show('Debes iniciar sesión', 'error'); return; }
-        
-        // On web, Alert.alert is not supported — go straight to gallery
-        if (Platform.OS === 'web') {
-            launchGallery();
-            return;
-        }
+    useEffect(() => {
+        if (!authUser) { show('Debes iniciar sesión', 'error'); onClose(); return; }
+        launchGallery();
+    }, []);
 
-        Alert.alert(
-            "Subir imagen",
-            "Elige una opción",
-            [
-                { text: "Cancelar", style: "cancel" },
-                { text: "Cámara", onPress: launchCamera },
-                { text: "Galería", onPress: launchGallery }
-            ]
-        );
-    };
-
-    const processImage = async (result: ImagePicker.ImagePickerResult) => {
-        if (result.canceled || !result.assets[0]) return;
+    const uploadImage = async (asset: ImagePicker.ImagePickerAsset) => {
+        setLocalUri(asset.uri);
         setUploading(true);
         try {
             const uploadUrl = await generateUploadUrl({ sessionToken, actorId: authUser?.id as any });
-            const asset = result.assets[0];
-            
-            // Standard fetch works for getting blobs in recent Expo versions
             let blob: Blob;
             try {
-                const fetchResponse = await fetch(asset.uri);
-                blob = await fetchResponse.blob();
-            } catch (err) {
-                // Fallback for older versions of React Native on Android
+                const resp = await fetch(asset.uri);
+                blob = await resp.blob();
+            } catch {
                 blob = await new Promise<Blob>((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
-                    xhr.onload = function() { resolve(xhr.response); };
-                    xhr.onerror = function(e) { reject(new TypeError('Network request failed')); };
+                    xhr.onload = () => resolve(xhr.response);
+                    xhr.onerror = () => reject(new TypeError('Network request failed'));
                     xhr.responseType = 'blob';
                     xhr.open('GET', asset.uri, true);
                     xhr.send(null);
                 });
             }
-
             const response = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': asset.mimeType ?? 'image/jpeg' },
                 body: blob,
             });
             const { storageId } = await response.json();
-            setImageUrl(`convex-storage:${storageId}`);
+            setUploadedStorageId(storageId);
         } catch (e: any) {
             show(e.message || 'Error al subir imagen', 'error');
         } finally {
@@ -86,92 +62,109 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
         }
     };
 
-    const launchCamera = async () => {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) { show('Permiso de cámara requerido', 'error'); return; }
-        const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-        });
-        processImage(result);
-    };
-
     const launchGallery = async () => {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-        });
-        processImage(result);
+        try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) { show('Permiso de galería requerido', 'error'); onClose(); return; }
+            
+            const mediaTypes = (ImagePicker.MediaTypeOptions as any)?.Images || 'Images';
+            
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes,
+                quality: 0.8,
+            });
+            if (result.canceled || !result.assets?.[0]) { onClose(); return; }
+            uploadImage(result.assets[0]);
+        } catch (error: any) {
+            show(error.message || 'Error al abrir la galería', 'error');
+            onClose();
+        }
     };
 
-    const handleCreate = () => {
-        if (!imageUrl) return;
-        createStory(imageUrl);
+    const handleCreate = async () => {
+        if (!uploadedStorageId || uploading) return;
+        setUploading(true);
+        try {
+            await createStoryMutation({
+                sessionToken: sessionToken || '',
+                url: `convex-storage:${uploadedStorageId}`,
+                type: 'image',
+            });
+            show('Historia publicada 🎉', 'success');
+        } catch (error: any) {
+            show(error.message || 'Error al publicar historia', 'error');
+        }
+        setUploading(false);
         onClose();
     };
 
+    if (!localUri) return null;
+
     return (
-        <Sheet open={true} onOpenChange={(val: boolean) => !val && onClose()}>
-            <SheetContent side="bottom" style={styles.sheetContent}>
-                <View style={[styles.container, { paddingBottom: insets.bottom + 16 }]}>
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={onClose}>
-                            <X size={28} color="#fff" />
-                        </TouchableOpacity>
-                        <Text style={styles.title}>Crear Historia</Text>
-                        <View style={{ width: 28 }} />
-                    </View>
+        <Modal visible={true} transparent={false} animationType="fade" onRequestClose={onClose}>
+            <View style={styles.container}>
+                <ImageWithFallback src={localUri} style={StyleSheet.absoluteFill} resizeMode="contain" />
+                <View style={styles.overlay} />
 
-                    <View style={styles.content}>
-                        {imageUrl ? (
-                            <ImageWithFallback src={imageUrl} style={styles.previewImage} />
-                        ) : (
-                            <TouchableOpacity style={styles.placeholder} onPress={handlePickImage} disabled={uploading}>
-                                {uploading ? (
-                                    <ActivityIndicator size="large" color="#fff" />
-                                ) : (
-                                    <>
-                                        <ImageIcon size={64} color="#666" />
-                                        <Text style={styles.placeholderText}>Tocá para elegir o tomar una foto</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <View style={styles.footer}>
-                        <TouchableOpacity
-                            style={[styles.createBtn, !imageUrl && styles.disabledBtn]}
-                            onPress={handleCreate}
-                            disabled={!imageUrl}
-                        >
-                            <Text style={styles.createBtnText}>Compartir en tu historia</Text>
-                        </TouchableOpacity>
-                    </View>
+                <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
+                    <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
+                        <X size={28} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.title}>Tu Historia</Text>
+                    <View style={{ width: 44 }} />
                 </View>
-            </SheetContent>
-        </Sheet>
+
+                <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+                    <View style={{ flex: 1 }} />
+                    <TouchableOpacity
+                        style={[styles.shareBtn, (uploading || !uploadedStorageId) && { opacity: 0.5 }]}
+                        onPress={handleCreate}
+                        disabled={uploading || !uploadedStorageId}
+                    >
+                        {uploading ? (
+                            <ActivityIndicator size="small" color="#000" />
+                        ) : (
+                            <>
+                                <Text style={styles.shareBtnText}>Compartir</Text>
+                                <View style={styles.shareIconWrap}>
+                                    <Send size={16} color="#000" />
+                                </View>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
     );
 };
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    sheetContent: {
-        backgroundColor: '#000',
-        height: '95%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#000' },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.1)',
     },
-    container: { flex: 1 },
-    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    topBar: {
+        position: 'absolute', top: 0, left: 0, right: 0,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingHorizontal: 16, zIndex: 10,
+    },
+    bottomBar: {
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        flexDirection: 'row', justifyContent: 'flex-end',
+        paddingHorizontal: 20, zIndex: 10,
+    },
+    iconBtn: {
+        width: 44, height: 44, borderRadius: 22,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        justifyContent: 'center', alignItems: 'center',
+    },
     title: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
-    content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-    previewImage: { width: '100%', height: '80%', borderRadius: Radius.lg, resizeMode: 'cover' },
-    placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, width: '100%' },
-    placeholderText: { color: '#666', fontSize: 16 },
-    footer: { padding: 20 },
-    createBtn: { backgroundColor: '#4FC3F7', padding: 16, borderRadius: Radius.lg, alignItems: 'center' },
-    disabledBtn: { backgroundColor: '#4B5563', opacity: 0.5 },
-    createBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+    shareBtn: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 24,
+        borderRadius: 30, gap: 12, minWidth: 140, justifyContent: 'center',
+    },
+    shareBtnText: { color: '#000', fontSize: 16, fontWeight: '700' },
+    shareIconWrap: { backgroundColor: '#f0f0f0', padding: 6, borderRadius: 16 },
 });

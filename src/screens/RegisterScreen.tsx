@@ -265,13 +265,7 @@ export default function RegisterScreen({ navigation, route }: any) {
         try {
             const decision = await loginWithSocial(provider, undefined, accountType);
 
-            // Check if we need to setup profile first
-            const nextScreen = decision.nextRoute?.screen;
-            if (nextScreen === 'BasicProfileSetup') {
-                const destination = decision.nextRoute!;
-                navigation.reset({ index: 0, routes: [{ name: destination.screen, params: destination.params }] });
-                return;
-            }
+            // Profile setup is no longer required as a separate step
 
             // Force KYC for ALL users during registration flow
             navigation.reset({

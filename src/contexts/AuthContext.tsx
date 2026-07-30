@@ -57,6 +57,7 @@ export interface PublicUser {
     kycStatus: AuthKycStatus;
     kycMetadata?: Record<string, unknown>;
     nickname?: string;
+    username?: string;
     tier: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
     termsAcceptedVersion: number;
     subscriptionStatus: SubscriptionStatus;
@@ -333,6 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 email: userData.email,
                 name: userData.name,
                 nickname: userData.nickname,
+                username: userData.username,
                 role: userData.role as UserRole,
                 isTest: userData.isTest,
                 avatar: userData.avatar,
@@ -496,6 +498,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 email: fullResult.email,
                 name: fullResult.name,
                 nickname: fullResult.nickname,
+                username: fullResult.username,
                 role: finalRole,
                 isTest: fullResult.isTest,
                 avatar: fullResult.avatar,

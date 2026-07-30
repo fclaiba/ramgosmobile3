@@ -19,6 +19,7 @@ import InfluencerMetrics from '../components/influencer/InfluencerMetrics';
 import AffiliateLinkCard from '../components/influencer/AffiliateLinkCard';
 import BonusGeneratorModal from '../components/influencer/BonusGeneratorModal';
 import CampaignsManager from '../components/influencer/CampaignsManager';
+import MyBonusesList from '../components/influencer/MyBonusesList';
 import { Button } from '../components/ui/button'; 
 
 export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: any) {
@@ -29,7 +30,7 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const insets = useSafeAreaInsets();
     
     // Auth & Contexts
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const influencerId = user?.id ?? 'influencer_demo';
     const influencerName = user?.name ?? 'Influencer Demo';
     const { referralLink, referralSummary } = useReferral();
@@ -45,6 +46,12 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
         api.campaigns.getMyCampaigns,
         user?.id ? { influencerId: user.id as Id<"users"> } : 'skip',
     ) ?? [];
+
+    const myListings = useQuery(
+        api.listings.getMyListings,
+        user?.id && sessionToken ? { sessionToken } : 'skip'
+    ) ?? [];
+    const myBonuses = useMemo(() => myListings.filter((l: any) => l.type === 'bono'), [myListings]);
 
     useEffect(() => {
         ensureWalletAccount(influencerId, 'influencer', influencerName);
@@ -109,6 +116,9 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                         <Text style={{ color: '#fff', fontWeight: 'bold' }}>Crear bono de afiliado</Text>
                     </Button>
                 </View>
+
+                {/* My Active Bonuses */}
+                <MyBonusesList bonuses={myBonuses as any} containerWidth={containerWidth} />
 
                 {/* Campaigns */}
                 <CampaignsManager pendingInvitations={pendingInvitations} myProposals={myProposals} activeCampaigns={activeCampaigns} containerWidth={containerWidth} />

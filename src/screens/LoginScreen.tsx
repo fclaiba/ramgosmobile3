@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
-import { Mail, Lock, Eye, EyeOff, LogIn, ArrowLeft, Sparkles } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, LogIn, ArrowLeft, Sparkles, User } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth, getAuthDestination, type AuthFlowDecision } from '../contexts/AuthContext';
@@ -170,19 +170,19 @@ export default function LoginScreen({ navigation }: any) {
                             <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
 
                             <View style={styles.form}>
-                                {/* Email */}
+                                {/* Email / Username */}
                                 <View style={styles.inputContainer}>
-                                    <Text style={styles.label}>Email</Text>
+                                    <Text style={styles.label}>Email o Usuario</Text>
                                     <View style={styles.inputWrapper}>
-                                        <Mail size={20} color="#9CA3AF" style={styles.icon} />
+                                        <User size={20} color="#9CA3AF" style={styles.icon} />
                                         <TextInput
                                             style={styles.input}
-                                            placeholder="tu@email.com"
+                                            placeholder="tu@email.com o usuario"
                                             placeholderTextColor="#9CA3AF"
                                             value={email}
                                             onChangeText={setEmail}
                                             autoCapitalize="none"
-                                            keyboardType="email-address"
+                                            keyboardType="default"
                                             autoComplete="off"
                                             textContentType="none"
                                             importantForAutofill="no"

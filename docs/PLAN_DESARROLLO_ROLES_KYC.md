@@ -5,26 +5,26 @@
 
 ## 🎯 FASE DE ENFOQUE ACTIVO (Paso a Paso)
 
-### 🛑 PASO 1: Reparar el Botón de "Cerrar Sesión" (Logout)
-* [ ] **1.1** Identificar en qué pantalla/componente está el botón de Cerrar Sesión.
-* [ ] **1.2** Asegurar que la función limpie la sesión en Convex.
-* [ ] **1.3** Redirigir correctamente a la pantalla de Bienvenida/Login.
+### ✅ PASO 1: Reparar el Botón de "Cerrar Sesión" (Logout)
+* [x] **1.1** Identificar en qué pantalla/componente está el botón de Cerrar Sesión.
+* [x] **1.2** Asegurar que la función limpie la sesión en Convex.
+* [x] **1.3** Redirigir correctamente a la pantalla de Bienvenida/Login.
 
-### 🛑 PASO 2: Deshabilitar/Ocultar Login Social (Google y Apple)
-* [ ] **2.1** Ocultar los botones de Google y Apple Login en la pantalla de Bienvenida.
-* [ ] **2.2** Asegurar que el formulario de correo y contraseña quede visible como opción principal.
+### ✅ PASO 2: Deshabilitar/Ocultar Login Social (Google y Apple)
+* [x] **2.1** Ocultar los botones de Google y Apple Login en la pantalla de Bienvenida.
+* [x] **2.2** Asegurar que el formulario de correo y contraseña quede visible como opción principal.
 
-### 🛑 PASO 3: Corregir Subida de Historias desde Galería
-* [ ] **3.1** Localizar la función de carga de imagen en la pestaña Social.
-* [ ] **3.2** Verificar permisos y la subida a Convex/Storage.
+### ✅ PASO 3: Corregir Subida de Historias desde Galería
+* [x] **3.1** Localizar la función de carga de imagen en la pestaña Social.
+* [x] **3.2** Verificar permisos y la subida a Convex/Storage.
 
-### 🛑 PASO 4: Implementar Autenticación 2FA (Código al Correo)
+### ✅ PASO 4: Implementar Autenticación 2FA (Código al Correo)
 * [x] **4.1** Crear pantalla intermedia de verificación de código de 6 dígitos.
 * [x] **4.2** Conectar con el servicio de correo para enviar el código temporal.
 
-### 🛑 PASO 5: Cambiar Username desde el Perfil
-* [ ] **5.1** Agregar botón de edición en el Perfil.
-* [ ] **5.2** Crear la mutación en Convex para actualizar el alias.
+### ✅ PASO 5: Cambiar Username desde el Perfil
+* [x] **5.1** Agregar botón de edición en el Perfil.
+* [x] **5.2** Crear la mutación en Convex para actualizar el alias.
 
 ---
 

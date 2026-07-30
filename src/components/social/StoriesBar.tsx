@@ -1,102 +1,139 @@
 import React from 'react';
-import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { Plus as PlusIcon } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
-import { useSocial, Story } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Radius, colors, glassShadow } from '../../theme/tokens';
-import { glassSurface } from '../../utils/glass';
-
+import { Radius, colors } from '../../theme/tokens';
 
 interface StoriesBarProps {
-    onStoryClick: (storyId: string) => void;
+    onStoryClick: (userId: string) => void;
     onAddStory: () => void;
 }
 
 export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
-    const { stories } = useSocial();
-    const { theme, colorScheme } = useTheme();
+    const { sessionToken, user } = useAuth();
+    const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+
+    const storyGroups = useQuery(
+        api.social.getStoriesForFollowing,
+        sessionToken ? { sessionToken } : 'skip'
+    ) ?? [];
+
+    const myGroup = storyGroups.find((g: any) => g.author?.userId === (user as any)?.id);
+    const hasMyStory = !!myGroup;
 
     return (
         <View style={styles.wrapper}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.container}>
-                <TouchableOpacity style={styles.storyItem} onPress={onAddStory}>
-                    <View style={styles.addStoryWrapper}>
-                        <View style={styles.addStoryContainer}>
-                            <View style={styles.addStoryIcon}>
-                                <PlusIcon size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                {/* "Your Story" button — always first */}
+                <TouchableOpacity 
+                    style={styles.storyItem} 
+                    onPress={hasMyStory ? () => onStoryClick((user as any)?.id) : onAddStory}
+                >
+                    <View style={styles.addStoryOuter}>
+                        {hasMyStory ? (
+                            <LinearGradient colors={['#4FC3F7', '#EC4899', '#F59E0B']} style={styles.gradientRing}>
+                                <View style={styles.imageBorder}>
+                                    <Avatar style={styles.avatar}>
+                                        <AvatarImage src={(user as any)?.avatar || ''} />
+                                        <AvatarFallback>{(user?.name || 'T')[0]}</AvatarFallback>
+                                    </Avatar>
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.noStoryRing}>
+                                <View style={styles.imageBorder}>
+                                    <Avatar style={styles.avatar}>
+                                        <AvatarImage src={(user as any)?.avatar || ''} />
+                                        <AvatarFallback>{(user?.name || 'T')[0]}</AvatarFallback>
+                                    </Avatar>
+                                </View>
                             </View>
-                        </View>
-                        <View style={styles.absolutePlus}>
-                            <View style={styles.plusBadge}>
-                                <PlusIcon size={10} color="#fff" />
-                            </View>
+                        )}
+                        <View style={styles.plusOverlay}>
+                            <TouchableOpacity style={styles.plusBadge} onPress={onAddStory}>
+                                <PlusIcon size={12} color="#fff" />
+                            </TouchableOpacity>
                         </View>
                     </View>
-                    {/* Empty text to keep alignment with other stories */}
-                    <Text style={styles.name}> </Text>
+                    <Text style={styles.name} numberOfLines={1}>Tu historia</Text>
                 </TouchableOpacity>
 
-                {stories.map((story: Story) => {
-                    const hasStory = story.items?.length > 0;
-                    const hasUnviewed = story.items?.some((item: any) => !item.viewed);
+                {/* Other users' stories */}
+                {storyGroups
+                    .filter((g: any) => g.author?.userId !== (user as any)?.id)
+                    .map((group: any) => {
+                        const author = group.author;
+                        if (!author) return null;
+                        const displayName = author.displayName || author.username || '?';
+                        const avatarUrl = author.avatar || '';
+                        const fallbackImg = !avatarUrl && group.stories?.[0]?.imageUrl
+                            ? group.stories[0].imageUrl
+                            : avatarUrl;
 
-                    return (
-                        <TouchableOpacity key={story.id} style={styles.storyItem} onPress={() => onStoryClick(story.id)}>
-                            <View style={styles.avatarWrapper}>
-                                {hasStory && hasUnviewed ? (
-                                    <LinearGradient
-                                        colors={['#4FC3F7', '#EC4899', '#F59E0B']}
-                                        style={styles.gradientRing}
-                                    >
-                                        <View style={styles.imageBorder}>
-                                            <Avatar style={styles.avatar}>
-                                                <AvatarImage src={story.user.avatar} />
-                                                <AvatarFallback>{story.user.name[0]}</AvatarFallback>
-                                            </Avatar>
-                                        </View>
-                                    </LinearGradient>
-                                ) : (
-                                    <View style={[styles.gradientRing, styles.noStoryRing]}>
-                                        <View style={styles.imageBorder}>
-                                            <Avatar style={styles.avatar}>
-                                                <AvatarImage src={story.user.avatar} />
-                                                <AvatarFallback>{story.user.name[0]}</AvatarFallback>
-                                            </Avatar>
-                                        </View>
+                        return (
+                            <TouchableOpacity
+                                key={author.userId}
+                                style={styles.storyItem}
+                                onPress={() => onStoryClick(author.userId)}
+                            >
+                                <LinearGradient
+                                    colors={['#4FC3F7', '#EC4899', '#F59E0B']}
+                                    style={styles.gradientRing}
+                                >
+                                    <View style={styles.imageBorder}>
+                                        <Avatar style={styles.avatar}>
+                                            <AvatarImage src={fallbackImg} />
+                                            <AvatarFallback>{displayName[0]}</AvatarFallback>
+                                        </Avatar>
                                     </View>
-                                )}
-                            </View>
-                            <Text style={styles.name} numberOfLines={1}>{story.user.name}</Text>
-                        </TouchableOpacity>
-                    );
-                })}
+                                </LinearGradient>
+                                <Text style={styles.name} numberOfLines={1}>{displayName.split(' ')[0]}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
             </ScrollView>
         </View>
     );
 };
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
-    wrapper: { backgroundColor: 'transparent' }, // Handled by parent container opacity/color usually
-    container: { paddingHorizontal: 16, gap: 16, paddingVertical: 12 },
-    storyItem: { alignItems: 'center', gap: 6, width: 68 },
-
-    // Add Story Style
-    addStoryWrapper: { position: 'relative', width: 64, height: 64 },
-    addStoryContainer: { width: 64, height: 64, ...glassSurface(true, 'regular', { borderRadius: Radius['2xl'] }), justifyContent: 'center', alignItems: 'center' },
-    addStoryIcon: { opacity: 0.5 },
-    absolutePlus: { position: 'absolute', bottom: -2, right: -2 },
-    plusBadge: { width: 20, height: 20, borderRadius: Radius.md, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
-
-    // Story Avatar Style
-    avatarWrapper: { width: 68, height: 68, justifyContent: 'center', alignItems: 'center' },
-    gradientRing: { width: 68, height: 68, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', ...glassShadow(isDark) },
-    noStoryRing: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
-    imageBorder: { width: 62, height: 62, borderRadius: Radius.full, backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#000' : '#fff' },
-    avatar: { width: 58, height: 58, borderRadius: Radius.full },
-
-    name: { fontSize: 11, textAlign: 'center', color: isDark ? '#D1D5DB' : '#374151', width: '100%' }
+    wrapper: { marginBottom: 12 },
+    container: { paddingHorizontal: 12, gap: 14, paddingVertical: 8 },
+    storyItem: { alignItems: 'center', width: 72 },
+    addStoryOuter: { position: 'relative', marginBottom: 4 },
+    gradientRing: {
+        width: 68, height: 68, borderRadius: 34,
+        alignItems: 'center', justifyContent: 'center', padding: 3,
+    },
+    noStoryRing: {
+        width: 68, height: 68, borderRadius: 34,
+        alignItems: 'center', justifyContent: 'center', padding: 3,
+        borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+    },
+    imageBorder: {
+        width: 62, height: 62, borderRadius: 31,
+        backgroundColor: isDark ? '#09090B' : '#FAFAFA',
+        padding: 2, alignItems: 'center', justifyContent: 'center',
+    },
+    avatar: { width: 56, height: 56, borderRadius: 28 },
+    plusOverlay: {
+        position: 'absolute', bottom: -2, right: -2, zIndex: 2,
+    },
+    plusBadge: {
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: '#0095F6',
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 2.5, borderColor: isDark ? '#09090B' : '#FAFAFA',
+    },
+    name: {
+        fontSize: 11, color: isDark ? '#D1D5DB' : '#4B5563',
+        textAlign: 'center', marginTop: 4, fontWeight: '500',
+    },
 });

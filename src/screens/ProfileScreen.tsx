@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform , KeyboardAvoidingView} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform , KeyboardAvoidingView, Image} from 'react-native';
 import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown, AtSign, Hash, ListTodo, Lock, LayoutDashboard, CheckCircle2, QrCode, Tag, Trophy, Flame, Coins, Map, Gamepad2, Building, AlertCircle, Copy } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -45,7 +46,7 @@ function ProfileScreen({ navigation }: any) {
     const styles = getStyles(isDark);
     const { show } = useToast();
 
-    const { user, logout, sessionToken } = useAuth();
+    const { user, logout, sessionToken, refreshActiveSession } = useAuth();
     const { points, currentTier, nextTier, lifetimePoints, transactions } = usePoints();
     const { referralSummary, referralCode } = useReferral() as any;
     const { unreadCount } = useNotifications();
@@ -82,6 +83,7 @@ function ProfileScreen({ navigation }: any) {
     }, [user]);
 
     const updateProfileMutation = useMutation(api.users.updateProfile);
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
     const rawStats = useQuery(api.users.getUserActivityStats, user?.id ? {} : "skip");
     const stats = rawStats || {
@@ -99,6 +101,37 @@ function ProfileScreen({ navigation }: any) {
             return;
         }
         
+        let finalAvatarUrl = editedProfile.avatarUrl;
+        if (finalAvatarUrl && finalAvatarUrl.startsWith('file:/')) {
+            try {
+                const uploadUrl = await generateUploadUrl({ sessionToken: sessionToken || '', actorId: (user as any)?.id });
+                let blob;
+                try {
+                    const fetchResponse = await fetch(finalAvatarUrl);
+                    blob = await fetchResponse.blob();
+                } catch (err) {
+                    blob = await new Promise<Blob>((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.onload = function() { resolve(xhr.response); };
+                        xhr.onerror = function() { reject(new TypeError('Network request failed')); };
+                        xhr.responseType = 'blob';
+                        xhr.open('GET', finalAvatarUrl, true);
+                        xhr.send(null);
+                    });
+                }
+                const response = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'image/jpeg' },
+                    body: blob,
+                });
+                const { storageId } = await response.json();
+                finalAvatarUrl = `convex-storage:${storageId}`;
+            } catch (error) {
+                show('Error al subir la imagen', 'error');
+                return;
+            }
+        }
+        
         try {
             await updateProfileMutation({
                 id: (user as any)?.id,
@@ -107,13 +140,32 @@ function ProfileScreen({ navigation }: any) {
                     name: editedProfile.name,
                     username: editedProfile.username,
                     referralCode: editedProfile.referralCode,
+                    avatar: finalAvatarUrl,
                 }
             });
-            setProfile(editedProfile);
+            await refreshActiveSession();
+            setProfile({ ...editedProfile, avatarUrl: finalAvatarUrl });
             setIsEditing(false);
             show('Perfil actualizado exitosamente', 'success');
         } catch (error: any) {
             show(error.message || 'Error al actualizar', 'error');
+        }
+    };
+
+    const handleAvatarPress = async () => {
+        if (!isEditing) return;
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.5,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setEditedProfile(prev => ({ ...prev, avatarUrl: result.assets[0].uri }));
+            }
+        } catch (error) {
+            show('Error al seleccionar imagen', 'error');
         }
     };
 
@@ -205,7 +257,7 @@ function ProfileScreen({ navigation }: any) {
                             <Text style={styles.screenTitle}>Mi Perfil</Text>
                         </View>
                         {!isEditing ? (
-                            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editBtn}>
+                            <TouchableOpacity onPress={() => { setEditedProfile(profile); setIsEditing(true); }} style={styles.editBtn}>
                                 <Edit2 size={18} color="#fff" />
                             </TouchableOpacity>
                         ) : (
@@ -222,19 +274,49 @@ function ProfileScreen({ navigation }: any) {
 
                     {/* Profile Info */}
                     <View style={styles.profileHeader}>
-                        <View style={styles.avatarWrapper}>
+                        <TouchableOpacity 
+                            style={styles.avatarWrapper} 
+                            onPress={handleAvatarPress}
+                            activeOpacity={isEditing ? 0.7 : 1}
+                        >
                             <Avatar style={styles.avatar}>
-                                <AvatarImage src={profile.avatarUrl} />
-                                <AvatarFallback style={isDark ? { backgroundColor: '#374151' } : {}} textStyle={isDark ? { color: '#F9FAFB' } : {}}>{profile.name[0]}</AvatarFallback>
+                                <AvatarImage src={isEditing ? editedProfile.avatarUrl : profile.avatarUrl} />
+                                <AvatarFallback style={isDark ? { backgroundColor: '#374151' } : {}} textStyle={isDark ? { color: '#F9FAFB' } : {}}>{(isEditing ? editedProfile.name : profile.name)[0]}</AvatarFallback>
                             </Avatar>
                             {isEditing && (
-                                <TouchableOpacity style={styles.cameraBtn}>
+                                <View style={styles.cameraBtn}>
                                     <Camera size={16} color="#000" />
-                                </TouchableOpacity>
+                                </View>
                             )}
-                        </View>
-                        <Text style={styles.name}>{profile.name}</Text>
-                        <Text style={styles.email}>{profile.email}</Text>
+                        </TouchableOpacity>
+                        
+                        {isEditing ? (
+                            <View style={{ alignItems: 'center', width: '100%', paddingHorizontal: 20 }}>
+                                <TextInput
+                                    style={[styles.editInput, { fontSize: 24, fontWeight: '800', textAlign: 'center', marginBottom: 4 }]}
+                                    value={editedProfile.name}
+                                    onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
+                                    placeholder="Tu Nombre"
+                                    placeholderTextColor="rgba(255,255,255,0.5)"
+                                />
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16 }}>@</Text>
+                                    <TextInput
+                                        style={[styles.editInput, { fontSize: 16, textAlign: 'center', padding: 0 }]}
+                                        value={editedProfile.username}
+                                        onChangeText={(text) => setEditedProfile({ ...editedProfile, username: text })}
+                                        placeholder="usuario"
+                                        placeholderTextColor="rgba(255,255,255,0.5)"
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+                            </View>
+                        ) : (
+                            <>
+                                <Text style={styles.name}>{profile.name}</Text>
+                                <Text style={[styles.email, { opacity: 0.9 }]}>@{profile.username || 'usuario'}</Text>
+                            </>
+                        )}
 
                         <View style={styles.badgesRow}>
                             <View style={styles.badge}>
@@ -618,6 +700,22 @@ function ProfileScreen({ navigation }: any) {
                         ))}
                     </View>
 
+                    {/* LOGOUT BUTTON */}
+                    <View style={{ marginTop: 24, marginBottom: 24, paddingHorizontal: 16 }}>
+                        <TouchableOpacity 
+                            style={styles.logoutBtn} 
+                            onPress={async () => {
+                                await logout();
+                                // AuthContext listener should redirect automatically, 
+                                // but we can force reset just in case
+                                navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+                            }}
+                        >
+                            <LogOut size={20} color="#EF4444" />
+                            <Text style={styles.logoutText}>Cerrar Sesión</Text>
+                        </TouchableOpacity>
+                    </View>
+
                 </View>
 
             </ScrollView>
@@ -723,6 +821,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     formLabel: { fontSize: 12, color: colors(isDark).textMuted, marginBottom: 2 },
     formValue: { fontSize: 15, color: colors(isDark).text, fontWeight: '500' },
     inputObj: { fontSize: 15, color: colors(isDark).text, borderBottomWidth: 1, borderBottomColor: '#2196F3', paddingVertical: 2 },
+    editInput: { color: '#fff', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.5)', paddingVertical: 4 },
     divider: { height: 1, backgroundColor: colors(isDark).glass, marginLeft: 68 },
 
     // KYC Status

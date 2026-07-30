@@ -449,13 +449,15 @@ function BusinessDashboardScreen({
 
   const layout = useMemo(() => {
     const pagePadding = 16;
-    const maxWidth = 980;
+    const maxWidth = 1200;
+    // On desktop, ResponsiveLayout adds a sidebar. We subtract it from the available width.
+    const availableWidth = isDesktop && !isTabMode ? Math.max(width - 256, 320) : width;
     const containerWidth = Math.min(
-      Math.max(width - pagePadding * 2, 280),
+      Math.max(availableWidth - pagePadding * 2, 280),
       maxWidth,
     );
     const gap = 16;
-    const summaryCols = containerWidth < 360 ? 1 : containerWidth < 920 ? 2 : 4;
+    const summaryCols = containerWidth < 400 ? 1 : containerWidth < 768 ? 2 : 4;
     const summaryCardWidth = Math.floor(
       (containerWidth - gap * (summaryCols - 1)) / summaryCols,
     );
@@ -468,7 +470,7 @@ function BusinessDashboardScreen({
       summaryCardWidth,
       contentPaddingBottom,
     };
-  }, [width, insets.bottom, isTabMode]);
+  }, [width, insets.bottom, isTabMode, isDesktop]);
 
   return (
     <ResponsiveLayout
@@ -740,23 +742,27 @@ function BusinessDashboardScreen({
           })()}
 
           {/* Tabs */}
-          <View style={styles.tabsContainer}>
-            {TABS.map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-                onPress={() => setActiveTab(tab.id)}
-              >
-                <Text
-                  style={[
-                    styles.tabText,
-                    activeTab === tab.id && styles.tabTextActive,
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={{ marginBottom: 20 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+              <View style={styles.tabsContainer}>
+                {TABS.map((tab) => (
+                  <TouchableOpacity
+                    key={tab.id}
+                    style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+                    onPress={() => setActiveTab(tab.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.tabText,
+                        activeTab === tab.id && styles.tabTextActive,
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
 
           {/* --- OVERVIEW TAB --- */}
@@ -1015,24 +1021,37 @@ const getStyles = (isDark: boolean) => {
     /* Tabs */
     tabsContainer: {
       flexDirection: "row",
-      borderRadius: Radius.md,
-      padding: 4,
-      marginBottom: 20,
-      ...glassCard,
+      borderRadius: 100,
+      padding: 6,
+      backgroundColor: isDark ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.6)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+      gap: 4,
     },
     tab: {
-      flex: 1,
+      paddingHorizontal: 20,
       paddingVertical: 10,
       alignItems: "center",
-      borderRadius: Radius.sm,
+      justifyContent: "center",
+      borderRadius: 100,
     },
-    tabActive: { backgroundColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.95)" },
+    tabActive: { 
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.15)' : '#ffffff',
+      ...Platform.select({
+          ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+          android: { elevation: 2 },
+          default: { boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } as any
+      })
+    },
     tabText: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: "600",
       color: isDark ? "#9CA3AF" : "#6B7280",
     },
-    tabTextActive: { color: isDark ? "#F9FAFB" : "#111827" },
+    tabTextActive: { 
+        color: isDark ? "#ffffff" : "#111827",
+        fontWeight: "700" 
+    },
 
     sectionGap: { gap: 16 },
 

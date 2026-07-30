@@ -61,8 +61,11 @@ export default function RoleSelectionScreen({ navigation }: any) {
             if (user) {
                 await updateRole(selectedRole as any);
             }
-            // Navigate to basic profile setup with the selected role context
-            navigation.navigate('BasicProfileSetup', { role: selectedRole });
+            
+            navigation.reset({
+                index: 0,
+                routes: [{ name: selectedRole === 'consumer' ? 'Home' : 'KYC', params: selectedRole !== 'consumer' ? { accountType: selectedRole } : undefined }],
+            });
         } catch (error) {
             console.error('Error selecting role:', error);
         }
