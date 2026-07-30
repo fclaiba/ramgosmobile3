@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { View, StyleSheet, Dimensions, RefreshControl, Platform } from 'react-native';
-import { FlashList, ViewToken } from '@shopify/flash-list';
-import { usePaginatedQuery, useMutation } from 'convex/react';
+import { FlatList, ViewToken } from 'react-native';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { PostCard, PostCardProps } from './PostCard';
@@ -25,19 +25,11 @@ export const UnifiedFeed = () => {
     const [checkoutPostId, setCheckoutPostId] = useState<string | null>(null);
     const [checkoutVisible, setCheckoutVisible] = useState(false);
 
-    const {
-        results: posts,
-        status,
-        loadMore,
-        isLoadingMore
-    } = usePaginatedQuery(
-        api.social.getFeed,
-        { sessionToken: sessionToken || '' },
-        { initialNumItems: 5 }
-    );
+    const postsResult = useQuery(api.social.getFeed, sessionToken ? { limit: 10, sessionToken } : 'skip');
+    const posts = postsResult?.items || [];
+    const status = postsResult ? 'CanLoadMore' : 'LoadingFirstPage';
 
     const toggleLike = useMutation(api.social.toggleLike);
-    const registerView = useMutation(api.social.addView);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -48,14 +40,12 @@ export const UnifiedFeed = () => {
     }, []);
 
     const handleEndReached = () => {
-        if (status === 'CanLoadMore' && !isLoadingMore) {
-            loadMore(5);
-        }
+        // Ponytail: Pagination is deferred
     };
 
     const handleLike = useCallback((postId: Id<'socialPosts'>) => {
         if (!sessionToken) return;
-        toggleLike({ sessionToken, postId }).catch(console.error);
+        toggleLike({ sessionToken, targetType: 'post', targetId: postId }).catch(console.error);
     }, [sessionToken, toggleLike]);
 
     const handleComment = useCallback((postId: Id<'socialPosts'>) => {
@@ -74,11 +64,6 @@ export const UnifiedFeed = () => {
         viewableItems.forEach(item => {
             if (item.isViewable && item.item?._id) {
                 visibleIds.add(item.item._id);
-                // Disparamos la vista (Analytics) si es la primera vez que se ve
-                if (sessionToken) {
-                    // Nota: Idealmente deberíamos debouncear o revisar si ya se vió
-                    registerView({ sessionToken, postId: item.item._id }).catch(() => {});
-                }
             }
         });
         setFocusedIds(visibleIds);
@@ -129,10 +114,10 @@ export const UnifiedFeed = () => {
 
     return (
         <View style={styles.container}>
-            <FlashList
+            <FlatList
                 data={posts}
                 renderItem={renderItem}
-                estimatedItemSize={ITEM_HEIGHT}
+                keyExtractor={(item) => item._id || item.id}
                 pagingEnabled
                 showsVerticalScrollIndicator={false}
                 onEndReached={handleEndReached}

@@ -861,6 +861,15 @@ export const submitKyc = mutation({
             const prevBio = typeof patch.bio === 'string' ? `${patch.bio} | ` : '';
             patch.bio = `${prevBio}EIN: ${payload.ein.trim()}`;
         }
+        
+        if (typeof payload.contactPhone === 'string' && payload.contactPhone.trim()) {
+            patch.phoneNumber = payload.contactPhone.trim();
+        }
+        
+        if (typeof payload.contactEmail === 'string' && payload.contactEmail.trim()) {
+            const prevBio = typeof patch.bio === 'string' ? `${patch.bio} | ` : '';
+            patch.bio = `${prevBio}Contacto KYC: ${payload.contactEmail.trim()}`;
+        }
 
         await ctx.db.patch(args.id, patch);
     }

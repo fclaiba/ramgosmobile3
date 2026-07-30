@@ -45,6 +45,8 @@ export default function KYCScreen({ navigation, route }: any) {
     const [premisesPhoto, setPremisesPhoto] = useState<string | null>(null);
 
     const [socialLink, setSocialLink] = useState('');
+    const [contactPhone, setContactPhone] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
 
     const { user, sessionToken, markKycSubmitted } = useAuth();
     const { refreshKyc } = useFintech();
@@ -91,6 +93,10 @@ export default function KYCScreen({ navigation, route }: any) {
                 show('Ingresá una URL válida (ej. instagram.com/tuusuario)', 'error');
                 return;
             }
+            if (!contactPhone.trim() || !contactEmail.trim() || !contactEmail.includes('@')) {
+                show('Ingresá un teléfono y correo de contacto válidos', 'error');
+                return;
+            }
         }
         setFormStep(s => Math.min(s + 1, totalSteps));
     };
@@ -118,6 +124,8 @@ export default function KYCScreen({ navigation, route }: any) {
                 businessAddress: accountType === 'business' ? businessAddress : undefined,
                 premisesPhoto: accountType === 'business' ? premisesPhoto : undefined,
                 socialLink: accountType === 'influencer' ? socialLink : undefined,
+                contactPhone: accountType !== 'consumer' ? contactPhone : undefined,
+                contactEmail: accountType !== 'consumer' ? contactEmail : undefined,
                 submittedFrom: 'mobile',
                 submittedAt: new Date().toISOString(),
             });
@@ -229,6 +237,12 @@ export default function KYCScreen({ navigation, route }: any) {
                             {accountType === 'influencer' && (
                                 <FormField styles={styles} label="Perfil principal" value={socialLink} onChangeText={(t) => setSocialLink(clamp(t, LIMITS.socialUrl))} placeholder="https://instagram.com/tuusuario" isDark={isDark} autoCapitalize="none" keyboardType="url" maxLength={LIMITS.socialUrl} hint="URL pública de Instagram, TikTok, YouTube, etc." icon={LinkIcon} />
                             )}
+                            
+                            <View style={{ marginTop: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}>
+                                <Text style={[styles.subtitle, { marginBottom: 16, color: colors(isDark).text }]}>Datos de Contacto (Administración)</Text>
+                                <FormField styles={styles} label="Teléfono de contacto" value={contactPhone} onChangeText={setContactPhone} placeholder="+1 555-0123" isDark={isDark} keyboardType="phone-pad" hint="Para que podamos comunicarnos por la verificación." />
+                                <FormField styles={styles} label="Correo de contacto" value={contactEmail} onChangeText={setContactEmail} placeholder="correo@ejemplo.com" isDark={isDark} keyboardType="email-address" autoCapitalize="none" hint="Tu correo para avisos importantes." />
+                            </View>
                         </View>
                     </View>
                 )}
@@ -260,6 +274,14 @@ export default function KYCScreen({ navigation, route }: any) {
                                 <>
                                     <Text style={styles.summaryLabel}>Red Social:</Text>
                                     <Text style={styles.summaryVal}>{socialLink}</Text>
+                                </>
+                            )}
+                            {accountType !== 'consumer' && (
+                                <>
+                                    <Text style={styles.summaryLabel}>Teléfono:</Text>
+                                    <Text style={styles.summaryVal}>{contactPhone}</Text>
+                                    <Text style={styles.summaryLabel}>Email:</Text>
+                                    <Text style={styles.summaryVal}>{contactEmail}</Text>
                                 </>
                             )}
                         </View>

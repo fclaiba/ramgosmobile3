@@ -16,10 +16,17 @@ export const Avatar = ({ children, style, className }: any) => {
 
 export const AvatarImage = ({ src, style }: any) => {
     const { colorScheme } = useTheme();
+    const [hasError, setHasError] = useState(!src);
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     
-    return <Image source={{ uri: src }} style={[styles.image, style]} />;
+    React.useEffect(() => {
+        setHasError(!src);
+    }, [src]);
+
+    if (hasError) return null;
+
+    return <Image source={{ uri: src }} style={[styles.image, style]} onError={() => setHasError(true)} />;
 };
 
 export const AvatarFallback = ({ children }: any) => {

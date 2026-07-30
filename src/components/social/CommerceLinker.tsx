@@ -1,221 +1,122 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Image } from 'react-native';
+import { X, Search, Tag } from 'lucide-react-native';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useAuth } from '../../contexts/AuthContext';
-import { Search, Tag, X } from 'lucide-react-native';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Radius } from '../../theme/tokens';
-import * as Haptics from 'expo-haptics';
+import { Radius, colors } from '../../theme/tokens';
+import { formatCurrency } from '../../utils/formatters';
 
-export interface CommerceLinkerProps {
-    onSelect: (product: { listingId: string, name: string, price: number, imageUrl?: string }) => void;
+interface CommerceLinkerProps {
     onClose: () => void;
+    onSelect: (listingId: string, listingName: string) => void;
 }
 
-export function CommerceLinker({ onSelect, onClose }: CommerceLinkerProps) {
-    const { sessionToken } = useAuth();
+export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const styles = getStyles(isDark);
+    const [searchTerm, setSearchTerm] = useState('');
 
-    // Obtenemos los listings del usuario autenticado (para etiquetar SUS productos o bonos)
-    const listings = useQuery(api.listings.getMyListings, sessionToken ? { sessionToken } : 'skip');
+    const searchResults = useQuery(api.listings.searchListings, { query: searchTerm, limit: 10 });
 
     const handleSelect = (item: any) => {
-        if (Platform.OS !== 'web') Haptics.selectionAsync();
-        onSelect({
-            listingId: item._id,
-            name: item.title,
-            price: item.price,
-            imageUrl: item.image || item.images?.[0]?.url,
-        });
-    };
-
-    const renderItem = ({ item }: { item: any }) => {
-        const displayImage = item.image || item.images?.[0]?.url;
-
-        return (
-            <TouchableOpacity 
-                style={[styles.itemCard, isDark ? styles.itemCardDark : styles.itemCardLight]}
-                onPress={() => handleSelect(item)}
-            >
-                {displayImage ? (
-                    <Image source={{ uri: displayImage }} style={styles.itemImage} />
-                ) : (
-                    <View style={[styles.itemImage, styles.itemImageFallback]}>
-                        <Tag size={20} color="#9CA3AF" />
-                    </View>
-                )}
-                <View style={styles.itemInfo}>
-                    <Text style={[styles.itemTitle, isDark ? styles.textLight : styles.textDark]} numberOfLines={1}>
-                        {item.title}
-                    </Text>
-                    <Text style={styles.itemPrice}>${item.price}</Text>
-                    <View style={styles.badgeWrapper}>
-                        <Text style={styles.badgeText}>{item.type === 'bono' ? 'Bono' : 'Producto'}</Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-        );
+        onSelect(item._id, item.title);
+        onClose();
     };
 
     return (
-        <View style={[styles.container, isDark ? styles.containerDark : styles.containerLight]}>
-            <View style={styles.header}>
-                <Text style={[styles.title, isDark ? styles.textLight : styles.textDark]}>
-                    Etiquetar Producto
-                </Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                    <X size={24} color={isDark ? '#FFF' : '#000'} />
-                </TouchableOpacity>
-            </View>
+        <Sheet open={true} onOpenChange={(val: boolean) => !val && onClose()}>
+            <SheetContent side="bottom" style={styles.sheetContent}>
+                <SheetHeader style={styles.header}>
+                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                        <X size={24} color={isDark ? '#D1D5DB' : '#374151'} />
+                    </TouchableOpacity>
+                    <SheetTitle style={styles.title}>Vincular Producto</SheetTitle>
+                    <View style={{ width: 24 }} />
+                </SheetHeader>
 
-            <View style={styles.searchBar}>
-                <Search size={20} color="#9CA3AF" />
-                <Text style={styles.searchPlaceholder}>Buscar en mi catálogo...</Text>
-            </View>
+                <View style={styles.searchContainer}>
+                    <Search size={20} color="#9CA3AF" style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Buscar productos o servicios..."
+                        placeholderTextColor="#9CA3AF"
+                        value={searchTerm}
+                        onChangeText={setSearchTerm}
+                        autoFocus
+                    />
+                </View>
 
-            {listings === undefined ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
-                </View>
-            ) : listings.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                    <Tag size={48} color="#9CA3AF" />
-                    <Text style={styles.emptyText}>No tenés productos activos.</Text>
-                </View>
-            ) : (
-                <FlatList
-                    data={listings}
-                    keyExtractor={item => item._id}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                />
-            )}
-        </View>
+                {searchResults === undefined ? (
+                    <ActivityIndicator style={{ marginTop: 40 }} color="#2196F3" />
+                ) : searchResults.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>No se encontraron productos.</Text>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={searchResults}
+                        keyExtractor={(item) => item._id}
+                        style={styles.list}
+                        contentContainerStyle={{ paddingBottom: 40 }}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity style={styles.itemCard} onPress={() => handleSelect(item)}>
+                                {item.images && item.images.length > 0 ? (
+                                    <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
+                                ) : (
+                                    <View style={[styles.itemImage, styles.placeholderImage]}>
+                                        <Tag size={24} color="#9CA3AF" />
+                                    </View>
+                                )}
+                                <View style={styles.itemInfo}>
+                                    <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                                    <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                    />
+                )}
+            </SheetContent>
+        </Sheet>
     );
-}
+};
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        borderTopLeftRadius: Radius.xl,
-        borderTopRightRadius: Radius.xl,
-        overflow: 'hidden',
+const getStyles = (isDark: boolean) => StyleSheet.create({
+    sheetContent: {
+        backgroundColor: colors(isDark).glass,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        height: '85%'
     },
-    containerDark: {
-        backgroundColor: '#111827',
-    },
-    containerLight: {
-        backgroundColor: '#FFFFFF',
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(156, 163, 175, 0.2)',
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    textLight: {
-        color: '#FFFFFF',
-    },
-    textDark: {
-        color: '#111827',
-    },
-    closeBtn: {
-        padding: 4,
-    },
-    searchBar: {
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    closeBtn: { padding: 4 },
+    title: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text },
+    searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
         margin: 16,
-        padding: 12,
-        backgroundColor: 'rgba(156, 163, 175, 0.15)',
-        borderRadius: Radius.lg,
-        gap: 8,
+        paddingHorizontal: 12,
+        borderRadius: Radius.full,
+        height: 48
     },
-    searchPlaceholder: {
-        color: '#9CA3AF',
-        fontSize: 16,
-    },
-    listContent: {
-        paddingHorizontal: 16,
-        paddingBottom: 40,
-    },
+    searchIcon: { marginRight: 8 },
+    searchInput: { flex: 1, color: colors(isDark).text, fontSize: 16 },
+    list: { flex: 1 },
     itemCard: {
         flexDirection: 'row',
-        padding: 12,
-        borderRadius: Radius.lg,
-        marginBottom: 12,
-        borderWidth: 1,
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        alignItems: 'center'
     },
-    itemCardDark: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        borderColor: 'rgba(255,255,255,0.1)',
-    },
-    itemCardLight: {
-        backgroundColor: '#F9FAFB',
-        borderColor: '#E5E7EB',
-    },
-    itemImage: {
-        width: 60,
-        height: 60,
-        borderRadius: Radius.md,
-    },
-    itemImageFallback: {
-        backgroundColor: 'rgba(156, 163, 175, 0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    itemInfo: {
-        flex: 1,
-        marginLeft: 12,
-        justifyContent: 'center',
-    },
-    itemTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    itemPrice: {
-        fontSize: 14,
-        color: '#10B981',
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    badgeWrapper: {
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: Radius.sm,
-    },
-    badgeText: {
-        color: '#4F46E5',
-        fontSize: 10,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 40,
-    },
-    emptyText: {
-        color: '#9CA3AF',
-        marginTop: 16,
-        textAlign: 'center',
-    }
+    itemImage: { width: 48, height: 48, borderRadius: Radius.md, marginRight: 16 },
+    placeholderImage: { backgroundColor: isDark ? '#374151' : '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
+    itemInfo: { flex: 1 },
+    itemTitle: { fontSize: 16, fontWeight: '600', color: colors(isDark).text, marginBottom: 4 },
+    itemPrice: { fontSize: 14, color: '#10B981', fontWeight: 'bold' },
+    emptyContainer: { padding: 40, alignItems: 'center' },
+    emptyText: { color: colors(isDark).textMuted, fontSize: 16 }
 });

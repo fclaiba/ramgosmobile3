@@ -9,9 +9,10 @@ interface LoopFeedProps {
     posts: PostType[];
     onUserClick: (id: string) => void;
     onEndReached?: () => void;
+    onCommercePress?: (listingId: string, postId: string) => void;
 }
 
-export const LoopFeed = ({ posts, onUserClick, onEndReached }: LoopFeedProps) => {
+export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress }: LoopFeedProps) => {
     const [activeIndex, setActiveIndex] = useState(0);
 
     const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
@@ -34,6 +35,7 @@ export const LoopFeed = ({ posts, onUserClick, onEndReached }: LoopFeedProps) =>
                         post={item}
                         isActive={activeIndex === index}
                         onUserClick={onUserClick}
+                        onCommercePress={onCommercePress}
                     />
                 )}
                 pagingEnabled

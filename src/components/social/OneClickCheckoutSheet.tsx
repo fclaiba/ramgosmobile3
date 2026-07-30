@@ -33,7 +33,7 @@ export function OneClickCheckoutSheet({ visible, postId, listingId, onClose }: O
 
     // Queries
     const listing = useQuery(api.listings.getListing, listingId ? { id: listingId as any } : 'skip');
-    const economyState = useQuery(api.points.getPointsState, sessionToken ? {} : 'skip');
+    const economyState = useQuery(api.points.getPointsState, sessionToken ? { sessionToken } : 'skip');
     const processPayment = useMutation(api.social.simulateSocialCommercePayment);
 
     const pointsBalance = economyState?.pointsBalance || 0;

@@ -16,8 +16,13 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Radius, colors, glassShadow } from '../../theme/tokens';
 import { glassSurface } from '../../utils/glass';
 
+interface PostProps {
+    post: PostType;
+    onUserClick: (id: string) => void;
+    onCommercePress?: (listingId: string, postId: string) => void;
+}
 
-export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: string) => void }) => {
+export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }) => {
     const { isPostSaved, savePost, unsavePost, currentUser, deletePost } = useSocial();
     
     const { addToWishlist } = useMarketplace();
@@ -113,16 +118,9 @@ export const Post = ({ post, onUserClick }: { post: PostType, onUserClick: (id: 
                                 <TouchableOpacity
                                     style={[styles.commercialButton, { backgroundColor: isDark ? '#2563EB' : '#2563EB' }]}
                                     onPress={() => {
-                                        /* addToCart({
-                                        id: post.commercialProduct!.id,
-                                        name: post.commercialProduct!.name,
-                                        price: post.commercialProduct!.price,
-                                        image: post.commercialProduct!.image,
-                                        quantity: 1,
-                                        sellerId: (post.author || post.user)?.userId || (post.author || post.user)?.id,
-                                        sellerName: (post.author || post.user)?.displayName || (post.author || post.user)?.name,
-                                        referralCode: post.commercialProduct!.referralLink,
-                                    }) */
+                                        if (onCommercePress && post.commercialProduct?.listingId) {
+                                            onCommercePress(post.commercialProduct.listingId, post._id || post.id);
+                                        }
                                     }}
                                 >
                                     <ShoppingBag size={16} color="#ffffff" />

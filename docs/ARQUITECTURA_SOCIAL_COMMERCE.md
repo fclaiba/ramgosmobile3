@@ -163,10 +163,11 @@ Para ejecutar esta visión de forma clínica, dividiremos el trabajo en 5 Sprint
 **Objetivo:** Inyectar la capa transaccional al contenido de forma elegante e intuitiva.
 * **Frontend (React Native / UI):**
   - `CommerceTag.tsx`: Botón holográfico (BlurView) superpuesto al `PostCard`. Muestra precio/descuento en mini-formato.
-  - `CreatorStudioModal.tsx`: Flujo de subida de contenido. Incluye un buscador `<CommerceLinker />` para vincular un `listingId` o `bonusId` de la base de datos al post.
+  - `CreatorStudioModal.tsx` (`CreatePost.tsx`): Flujo de subida de contenido expandido. Ahora cuenta con un botón "Vincular Producto" que levanta el modal `<CommerceLinker />`.
+  - `CommerceLinker.tsx`: Componente de búsqueda que consulta `api.listings.searchListings` para vincular un `listingId` al post.
   - `OneClickCheckoutSheet.tsx`: BottomSheet que emerge al tocar el CommerceTag. Muestra el resumen del ítem sin salir de la vista de video.
 * **Backend (Convex):**
-  - Ampliar tabla `posts` con `attachedListingId`, `attachedBonusId`.
+  - Mutación `createPost`: Ahora acepta `attachedListingId`. Si se recibe, el backend consulta internamente los datos del producto (precio, imagen, nombre) y guarda el objeto desnormalizado `commercialProduct` en el documento del post, optimizando la carga masiva del feed en O(1).
   - Query `getCommerceInfoForPost(postId)` para hidratar el BottomSheet instantáneamente.
 * **Criterio de Éxito:** Un influencer puede subir un video, atacharle una zapatilla de un negocio local y publicarlo en menos de 1 minuto.
 

@@ -11,7 +11,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 import { useToast } from '../../contexts/ToastContext';
 import { Radius, colors } from '../../theme/tokens';
-
+import { CommerceLinker } from './CommerceLinker';
+import { Tag as TagIcon } from 'lucide-react-native';
 
 export const CreatePost = ({ onClose }: { onClose: () => void }) => {
     const { currentUser, createPost } = useSocial();
@@ -21,6 +22,8 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isVideo, setIsVideo] = useState<boolean>(false);
     const [uploading, setUploading] = useState(false);
+    const [showLinker, setShowLinker] = useState(false);
+    const [attachedListing, setAttachedListing] = useState<{ id: string, title: string } | null>(null);
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
@@ -75,14 +78,18 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
 
     const handlePost = () => {
         if (!content.trim() && !imageUrl) return;
+        
+        const basePayload: any = {};
+        if (attachedListing) basePayload.attachedListingId = attachedListing.id;
+
         if (imageUrl) {
             if (isVideo) {
-                createPost(content || '', 'video', { videoUrl: imageUrl });
+                createPost(content || '', 'video', { videoUrl: imageUrl, ...basePayload });
             } else {
-                createPost(content || '', 'image', { images: [imageUrl] });
+                createPost(content || '', 'image', { images: [imageUrl], ...basePayload });
             }
         } else {
-            createPost(content, 'text');
+            createPost(content, 'text', basePayload);
         }
         onClose();
     };
@@ -140,6 +147,16 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
                             </TouchableOpacity>
                         </View>
                     )}
+
+                    {attachedListing && (
+                        <View style={styles.attachedPill}>
+                            <TagIcon size={16} color="#2196F3" />
+                            <Text style={styles.attachedPillText} numberOfLines={1}>{attachedListing.title}</Text>
+                            <TouchableOpacity onPress={() => setAttachedListing(null)}>
+                                <X size={16} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.footer}>
@@ -151,8 +168,20 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
                         )}
                         <Text style={styles.mediaText}>{uploading ? 'Subiendo...' : 'Foto/Video'}</Text>
                     </TouchableOpacity>
+                    
+                    <TouchableOpacity style={styles.linkerBtn} onPress={() => setShowLinker(true)}>
+                        <TagIcon size={24} color="#2196F3" />
+                        <Text style={styles.linkerText}>Vincular Producto</Text>
+                    </TouchableOpacity>
                 </View>
             </SheetContent>
+
+            {showLinker && (
+                <CommerceLinker 
+                    onClose={() => setShowLinker(false)} 
+                    onSelect={(id, title) => setAttachedListing({ id, title })} 
+                />
+            )}
         </Sheet>
     );
 };
@@ -177,10 +206,14 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     userName: { fontWeight: 'bold', fontSize: 15, color: colors(isDark).text },
     input: { fontSize: 16, color: colors(isDark).text, minHeight: 120, flex: 1 },
 
-    footer: { padding: 16, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', marginBottom: 20 },
-    mediaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
+    footer: { padding: 16, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', marginBottom: 20, flexDirection: 'row', gap: 12 },
+    mediaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', flex: 1, justifyContent: 'center' },
     mediaText: { color: colors(isDark).textMuted, fontWeight: '500' },
+    linkerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(33, 150, 243,0.1)' : '#E3F2FD', flex: 1, justifyContent: 'center' },
+    linkerText: { color: '#2196F3', fontWeight: 'bold' },
     imagePreview: { marginTop: 16, position: 'relative' },
     preview: { width: '100%', height: 200, borderRadius: Radius.md },
     removeImage: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: Radius.md, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+    attachedPill: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: isDark ? 'rgba(33, 150, 243,0.1)' : '#E3F2FD', paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, marginTop: 16, alignSelf: 'flex-start' },
+    attachedPillText: { color: '#2196F3', fontWeight: 'bold', maxWidth: 200 },
 });

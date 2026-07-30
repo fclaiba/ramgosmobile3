@@ -18,6 +18,8 @@
  */
 
 import { v } from 'convex/values';
+import { Id } from './_generated/dataModel';
+import { requireActor } from './authHelpers';
 import {
     mutation,
     query,
@@ -284,6 +286,7 @@ export const createPost = mutation({
             location: v.optional(v.string()),
             description: v.optional(v.string()),
         })),
+        attachedListingId: v.optional(v.id('listings')),
     },
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
@@ -301,6 +304,22 @@ export const createPost = mutation({
             }
             : undefined;
 
+        let finalCommercialProduct = args.commercialProduct;
+        
+        if (args.attachedListingId) {
+            const listing = await ctx.db.get(args.attachedListingId);
+            if (listing) {
+                finalCommercialProduct = {
+                    listingId: listing._id,
+                    name: listing.title,
+                    price: listing.price,
+                    image: listing.images?.[0]?.url,
+                    type: listing.type,
+                    description: listing.description,
+                };
+            }
+        }
+
         const postId = await ctx.db.insert('socialPosts', {
             authorUserId: actor.idString,
             type: args.type,
@@ -308,7 +327,7 @@ export const createPost = mutation({
             images: args.images,
             videoUrl: args.videoUrl,
             poll: pollPayload,
-            commercialProduct: args.commercialProduct,
+            commercialProduct: finalCommercialProduct,
             likeCount: 0,
             commentCount: 0,
             retweetCount: 0,
@@ -1478,7 +1497,7 @@ export const simulateSocialCommercePayment = mutation({
         // 10% to Creator (Influencer)
         // 10% to Platform (simulated)
         const sellerId = listing.sellerId;
-        const creatorId = post.actorId; // Assuming socialPosts stores actorId as string
+        const creatorId = post.authorUserId; // Assuming socialPosts stores actorId as string
         
         const sellerCut = finalPrice * 0.8;
         const creatorCut = finalPrice * 0.1;
@@ -1530,13 +1549,13 @@ export const simulateSocialCommercePayment = mutation({
             });
         }
 
-        // Add Ledger entry for Gamification
         await ctx.db.insert("pointsLedger", {
             userId: actor.idString,
             eventKey: "purchase_" + Date.now(),
             type: "earn",
             description: "Compra Social Commerce",
             amount: pointsEarned,
+            source: "purchase",
             createdAt: new Date().toISOString()
         });
 

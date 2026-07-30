@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Platform } from 'react-native';
-import { Heart, MessageCircle, Share2, Music2 } from 'lucide-react-native';
+import { Heart, MessageCircle, Share2, Music2, ShoppingBag } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -18,9 +18,10 @@ interface LoopItemProps {
     post: any;
     isActive: boolean;
     onUserClick: (userId: string) => void;
+    onCommercePress?: (listingId: string, postId: string) => void;
 }
 
-export const LoopItem = ({ post, isActive, onUserClick }: LoopItemProps) => {
+export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopItemProps) => {
     const videoRef = useRef<Video>(null);
     const isDark = useTheme().colorScheme === 'dark';
     
@@ -126,6 +127,18 @@ export const LoopItem = ({ post, isActive, onUserClick }: LoopItemProps) => {
                         </View>
                         <Text style={styles.actionText}>Compartir</Text>
                     </TouchableOpacity>
+
+                    {post.commercialProduct?.listingId && (
+                        <TouchableOpacity 
+                            style={[styles.actionBtn, { marginTop: 8 }]} 
+                            onPress={() => onCommercePress && onCommercePress(post.commercialProduct!.listingId!, post._id || post.id)}
+                        >
+                            <View style={[styles.iconWrapper, { backgroundColor: '#2563EB' }]}>
+                                <ShoppingBag size={26} color="#fff" />
+                            </View>
+                            <Text style={styles.actionText}>Comprar</Text>
+                        </TouchableOpacity>
+                    )}
 
                     <Animated.View style={[styles.recordWrapper, { transform: [{ rotate: spin }] }]}>
                         <ImageWithFallback src={post.author?.avatar} style={styles.recordImage} />

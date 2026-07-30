@@ -3,9 +3,11 @@ import { mutation, query } from "./_generated/server";
 import { requireActor } from "./authHelpers";
 
 export const getPointsState = query({
-    args: {},
-    handler: async (ctx) => {
-        const actor = await requireActor(ctx);
+    args: {
+        sessionToken: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
         const economyState = await ctx.db
             .query("economyState")
             .withIndex("by_user", (q) => q.eq("userId", actor.idString))

@@ -992,7 +992,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                                         <Text style={styles.detailActionSecondaryText}>Ver escrow</Text>
                                     </TouchableOpacity>
                                 )}
-                                {activeTab === 'purchases' && selectedItem.source === 'marketplace_order' && (
+                                {activeTab === 'purchases' && selectedItem.source === 'marketplace_order' && selectedItem.kind !== 'bonos' && (
                                     <TouchableOpacity
                                         style={[styles.detailActionBtn, styles.detailActionSecondary]}
                                         onPress={() => handleDispute(selectedItem)}

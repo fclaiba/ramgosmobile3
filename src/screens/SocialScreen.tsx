@@ -10,7 +10,7 @@ import { MobileNav } from '../components/MobileNav';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { Post, LoopFeed, StoriesBar, StoryViewer, CreatePost, CreateStory, UserSearch, DirectMessages } from '../components/social';
+import { Post, LoopFeed, StoriesBar, StoryViewer, CreatePost, CreateStory, UserSearch, DirectMessages, OneClickCheckoutSheet } from '../components/social';
 
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
@@ -34,6 +34,11 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
     const [showSearch, setShowSearch] = useState(false);
     const [showMessages, setShowMessages] = useState(false);
 
+    // Gamification Checkout
+    const [checkoutListingId, setCheckoutListingId] = useState<string | null>(null);
+    const [checkoutPostId, setCheckoutPostId] = useState<string | null>(null);
+    const [checkoutVisible, setCheckoutVisible] = useState(false);
+
     // ponytail: Direct queries
     const postsResult = useQuery(api.social.getFeed, sessionToken ? { limit: 20, sessionToken } : 'skip');
     const posts = postsResult?.items || [];
@@ -43,6 +48,12 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
 
     const handleUserClick = (userId: string) => {
         navigation.navigate('CommercialProfile', { sellerId: userId });
+    };
+
+    const handleCommercePress = (listingId: string, postId: string) => {
+        setCheckoutListingId(listingId);
+        setCheckoutPostId(postId);
+        setCheckoutVisible(true);
     };
 
     const renderTabs = () => (
@@ -107,7 +118,7 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                     keyExtractor={(item) => item._id || item.id}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-                    renderItem={({ item }) => <Post post={item} onUserClick={handleUserClick} />}
+                    renderItem={({ item }) => <Post post={item} onUserClick={handleUserClick} onCommercePress={handleCommercePress} />}
                     ListHeaderComponent={
                         <>
                             <StoriesBar 
@@ -128,7 +139,7 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
             ) : (
                 <View style={styles.reelsContainer}>
                     {reelPosts.length > 0 ? (
-                        <LoopFeed posts={reelPosts} onUserClick={handleUserClick} />
+                        <LoopFeed posts={reelPosts} onUserClick={handleUserClick} onCommercePress={handleCommercePress} />
                     ) : (
                         <View style={styles.emptyReels}>
                             <Film size={48} color={isDark ? '#374151' : '#D1D5DB'} />
@@ -153,6 +164,13 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                     onNavigateProfile={handleUserClick} 
                 />
             )}
+
+            <OneClickCheckoutSheet 
+                visible={checkoutVisible}
+                postId={checkoutPostId}
+                listingId={checkoutListingId}
+                onClose={() => setCheckoutVisible(false)}
+            />
 
             {!isTabMode && !isDesktop && (
                 <MobileNav
