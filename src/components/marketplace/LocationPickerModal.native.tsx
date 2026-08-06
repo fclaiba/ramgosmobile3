@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { X, Check } from 'lucide-react-native';
@@ -8,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../ui/button';
 import { DARK_MAP_STYLE, LIGHT_MAP_STYLE, MAP_DEFAULTS } from '../../constants/darkMapStyle';
 import { glassShadow, colors } from '../../theme/tokens';
-
+import { resolveLandLocation } from '../../utils/landLocation';
+import { useToast } from '../../contexts/ToastContext';
 
 interface LocationPickerModalProps {
     visible: boolean;
@@ -17,27 +18,34 @@ interface LocationPickerModalProps {
     initialLocation?: { lat: number; lng: number };
 }
 
-export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visible, onClose, onSelect, initialLocation }) => {
+export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
+    visible,
+    onClose,
+    onSelect,
+    initialLocation,
+}) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const insets = useSafeAreaInsets();
+    const { show } = useToast();
     const [region, setRegion] = useState({
-        latitude: initialLocation?.lat || 40.7128, // Default Manhattan
-        longitude: initialLocation?.lng || -74.0060,
+        latitude: initialLocation?.lat || 40.7484,
+        longitude: initialLocation?.lng || -73.9857,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
     });
     const [selectedCoord, setSelectedCoord] = useState<{ latitude: number; longitude: number } | null>(
-        initialLocation ? { latitude: initialLocation.lat, longitude: initialLocation.lng } : null
+        initialLocation ? { latitude: initialLocation.lat, longitude: initialLocation.lng } : null,
     );
     const [address, setAddress] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const [landOk, setLandOk] = useState(true);
 
     useEffect(() => {
         if (visible && !initialLocation) {
             (async () => {
-                let { status } = await Location.requestForegroundPermissionsAsync();
+                const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status !== 'granted') return;
                 const loc = await Location.getCurrentPositionAsync({});
                 setRegion({
@@ -54,28 +62,40 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
         const coord = e.nativeEvent.coordinate;
         setSelectedCoord(coord);
         setLoading(true);
+        setLandOk(false);
         try {
-            const geocode = await Location.reverseGeocodeAsync(coord);
-            if (geocode && geocode.length > 0) {
-                const addr = geocode[0];
-                const addrString = `${addr.street || ''} ${addr.streetNumber || ''}, ${addr.city || addr.subregion || ''}`;
-                setAddress(addrString.trim());
-            } else {
-                setAddress(`${coord.latitude.toFixed(4)}, ${coord.longitude.toFixed(4)}`);
+            const result = await resolveLandLocation(coord.latitude, coord.longitude);
+            if (!result.ok) {
+                setAddress(result.message);
+                setLandOk(false);
+                show(result.message, 'warning');
+                return;
             }
-        } catch (error) {
+            setSelectedCoord({ latitude: result.lat, longitude: result.lng });
+            setAddress(result.address);
+            setLandOk(true);
+            if (result.snapped) {
+                show('Ajustamos el pin a tierra firme (estaba sobre agua)', 'info');
+                setRegion((prev) => ({
+                    ...prev,
+                    latitude: result.lat,
+                    longitude: result.lng,
+                }));
+            }
+        } catch {
             setAddress(`${coord.latitude.toFixed(4)}, ${coord.longitude.toFixed(4)}`);
+            setLandOk(false);
         } finally {
             setLoading(false);
         }
     };
 
     const handleConfirm = () => {
-        if (selectedCoord) {
+        if (selectedCoord && landOk) {
             onSelect({
                 lat: selectedCoord.latitude,
                 lng: selectedCoord.longitude,
-                address: address
+                address,
             });
         }
     };
@@ -83,7 +103,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
     return (
         <Modal visible={visible} animationType="slide" transparent={false}>
             <View style={[styles.container, { backgroundColor: colors(isDark).bg }]}>
-                {/* Header */}
                 <View style={[styles.header, { paddingTop: insets.top, backgroundColor: colors(isDark).glass }]}>
                     <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>Seleccionar Ubicación</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -91,7 +110,6 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
                     </TouchableOpacity>
                 </View>
 
-                {/* Map */}
                 <MapView
                     style={styles.map}
                     region={region}
@@ -102,26 +120,43 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
                     customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
                     {...MAP_DEFAULTS.CLEAN_MAP_PROPS}
                 >
-                    {selectedCoord && <Marker coordinate={selectedCoord} />}
+                    {selectedCoord && <Marker coordinate={selectedCoord} pinColor={landOk ? undefined : 'red'} />}
                 </MapView>
 
-                {/* Bottom Sheet */}
                 <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colors(isDark).glass }]}>
                     {selectedCoord ? (
                         <View>
-                            <Text style={[styles.addressLabel, { color: colors(isDark).textMuted }]}>Ubicación seleccionada:</Text>
+                            <Text style={[styles.addressLabel, { color: colors(isDark).textMuted }]}>
+                                Ubicación seleccionada:
+                            </Text>
                             {loading ? (
                                 <ActivityIndicator color="#4FC3F7" />
                             ) : (
-                                <Text style={[styles.addressText, { color: isDark ? '#fff' : '#111827' }]}>{address || 'Coordenadas seleccionadas'}</Text>
+                                <Text
+                                    style={[
+                                        styles.addressText,
+                                        { color: landOk ? (isDark ? '#fff' : '#111827') : '#EF4444' },
+                                    ]}
+                                >
+                                    {address || 'Coordenadas seleccionadas'}
+                                </Text>
                             )}
-                            <Button onPress={handleConfirm} style={{ marginTop: 16, backgroundColor: '#4FC3F7' }}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Confirmar Ubicación</Text>
+                            <Button
+                                onPress={handleConfirm}
+                                disabled={!landOk || loading}
+                                style={{
+                                    marginTop: 16,
+                                    backgroundColor: landOk && !loading ? '#4FC3F7' : '#9CA3AF',
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+                                    {loading ? 'Validando tierra firme…' : 'Confirmar Ubicación'}
+                                </Text>
                             </Button>
                         </View>
                     ) : (
                         <Text style={{ color: colors(isDark).textMuted, textAlign: 'center' }}>
-                            Toca en el mapa para seleccionar una ubicación
+                            Tocá tierra firme en el mapa (no ríos ni mar)
                         </Text>
                     )}
                 </View>
@@ -130,13 +165,26 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({ visibl
     );
 };
 
-const getStyles = (isDark: any) => StyleSheet.create({
-    container: { flex: 1 },
-    header: { padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 10, ...glassShadow(isDark),},
-    title: { fontSize: 18, fontWeight: 'bold' },
-    closeBtn: { padding: 4 },
-    map: { flex: 1 },
-    footer: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16, ...glassShadow(isDark),},
-    addressLabel: { fontSize: 14, marginBottom: 4 },
-    addressText: { fontSize: 16, fontWeight: '500' },
-});
+const getStyles = (isDark: any) =>
+    StyleSheet.create({
+        container: { flex: 1 },
+        header: {
+            padding: 16,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            zIndex: 10,
+            ...glassShadow(isDark),
+        },
+        title: { fontSize: 18, fontWeight: 'bold' },
+        closeBtn: { padding: 4 },
+        map: { flex: 1 },
+        footer: {
+            padding: 16,
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            ...glassShadow(isDark),
+        },
+        addressLabel: { fontSize: 14, marginBottom: 4 },
+        addressText: { fontSize: 16, fontWeight: '500' },
+    });

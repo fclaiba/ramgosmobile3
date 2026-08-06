@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fclaiba.ramgosmobile",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -40,12 +41,6 @@
     },
     "plugins": [
       "@sentry/react-native/expo",
-      [
-        "react-native-iap",
-        {
-          "paymentProvider": "Play Store"
-        }
-      ],
       "@sentry/react-native",
       [
         "@stripe/stripe-react-native",
@@ -55,7 +50,16 @@
         }
       ],
       "expo-sharing",
-      "expo-video"
+      "expo-video",
+      [
+        "@react-native-google-signin/google-signin/app.plugin.js",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.216016729359-hgdrjnvl502jmln1abopk8mpge6vd3a2"
+        }
+      ],
+      "expo-apple-authentication",
+      "expo-web-browser",
+      "expo-localization"
     ],
     "extra": {
       "eas": {

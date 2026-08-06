@@ -4,6 +4,14 @@ import { Id } from "./_generated/dataModel";
 import { assertSelfOrAdmin, requireActor, checkRateLimit, createSession, getActorOrNull } from "./authHelpers";
 import { internal } from "./_generated/api";
 import { hashPassword, verifyPassword } from "./passwordHelpers";
+import {
+    aliasValidationMessage,
+    isAliasCooldownActive,
+    normalizeReferralAlias,
+    normalizeReferralInput,
+    preferredShareCode,
+    validateReferralAliasFormat,
+} from "./referralHelpers";
 
 export const internalCheckRateLimit = internalMutation({
     args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
@@ -42,6 +50,103 @@ export const checkInfluencerMetrics = internalMutation({
 });
 
 const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
+const REFERRAL_WELCOME_BONUS = 10;
+const REFERRAL_SIGNUP_BONUS = 5;
+const REFERRAL_FIRST_PURCHASE_BONUS = 10;
+const REFERRAL_HIGH_TICKET_BONUS = 25;
+const REFERRAL_HIGH_TICKET_THRESHOLD_USD = 100;
+
+/** Resolve invite code: handle (@username) → referralAlias → legacy referralCode. */
+async function resolveReferrerByInput(ctx: any, rawInput?: string) {
+    if (!rawInput?.trim()) return null;
+    const normalized = normalizeReferralInput(rawInput);
+    if (!normalized) return null;
+
+    const byUsername = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q: any) => q.eq("username", normalized.toLowerCase()))
+        .first();
+    if (byUsername) return byUsername;
+
+    const aliasUpper = normalized.toUpperCase();
+    const byAlias = await ctx.db
+        .query("users")
+        .withIndex("by_referral_alias", (q: any) => q.eq("referralAlias", aliasUpper))
+        .first();
+    if (byAlias) return byAlias;
+
+    // Legacy unmigrated invite codes still stored on referralCode.
+    return await ctx.db
+        .query("users")
+        .withIndex("by_referral_code", (q: any) => q.eq("referralCode", aliasUpper))
+        .first();
+}
+
+async function assertReferralAliasAvailable(
+    ctx: any,
+    alias: string,
+    selfUserId: Id<"users">,
+    ownUsername?: string | null,
+) {
+    const formatErr = validateReferralAliasFormat(alias, ownUsername);
+    if (formatErr) throw new Error(aliasValidationMessage(formatErr));
+
+    const usernameHit = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q: any) => q.eq("username", alias.toLowerCase()))
+        .first();
+    if (usernameHit && String(usernameHit._id) !== String(selfUserId)) {
+        throw new Error("Ese alias coincide con el @usuario de otra persona.");
+    }
+
+    const aliasHit = await ctx.db
+        .query("users")
+        .withIndex("by_referral_alias", (q: any) => q.eq("referralAlias", alias))
+        .first();
+    if (aliasHit && String(aliasHit._id) !== String(selfUserId)) {
+        throw new Error("Ese alias ya está en uso.");
+    }
+
+    const legacyCodeHit = await ctx.db
+        .query("users")
+        .withIndex("by_referral_code", (q: any) => q.eq("referralCode", alias))
+        .first();
+    if (legacyCodeHit && String(legacyCodeHit._id) !== String(selfUserId)) {
+        throw new Error("Ese alias ya está en uso.");
+    }
+}
+
+async function awardReferralOnSignup(
+    ctx: any,
+    userId: Id<"users">,
+    userName: string,
+    referrerId?: Id<"users">,
+) {
+    await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+        userId: String(userId),
+        eventKey: `signup_welcome_${String(userId)}`,
+        type: "earn",
+        source: "bonus",
+        amount: REFERRAL_WELCOME_BONUS,
+        description: "Bono de bienvenida por registrarte en Ramgos",
+    });
+
+    if (!referrerId) return;
+    if (String(referrerId) === String(userId)) return;
+
+    const referrerUser = await ctx.db.get(referrerId);
+    if (!referrerUser) return;
+
+    await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+        userId: String(referrerUser._id),
+        eventKey: `ref_signup_${String(userId)}`,
+        type: "earn",
+        source: "referral",
+        amount: REFERRAL_SIGNUP_BONUS,
+        description: `Registro de referido (${userName})`,
+        metadata: { friendUserId: String(userId), referrerUserId: String(referrerId) },
+    });
+}
 
 const sanitizeUser = async (ctx: any, user: any) => {
     let avatarUrl = user.avatar;
@@ -86,6 +191,14 @@ const sanitizeUser = async (ctx: any, user: any) => {
     isBanned: user.isBanned,
     businessAvailability: user.businessAvailability,
     username: user.username,
+    phoneNumber: user.phoneNumber,
+    businessCategory: user.businessCategory,
+    emailVerified: user.emailVerified,
+    storeLocation: user.storeLocation,
+    // Alias used by CommercialProfile / marketplace "Tiendas"
+    location: user.storeLocation,
+    referralAlias: user.referralAlias,
+    referredByUserId: user.referredByUserId ? String(user.referredByUserId) : undefined,
     };
 };
 
@@ -133,19 +246,16 @@ export const register = mutation({
             throw new Error("No se pudo registrar la cuenta. Si ya tienes una cuenta, intenta iniciar sesión.");
         }
 
-        let finalUsername = args.username?.trim();
+        let finalUsername = args.username?.trim().replace(/^@/, "").toLowerCase();
         if (!finalUsername) {
-            const base = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-            const randomSuffix = Math.floor(100 + Math.random() * 900);
-            finalUsername = `${base}${randomSuffix}`;
-            const existingUsername = await ctx.db
-                .query("users")
-                .withIndex("by_username", (q) => q.eq("username", finalUsername!))
-                .first();
-            if (existingUsername) {
-                finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
-            }
-        } else {
+            throw new Error("Elegí un nombre de usuario (@) para continuar.");
+        }
+        if (!/^[a-z0-9_]{3,24}$/.test(finalUsername)) {
+            throw new Error(
+                "El usuario debe tener 3–24 caracteres (letras, números o _).",
+            );
+        }
+        {
             const existingUsername = await ctx.db
                 .query("users")
                 .withIndex("by_username", (q) => q.eq("username", finalUsername))
@@ -155,24 +265,27 @@ export const register = mutation({
             }
         }
 
-        let finalReferralCode = finalUsername;
+        if (args.role === "business" && !args.businessCategory?.trim()) {
+            throw new Error("Seleccioná la categoría de tu negocio.");
+        }
+        if (args.role === "business" && !args.nickname?.trim()) {
+            throw new Error("Ingresá el nombre del negocio.");
+        }
+        if (args.role === "influencer" && !args.businessCategory?.trim()) {
+            throw new Error("Seleccioná tu categoría de influencer.");
+        }
+        if (
+            args.role === "influencer" &&
+            !args.instagramUrl?.trim() &&
+            !args.tiktokUrl?.trim()
+        ) {
+            throw new Error("Debés proporcionar al menos Instagram o TikTok.");
+        }
 
-        let finalReferredBy = undefined;
+        let referredByUserId: Id<"users"> | undefined;
         if (args.referredBy?.trim()) {
-            const inputReferredBy = args.referredBy.trim().replace(/^@/, '');
-            const referrer = await ctx.db
-                .query("users")
-                .withIndex("by_username", (q) => q.eq("username", inputReferredBy.toLowerCase()))
-                .first() 
-                || 
-                await ctx.db
-                .query("users")
-                .withIndex("by_referral_code", (q) => q.eq("referralCode", inputReferredBy.toUpperCase()))
-                .first();
-
-            if (referrer) {
-                finalReferredBy = referrer.username;
-            }
+            const referrer = await resolveReferrerByInput(ctx, args.referredBy);
+            if (referrer) referredByUserId = referrer._id;
         }
 
         const hashedPassword = hashPassword(args.password);
@@ -190,8 +303,7 @@ export const register = mutation({
             bio: args.bio?.trim() || undefined,
             businessCategory: args.businessCategory?.trim() || undefined,
             username: finalUsername,
-            referralCode: finalReferralCode,
-            referredBy: finalReferredBy,
+            ...(referredByUserId ? { referredByUserId } : {}),
             kycStatus: "pending",
             influencerStatus: initialInfluencerStatus as any,
             instagramUrl: args.instagramUrl?.trim() || undefined,
@@ -205,21 +317,8 @@ export const register = mutation({
 
         const sessionToken = await createSession(ctx, userId);
         
-        // Gamificación: Puntos de registro y referidos
         try {
-            await ctx.runMutation(internal.rewards.awardSignupPoints, { userId });
-            if (finalReferredBy) {
-                const referrerUser = await ctx.db
-                    .query("users")
-                    .withIndex("by_username", q => q.eq("username", finalReferredBy!))
-                    .first();
-                if (referrerUser) {
-                    await ctx.runMutation(internal.rewards.awardReferralPoints, { 
-                        referrerId: referrerUser._id, 
-                        referredId: userId 
-                    });
-                }
-            }
+            await awardReferralOnSignup(ctx, userId, name, referredByUserId);
         } catch (e) { console.error("Error otorgando puntos de registro:", e); }
 
         const require2FA = await ctx.db
@@ -290,62 +389,150 @@ export const login = mutation({
     },
 });
 
-export const oauthLogin = mutation({
+/** OAuth after provider token verification (internal only). */
+export const oauthLoginFromProvider = internalMutation({
     args: {
-        provider: v.string(), // 'google' | 'apple'
-        email: v.string(),
+        provider: v.string(),
+        /** Optional for Apple re-login (Hide My Email / email only on first auth). */
+        email: v.optional(v.string()),
         name: v.string(),
         providerUserId: v.string(),
+        role: v.optional(v.string()),
+        /** login = existing users only; register = create if missing (requires role). */
+        mode: v.union(v.literal("login"), v.literal("register")),
+        username: v.optional(v.string()),
+        referredBy: v.optional(v.string()),
+        businessCategory: v.optional(v.string()),
+        nickname: v.optional(v.string()),
+        phoneNumber: v.optional(v.string()),
+        bio: v.optional(v.string()),
+        instagramUrl: v.optional(v.string()),
+        tiktokUrl: v.optional(v.string()),
+        termsVersion: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const email = args.email.trim().toLowerCase();
-        
+        const uid = `${args.provider}_${args.providerUserId}`;
+        const email = args.email?.trim().toLowerCase() || undefined;
+
+        // Prefer stable provider uid (Apple may omit email after first sign-in).
         let user = await ctx.db
             .query("users")
-            .withIndex("by_email", (q) => q.eq("email", email))
+            .withIndex("by_uid", (q) => q.eq("uid", uid))
             .first();
 
+        if (!user && email) {
+            user = await ctx.db
+                .query("users")
+                .withIndex("by_email", (q) => q.eq("email", email))
+                .first();
+        }
+
+        // Login: never create. Register: never overwrite an existing account.
         if (!user) {
-            // Auto-register consumer
-            let finalUsername = args.name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() + Math.floor(100 + Math.random() * 900);
-            const existingUsername = await ctx.db.query("users").withIndex("by_username", (q) => q.eq("username", finalUsername)).first();
-            if (existingUsername) {
-                finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
+            if (args.mode === "login") {
+                throw new Error(
+                    "NO_ACCOUNT: No hay cuenta con este email. Registrate y elegí el tipo de usuario.",
+                );
             }
 
-            let finalReferralCode = finalUsername;
+            if (!email) {
+                throw new Error(
+                    "Apple no compartió el email. En el iPhone: Ajustes → Apple ID → Inicio de sesión y seguridad → Apps con Apple ID → Ramgos → Dejar de usar Apple ID, y volvé a registrarte.",
+                );
+            }
+
+            if (!args.role || !ALLOWED_ROLES.has(args.role) || args.role === "admin") {
+                throw new Error(
+                    "Elegí el tipo de cuenta (consumidor, negocio o influencer) antes de continuar.",
+                );
+            }
+
+            let finalUsername = args.username?.trim().replace(/^@/, "").toLowerCase();
+            if (!finalUsername) {
+                throw new Error("Elegí un nombre de usuario (@) para continuar.");
+            }
+            if (!/^[a-z0-9_]{3,24}$/.test(finalUsername)) {
+                throw new Error(
+                    "El usuario debe tener 3–24 caracteres (letras, números o _).",
+                );
+            }
+            const existingUsername = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", finalUsername))
+                .first();
+            if (existingUsername) {
+                throw new Error("El nombre de usuario ya está en uso. Por favor, elige otro.");
+            }
+
+            if (args.role === "business" && !args.businessCategory?.trim()) {
+                throw new Error("Seleccioná la categoría de tu negocio.");
+            }
+            if (args.role === "business" && !args.nickname?.trim()) {
+                throw new Error("Ingresá el nombre del negocio.");
+            }
+            if (args.role === "influencer" && !args.businessCategory?.trim()) {
+                throw new Error("Seleccioná tu categoría de influencer.");
+            }
+            if (
+                args.role === "influencer" &&
+                !args.instagramUrl?.trim() &&
+                !args.tiktokUrl?.trim()
+            ) {
+                throw new Error("Debés proporcionar al menos Instagram o TikTok.");
+            }
+
+            let referredByUserId: Id<"users"> | undefined;
+            if (args.referredBy?.trim()) {
+                const referrer = await resolveReferrerByInput(ctx, args.referredBy);
+                if (referrer) referredByUserId = referrer._id;
+            }
+
+            const initialInfluencerStatus =
+                args.role === "influencer" ? "pending" : undefined;
 
             const userId = await ctx.db.insert("users", {
-                uid: Math.random().toString(36).slice(2), // Use internal UID
+                uid,
                 email,
                 name: args.name.trim(),
-                role: "consumer",
+                role: args.role as any,
                 username: finalUsername,
-                referralCode: finalReferralCode,
+                ...(referredByUserId ? { referredByUserId } : {}),
+                nickname: args.nickname?.trim() || undefined,
+                phoneNumber: args.phoneNumber?.trim() || undefined,
+                bio: args.bio?.trim() || undefined,
+                businessCategory: args.businessCategory?.trim() || undefined,
+                instagramUrl: args.instagramUrl?.trim() || undefined,
+                tiktokUrl: args.tiktokUrl?.trim() || undefined,
+                influencerStatus: initialInfluencerStatus as any,
                 kycStatus: "pending",
                 joinedAt: new Date().toISOString(),
                 tier: "Bronze",
                 subscriptionStatus: "inactive",
                 isTest: email.endsWith("@ramgos.com"),
-                // In a real app we might store providerUserId in a linkedAccounts table or directly
+                emailVerified: true,
+                ...(args.termsVersion
+                    ? { termsAcceptedVersion: args.termsVersion }
+                    : {}),
             });
             user = await ctx.db.get(userId);
+
+            try {
+                await awardReferralOnSignup(ctx, userId, args.name.trim(), referredByUserId);
+            } catch (e) {
+                console.error("Error otorgando puntos OAuth:", e);
+            }
+        } else if (args.mode === "register") {
+            throw new Error(
+                "ACCOUNT_EXISTS: Ya tenés una cuenta con este email. Andá a Iniciar sesión.",
+            );
         }
+        // mode === login + user exists: allow OAuth as alternate login
 
         if ((user as any).isBanned) {
             throw new Error("ACCOUNT_BANNED");
         }
 
         const sessionToken = await createSession(ctx, user!._id);
-        
-        // Gamificación: Si es un usuario nuevo (kycStatus == 'pending') o balance 0, podríamos darle el bono, 
-        // pero mejor es dárselo solo cuando sabemos que acaba de registrarse.
-        // Dado que OAuth puede ser login o registro, verificamos.
-        // Para no romper la DB, llamamos al internal que ya tiene idempotencia por evento.
-        try {
-            await ctx.runMutation(internal.rewards.awardSignupPoints, { userId: user!._id });
-        } catch (e) { console.error("Error otorgando puntos OAuth:", e); }
-
         return { ...(await sanitizeUser(ctx, user)), sessionToken };
     },
 });
@@ -379,7 +566,6 @@ export const changePassword = mutation({
         if (!user) {
             throw new Error("Usuario no encontrado.");
         }
-        return { ...(await sanitizeUser(ctx, user)), sessionToken: (args as any).sessionToken };
         if (user.otp !== args.code) {
             throw new Error("El código de verificación es inválido.");
         }
@@ -477,8 +663,6 @@ export const syncUser = mutation({
             finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
         }
 
-        let finalReferralCode = finalUsername;
-
         const newUserId = await ctx.db.insert("users", {
             uid: args.uid,
             email,
@@ -486,7 +670,6 @@ export const syncUser = mutation({
             role: args.role as any,
             avatar: args.avatar,
             username: finalUsername,
-            referralCode: finalReferralCode,
             kycStatus: "pending",
             joinedAt: new Date().toISOString(),
             tier: "Bronze",
@@ -508,7 +691,9 @@ export const updateProfile = mutation({
             avatar: v.optional(v.string()),
             phoneNumber: v.optional(v.string()),
             username: v.optional(v.string()),
+            /** @deprecated Prefer referralAlias for vanity invite codes. */
             referralCode: v.optional(v.string()),
+            referralAlias: v.optional(v.string()),
             businessAvailability: v.optional(v.object({
                 days: v.array(v.number()),
                 startTime: v.string(),
@@ -529,24 +714,81 @@ export const updateProfile = mutation({
         if (args.updates.nickname !== undefined) updates.nickname = args.updates.nickname.trim();
         if (args.updates.avatar !== undefined) updates.avatar = args.updates.avatar;
         if (args.updates.phoneNumber !== undefined) updates.phoneNumber = args.updates.phoneNumber.trim();
-        if (args.updates.referralCode !== undefined) updates.referralCode = args.updates.referralCode.trim();
         if (args.updates.businessAvailability !== undefined) updates.businessAvailability = args.updates.businessAvailability;
 
+        // Vanity alias (preferred). Legacy referralCode updates map to referralAlias.
+        const rawAliasUpdate =
+            args.updates.referralAlias !== undefined
+                ? args.updates.referralAlias
+                : args.updates.referralCode !== undefined
+                  ? args.updates.referralCode
+                  : undefined;
+
+        if (rawAliasUpdate !== undefined) {
+            const nextAlias = normalizeReferralAlias(rawAliasUpdate);
+            const prevAlias = ((userDoc as any).referralAlias as string | undefined) || "";
+
+            if (nextAlias !== prevAlias) {
+                if (nextAlias) {
+                    if (
+                        isAliasCooldownActive((userDoc as any).referralAliasChangedAt) &&
+                        prevAlias
+                    ) {
+                        throw new Error(aliasValidationMessage("cooldown"));
+                    }
+                    await assertReferralAliasAvailable(
+                        ctx,
+                        nextAlias,
+                        args.id,
+                        userDoc.username,
+                    );
+                    updates.referralAlias = nextAlias;
+                } else {
+                    updates.referralAlias = undefined;
+                }
+                updates.referralAliasChangedAt = Date.now();
+            }
+        }
+
         if (args.updates.username !== undefined) {
-            const newUsername = args.updates.username.trim();
+            const newUsername = args.updates.username.trim().replace(/^@/, "").toLowerCase();
             if (newUsername !== userDoc.username) {
+                if (!/^[a-z0-9_]{3,24}$/.test(newUsername)) {
+                    throw new Error(
+                        "El usuario debe tener 3–24 caracteres (letras, números o _).",
+                    );
+                }
                 const existing = await ctx.db
                     .query("users")
-                    .filter((q) => q.eq(q.field("username"), newUsername))
+                    .withIndex("by_username", (q) => q.eq("username", newUsername))
                     .first();
                 if (existing) {
                     throw new Error("El nombre de usuario ya está en uso.");
                 }
 
-                const now = Date.now();
+                const aliasCollision = await ctx.db
+                    .query("users")
+                    .withIndex("by_referral_alias", (q) =>
+                        q.eq("referralAlias", newUsername.toUpperCase()),
+                    )
+                    .first();
+                if (aliasCollision) {
+                    throw new Error(
+                        "Ese @usuario coincide con el alias de referido de otra persona.",
+                    );
+                }
+
+                // Own alias must stay distinct from own handle.
+                const ownAlias = (userDoc as any).referralAlias as string | undefined;
+                if (ownAlias && ownAlias.toLowerCase() === newUsername) {
+                    throw new Error(
+                        "Tu alias de referido debe ser distinto de tu @usuario. Cambiá el alias primero.",
+                    );
+                }
+
                 updates.username = newUsername;
-                updates.referralCode = newUsername; // Sincronizado
-                updates.usernameLastChangedAt = now;
+                updates.usernameLastChangedAt = Date.now();
+                // Do NOT sync referralAlias / referralCode — handle and alias are independent.
             }
         }
 
@@ -577,6 +819,64 @@ export const listUsers = query({
             return sanitized.filter(u => u.role === args.role);
         }
         return sanitized;
+    },
+});
+
+/** Public store cards for marketplace "Tiendas" tab (businesses with storeLocation). */
+export const listBusinessStores = query({
+    args: {},
+    handler: async (ctx) => {
+        const users = await ctx.db.query("users").collect();
+        const businesses = users.filter(
+            (u) =>
+                u.role === "business" &&
+                !u.isBanned &&
+                u.storeLocation?.lat != null &&
+                u.storeLocation?.lng != null,
+        );
+
+        return Promise.all(
+            businesses.map(async (u) => {
+                const avatarUrl =
+                    u.avatar && u.avatar.startsWith("convex-storage:")
+                        ? (await ctx.storage.getUrl(u.avatar.replace("convex-storage:", ""))) ||
+                          u.avatar
+                        : u.avatar;
+
+                return {
+                    _id: u._id,
+                    id: String(u._id),
+                    type: "business" as const,
+                    title: u.nickname || u.name,
+                    name: u.nickname || u.name,
+                    description: u.bio || `Tienda de ${u.name}`,
+                    price: 0,
+                    category: u.businessCategory || "Negocio",
+                    image: avatarUrl || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80",
+                    images: avatarUrl
+                        ? [{ id: "avatar", url: avatarUrl, isPrimary: true }]
+                        : [],
+                    location: {
+                        lat: u.storeLocation!.lat,
+                        lng: u.storeLocation!.lng,
+                        name: u.storeLocation!.name || u.storeLocation!.city || "Manhattan, NY",
+                        address: u.storeLocation!.address,
+                        city: u.storeLocation!.city,
+                    },
+                    seller: {
+                        id: String(u._id),
+                        name: u.nickname || u.name,
+                        avatar: avatarUrl,
+                        type: "business",
+                        sellerRating: u.sellerRating || 0,
+                    },
+                    sellerRating: u.sellerRating || 0,
+                    sellerReviewCount: u.sellerReviewCount || 0,
+                    kycStatus: u.kycStatus,
+                    username: u.username,
+                };
+            }),
+        );
     },
 });
 
@@ -928,38 +1228,44 @@ export const internalUpdateStripeConnectId = internalMutation({
 export const getReferralDashboard = query({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
+        const empty = {
+            username: "",
+            referralAlias: "",
+            referralCode: "",
+            referralLink: "",
+            stats: { totalInvited: 0, totalEarned: 0, level: 1 },
+            referralSummary: { registrations: 0, purchases: 0, totalPoints: 0 },
+            history: [] as Array<{
+                id: string;
+                name: string;
+                status: string;
+                earned: number;
+                date: string;
+                points?: number;
+            }>,
+            referrals: [] as Array<{
+                id: string;
+                name: string;
+                status: string;
+                earned: number;
+                date: string;
+                points?: number;
+            }>,
+        };
+
         const actor = await requireActor(ctx, args.sessionToken);
         const user = await ctx.db.get(actor.id);
-        if (!user) {
-            return {
-                referralCode: "",
-                referralLink: "",
-                stats: { totalInvited: 0, totalEarned: 0, level: 1 },
-                referralSummary: { registrations: 0, purchases: 0, totalPoints: 0 },
-                history: [] as Array<{
-                    id: string;
-                    name: string;
-                    status: string;
-                    earned: number;
-                    date: string;
-                    points?: number;
-                }>,
-                referrals: [] as Array<{
-                    id: string;
-                    name: string;
-                    status: string;
-                    earned: number;
-                    date: string;
-                    points?: number;
-                }>,
-            };
-        }
+        if (!user) return empty;
 
-        const referralCode = ((user as any).referralCode as string | undefined) ?? "";
+        const username = ((user as any).username as string | undefined) ?? "";
+        const referralAlias = ((user as any).referralAlias as string | undefined) ?? "";
+        const shareCode = preferredShareCode(username, referralAlias);
 
         const referred = await ctx.db
             .query("users")
-            .filter((q) => q.eq(q.field("referredBy"), actor.idString))
+            .withIndex("by_referred_by_user", (q) =>
+                q.eq("referredByUserId", actor.id),
+            )
             .collect();
 
         const ledger = await ctx.db
@@ -984,14 +1290,19 @@ export const getReferralDashboard = query({
             earned: e.amount,
             date: e.createdAt,
             points: e.amount,
+            user: e.description ?? "Referido",
+            action: e.type,
         }));
 
         const level =
             registrations >= 20 ? 4 : registrations >= 10 ? 3 : registrations >= 5 ? 2 : 1;
 
         return {
-            referralCode,
-            referralLink: referralCode ? `https://ramgos.com/ref/${referralCode}` : "",
+            username,
+            referralAlias,
+            // referralCode = preferred share token for backward-compatible clients
+            referralCode: shareCode,
+            referralLink: shareCode ? `https://ramgos.app/ref/${shareCode}` : "",
             stats: { totalInvited: registrations, totalEarned, level },
             referralSummary: { registrations, purchases, totalPoints: totalEarned },
             history,
@@ -1000,13 +1311,7 @@ export const getReferralDashboard = query({
     },
 });
 
-const generateReferralCode = (seed: string): string => {
-    // 6-char base36 from seed + random nonce.
-    const nonce = Math.random().toString(36).slice(2, 5);
-    const base = seed.replace(/[^a-z0-9]/gi, '').slice(0, 3) || 'ref';
-    return `${base}${nonce}`.toUpperCase().slice(0, 6);
-};
-
+/** Returns the durable handle (@username). Alias is optional and edited separately. */
 export const ensureReferralCode = mutation({
     args: {
         sessionToken: v.optional(v.string()),
@@ -1018,41 +1323,18 @@ export const ensureReferralCode = mutation({
 
         const user = await ctx.db.get(args.userId as Id<"users">);
         if (!user) throw new Error("Usuario no encontrado.");
-        if ((user as any).referralCode) {
-            return (user as any).referralCode as string;
+        const username = (user as any).username as string | undefined;
+        if (!username) {
+            throw new Error("Definí un @usuario antes de compartir tu código de referido.");
         }
-
-        // Try a few times in the unlikely case of a collision.
-        for (let i = 0; i < 5; i++) {
-            const candidate = generateReferralCode(
-                ((user as any).name as string) ?? (user as any).email ?? "ref",
-            );
-            const existing = await ctx.db
-                .query("users")
-                .withIndex("by_referral_code", (q) =>
-                    q.eq("referralCode", candidate),
-                )
-                .first();
-            if (!existing) {
-                await ctx.db.patch(args.userId as Id<"users">, {
-                    referralCode: candidate,
-                } as any);
-                return candidate;
-            }
-        }
-        throw new Error("No se pudo generar un código único de referido. Intenta de nuevo.");
+        return preferredShareCode(username, (user as any).referralAlias);
     },
 });
 
 export const resolveReferralCode = query({
     args: { code: v.string() },
     handler: async (ctx, args): Promise<string | null> => {
-        const user = await ctx.db
-            .query("users")
-            .withIndex("by_referral_code", (q) =>
-                q.eq("referralCode", args.code.toUpperCase()),
-            )
-            .first();
+        const user = await resolveReferrerByInput(ctx, args.code);
         if (!user) return null;
         return String(user._id);
     },
@@ -1062,12 +1344,7 @@ export const resolveReferralCode = query({
 export const internalResolveReferralCode = internalMutation({
     args: { code: v.string() },
     handler: async (ctx, args): Promise<string | null> => {
-        const user = await ctx.db
-            .query("users")
-            .withIndex("by_referral_code", (q) =>
-                q.eq("referralCode", args.code.toUpperCase()),
-            )
-            .first();
+        const user = await resolveReferrerByInput(ctx, args.code);
         if (!user) return null;
         return String(user._id);
     },
@@ -1089,47 +1366,54 @@ export const redeemReferralCode = mutation({
         if (user.referredByUserId) {
             throw new Error("Ya has canjeado un código de referido antes.");
         }
-        
-        if (user.referralCode === args.code.toUpperCase()) {
-            throw new Error("No puedes usar tu propio código.");
-        }
 
-        const referrer = await ctx.db
-            .query("users")
-            .withIndex("by_referral_code", (q) =>
-                q.eq("referralCode", args.code.toUpperCase())
-            )
-            .first() as any;
-
+        const referrer = await resolveReferrerByInput(ctx, args.code);
         if (!referrer) {
             throw new Error("Código no encontrado.");
         }
 
-        // Set referredByUserId
+        if (String(referrer._id) === String(user._id)) {
+            throw new Error("No puedes usar tu propio código.");
+        }
+
+        const ownHandle = (user.username || "").toLowerCase();
+        const ownAlias = ((user.referralAlias as string) || "").toUpperCase();
+        const inputNorm = normalizeReferralInput(args.code);
+        if (
+            inputNorm.toLowerCase() === ownHandle ||
+            inputNorm.toUpperCase() === ownAlias
+        ) {
+            throw new Error("No puedes usar tu propio código.");
+        }
+
         await ctx.db.patch(user._id, {
             referredByUserId: referrer._id,
-        } as any);
+        });
 
-        // Give points to the new user (Welcome bonus)
         await ctx.runMutation(internal.economy.applyPointsEventInternal, {
             userId: user._id,
             eventKey: `ref_welcome_${Date.now()}_${user._id}`,
             type: "earn",
             source: "referral",
-            amount: 10,
-            description: `Bono de bienvenida (${args.code.toUpperCase()})`,
-            metadata: { referralCode: args.code.toUpperCase(), referrerUserId: referrer._id },
+            amount: REFERRAL_WELCOME_BONUS,
+            description: `Bono de bienvenida (${normalizeReferralInput(args.code).toUpperCase()})`,
+            metadata: {
+                referralCode: normalizeReferralInput(args.code).toUpperCase(),
+                referrerUserId: String(referrer._id),
+            },
         });
 
-        // Give points to the referrer (Registration bonus)
         await ctx.runMutation(internal.economy.applyPointsEventInternal, {
             userId: referrer._id,
             eventKey: `ref_signup_${Date.now()}_${user._id}`,
             type: "earn",
             source: "referral",
-            amount: 5,
+            amount: REFERRAL_SIGNUP_BONUS,
             description: `Registro de referido (${user.name})`,
-            metadata: { friendUserId: user._id, referralCode: args.code.toUpperCase() },
+            metadata: {
+                friendUserId: String(user._id),
+                referralCode: normalizeReferralInput(args.code).toUpperCase(),
+            },
         });
 
         return true;
@@ -1152,9 +1436,11 @@ export const notifyReferralPurchase = mutation({
         const referrer = await ctx.db.get(user.referredByUserId as any) as any;
         if (!referrer) return false;
 
-        // Give points to the referrer
-        const baseReward = 10;
-        const highTicketReward = args.amountUSD > 100 ? 25 : 0;
+        const baseReward = REFERRAL_FIRST_PURCHASE_BONUS;
+        const highTicketReward =
+            args.amountUSD >= REFERRAL_HIGH_TICKET_THRESHOLD_USD
+                ? REFERRAL_HIGH_TICKET_BONUS
+                : 0;
 
         await ctx.runMutation(internal.economy.applyPointsEventInternal, {
             userId: referrer._id,
@@ -1179,6 +1465,179 @@ export const notifyReferralPurchase = mutation({
         }
 
         return true;
+    },
+});
+
+export const internalHandleReferralPurchase = internalMutation({
+    args: {
+        buyerUserId: v.string(),
+        amountUSD: v.number(),
+        paymentIntentId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const buyerId = ctx.db.normalizeId("users", args.buyerUserId);
+        if (!buyerId) return { success: false, reason: "buyer_not_found" as const };
+        const buyer = await ctx.db.get(buyerId) as any;
+        if (!buyer) return { success: false, reason: "buyer_not_found" as const };
+
+        let referrerId = buyer.referredByUserId as Id<"users"> | undefined;
+        if (!referrerId && typeof buyer.referredBy === "string") {
+            const legacy = await resolveReferrerByInput(ctx, buyer.referredBy);
+            if (legacy) {
+                referrerId = legacy._id;
+                await ctx.db.patch(buyerId, { referredByUserId: legacy._id });
+            }
+        }
+        if (!referrerId) {
+            return { success: false, reason: "no_referrer" as const };
+        }
+
+        const referrer = await ctx.db.get(referrerId) as any;
+        if (!referrer) return { success: false, reason: "referrer_missing" as const };
+
+        const firstPurchaseEventKey = `ref_purchase_first_${String(buyer._id)}`;
+        const highTicketEventKey = `ref_purchase_high_ticket_${args.paymentIntentId}`;
+        const paymentAmount = Math.max(0, Number(args.amountUSD) || 0);
+        let pointsAwarded = 0;
+
+        const firstPurchaseClaim = await ctx.db
+            .query("rewardsClaims")
+            .withIndex("by_user_claim", (q: any) =>
+                q.eq("userId", String(referrer._id)).eq("claimKey", firstPurchaseEventKey),
+            )
+            .first();
+        if (!firstPurchaseClaim) {
+            await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+                userId: String(referrer._id),
+                eventKey: firstPurchaseEventKey,
+                type: "earn",
+                source: "referral",
+                amount: REFERRAL_FIRST_PURCHASE_BONUS,
+                description: `Primera compra de referido (${buyer.name || "referido"})`,
+                metadata: {
+                    friendUserId: String(buyer._id),
+                    amountUSD: paymentAmount,
+                    paymentIntentId: args.paymentIntentId,
+                },
+            });
+            await ctx.db.insert("rewardsClaims", {
+                userId: String(referrer._id),
+                claimKey: firstPurchaseEventKey,
+                type: "ref_first_purchase",
+                pointsAwarded: REFERRAL_FIRST_PURCHASE_BONUS,
+                metadata: { friendUserId: String(buyer._id), paymentIntentId: args.paymentIntentId },
+                claimedAt: new Date().toISOString(),
+            });
+            pointsAwarded += REFERRAL_FIRST_PURCHASE_BONUS;
+        }
+
+        if (paymentAmount >= REFERRAL_HIGH_TICKET_THRESHOLD_USD) {
+            const highTicketClaim = await ctx.db
+                .query("rewardsClaims")
+                .withIndex("by_user_claim", (q: any) =>
+                    q.eq("userId", String(referrer._id)).eq("claimKey", highTicketEventKey),
+                )
+                .first();
+            if (!highTicketClaim) {
+                await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+                    userId: String(referrer._id),
+                    eventKey: highTicketEventKey,
+                    type: "earn",
+                    source: "referral",
+                    amount: REFERRAL_HIGH_TICKET_BONUS,
+                    description: `Bono high-ticket de referido (${buyer.name || "referido"})`,
+                    metadata: {
+                        friendUserId: String(buyer._id),
+                        amountUSD: paymentAmount,
+                        paymentIntentId: args.paymentIntentId,
+                    },
+                });
+                await ctx.db.insert("rewardsClaims", {
+                    userId: String(referrer._id),
+                    claimKey: highTicketEventKey,
+                    type: "ref_high_ticket",
+                    pointsAwarded: REFERRAL_HIGH_TICKET_BONUS,
+                    metadata: { friendUserId: String(buyer._id), paymentIntentId: args.paymentIntentId },
+                    claimedAt: new Date().toISOString(),
+                });
+                pointsAwarded += REFERRAL_HIGH_TICKET_BONUS;
+            }
+        }
+
+        return { success: pointsAwarded > 0, pointsAwarded };
+    },
+});
+
+/**
+ * One-shot migration: custom referralCode → referralAlias;
+ * backfill referredByUserId from legacy referredBy username/code.
+ */
+export const migrateReferralDualCodes = mutation({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        if (actor.role !== "admin" && actor.role !== "developer") {
+            throw new Error("Solo admin/developer puede migrar códigos de referido.");
+        }
+
+        const users = await ctx.db.query("users").collect();
+        let patched = 0;
+        let aliasesMoved = 0;
+        let linksBackfilled = 0;
+
+        for (const u of users) {
+            const patch: Record<string, unknown> = {};
+            const uname = ((u as any).username as string | undefined)?.toLowerCase() ?? "";
+            const code = (u as any).referralCode as string | undefined;
+            const existingAlias = (u as any).referralAlias as string | undefined;
+
+            if (code && !existingAlias) {
+                if (uname && code.toLowerCase() === uname) {
+                    // Handle already covers invite — drop redundant invite code.
+                    patch.referralCode = undefined;
+                } else {
+                    const alias = normalizeReferralAlias(code);
+                    const formatErr = validateReferralAliasFormat(alias, uname);
+                    if (!formatErr && alias) {
+                        const taken = await ctx.db
+                            .query("users")
+                            .withIndex("by_referral_alias", (q) =>
+                                q.eq("referralAlias", alias),
+                            )
+                            .first();
+                        const usernameTaken = await ctx.db
+                            .query("users")
+                            .withIndex("by_username", (q) =>
+                                q.eq("username", alias.toLowerCase()),
+                            )
+                            .first();
+                        if (
+                            (!taken || String(taken._id) === String(u._id)) &&
+                            (!usernameTaken || String(usernameTaken._id) === String(u._id))
+                        ) {
+                            patch.referralAlias = alias;
+                            patch.referralCode = undefined;
+                            aliasesMoved += 1;
+                        }
+                    }
+                }
+            }
+
+            if (!(u as any).referredByUserId && (u as any).referredBy) {
+                const ref = await resolveReferrerByInput(ctx, (u as any).referredBy);
+                if (ref && String(ref._id) !== String(u._id)) {
+                    patch.referredByUserId = ref._id;
+                    linksBackfilled += 1;
+                }
+            }
+
+            if (Object.keys(patch).length > 0) {
+                await ctx.db.patch(u._id, patch as any);
+                patched += 1;
+            }
+        }
+
+        return { patched, aliasesMoved, linksBackfilled, totalUsers: users.length };
     },
 });
 
@@ -1232,16 +1691,21 @@ export const updateUserStripeCustomerId = internalMutation({
     args: {
         userId: v.string(),
         stripeCustomerId: v.string(),
+        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
     },
     handler: async (ctx, args) => {
         const idVal = ctx.db.normalizeId("users", args.userId);
         if (idVal) {
-            await ctx.db.patch(idVal, { stripeCustomerId: args.stripeCustomerId } as any);
+            const mode = args.mode ?? "test";
+            await ctx.db.patch(idVal, {
+                stripeCustomerId: args.stripeCustomerId,
+                ...(mode === "live"
+                    ? { stripeCustomerIdLive: args.stripeCustomerId }
+                    : { stripeCustomerIdTest: args.stripeCustomerId }),
+            } as any);
         }
     }
 });
-
-
 
 export const getUserActivityStats = query({
     args: {},

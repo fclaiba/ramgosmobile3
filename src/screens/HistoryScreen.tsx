@@ -534,10 +534,15 @@ export default function HistoryScreen({ navigation, route }: any) {
     };
 
     const handleUseBono = (item: HistoryItem) => {
+        const code = (item.bonoCode || '').trim();
+        if (!code || code.startsWith('DEMO-')) {
+            show('Este bono no tiene un código canjeable. Si acabás de pagar, esperá un momento y refrescá Historial.', 'warning');
+            return;
+        }
         navigation.navigate('BonusQR', {
             bonusId: item.orderId,
             businessName: item.business,
-            bonoCode: item.bonoCode || item.orderId,
+            bonoCode: code,
             paidAmount: item.paidAmount ?? item.price ?? 50,
             creditTotal: item.creditTotal ?? 100,
             creditRemaining: item.creditRemaining ?? item.creditTotal ?? 100,
@@ -702,13 +707,18 @@ export default function HistoryScreen({ navigation, route }: any) {
         const StatusIcon = meta.icon;
         const TypeIcon = TYPE_ICON[item.type];
         const isBono = item.kind === 'bonos' && item.type === 'bonus';
-        const canUseBono = isBono && activeTab === 'purchases' && item.status === 'pending';
+        const canUseBono =
+            isBono &&
+            activeTab === 'purchases' &&
+            item.status === 'pending' &&
+            !!item.bonoCode &&
+            !String(item.bonoCode).startsWith('DEMO-');
         const canConfirm = activeTab === 'purchases' && item.backendStatus === 'paid_escrow';
         const creditRemaining = item.creditRemaining ?? 0;
         const creditTotal = item.creditTotal ?? 100;
         const usesRemaining = item.usesRemaining ?? 0;
         const usesTotal = item.usesTotal ?? 1;
-        const codeLabel = item.bonoCode || item.orderId;
+        const codeLabel = item.bonoCode || '—';
 
         // Dedicated bono purchase card — code + credit + Ver QR
         if (isBono && activeTab === 'purchases') {

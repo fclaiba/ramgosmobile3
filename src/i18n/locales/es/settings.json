@@ -1,0 +1,46 @@
+{
+  "title": "Configuración",
+  "subtitle": "Personaliza tu experiencia",
+  "sections": {
+    "account": "Cuenta",
+    "payments": "Pagos",
+    "appearance": "Apariencia",
+    "securityPrivacy": "Seguridad y privacidad",
+    "notifications": "Notificaciones",
+    "legal": "Legal"
+  },
+  "rows": {
+    "editProfile": "Editar perfil",
+    "paymentMethods": "Métodos de pago",
+    "language": "Idioma",
+    "paymentMode": "Modo de pagos",
+    "testMode": "TEST (simulado)",
+    "liveMode": "LIVE (real)",
+    "paymentModeInfo": "Pagos LIVE deshabilitados hasta el lanzamiento (solo modo TEST)",
+    "testBanner": "MODO TEST: Se procesan tarjetas de prueba de Stripe. Se simulan pedidos, garantía y disputas completas. No se mueve dinero real.",
+    "darkMode": "Tema oscuro",
+    "privacySecurity": "Privacidad y seguridad",
+    "changePassword": "Cambiar contraseña",
+    "notificationInbox": "Bandeja de notificaciones",
+    "pushNotifications": "Notificaciones push",
+    "emails": "Correos",
+    "promotions": "Promociones",
+    "termsOfService": "Términos de servicio",
+    "privacyPolicy": "Política de privacidad"
+  },
+  "actions": {
+    "logout": "Cerrar sesión",
+    "deleteAccount": "Eliminar mi cuenta y mis datos",
+    "confirmLogoutTitle": "Cerrar sesión",
+    "confirmLogoutBody": "¿Seguro que deseas cerrar sesión en este dispositivo?",
+    "confirmDeleteTitle": "Eliminar cuenta",
+    "confirmDeleteBody": "Esta acción eliminará permanentemente tus datos, puntos y progreso. No se puede deshacer.",
+    "deleteNow": "Sí, eliminar"
+  },
+  "messages": {
+    "saved": "Preferencia guardada",
+    "saveFailed": "No se pudo guardar",
+    "accountDeleted": "Cuenta eliminada correctamente",
+    "deleteFailed": "No se pudo eliminar la cuenta"
+  }
+}

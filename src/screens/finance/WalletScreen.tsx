@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { ArrowUpRight, ArrowDownLeft, Clock, Wallet as WalletIcon, DollarSign } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 
 export default function WalletScreen() {
@@ -16,6 +17,7 @@ export default function WalletScreen() {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { t } = useTranslation();
 
     // In a real app, userId would come from auth context. 
     // For demo purposes, we might be looking at 'seller_1' or 'inf_1' or the logged in user.
@@ -29,21 +31,21 @@ export default function WalletScreen() {
 
     const handleWithdraw = () => {
         if (wallet.balanceAvailable <= 0) {
-            show('No tienes fondos disponibles para retirar.', 'error');
+            show(t('wallet.noFunds', { defaultValue: 'No tienes fondos disponibles para retirar.' }), 'error');
             return;
         }
-        show(`Se ha iniciado la transferencia de $${wallet.balanceAvailable.toFixed(2)} a tu CBU vinculado.`, 'success');
+        show(t('wallet.transferStarted', { amount: wallet.balanceAvailable.toFixed(2), defaultValue: `Se inició la transferencia de $${wallet.balanceAvailable.toFixed(2)}.` }), 'success');
     };
 
     const handleSimulateTime = () => {
         simulateTimePass(10);
-        show('Modo Desarrollador. Se ha simulado el paso de 10 días. Fondos en Escrow liberados.', 'info');
+        show(t('wallet.devSimulated', { defaultValue: 'Modo desarrollador: se simuló el paso de 10 días y se liberaron fondos en garantía.' }), 'info');
     };
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Mi Billetera</Text>
+                <Text style={styles.headerTitle}>{t('wallet.title', { defaultValue: 'Mi billetera' })}</Text>
                 {/* Dev Tool */}
                 <TouchableOpacity onPress={handleSimulateTime} style={{ padding: 8 }}>
                     <Clock size={20} color={isDark ? '#9CA3AF' : '#6B7280'} />
@@ -60,7 +62,7 @@ export default function WalletScreen() {
                 >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <View>
-                            <Text style={styles.balanceLabel}>Saldo Disponible</Text>
+                            <Text style={styles.balanceLabel}>{t('wallet.available', { defaultValue: 'Saldo disponible' })}</Text>
                             <Text style={styles.balanceAmount}>${wallet.balanceAvailable.toFixed(2)}</Text>
                         </View>
                         <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: Radius.md }}>
@@ -68,7 +70,7 @@ export default function WalletScreen() {
                         </View>
                     </View>
                     <TouchableOpacity style={styles.withdrawBtn} onPress={handleWithdraw}>
-                        <Text style={styles.withdrawText}>Retirar Fondos</Text>
+                        <Text style={styles.withdrawText}>{t('wallet.withdraw', { defaultValue: 'Retirar fondos' })}</Text>
                         <ArrowUpRight size={16} color="#2196F3" />
                     </TouchableOpacity>
                 </LinearGradient>
@@ -76,19 +78,19 @@ export default function WalletScreen() {
                 <View style={styles.secondaryCard}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <Clock size={16} color={isDark ? '#FCD34D' : '#D97706'} />
-                        <Text style={styles.secondaryLabel}>En Retención (Escrow)</Text>
+                        <Text style={styles.secondaryLabel}>{t('wallet.inEscrow', { defaultValue: 'En retención (escrow)' })}</Text>
                     </View>
                     <Text style={styles.secondaryAmount}>${wallet.balancePending.toFixed(2)}</Text>
-                <Text style={styles.secondarySubtext}>Se libera en ~10 días</Text>
+                <Text style={styles.secondarySubtext}>{t('wallet.releaseEta', { defaultValue: 'Se libera en ~10 días' })}</Text>
                 </View>
             </View>
 
             {/* Transactions History */}
-            <Text style={styles.sectionTitle}>Movimientos Recientes</Text>
+            <Text style={styles.sectionTitle}>{t('wallet.recent', { defaultValue: 'Movimientos recientes' })}</Text>
 
             <View style={styles.txList}>
                 {myTransactions.length === 0 ? (
-                    <Text style={styles.emptyText}>No hay movimientos registrados.</Text>
+                    <Text style={styles.emptyText}>{t('wallet.noMovements', { defaultValue: 'No hay movimientos registrados.' })}</Text>
                 ) : (
                     myTransactions.map(tx => (
                         <View key={tx.id} style={styles.txItem}>

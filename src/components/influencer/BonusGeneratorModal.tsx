@@ -1,19 +1,25 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, TextInput } from 'react-native';
 import { X, Gift } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 import { useAuth } from '../../contexts/AuthContext';
 import { glassSurface } from '../../utils/glass';
 import { useResponsive } from '../../hooks/useResponsive';
+import { ImageUploadField } from '../ui/ImageUploadField';
 
 interface Props {
     visible: boolean;
     onClose: () => void;
     user: any;
 }
+
+const DEFAULT_PAID = '50';
+const DEFAULT_CREDIT = '100';
+const DEFAULT_DAYS = '4';
 
 export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
     const { colorScheme } = useTheme();
@@ -23,41 +29,137 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
     const { sessionToken } = useAuth();
 
     const [bonoTitle, setBonoTitle] = useState('');
-    const [bonoDiscount, setBonoDiscount] = useState('40'); // 40, 50, 60
-    const [bonoDescription, setBonoDescription] = useState('Cupón exclusivo para mis seguidores.');
+    const [bonoDescription, setBonoDescription] = useState(
+        'Pagás el precio y recibís crédito para gastar en el negocio.',
+    );
+    const [paidPrice, setPaidPrice] = useState(DEFAULT_PAID);
+    const [creditValue, setCreditValue] = useState(DEFAULT_CREDIT);
+    const [validityDays, setValidityDays] = useState(DEFAULT_DAYS);
+    const [selectedBusinessId, setSelectedBusinessId] = useState<string>('');
+    const [photos, setPhotos] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const createListingMutation = useMutation(api.listings.createListing);
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+
+    const campaignRows =
+        useQuery(
+            api.campaigns.getMyCampaigns,
+            user?.id ? { influencerId: user.id as Id<'users'>, sessionToken } : 'skip',
+        ) ?? [];
+
+    const businessOptions = useMemo(() => {
+        const active = campaignRows.filter((c: any) => c.status === 'active');
+        const byId = new Map<string, { id: string; name: string }>();
+        for (const c of active) {
+            const id = String(c.businessId || '');
+            if (!id || byId.has(id)) continue;
+            byId.set(id, {
+                id,
+                name: c.businessName || 'Negocio',
+            });
+        }
+        return Array.from(byId.values());
+    }, [campaignRows]);
+
+    const resetForm = () => {
+        setBonoTitle('');
+        setBonoDescription('Pagás el precio y recibís crédito para gastar en el negocio.');
+        setPaidPrice(DEFAULT_PAID);
+        setCreditValue(DEFAULT_CREDIT);
+        setValidityDays(DEFAULT_DAYS);
+        setSelectedBusinessId('');
+        setPhotos([]);
+    };
+
+    const uploadPhoto = async (uri: string): Promise<string> => {
+        const isStorageId =
+            !uri.startsWith('http') &&
+            !uri.startsWith('blob:') &&
+            !uri.startsWith('data:') &&
+            !uri.startsWith('file:') &&
+            uri.length < 64;
+        const isRemoteUrl =
+            (uri.startsWith('http') || uri.startsWith('https')) && !uri.startsWith('blob:');
+        if (isStorageId || isRemoteUrl) return uri;
+
+        if (!user?.id) {
+            throw new Error('Debes iniciar sesión para subir imágenes.');
+        }
+
+        const postUrl = await generateUploadUrl({
+            sessionToken,
+            actorId: String(user.id),
+        });
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const result = await fetch(postUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': response.headers.get('Content-Type') || 'image/jpeg',
+            },
+            body: blob,
+        });
+        if (!result.ok) {
+            throw new Error('No se pudo subir la imagen al servidor.');
+        }
+        const { storageId } = await result.json();
+        if (!storageId) {
+            throw new Error('El servidor no devolvió un ID de imagen.');
+        }
+        return storageId as string;
+    };
 
     const handleCreateBono = async () => {
         if (!user) {
             show('Debes iniciar sesión.', 'error');
             return;
         }
-        const discount = Number(bonoDiscount);
-        if (![40, 50, 60].includes(discount)) {
-            show('El descuento debe ser 40, 50 o 60%.', 'warning');
-            return;
-        }
         if (!bonoTitle.trim()) {
-            show('Ingresa un título para el bono', 'warning');
+            show('Ingresá un título para el bono', 'warning');
             return;
         }
-        
+        if (!selectedBusinessId) {
+            show('Elegí el negocio emisor (necesitás una campaña activa).', 'warning');
+            return;
+        }
+        if (photos.length === 0) {
+            show('Subí una foto del bono.', 'warning');
+            return;
+        }
+        const price = Number(paidPrice);
+        const credit = Number(creditValue);
+        const days = Math.floor(Number(validityDays) || 4);
+        if (!Number.isFinite(price) || price <= 0) {
+            show('El precio pagado debe ser mayor a 0.', 'warning');
+            return;
+        }
+        if (!Number.isFinite(credit) || credit <= price) {
+            show('El crédito debe ser mayor al precio (ej. pagás 50, crédito 100).', 'warning');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
+            const uploadedImages = await Promise.all(photos.map((uri) => uploadPhoto(uri)));
             await createListingMutation({
                 sessionToken,
-                title: bonoTitle,
-                description: bonoDescription,
-                price: 0,
+                title: bonoTitle.trim(),
+                description: bonoDescription.trim() || `Pagás $${price} y tenés $${credit} de crédito.`,
+                price,
+                discountValue: credit,
+                discountType: 'fixed',
+                validityDays: Math.min(Math.max(days, 1), 365),
                 type: 'bono',
-                category: 'social',
+                category: 'bonos',
                 stock: 1000,
-                discountPercent: discount,
+                sellerId: selectedBusinessId,
+                image: uploadedImages[0],
+                gallery: uploadedImages,
             });
+            resetForm();
             onClose();
-            show(`¡Bono del ${discount}% creado con éxito!`, 'success');
+            show(`Bono creado: pagás $${price} · crédito $${credit}`, 'success');
         } catch (error: any) {
             show(error.message || 'Error al crear bono', 'error');
         } finally {
@@ -73,23 +175,111 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
             onRequestClose={onClose}
         >
             <View style={styles.modalOverlay}>
-                <View style={[styles.modalView, glassSurface(isDark, 'prominent'), { maxHeight: windowHeight * 0.86 }]}>
+                <View
+                    style={[
+                        styles.modalView,
+                        glassSurface(isDark, 'prominent'),
+                        { maxHeight: windowHeight * 0.9 },
+                    ]}
+                >
                     <View style={styles.modalHeaderRow}>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#111827' }]}>Crear Bono de Descuento</Text>
-                            <Text style={[styles.modalText, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>Tus seguidores podrán reclamar este bono en la plataforma.</Text>
+                            <Text style={[styles.modalTitle, { color: isDark ? '#fff' : '#111827' }]}>
+                                Crear bono de crédito
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.modalText,
+                                    { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' },
+                                ]}
+                            >
+                                El seguidor paga un precio y recibe más crédito para gastar en el negocio.
+                            </Text>
                         </View>
-                        <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} accessibilityRole="button">
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.modalCloseBtn}
+                            accessibilityRole="button"
+                        >
                             <X size={18} color={isDark ? '#CBD5E1' : '#64748b'} />
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+                    <ScrollView
+                        contentContainerStyle={styles.modalScroll}
+                        keyboardShouldPersistTaps="handled"
+                    >
                         <View style={styles.formGroup}>
-                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>Título del bono</Text>
+                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                Negocio emisor
+                            </Text>
+                            {businessOptions.length === 0 ? (
+                                <Text
+                                    style={{
+                                        color: isDark ? '#FCA5A5' : '#B91C1C',
+                                        fontSize: 13,
+                                        lineHeight: 18,
+                                    }}
+                                >
+                                    No tenés campañas activas. Pedile a un negocio que te invite o aceptá una
+                                    propuesta primero.
+                                </Text>
+                            ) : (
+                                <View style={{ gap: 8 }}>
+                                    {businessOptions.map((b) => {
+                                        const selected = selectedBusinessId === b.id;
+                                        return (
+                                            <TouchableOpacity
+                                                key={b.id}
+                                                onPress={() => setSelectedBusinessId(b.id)}
+                                                style={[
+                                                    styles.input,
+                                                    {
+                                                        backgroundColor: isDark
+                                                            ? 'rgba(255,255,255,0.05)'
+                                                            : '#fff',
+                                                        borderColor: selected
+                                                            ? '#4f46e5'
+                                                            : isDark
+                                                              ? 'rgba(255,255,255,0.1)'
+                                                              : '#E5E7EB',
+                                                    },
+                                                    selected && {
+                                                        backgroundColor: isDark
+                                                            ? 'rgba(79,70,229,0.2)'
+                                                            : 'rgba(79,70,229,0.08)',
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        color: isDark ? '#fff' : '#111827',
+                                                        fontWeight: selected ? '700' : '500',
+                                                    }}
+                                                >
+                                                    {b.name}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                Título del bono
+                            </Text>
                             <TextInput
-                                style={[styles.input, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', color: isDark ? '#fff' : '#111827', borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB' }]}
-                                placeholder="Ej: Promo de Verano 50%"
+                                style={[
+                                    styles.input,
+                                    {
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                        color: isDark ? '#fff' : '#111827',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                                    },
+                                ]}
+                                placeholder="Ej: Bono $50 → $100 en La Cafetería"
                                 value={bonoTitle}
                                 onChangeText={setBonoTitle}
                                 placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
@@ -97,28 +287,92 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                         </View>
 
                         <View style={styles.formGroup}>
-                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>Porcentaje de descuento (%)</Text>
-                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                                {['40', '50', '60'].map((perc) => (
-                                    <TouchableOpacity
-                                        key={perc}
-                                        style={[
-                                            styles.input,
-                                            { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB' },
-                                            bonoDiscount === perc && { borderColor: '#4f46e5', backgroundColor: isDark ? 'rgba(79, 70, 229, 0.2)' : 'rgba(79, 70, 229, 0.1)' }
-                                        ]}
-                                        onPress={() => setBonoDiscount(perc)}
-                                    >
-                                        <Text style={[{ color: isDark ? '#fff' : '#111827', fontWeight: '600' }, bonoDiscount === perc && { color: '#4f46e5' }]}>{perc}%</Text>
-                                    </TouchableOpacity>
-                                ))}
+                            <ImageUploadField
+                                title="Foto del bono"
+                                images={photos}
+                                onChange={setPhotos}
+                                maxImages={3}
+                            />
+                        </View>
+
+                        <View style={styles.row2}>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                    Precio pagado ($)
+                                </Text>
+                                <TextInput
+                                    style={[
+                                        styles.input,
+                                        {
+                                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                            color: isDark ? '#fff' : '#111827',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                                        },
+                                    ]}
+                                    keyboardType="decimal-pad"
+                                    value={paidPrice}
+                                    onChangeText={setPaidPrice}
+                                    placeholder="50"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
+                            </View>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                    Crédito ($)
+                                </Text>
+                                <TextInput
+                                    style={[
+                                        styles.input,
+                                        {
+                                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                            color: isDark ? '#fff' : '#111827',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                                        },
+                                    ]}
+                                    keyboardType="decimal-pad"
+                                    value={creditValue}
+                                    onChangeText={setCreditValue}
+                                    placeholder="100"
+                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                                />
                             </View>
                         </View>
 
                         <View style={styles.formGroup}>
-                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>Descripción</Text>
+                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                Validez (días desde la compra)
+                            </Text>
                             <TextInput
-                                style={[styles.input, styles.inputMultiline, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', color: isDark ? '#fff' : '#111827', borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB' }]}
+                                style={[
+                                    styles.input,
+                                    {
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                        color: isDark ? '#fff' : '#111827',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                                    },
+                                ]}
+                                keyboardType="number-pad"
+                                value={validityDays}
+                                onChangeText={setValidityDays}
+                                placeholder="4"
+                                placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
+                            />
+                        </View>
+
+                        <View style={styles.formGroup}>
+                            <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                Descripción
+                            </Text>
+                            <TextInput
+                                style={[
+                                    styles.input,
+                                    styles.inputMultiline,
+                                    {
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                                        color: isDark ? '#fff' : '#111827',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                                    },
+                                ]}
                                 placeholder="Instrucciones para usar el bono"
                                 value={bonoDescription}
                                 onChangeText={setBonoDescription}
@@ -129,11 +383,34 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                     </ScrollView>
 
                     <View style={styles.modalFooter}>
-                        <View style={[styles.modalActionsRow, windowWidth < 420 && { flexDirection: 'column' }]}>
-                            <TouchableOpacity onPress={onClose} style={[styles.btn, styles.btnOutline, windowWidth < 420 ? { width: '100%' } : { flex: 1 }]}>
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>Cancelar</Text>
+                        <View
+                            style={[
+                                styles.modalActionsRow,
+                                windowWidth < 420 && { flexDirection: 'column' },
+                            ]}
+                        >
+                            <TouchableOpacity
+                                onPress={onClose}
+                                style={[
+                                    styles.btn,
+                                    styles.btnOutline,
+                                    windowWidth < 420 ? { width: '100%' } : { flex: 1 },
+                                ]}
+                            >
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#111827', fontWeight: '700' }}>
+                                    Cancelar
+                                </Text>
                             </TouchableOpacity>
-                            <TouchableOpacity disabled={isSubmitting} onPress={handleCreateBono} style={[styles.btn, styles.btnPrimary, windowWidth < 420 ? { width: '100%' } : { flex: 1 }]}>
+                            <TouchableOpacity
+                                disabled={isSubmitting || businessOptions.length === 0}
+                                onPress={handleCreateBono}
+                                style={[
+                                    styles.btn,
+                                    styles.btnPrimary,
+                                    windowWidth < 420 ? { width: '100%' } : { flex: 1 },
+                                    (isSubmitting || businessOptions.length === 0) && { opacity: 0.5 },
+                                ]}
+                            >
                                 <Gift size={16} color="#fff" style={{ marginRight: 8 }} />
                                 <Text style={{ color: '#fff', fontWeight: '800' }}>Crear bono</Text>
                             </TouchableOpacity>
@@ -182,7 +459,11 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
     formGroup: {
-        marginBottom: 20,
+        marginBottom: 16,
+    },
+    row2: {
+        flexDirection: 'row',
+        gap: 12,
     },
     modalLabel: {
         fontSize: 14,
@@ -197,7 +478,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     inputMultiline: {
-        height: 100,
+        height: 90,
         textAlignVertical: 'top',
     },
     modalFooter: {

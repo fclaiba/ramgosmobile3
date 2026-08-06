@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
+import { AppLanguage, normalizeLanguage, setAppLanguage } from '../i18n';
 
 export const useUserPreferences = () => {
     const { user, sessionToken } = useAuth();
@@ -13,10 +14,12 @@ export const useUserPreferences = () => {
     const updatePrefsMutation = useMutation(api.userProfile.updatePreferences);
 
     const setLanguage = async (language: string) => {
+        const normalized = normalizeLanguage(language) as AppLanguage;
+        await setAppLanguage(normalized);
         if (!user) return;
         await updatePrefsMutation({
             sessionToken, userId: user.id,
-            preferences: { language }
+            preferences: { language: normalized }
         });
     };
 
@@ -58,7 +61,7 @@ export const useUserPreferences = () => {
     };
 
     return {
-        language: preferences?.language || 'es',
+        language: normalizeLanguage(preferences?.language || 'es'),
         currency: preferences?.currency || 'USD',
         notifications: preferences?.notifications || {
             email: true,

@@ -4,52 +4,57 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { Mail, Lock, Eye, EyeOff, LogIn, ArrowLeft, Sparkles, User } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path } from 'react-native-svg';
-import { useAuth, getAuthDestination, type AuthFlowDecision } from '../contexts/AuthContext';
+import { useAuth, getAuthDestination, REMEMBERED_LOGIN_KEY, type AuthFlowDecision } from '../contexts/AuthContext';
+import { storage } from '../services/auth/storageAdapter';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
-
-
-// Existing icons...
+import {
+    GoogleSignInCancelledError,
+    signInWithGoogle,
+} from '../services/auth/googleSignIn';
+import {
+    AppleSignInCancelledError,
+    signInWithApple,
+} from '../services/auth/appleSignIn';
+import { GoogleAuthButton } from '../components/ui/GoogleAuthButton';
+import { AppleAuthButton } from '../components/ui/AppleAuthButton';
+import { useTranslation } from 'react-i18next';
+import { mapAuthError } from '../i18n/errorMap';
 
 const getCleanErrorMessage = (error: unknown, fallback: string): string => {
     if (error instanceof Error) {
-        const msg = error.message;
+        let msg = error.message;
         if (msg.includes('[ConvexError]')) {
-            return msg.split('[ConvexError]')[1].split('\n')[0].trim();
+            msg = msg.split('[ConvexError]')[1].split('\n')[0].trim();
         }
         if (msg.includes('Uncaught ConvexError:')) {
-            return msg.split('Uncaught ConvexError:')[1].split('\n')[0].trim();
+            msg = msg.split('Uncaught ConvexError:')[1].split('\n')[0].trim();
         }
-        if (msg.includes('Uncaught Error:')) {
-            return msg.split('Uncaught Error:')[1].split('\n')[0].trim();
+        while (msg.includes('Uncaught Error:')) {
+            msg = msg.split('Uncaught Error:').pop()!.split('\n')[0].trim();
         }
-        return msg;
+        if (msg.startsWith('NO_ACCOUNT:')) {
+            return msg.replace(/^NO_ACCOUNT:\s*/, '');
+        }
+        if (msg.startsWith('ACCOUNT_EXISTS:')) {
+            return msg.replace(/^ACCOUNT_EXISTS:\s*/, '');
+        }
+        return msg || fallback;
     }
     return fallback;
 };
 
-// SVG Icons matching WelcomeScreen
-const GoogleIcon = () => (
-    <Svg width={20} height={20} viewBox="0 0 24 24">
-        <Path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-        <Path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-        <Path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-        <Path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-    </Svg>
-);
-
-const AppleIcon = ({ isDark }: { isDark: boolean }) => (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill={isDark ? "#fff" : "#000"}>
-        <Path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-    </Svg>
-);
+const isNoAccountError = (error: unknown): boolean => {
+    const msg = error instanceof Error ? error.message : String(error);
+    return msg.includes('NO_ACCOUNT') || msg.toLowerCase().includes('no hay cuenta') || msg.toLowerCase().includes('no existe una cuenta');
+};
 
 export default function LoginScreen({ navigation }: any) {
-    const { loginWithEmail, loginWithSocial, pendingVerification, isProcessing, status, user } = useAuth();
+    const { loginWithEmail, loginWithGoogleIdToken, loginWithAppleIdToken, pendingVerification, isProcessing, status, user } = useAuth();
     const { colorScheme } = useTheme();
     const { show } = useToast();
+    const { t } = useTranslation(['auth', 'common']);
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
@@ -57,7 +62,24 @@ export default function LoginScreen({ navigation }: any) {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [appleLoading, setAppleLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const raw = await storage.getItem(REMEMBERED_LOGIN_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw) as { email?: string; rememberMe?: boolean };
+                    if (parsed.email) setEmail(parsed.email);
+                    setRememberMe(parsed.rememberMe !== false);
+                }
+            } catch {
+                /* ignore */
+            }
+        })();
+    }, []);
 
     useEffect(() => {
         if (status === 'authenticated' && user) {
@@ -83,7 +105,7 @@ export default function LoginScreen({ navigation }: any) {
         ]).start();
     }, []);
 
-    const busy = isLoading || isProcessing;
+    const busy = isLoading || isProcessing || googleLoading || appleLoading;
 
     const mapRoleToAccountType = (role?: string) => {
         switch (role) {
@@ -104,45 +126,87 @@ export default function LoginScreen({ navigation }: any) {
     const handleLogin = async () => {
         console.log('[LoginScreen] handleLogin called with:', { email, hasPassword: !!password });
         if (!email.trim() || !password.trim()) {
-            show('Ingresa tu email y contraseña', 'error');
+            show(t('auth:login.emptyCredentials'), 'error');
             return;
         }
         setIsLoading(true);
         try {
             console.log('[LoginScreen] calling loginWithEmail...');
-            const decision = await loginWithEmail(email.trim(), password);
+            const decision = await loginWithEmail(email.trim(), password, undefined, rememberMe);
             console.log('[LoginScreen] loginWithEmail succeeded:', decision);
+            if (decision.nextRoute?.screen === 'Verification') {
+                navigation.navigate('Verification', {
+                    email: email.trim(),
+                    accountType: mapRoleToAccountType(pendingVerification?.user?.role),
+                    rememberMe,
+                    isSignup: false,
+                });
+                return;
+            }
             navigateAfterAuth(decision);
         } catch (error) {
             console.error('[LoginScreen] loginWithEmail error:', error);
             if (error instanceof Error && error.message === 'EMAIL_VERIFICATION_REQUIRED') {
                 const accountType = mapRoleToAccountType(pendingVerification?.user?.role);
-                navigation.navigate('Verification', { email: email.trim(), accountType });
+                navigation.navigate('Verification', {
+                    email: email.trim(),
+                    accountType,
+                    rememberMe,
+                });
                 return;
             }
             if (error instanceof Error && error.message.includes('ACCOUNT_BANNED')) {
                 navigation.navigate('BannedUser');
                 return;
             }
-            const cleanMsg = getCleanErrorMessage(error, 'Credenciales inválidas. Por favor, intenta de nuevo.');
-            show(cleanMsg, 'error');
+            const cleanMsg = getCleanErrorMessage(error, t('auth:login.invalidCredentials'));
+            show(mapAuthError(cleanMsg), 'error');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleSocialLogin = async (provider: Parameters<typeof loginWithSocial>[0]) => {
-        if (busy) return;
-        setIsLoading(true);
+    const handleGoogleLogin = async () => {
+        if (busy || googleLoading) return;
+        setGoogleLoading(true);
         try {
-            const decision = await loginWithSocial(provider);
+            const { idToken } = await signInWithGoogle();
+            const decision = await loginWithGoogleIdToken(idToken, { mode: 'login' });
             navigateAfterAuth(decision);
         } catch (error) {
-            console.error('[LoginScreen] loginWithSocial error:', error);
-            const cleanMsg = getCleanErrorMessage(error, 'No pudimos completar el inicio con tu cuenta social.');
-            show(cleanMsg, 'error');
+            if (error instanceof GoogleSignInCancelledError) return;
+            console.error('[LoginScreen] Google login error:', error);
+            const cleanMsg = getCleanErrorMessage(error, t('auth:login.googleFailed'));
+            show(mapAuthError(cleanMsg), 'error');
+            if (isNoAccountError(error)) {
+                setTimeout(() => navigation.navigate('SignUp'), 600);
+            }
         } finally {
-            setIsLoading(false);
+            setGoogleLoading(false);
+        }
+    };
+
+    const handleAppleLogin = async () => {
+        if (busy || appleLoading) return;
+        setAppleLoading(true);
+        try {
+            const { identityToken, email: appleEmail, fullName } = await signInWithApple();
+            const decision = await loginWithAppleIdToken(identityToken, {
+                mode: 'login',
+                email: appleEmail,
+                name: fullName,
+            });
+            navigateAfterAuth(decision);
+        } catch (error) {
+            if (error instanceof AppleSignInCancelledError) return;
+            console.error('[LoginScreen] Apple login error:', error);
+            const cleanMsg = getCleanErrorMessage(error, t('auth:login.appleFailed'));
+            show(mapAuthError(cleanMsg), 'error');
+            if (isNoAccountError(error)) {
+                setTimeout(() => navigation.navigate('SignUp'), 600);
+            }
+        } finally {
+            setAppleLoading(false);
         }
     };
 
@@ -163,21 +227,21 @@ export default function LoginScreen({ navigation }: any) {
                             {/* Header */}
                             <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })} style={styles.backBtn}>
                                 <ArrowLeft size={20} color={isDark ? "#D1D5DB" : "#4B5563"} />
-                                <Text style={styles.backText}>Volver</Text>
+                                <Text style={styles.backText}>{t('common:buttons.back')}</Text>
                             </TouchableOpacity>
 
-                            <Text style={styles.title}>Bienvenido a Ramgos</Text>
-                            <Text style={styles.subtitle}>Inicia sesión para continuar</Text>
+                            <Text style={styles.title}>{t('auth:login.title')}</Text>
+                            <Text style={styles.subtitle}>{t('auth:login.subtitle')}</Text>
 
                             <View style={styles.form}>
                                 {/* Email / Username */}
                                 <View style={styles.inputContainer}>
-                                    <Text style={styles.label}>Email o Usuario</Text>
+                                    <Text style={styles.label}>{t('auth:login.emailOrUsername')}</Text>
                                     <View style={styles.inputWrapper}>
                                         <User size={20} color="#9CA3AF" style={styles.icon} />
                                         <TextInput
                                             style={styles.input}
-                                            placeholder="tu@email.com o usuario"
+                                            placeholder={t('auth:login.emailOrUsernamePlaceholder')}
                                             placeholderTextColor="#9CA3AF"
                                             value={email}
                                             onChangeText={setEmail}
@@ -194,9 +258,9 @@ export default function LoginScreen({ navigation }: any) {
                                 {/* Password */}
                                 <View style={styles.inputContainer}>
                                     <View style={styles.passHeader}>
-                                        <Text style={styles.label}>Contraseña</Text>
+                                        <Text style={styles.label}>{t('auth:login.password')}</Text>
                                         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-                                            <Text style={styles.forgotLink}>¿Olvidaste tu contraseña?</Text>
+                                            <Text style={styles.forgotLink}>{t('auth:login.forgotPassword')}</Text>
                                         </TouchableOpacity>
                                     </View>
                                     <View style={styles.inputWrapper}>
@@ -229,7 +293,7 @@ export default function LoginScreen({ navigation }: any) {
                                     <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
                                         {rememberMe && <Sparkles size={10} color="#fff" />}
                                     </View>
-                                    <Text style={styles.rememberText}>Recordarme</Text>
+                                    <Text style={styles.rememberText}>{t('auth:login.rememberMe')}</Text>
                                 </TouchableOpacity>
 
                                 {/* Submit Button */}
@@ -245,11 +309,11 @@ export default function LoginScreen({ navigation }: any) {
                                         style={styles.gradientBtn}
                                     >
                                         {busy ? (
-                                            <Text style={styles.btnText}>Iniciando...</Text>
+                                            <Text style={styles.btnText}>{t('auth:login.signingIn')}</Text>
                                         ) : (
                                             <>
                                                 <LogIn size={20} color="#fff" style={{ marginRight: 8 }} />
-                                                <Text style={styles.btnText}>Iniciar sesión</Text>
+                                                <Text style={styles.btnText}>{t('auth:login.signInButton')}</Text>
                                             </>
                                         )}
                                     </LinearGradient>
@@ -258,35 +322,39 @@ export default function LoginScreen({ navigation }: any) {
                                 {/* Social Login Separator */}
                                 <View style={styles.divider}>
                                     <View style={styles.line} />
-                                    <Text style={styles.orText}>O continuar con</Text>
+                                    <Text style={styles.orText}>{t('auth:login.socialDivider')}</Text>
                                     <View style={styles.line} />
                                 </View>
 
-                                {/* Social Login Buttons */}
-                                <View style={[styles.socialRow, { display: 'none' }]}>
-                                    <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('google')} activeOpacity={0.8}>
-                                        <GoogleIcon />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('apple')} activeOpacity={0.8}>
-                                        <AppleIcon isDark={isDark} />
-                                    </TouchableOpacity>
-                                </View>
+                                <GoogleAuthButton
+                                    label={t('auth:login.continueWithGoogle')}
+                                    onPress={handleGoogleLogin}
+                                    disabled={busy || googleLoading}
+                                    loading={googleLoading}
+                                    style={{ marginBottom: 12 }}
+                                />
+                                <AppleAuthButton
+                                    label={t('auth:login.continueWithApple')}
+                                    onPress={handleAppleLogin}
+                                    disabled={busy || appleLoading}
+                                    loading={appleLoading}
+                                />
                             </View>
 
 
 
                             {/* Footer */}
                             <View style={styles.footer}>
-                                <Text style={styles.footerText}>¿No tienes cuenta? </Text>
+                                <Text style={styles.footerText}>{t('auth:login.noAccount')} </Text>
                                 <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                                    <Text style={styles.registerLink}>Regístrate</Text>
+                                    <Text style={styles.registerLink}>{t('auth:login.register')}</Text>
                                 </TouchableOpacity>
                             </View>
 
                             {/* Security Badge */}
                             <View style={styles.securityBadge}>
                                 <Sparkles size={12} color="#4FC3F7" style={{ marginRight: 6 }} />
-                                <Text style={styles.securityText}>Conexión segura y encriptada</Text>
+                                <Text style={styles.securityText}>{t('common:security.secureConnection')}</Text>
                             </View>
 
                         </Animated.View>

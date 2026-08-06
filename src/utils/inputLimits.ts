@@ -8,7 +8,10 @@ export const LIMITS = {
     businessName: 120,
     socialUrl: 500,
     socialHandle: 30,
-    referralCode: 32,
+    /** Invite input at signup (handle or alias of referrer). */
+    referralCode: 24,
+    /** Own vanity alias (distinct from @username). */
+    referralAlias: 15,
     phone: 20,
     taxId: 20,
     legalRep: 80,
@@ -19,6 +22,7 @@ export const MIN = {
     name: 2,
     businessName: 2,
     password: 8,
+    referralAlias: 3,
 } as const;
 
 export function clamp(text: string, max: number) {
@@ -52,8 +56,20 @@ export function isValidSocialUrl(raw: string) {
     }
 }
 
+/** Normalize invite code entered at signup (accepts @handle or vanity). */
 export function formatReferralCode(raw: string) {
-    return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, LIMITS.referralCode);
+    const stripped = raw.trim().replace(/^@+/, '');
+    // Keep lowercase letters for handles; uppercase path still works for aliases.
+    return stripped.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, LIMITS.referralCode);
+}
+
+/** Own vanity referral alias — mirrors convex/referralHelpers.normalizeReferralAlias. */
+export function formatReferralAlias(raw: string) {
+    return raw
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9-]/g, '')
+        .slice(0, LIMITS.referralAlias);
 }
 
 export function formatSocialHandle(raw: string) {

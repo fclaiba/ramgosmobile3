@@ -4,7 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Ex
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ShoppingCart, Heart, Search, Filter, LayoutGrid, List, MapPin, Plus as PlusIcon, Tag, Ticket, Star, Calendar, Wrench, X } from 'lucide-react-native';
+import { ShoppingCart, Heart, Search, Filter, LayoutGrid, List, MapPin, Plus as PlusIcon, Tag, Ticket, Star, Calendar, Wrench, X, Store } from 'lucide-react-native';
 import { api } from '../../convex/_generated/api';
 import { useQuery } from 'convex/react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +32,7 @@ import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 type ViewMode = 'grid' | 'list' | 'map';
 type ItemType = 'products' | 'bonos' | 'events' | 'services' | 'businesses';
@@ -128,6 +129,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
     const { theme, colorScheme } = useTheme(); // Use theme
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { t } = useTranslation();
 
     const { numColumns, isDesktop, maxContainerWidth } = useResponsive();
     const { location: userLocation } = useUserLocation();
@@ -245,6 +247,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
     // If searchQuery is present, we fetch from api.listings.searchListings
     // Otherwise we use 'products' from context (which is getValidListings)
     const searchResults = useQuery(api.listings.searchListings, searchQuery ? { query: searchQuery } : "skip");
+    const businessStores = useQuery(api.users.listBusinessStores) ?? [];
 
     // Determine which source to use
     const sourceListings = searchQuery ? (searchResults || []) : products;
@@ -311,12 +314,45 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
         return sourceListings.map(normalizeListing);
     }, [sourceListings]);
 
-    const combinedItems = useMemo<MarketplaceFeedItem[]>(() => {
-        // If searching, we likely only want real results, not mocks
-        if (searchQuery) return productItems;
+    const storeItems = useMemo<MarketplaceFeedItem[]>(() => {
+        return (businessStores as any[]).map((store) => ({
+            id: store.id || store._id,
+            type: 'business' as const,
+            name: store.title || store.name,
+            price: 0,
+            image:
+                store.image ||
+                'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80',
+            gallery: store.images?.map((img: any) => img.url) || [],
+            category: store.category || 'Negocio',
+            location: {
+                lat: store.location.lat,
+                lng: store.location.lng,
+                name: store.location.name || store.location.city || 'Manhattan, NY',
+                address: store.location.address || '',
+            },
+            distance: 0,
+            description: store.description,
+            sellerId: store.seller?.id || store.id,
+            sellerName: store.seller?.name || store.name,
+            rating: store.sellerRating,
+            reviews: store.sellerReviewCount,
+            sourceProductId: store.id || store._id,
+        }));
+    }, [businessStores]);
 
-        return productItems;
-    }, [productItems, searchQuery]);
+    const combinedItems = useMemo<MarketplaceFeedItem[]>(() => {
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const matchingStores = storeItems.filter(
+                (s) =>
+                    s.name.toLowerCase().includes(q) ||
+                    (s.description || '').toLowerCase().includes(q),
+            );
+            return [...productItems, ...matchingStores];
+        }
+        return [...productItems, ...storeItems];
+    }, [productItems, storeItems, searchQuery]);
 
     const applyFilters = (items: MarketplaceFeedItem[]) => {
         let result = items.filter(item => {
@@ -330,7 +366,9 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
 
             if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
-            if (item.price < advancedFilters.priceRange[0] || item.price > advancedFilters.priceRange[1]) return false;
+            if (item.price < advancedFilters.priceRange[0] || item.price > advancedFilters.priceRange[1]) {
+                if (item.type !== 'business') return false;
+            }
 
             if (advancedFilters.minRating) {
                 if (item.type !== 'product' || !item.rating || item.rating < advancedFilters.minRating) return false;
@@ -388,9 +426,18 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
             case 'bono': return Tag;
             case 'event': return Ticket;
             case 'service': return Wrench;
-            case 'business': return MapPin;
+            case 'business': return Store;
             default: return ShoppingCart;
         }
+    };
+
+    const openFeedItem = (item: MarketplaceFeedItem) => {
+        if (Platform.OS !== 'web') Haptics.selectionAsync();
+        if (item.type === 'business') {
+            navigation.navigate('CommercialProfile', { sellerId: String(item.sellerId || item.id) });
+            return;
+        }
+        navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
     };
 
     const handleAddToCart = (item: MarketplaceFeedItem) => {
@@ -428,10 +475,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
             <TouchableOpacity
                 style={styles.gridCard}
                 activeOpacity={0.8}
-                onPress={() => {
-                    if (Platform.OS !== 'web') Haptics.selectionAsync();
-                    navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
-                }}
+                onPress={() => openFeedItem(item)}
             >
                 <View style={styles.gridImgContainer}>
                     <ImageWithFallback src={item.image} style={styles.cardImg} />
@@ -484,6 +528,12 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                             <Text style={[styles.originalPrice, { textDecorationLine: 'none', color: '#10B981', fontWeight: '700' }]}>Valor real: ${item.discountValue}</Text>
                             <Text style={styles.price}>${item.price}</Text>
                         </View>
+                    ) : item.type === 'business' ? (
+                        <View style={styles.priceRow}>
+                            <Text style={[styles.originalPrice, { textDecorationLine: 'none', color: isDark ? '#9CA3AF' : '#6B7280' }]}>
+                                {item.location.address || item.location.name}
+                            </Text>
+                        </View>
                     ) : (
                         <View style={styles.priceRow}>
                             <Text style={styles.price}>${item.price}</Text>
@@ -498,7 +548,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                             style={[styles.btnSm, { backgroundColor: '#10B981' }]}
                             onPress={(e) => {
                                 e.stopPropagation();
-                                navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
+                                openFeedItem(item);
                             }}
                         >
                             <Text style={styles.btnSmText}>Ver Perfil</Text>
@@ -533,10 +583,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
             <TouchableOpacity
                 style={styles.listCard}
                 activeOpacity={0.8}
-                onPress={() => {
-                    if (Platform.OS !== 'web') Haptics.selectionAsync();
-                    navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
-                }}
+                onPress={() => openFeedItem(item)}
             >
                 <View style={styles.listImgContainer}>
                     <ImageWithFallback src={item.image} style={styles.cardImg} />
@@ -590,7 +637,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                                 style={[styles.btnSm, { backgroundColor: '#10B981', width: 'auto', paddingHorizontal: 16 }]}
                                 onPress={(e) => {
                                     e.stopPropagation();
-                                    navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
+                                    openFeedItem(item);
                                 }}
                             >
                                 <Text style={styles.btnSmText}>Ver Perfil</Text>
@@ -669,7 +716,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                     <MarketplaceMap
                         items={filteredItems}
                         onItemClick={(item: any) => {
-                            navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });
+                            openFeedItem(item);
                         }}
                         radius={radius}
                         searchLocation={advancedFilters.searchLocation}
@@ -760,7 +807,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                                             if (Platform.OS !== 'web') Haptics.selectionAsync();
                                             setViewMode(mode.id as ViewMode);
                                         }}
-                                        accessibilityLabel={`Ver en ${mode.label}`}
+                                        accessibilityLabel={t('marketplace.viewMode', { mode: mode.label, defaultValue: `Ver en ${mode.label}` })}
                                     >
                                         <mode.Icon size={16} color={active ? '#2196F3' : (isDark ? '#D1D5DB' : '#6B7280')} />
                                     </TouchableOpacity>
@@ -774,22 +821,22 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                             contentContainerStyle={styles.categoryChipsContent}
                             style={styles.categoryChipsScroll}
                         >
-                            {(['all', 'products', 'services', 'bonos', 'events', 'businesses'] as const).map((t) => {
-                                const active = filter === t;
+                            {(['all', 'products', 'services', 'bonos', 'events', 'businesses'] as const).map((itemType) => {
+                                const active = filter === itemType;
                                 const label =
-                                    t === 'products' ? 'Productos' :
-                                        t === 'services' ? 'Servicios' :
-                                            t === 'bonos' ? 'Bonos' :
-                                                t === 'events' ? 'Eventos' : 
-                                                    t === 'businesses' ? 'Tiendas' : 'Todos';
+                                    itemType === 'products' ? t('marketplace.products', { defaultValue: 'Productos' }) :
+                                        itemType === 'services' ? t('marketplace.services', { defaultValue: 'Servicios' }) :
+                                            itemType === 'bonos' ? t('marketplace.vouchers', { defaultValue: 'Bonos' }) :
+                                                itemType === 'events' ? t('marketplace.events', { defaultValue: 'Eventos' }) :
+                                                    itemType === 'businesses' ? t('marketplace.stores', { defaultValue: 'Tiendas' }) : t('marketplace.all', { defaultValue: 'Todos' });
 
                                 return (
                                     <TouchableOpacity
-                                        key={t}
+                                        key={itemType}
                                         style={[styles.categoryChip, active && styles.categoryChipActive]}
                                         onPress={() => {
                                             if (Platform.OS !== 'web') Haptics.selectionAsync();
-                                            setFilter(t as any);
+                                            setFilter(itemType as any);
                                         }}
                                         accessibilityLabel={`Filtrar: ${label}`}
                                     >

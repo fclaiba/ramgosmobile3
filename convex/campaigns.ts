@@ -658,9 +658,10 @@ export const internalResolveCartAttribution = internalQuery({
         })),
     },
     handler: async (ctx, args) => {
-        let finalInfluencerId: string | undefined = undefined;
-        let totalInfluencerAmount = 0;
-        let finalInfluencerRate = 0;
+        const influencerTotals = new Map<
+            string,
+            { amountInCents: number; maxRate: number; items: number }
+        >();
 
         for (const item of args.lineItems) {
             if (!item.referralCode || !item.sellerId || !item.listingId) continue;
@@ -715,19 +716,170 @@ export const internalResolveCartAttribution = internalQuery({
 
             if (resolvedRate > 0) {
                 const itemTotal = item.amountInCents * item.quantity;
-                totalInfluencerAmount += Math.round(itemTotal * resolvedRate);
-                
-                if (!finalInfluencerId) {
-                    finalInfluencerId = influencer._id;
-                    finalInfluencerRate = resolvedRate;
-                }
+                const current = influencerTotals.get(String(influencer._id));
+                const earned = Math.round(itemTotal * resolvedRate);
+                influencerTotals.set(String(influencer._id), {
+                    amountInCents: (current?.amountInCents || 0) + earned,
+                    maxRate: Math.max(current?.maxRate || 0, resolvedRate),
+                    items: (current?.items || 0) + 1,
+                });
             }
         }
 
+        const influencerIds = Array.from(influencerTotals.keys());
+        const totalInfluencerAmount = Array.from(influencerTotals.values()).reduce(
+            (sum, row) => sum + row.amountInCents,
+            0,
+        );
+        const hasMixedInfluencers = influencerIds.length > 1;
+
+        if (hasMixedInfluencers) {
+            return {
+                influencerId: undefined,
+                influencerAmount: 0,
+                influencerRate: 0,
+                hasMixedInfluencers: true,
+                attributionRejectedReason: "mixed_influencers_in_checkout",
+                influencerBreakdown: influencerIds.map((id) => ({
+                    influencerId: id,
+                    amountInCents: influencerTotals.get(id)?.amountInCents || 0,
+                    maxRate: influencerTotals.get(id)?.maxRate || 0,
+                    items: influencerTotals.get(id)?.items || 0,
+                })),
+            };
+        }
+
+        const winnerId = influencerIds[0];
+        const winner = winnerId ? influencerTotals.get(winnerId) : undefined;
         return {
-            influencerId: finalInfluencerId,
-            influencerAmount: totalInfluencerAmount,
-            influencerRate: finalInfluencerRate,
+            influencerId: winnerId,
+            influencerAmount: winner?.amountInCents || totalInfluencerAmount,
+            influencerRate: winner?.maxRate || 0,
+            hasMixedInfluencers: false,
+            attributionRejectedReason: null,
+            influencerBreakdown: winnerId
+                ? [
+                      {
+                          influencerId: winnerId,
+                          amountInCents: winner?.amountInCents || 0,
+                          maxRate: winner?.maxRate || 0,
+                          items: winner?.items || 0,
+                      },
+                  ]
+                : [],
         };
     }
+});
+
+/**
+ * Dev seed: business@test.com → @influencer1 with an **active** campaign
+ * so the influencer can create bonos. Safe to re-run (idempotent).
+ */
+export const seedBusinessInviteInfluencer1 = mutation({
+    args: {},
+    handler: async (ctx) => {
+        const business = await ctx.db
+            .query('users')
+            .withIndex('by_email', (q) => q.eq('email', 'business@test.com'))
+            .first();
+        if (!business) {
+            throw new Error('business@test.com no existe. Corré seedTestUsers primero.');
+        }
+        if ((business as any).role !== 'business') {
+            await ctx.db.patch(business._id, { role: 'business' });
+        }
+
+        let influencer =
+            (await ctx.db
+                .query('users')
+                .withIndex('by_username', (q) => q.eq('username', 'influencer1'))
+                .first()) ?? null;
+
+        if (!influencer) {
+            const profile = await ctx.db
+                .query('socialUsers')
+                .withIndex('by_username', (q) => q.eq('username', 'influencer1'))
+                .first();
+            if (profile) {
+                const uid = ctx.db.normalizeId('users', String((profile as any).userId));
+                influencer = uid ? await ctx.db.get(uid) : null;
+            }
+        }
+
+        if (!influencer) {
+            influencer = await ctx.db
+                .query('users')
+                .withIndex('by_email', (q) => q.eq('email', 'influencer@test.com'))
+                .first();
+        }
+
+        if (!influencer) {
+            throw new Error(
+                'No encontré @influencer1 ni influencer@test.com. Creá el usuario o ajustá el username.',
+            );
+        }
+
+        await ctx.db.patch(influencer._id, {
+            role: 'influencer',
+            influencerStatus: 'approved',
+            kycStatus: 'approved',
+            username: (influencer as any).username || 'influencer1',
+        } as any);
+
+        const influencerId = String(influencer._id);
+        const businessId = String(business._id);
+        const existing = await findExistingPair(ctx, influencerId, businessId);
+        const now = new Date().toISOString();
+
+        if (existing) {
+            if (existing.status === 'active') {
+                return {
+                    ok: true,
+                    action: 'already_active',
+                    campaignId: existing._id,
+                    influencerId,
+                    influencerEmail: (influencer as any).email,
+                    businessEmail: (business as any).email,
+                };
+            }
+            await ctx.db.patch(existing._id, {
+                status: 'active',
+                startsAt: existing.startsAt ?? now,
+                updatedAt: now,
+                commissionRate: existing.commissionRate || 0.1,
+                notes:
+                    existing.notes ||
+                    'Seed: invitación business@test.com → @influencer1 (activa para crear bonos)',
+            });
+            return {
+                ok: true,
+                action: 'activated',
+                campaignId: existing._id,
+                influencerId,
+                influencerEmail: (influencer as any).email,
+                businessEmail: (business as any).email,
+            };
+        }
+
+        const campaignId = await ctx.db.insert('influencerCampaigns', {
+            influencerId,
+            businessId,
+            commissionRate: 0.1,
+            initiatedBy: 'business',
+            status: 'active',
+            notes: 'Seed: invitación business@test.com → @influencer1 (activa para crear bonos)',
+            startsAt: now,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        return {
+            ok: true,
+            action: 'created',
+            campaignId,
+            influencerId,
+            influencerEmail: (influencer as any).email,
+            businessEmail: (business as any).email,
+        };
+    },
 });

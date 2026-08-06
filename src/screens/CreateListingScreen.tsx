@@ -57,7 +57,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
         validityDays:
             initialData?.validityDays != null
                 ? String(initialData.validityDays)
-                : '7',
+                : '4',
         description: initialData?.description || '',
         type: initialData?.type || null,
         category: initialData?.category || '',
@@ -263,7 +263,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     return;
                 }
                 validityDaysValue = Math.min(
-                    Math.max(parseInt(form.validityDays || '7', 10) || 7, 1),
+                    Math.max(parseInt(form.validityDays || '4', 10) || 4, 1),
                     365,
                 );
             }
@@ -400,7 +400,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                                         ...prev,
                                         discountValue: prev.discountValue || '100',
                                         price: prev.price || '50',
-                                        validityDays: prev.validityDays || '7',
+                                        validityDays: prev.validityDays || '4',
                                         description:
                                             prev.description ||
                                             'Pagás $50 y tenés $100 de crédito para consumir en el negocio. Válido 7 días desde la compra.',
@@ -623,7 +623,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     <View style={styles.formColumn}>
                         <FormInput
                             label="Duración (días)"
-                            placeholder="7"
+                            placeholder="4"
                             keyboardType="numeric"
                             value={form.validityDays}
                             onChange={(t: string) =>

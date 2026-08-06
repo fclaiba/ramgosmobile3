@@ -27,6 +27,7 @@ import BusinessDashboardScreen from './BusinessDashboardScreen';
 import InfluencerDashboardScreen from './InfluencerDashboardScreen';
 import AdminDashboardScreen from './AdminDashboardScreen';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 
 const heroSlides = [
@@ -88,6 +89,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const insets = useSafeAreaInsets();
     const { isDesktop } = useResponsive();
     const styles = getStyles(isDark);
+    const { t } = useTranslation();
 
     const myOrders = useQuery(api.orders.getMyOrders, user?.id ? { sessionToken, userId: user.id } : "skip") || [];
     const mySellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id ? { sellerId: user.id } : "skip") || [];
@@ -238,8 +240,8 @@ export default function HomeScreen({ navigation, route }: any) {
                     <>
                         <MobileHeader
                             logo={Platform.OS !== 'web'}
-                            title="Inicio"
-                            subtitle="Descubre la oportunidad"
+                            title={t('home.title', { defaultValue: 'Inicio' })}
+                            subtitle={t('home.subtitle', { defaultValue: 'Descubre oportunidades' })}
                             onMenuPress={() => setIsSidebarOpen(true)}
                             actions={
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -269,14 +271,14 @@ export default function HomeScreen({ navigation, route }: any) {
                                 style={[styles.viewTab, view === 'home' && styles.viewTabActive]}
                             >
                                 <Sparkles size={16} color={view === 'home' ? (isDark ? '#F9FAFB' : '#111827') : '#6B7280'} />
-                                <Text style={[styles.viewTabText, view === 'home' && styles.viewTabTextActive]}>Principal</Text>
+                                <Text style={[styles.viewTabText, view === 'home' && styles.viewTabTextActive]}>{t('home.main', { defaultValue: 'Principal' })}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => setView('consumos')}
                                 style={[styles.viewTab, view === 'consumos' && styles.viewTabActive]}
                             >
                                 <TrendingUp size={16} color={view === 'consumos' ? (isDark ? '#F9FAFB' : '#111827') : '#6B7280'} />
-                                <Text style={[styles.viewTabText, view === 'consumos' && styles.viewTabTextActive]}>Actividad</Text>
+                                <Text style={[styles.viewTabText, view === 'consumos' && styles.viewTabTextActive]}>{t('home.activity', { defaultValue: 'Actividad' })}</Text>
                             </TouchableOpacity>
                         </View>
 

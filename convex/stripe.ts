@@ -70,6 +70,9 @@ export const createPaymentIntent = action({
         description: v.optional(v.string()),
         metadata: v.optional(v.any()),
         tokenId: v.optional(v.string()),
+        // Titular AR — nombre + documento (DNI/CUIT) para cobros locales
+        cardholderName: v.optional(v.string()),
+        documentNumber: v.optional(v.string()),
         // Fase 5: transfer_group del carrito. Si viene, el webhook procesa el
         // carrito multi-vendor (sub-órdenes con escrow "held") al confirmarse el pago.
         cartId: v.optional(v.string()),
@@ -95,6 +98,7 @@ export const createPaymentIntent = action({
             let resolvedInfluencerId = args.influencerId;
             let resolvedInfluencerRate = args.influencerRate ?? 0;
             let resolvedInfluencerAmount = Math.round(totalAmountCents * resolvedInfluencerRate);
+            let attributionRejectedReason: string | null = null;
 
             if (args.lineItems && args.lineItems.length > 0) {
                 const attribution = await ctx.runQuery(internal.campaigns.internalResolveCartAttribution, {
@@ -111,6 +115,14 @@ export const createPaymentIntent = action({
                     resolvedInfluencerId = attribution.influencerId;
                     resolvedInfluencerRate = attribution.influencerRate;
                     resolvedInfluencerAmount = attribution.influencerAmount;
+                } else if ((attribution as any).hasMixedInfluencers) {
+                    // Regla temporal acordada: si hay mezcla de influencers en el checkout,
+                    // no acreditamos referido hasta implementar split multi-influencer.
+                    resolvedInfluencerId = undefined;
+                    resolvedInfluencerRate = 0;
+                    resolvedInfluencerAmount = 0;
+                    attributionRejectedReason =
+                        (attribution as any).attributionRejectedReason ?? "mixed_influencers_in_checkout";
                 }
             }
 
@@ -131,18 +143,48 @@ export const createPaymentIntent = action({
                 // 2. Crear y opcionalmente confirmar el PaymentIntent en Stripe
                 
                 const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
+                const mode = args.mode ?? "test";
+                const modeCustomerId =
+                    mode === "live"
+                        ? (user as any)?.stripeCustomerIdLive
+                        : (user as any)?.stripeCustomerIdTest;
+                const fallbackCustomerId = (user as any)?.stripeCustomerId;
                 const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
                     amount: totalAmountCents,
                     currency: "usd",
-                    customer: user?.stripeCustomerId,
+                    customer: modeCustomerId || fallbackCustomerId,
                     metadata: {
                         userId,
                         lineItemsCount: args.lineItems?.length || 0,
+                        paymentMode: mode,
                         // El webhook usa cartId+userId para crear las sub-órdenes
                         // multi-vendor con escrow "held" (convex/http.ts).
                         ...(args.cartId ? { cartId: args.cartId } : {}),
+                        ...(attributionRejectedReason
+                            ? { attributionRejectedReason }
+                            : {}),
+                        billingMarket: "US-NY",
+                        ...(args.cardholderName
+                            ? { cardholderName: args.cardholderName.trim().slice(0, 120) }
+                            : {}),
+                        ...(args.documentNumber
+                            ? {
+                                  documentNumber: args.documentNumber.replace(/\D/g, "").slice(0, 20),
+                              }
+                            : {}),
                     },
                 };
+
+                // Merge client metadata (string values only — Stripe requirement).
+                if (args.metadata && typeof args.metadata === "object") {
+                    for (const [k, v] of Object.entries(args.metadata as Record<string, unknown>)) {
+                        if (v == null) continue;
+                        paymentIntentParams.metadata![k] = String(v).slice(0, 500);
+                    }
+                }
+
+                // Card-only, in-app. No wallets/redirects that kick the user to a browser.
+                paymentIntentParams.payment_method_types = ["card"];
 
                 if (args.tokenId) {
                     const paymentMethod = await stripe.paymentMethods.create({
@@ -153,12 +195,6 @@ export const createPaymentIntent = action({
                     });
                     paymentIntentParams.payment_method = paymentMethod.id;
                     paymentIntentParams.confirm = true;
-                    paymentIntentParams.automatic_payment_methods = {
-                        enabled: true,
-                        allow_redirects: "never",
-                    };
-                } else {
-                    paymentIntentParams.automatic_payment_methods = { enabled: true };
                 }
 
                 const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
@@ -182,6 +218,9 @@ export const createPaymentIntent = action({
                 influencerRate: resolvedInfluencerRate,
                 influencerId: resolvedInfluencerId,
                 description: args.description || args.lineItems?.[0]?.description || "Pago Ramgos",
+                metadata: attributionRejectedReason
+                    ? { attributionRejectedReason }
+                    : undefined,
             });
 
             // Mock mode: no llega webhook, así que procesamos el carrito igual.
@@ -259,17 +298,26 @@ export const listPaymentMethods = action({
 export const createSetupIntent = action({
     args: {
         sessionToken: v.optional(v.string()),
+        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
+        const mode = args.mode ?? "test";
+        const stripeClient = getStripeClient(mode);
 
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
         
-        let customerId = user?.stripeCustomerId;
+        let customerId =
+            mode === "live"
+                ? (user as any)?.stripeCustomerIdLive
+                : (user as any)?.stripeCustomerIdTest;
+        if (!customerId) {
+            customerId = (user as any)?.stripeCustomerId;
+        }
         if (!customerId) {
             // Si el usuario no tiene customerId, lo creamos
-            const customer = await stripe.customers.create({
+            const customer = await stripeClient.customers.create({
                 metadata: { userId },
             });
             customerId = customer.id;
@@ -277,11 +325,12 @@ export const createSetupIntent = action({
             await ctx.runMutation(internal.users.updateUserStripeCustomerId, {
                 userId,
                 stripeCustomerId: customerId,
+                mode,
             });
         }
 
         try {
-            const setupIntent = await stripe.setupIntents.create({
+            const setupIntent = await stripeClient.setupIntents.create({
                 customer: customerId,
                 payment_method_types: ['card'],
             });
@@ -304,19 +353,25 @@ export const detachPaymentMethod = action({
     args: {
         sessionToken: v.optional(v.string()),
         paymentMethodId: v.string(),
+        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
+        const stripeClient = getStripeClient(args.mode ?? "test");
 
         try {
             // IDOR guard: only detach payment methods that belong to the
             // caller's own Stripe customer.
             const user = await ctx.runQuery(internal.users.internalGetUserById, { id: actor.idString });
-            const pm = await stripe.paymentMethods.retrieve(args.paymentMethodId);
-            if (!user?.stripeCustomerId || pm.customer !== user.stripeCustomerId) {
+            const customerId =
+                (args.mode === "live"
+                    ? (user as any)?.stripeCustomerIdLive
+                    : (user as any)?.stripeCustomerIdTest) || (user as any)?.stripeCustomerId;
+            const pm = await stripeClient.paymentMethods.retrieve(args.paymentMethodId);
+            if (!customerId || pm.customer !== customerId) {
                 throw new Error("No autorizado.");
             }
-            await stripe.paymentMethods.detach(args.paymentMethodId);
+            await stripeClient.paymentMethods.detach(args.paymentMethodId);
         } catch (error: any) {
             console.error("[Stripe] Error al eliminar método de pago:", error);
             throw new Error(`Error al eliminar método de pago: ${error.message}`);
@@ -331,18 +386,24 @@ export const setDefaultPaymentMethod = action({
     args: {
         sessionToken: v.optional(v.string()),
         paymentMethodId: v.string(),
+        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         const userId = actor.idString;
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
+        const stripeClient = getStripeClient(args.mode ?? "test");
         
-        if (!user || !user.stripeCustomerId) {
+        const customerId =
+            (args.mode === "live"
+                ? (user as any)?.stripeCustomerIdLive
+                : (user as any)?.stripeCustomerIdTest) || (user as any)?.stripeCustomerId;
+        if (!user || !customerId) {
             throw new Error("Usuario no encontrado o sin customer ID de Stripe");
         }
 
         try {
-            await stripe.customers.update(user.stripeCustomerId, {
+            await stripeClient.customers.update(customerId, {
                 invoice_settings: {
                     default_payment_method: args.paymentMethodId,
                 },
@@ -389,6 +450,12 @@ export const internalMarkPaymentSucceeded = internalMutation({
                     : undefined,
             });
             pointsAwarded = Number((award as any)?.pointsAwarded) || 0;
+
+            await ctx.runMutation(internal.users.internalHandleReferralPurchase, {
+                buyerUserId: payment.userId,
+                amountUSD: Number(payment.amount),
+                paymentIntentId: args.stripePaymentIntentId,
+            });
 
             if (pointsAwarded > 0) {
                 await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {

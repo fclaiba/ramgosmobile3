@@ -353,7 +353,14 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 <View style={styles.metaRow}>
                     <View style={styles.metaItem}>
                         <MapPin size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                        <Text style={styles.metaText}>{(profile as any)?.location?.name || (profile as any)?.location?.city || 'Nueva York, NY'}</Text>
+                        <Text style={styles.metaText}>
+                            {(profile as any)?.storeLocation?.name
+                                || (profile as any)?.storeLocation?.city
+                                || (profile as any)?.location?.name
+                                || (profile as any)?.location?.city
+                                || (profile as any)?.location?.address
+                                || 'Sin ubicación'}
+                        </Text>
                     </View>
                     <View style={styles.metaItem}>
                         <Calendar size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />

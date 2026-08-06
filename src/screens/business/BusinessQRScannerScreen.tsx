@@ -7,6 +7,7 @@ import { useBusiness } from '../../contexts/BusinessContext';
 import { useToast } from '../../contexts/ToastContext';
 import { CodeVerificationCard } from '../../components/business/CodeVerificationCard';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { toUserErrorTitle, toUserMessage } from '../../utils/errors';
@@ -19,6 +20,7 @@ function BusinessQRScannerScreen({ navigation }: any) {
     const styles = getStyles(isDark);
     const { branches } = useBusiness();
     const { show } = useToast();
+    const { sessionToken } = useAuth();
 
     const [inputCode, setInputCode] = useState('');
     const [searchCode, setSearchCode] = useState('');
@@ -46,6 +48,11 @@ function BusinessQRScannerScreen({ navigation }: any) {
 
     const handleValidate = async () => {
         if (!searchCode || !lookupResult) return;
+
+        if (!sessionToken) {
+            show('Tenés que iniciar sesión como el negocio emisor.', 'error');
+            return;
+        }
         
         const branchId = selectedBranch || branches[0]?.id;
         if (!branchId) {
@@ -55,7 +62,7 @@ function BusinessQRScannerScreen({ navigation }: any) {
         
         setIsProcessing(true);
         try {
-            await redeemBono({ bonoCode: searchCode });
+            await redeemBono({ bonoCode: searchCode, sessionToken });
             setResult({
                 status: 'success',
                 title: '¡Canje Exitoso!',

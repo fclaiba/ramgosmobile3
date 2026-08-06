@@ -176,22 +176,31 @@ export default function PaymentMethodsScreen({ navigation }: any) {
                     })
                 )}
 
-                <Button style={{ marginTop: Space[2] }} onPress={() => setAddOpen(true)}>
-                    <View style={styles.btnInner}>
-                        <Plus size={18} color="#fff" />
-                        <Text style={styles.btnText}>Agregar tarjeta</Text>
+                {isTest ? (
+                    <Button style={{ marginTop: Space[2] }} onPress={() => setAddOpen(true)}>
+                        <View style={styles.btnInner}>
+                            <Plus size={18} color="#fff" />
+                            <Text style={styles.btnText}>Agregar tarjeta</Text>
+                        </View>
+                    </Button>
+                ) : (
+                    <View style={styles.safeNote}>
+                        <ShieldCheck size={16} color={c.primary} />
+                        <Text style={styles.safeNoteText}>
+                            En producción agregá la tarjeta dentro de Checkout (in-app). Para pagar necesitás KYC aprobado.
+                        </Text>
                     </View>
-                </Button>
+                )}
 
                 <View style={styles.safeNote}>
                     <ShieldCheck size={16} color={c.primary} />
                     <Text style={styles.safeNoteText}>
-                        Ramgos no almacena el número completo de tu tarjeta. En producción usamos Stripe (PCI).
+                        Ramgos no almacena el número completo. Stripe (PCI) procesa la tarjeta dentro de la app.
                     </Text>
                 </View>
             </ScrollView>
 
-            <Sheet open={addOpen} onOpenChange={setAddOpen}>
+            <Sheet open={addOpen && isTest} onOpenChange={setAddOpen}>
                 <SheetContent side="bottom" style={styles.sheet}>
                     <SheetHeader>
                         <SheetTitle>Elegí una tarjeta de prueba</SheetTitle>

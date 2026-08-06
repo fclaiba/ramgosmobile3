@@ -19,6 +19,7 @@ import {
     LIMITS, MIN, clamp, formatEin, isValidEin, isValidBusinessAddress, isValidSocialUrl,
 } from '../utils/inputLimits';
 import { Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 type Step = 'intro' | 'success';
 
@@ -29,6 +30,7 @@ export default function KYCScreen({ navigation, route }: any) {
     const isWide = windowWidth >= 768;
     const styles = useMemo(() => getStyles(isDark, isWide), [isDark, isWide]);
     const { show } = useToast();
+    const { t } = useTranslation();
 
     const accountType = route.params?.accountType || 'consumer';
     const totalSteps = accountType === 'consumer' ? 2 : 3;
@@ -62,7 +64,7 @@ export default function KYCScreen({ navigation, route }: any) {
             await skipKycMutation({ sessionToken });
             navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
         } catch (error: any) {
-            show(error.message || 'Error al saltar KYC', 'error');
+            show(error.message || t('kyc.skipError', { defaultValue: 'Error al omitir la verificación KYC' }), 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -82,19 +84,19 @@ export default function KYCScreen({ navigation, route }: any) {
     const handleNext = () => {
         if (formStep === 1) {
             if (!idFront || !idBack) {
-                show('Adjuntá el frente y dorso del documento', 'error');
+                show(t('kyc.needDocuments', { defaultValue: 'Adjunta el frente y reverso del documento' }), 'error');
                 return;
             }
         } else if (formStep === 2 && accountType !== 'consumer') {
             if (accountType === 'business' && !businessReady) {
-                show('Completá los datos requeridos (EIN, docs, foto)', 'error');
+                show(t('kyc.needBusinessData', { defaultValue: 'Completa los datos requeridos (EIN, documentos y foto)' }), 'error');
                 return;
             } else if (accountType === 'influencer' && !influencerReady) {
-                show('Ingresá una URL válida (ej. instagram.com/tuusuario)', 'error');
+                show(t('kyc.needValidUrl', { defaultValue: 'Ingresa una URL válida (ej. instagram.com/tuusuario)' }), 'error');
                 return;
             }
             if (!contactPhone.trim() || !contactEmail.trim() || !contactEmail.includes('@')) {
-                show('Ingresá un teléfono y correo de contacto válidos', 'error');
+                show(t('kyc.needContact', { defaultValue: 'Ingresa un teléfono y correo de contacto válidos' }), 'error');
                 return;
             }
         }

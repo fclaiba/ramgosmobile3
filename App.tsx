@@ -4,9 +4,11 @@ import { View, StyleSheet, Text } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef, getStateFromPath as rnGetStateFromPath } from '@react-navigation/native';
 import { useTheme, ThemeProvider } from './src/contexts/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useBonoDeepLinkHandler } from './src/hooks/useBonoDeepLinkHandler';
+import { parseBonoDeepLink } from './src/utils/bonoDeepLink';
 
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ToastProvider } from './src/contexts/ToastContext';
@@ -25,6 +27,14 @@ import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
 import { CrashHandler } from './src/components/CrashHandler';
 
 import { Platform } from 'react-native';
+
+import { configureGoogleSignIn } from './src/services/auth/googleSignIn';
+import { configureAppleSignIn } from './src/services/auth/appleSignIn';
+import './src/i18n';
+import { I18nProvider } from './src/i18n/I18nProvider';
+
+configureGoogleSignIn();
+configureAppleSignIn();
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
@@ -122,10 +132,12 @@ import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
 import AnalyticsDashboardScreen from './src/screens/AnalyticsDashboardScreen';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 const AppNavigator = () => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    useBonoDeepLinkHandler(navigationRef);
 
     // Design system v2: neutral canvas + brand accent (no purple wallpaper)
     const MyDarkTheme = {
@@ -154,17 +166,50 @@ const AppNavigator = () => {
 
     return (
         <NavigationContainer
+            ref={navigationRef}
             theme={isDark ? MyDarkTheme : MyLightTheme}
             linking={{
-                prefixes: ['ramgos://', 'https://ramgos.app'],
+                prefixes: [
+                    'ramgos://',
+                    'https://ramgos.app',
+                    'https://www.ramgos.app',
+                    // Legacy share links still open in-app
+                    'https://ramgos.com',
+                    'https://www.ramgos.com',
+                ],
                 config: {
                     screens: {
                         Welcome: 'Welcome',
                         Home: 'home',
                         SignUp: 'signup',
                         Login: 'login',
+                        ItemDetail: {
+                            path: 'item/:itemId',
+                            parse: {
+                                itemId: (itemId: string) => itemId,
+                                referralCode: (referralCode: string) => referralCode,
+                            },
+                        },
+                    },
+                },
+                // Custom getStateFromPath so /ref/{code}?bono=ID and ramgos://bono/ID?ref=CODE work
+                getStateFromPath(path, options) {
+                    const parsed = parseBonoDeepLink(path);
+                    if (parsed?.listingId) {
+                        return {
+                            routes: [
+                                {
+                                    name: 'ItemDetail',
+                                    params: {
+                                        itemId: parsed.listingId,
+                                        referralCode: parsed.referralCode || undefined,
+                                    },
+                                },
+                            ],
+                        };
                     }
-                }
+                    return rnGetStateFromPath(path, options);
+                },
             }}
             documentTitle={{ formatter: () => 'Ramgos App' }}>
             <StatusBar style={isDark ? "light" : "dark"} />
@@ -268,11 +313,12 @@ function StripeKeyGate() {
                  * E-017: CartProvider envuelve a AuthProvider por sessionTokenStore
                  * Payment -> Toast -> Cart -> Auth -> Favorites -> Escrow -> Rewards -> AppNavigator
                  */
-                <PaymentProvider stripePublishableKey={stripePublishableKey}>
+                <PaymentProvider key={stripePublishableKey} stripePublishableKey={stripePublishableKey}>
                                     <ToastProvider>
                                         <ConfirmProvider>
                                             <CartProvider>
                                                 <AuthProvider>
+                                                    <I18nProvider>
                                                     <NotificationsProvider>
 
                                                         <EscrowProvider>
@@ -285,6 +331,7 @@ function StripeKeyGate() {
                                                         </EscrowProvider>
 
                                                     </NotificationsProvider>
+                                                    </I18nProvider>
                                                 </AuthProvider>
                                             </CartProvider>
                                         </ConfirmProvider>

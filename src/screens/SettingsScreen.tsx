@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 
 export default function SettingsScreen({ navigation }: any) {
@@ -25,13 +26,14 @@ export default function SettingsScreen({ navigation }: any) {
         notifications,
         setNotifications,
     } = useUserPreferences();
+    const { t } = useTranslation(['settings', 'common']);
 
     const toggleNotif = async (key: 'push' | 'email' | 'sms' | 'marketingEmails') => {
         try {
             await setNotifications({ ...notifications, [key]: !notifications[key] });
-            show('Preferencia guardada', 'success');
+            show(t('settings:messages.saved'), 'success');
         } catch {
-            show('No se pudo guardar', 'error');
+            show(t('settings:messages.saveFailed'), 'error');
         }
     };
 
@@ -78,21 +80,21 @@ export default function SettingsScreen({ navigation }: any) {
         setDeleteModalVisible(false);
         try {
             await deleteMyAccount();
-            show('Cuenta eliminada correctamente.');
+            show(t('settings:messages.accountDeleted'));
             navigation.reset({
                 index: 0,
                 routes: [{ name: 'Welcome' }],
             });
         } catch (error) {
-            show('Error al eliminar cuenta.', 'error');
+            show(t('settings:messages.deleteFailed'), 'error');
         }
     };
 
     return (
         <View style={styles.container}>
             <MobileHeader
-                title="Configuración"
-                subtitle="Personaliza tu experiencia"
+                title={t('settings:title')}
+                subtitle={t('settings:subtitle')}
                 onMenuPress={() => navigation.openDrawer && navigation.openDrawer()}
                 backButton
                 onBack={() => navigation.goBack()}
@@ -101,32 +103,32 @@ export default function SettingsScreen({ navigation }: any) {
             <ScrollView contentContainerStyle={styles.content}>
 
                 {/* ... existing sections ... */}
-                <SectionHeader title="Cuenta" />
+                <SectionHeader title={t('settings:sections.account')} />
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
                         <SettingRow
                             icon={Settings}
-                            label="Editar Perfil"
+                            label={t('settings:rows.editProfile')}
                             onPress={() => navigation.navigate('Profile')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
                             icon={CreditCard}
-                            label="Métodos de Pago"
+                            label={t('settings:rows.paymentMethods')}
                             onPress={() => navigation.navigate('PaymentMethods')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Globe}
-                            label="Idioma"
+                            label={t('settings:rows.language')}
                             type="value"
-                            value={language === 'es' ? 'Español' : 'English'}
+                            value={language === 'es' ? t('common:language.es') : t('common:language.en')}
                             onPress={() => setLanguage(language === 'es' ? 'en' : 'es')}
                         />
                     </CardContent>
                 </Card>
 
-                <SectionHeader title="Pagos" />
+                <SectionHeader title={t('settings:sections.payments')} />
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
                         <View style={styles.settingRow}>
@@ -134,17 +136,17 @@ export default function SettingsScreen({ navigation }: any) {
                                 {isTest ? <FlaskConical size={20} color="#F59E0B" /> : <Zap size={20} color="#10B981" />}
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.settingLabel}>Modo de Pagos</Text>
+                                <Text style={styles.settingLabel}>{t('settings:rows.paymentMode')}</Text>
                                 <Text style={[styles.settingValueText, { color: isTest ? '#F59E0B' : '#10B981' }]}>
-                                    {isTest ? 'TEST (simulado)' : 'LIVE (real)'}
+                                    {isTest ? t('settings:rows.testMode') : t('settings:rows.liveMode')}
                                 </Text>
                             </View>
-                            {/* Fase 5: modo live deshabilitado hasta Bloque D — switch fijo en TEST. */}
+                            {/* Mismo PaymentModeContext que /Payment — Simulado | Producción */}
                             <Switch
                                 value={isTest}
                                 onValueChange={() => {
                                     toggle();
-                                    show('Pagos LIVE deshabilitados hasta el lanzamiento (solo modo TEST)', 'info');
+                                    show(t('settings:rows.paymentModeInfo'), 'info');
                                 }}
                                 trackColor={{ false: '#10B981', true: '#F59E0B' }}
                                 thumbColor="#fff"
@@ -164,7 +166,7 @@ export default function SettingsScreen({ navigation }: any) {
                                         color: isDark ? '#FCD34D' : '#92400E',
                                         lineHeight: 18,
                                     }}>
-                                        MODO TEST: Los pagos se procesan con tarjetas de prueba de Stripe. Se simulan órdenes, escrow y disputas completas. No se mueve dinero real.
+                                        {t('settings:rows.testBanner')}
                                     </Text>
                                 </View>
                             </View>
@@ -172,12 +174,12 @@ export default function SettingsScreen({ navigation }: any) {
                     </CardContent>
                 </Card>
 
-                <SectionHeader title="Apariencia" />
+                <SectionHeader title={t('settings:sections.appearance')} />
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
                         <SettingRow
                             icon={theme === 'dark' ? Moon : Sun}
-                            label="Tema Oscuro"
+                            label={t('settings:rows.darkMode')}
                             type="switch"
                             value={theme === 'dark'}
                             onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -185,35 +187,35 @@ export default function SettingsScreen({ navigation }: any) {
                     </CardContent>
                 </Card>
 
-                <SectionHeader title="Seguridad y privacidad" />
+                <SectionHeader title={t('settings:sections.securityPrivacy')} />
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
                         <SettingRow
                             icon={Shield}
-                            label="Privacidad y Seguridad"
+                            label={t('settings:rows.privacySecurity')}
                             onPress={() => navigation.navigate('PrivacySecurity')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Key}
-                            label="Cambiar Contraseña"
+                            label={t('settings:rows.changePassword')}
                             onPress={() => navigation.navigate('ChangePassword')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Bell}
-                            label="Bandeja de notificaciones"
+                            label={t('settings:rows.notificationInbox')}
                             onPress={() => navigation.navigate('Notifications')}
                         />
                     </CardContent>
                 </Card>
 
-                <SectionHeader title="Notificaciones" />
+                <SectionHeader title={t('settings:sections.notifications')} />
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
                         <SettingRow
                             icon={Bell}
-                            label="Notificaciones Push"
+                            label={t('settings:rows.pushNotifications')}
                             type="switch"
                             value={notifications.push}
                             onPress={() => toggleNotif('push')}
@@ -221,7 +223,7 @@ export default function SettingsScreen({ navigation }: any) {
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Mail}
-                            label="Emails"
+                            label={t('settings:rows.emails')}
                             type="switch"
                             value={notifications.email}
                             onPress={() => toggleNotif('email')}
@@ -229,7 +231,7 @@ export default function SettingsScreen({ navigation }: any) {
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Target}
-                            label="Promociones"
+                            label={t('settings:rows.promotions')}
                             type="switch"
                             value={notifications.marketingEmails}
                             onPress={() => toggleNotif('marketingEmails')}
@@ -237,18 +239,18 @@ export default function SettingsScreen({ navigation }: any) {
                     </CardContent>
                 </Card>
 
-                <SectionHeader title="Legal" />
+                <SectionHeader title={t('settings:sections.legal')} />
                 <Card style={styles.card}>
                     <CardContent style={styles.cardContent}>
                         <SettingRow
                             icon={FileText}
-                            label="Términos de Servicio"
+                            label={t('settings:rows.termsOfService')}
                             onPress={() => navigation.navigate('Terms')}
                         />
                         <View style={styles.divider} />
                         <SettingRow
                             icon={Shield}
-                            label="Política de Privacidad"
+                            label={t('settings:rows.privacyPolicy')}
                             onPress={() => navigation.navigate('Privacy')}
                         />
                     </CardContent>
@@ -257,11 +259,11 @@ export default function SettingsScreen({ navigation }: any) {
                 <View style={{ height: 20 }} />
 
                 <Button variant="outline" onPress={() => setLogoutModalVisible(true)}>
-                    <Text style={{ color: '#dc2626' }}>Cerrar Sesión</Text>
+                    <Text style={{ color: '#dc2626' }}>{t('settings:actions.logout')}</Text>
                 </Button>
 
                 <TouchableOpacity onPress={() => setDeleteModalVisible(true)} style={{ marginTop: 24, marginBottom: 8, alignItems: 'center' }}>
-                    <Text style={{ color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 13, textDecorationLine: 'underline' }}>Eliminar mi cuenta y datos</Text>
+                    <Text style={{ color: isDark ? '#6B7280' : '#9CA3AF', fontSize: 13, textDecorationLine: 'underline' }}>{t('settings:actions.deleteAccount')}</Text>
                 </TouchableOpacity>
 
                 <View style={{ height: 40 }} />
@@ -270,24 +272,24 @@ export default function SettingsScreen({ navigation }: any) {
             <Sheet open={logoutModalVisible} onOpenChange={setLogoutModalVisible}>
                 <SheetContent side="bottom" style={styles.sheetContent}>
                     <SheetHeader>
-                        <SheetTitle>Cerrar Sesión</SheetTitle>
+                        <SheetTitle>{t('settings:actions.confirmLogoutTitle')}</SheetTitle>
                     </SheetHeader>
                     <View style={styles.sheetBody}>
                         <View style={[styles.confirmationIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}>
                             <LogOut size={32} color={isDark ? '#ef4444' : '#dc2626'} />
                         </View>
                         <Text style={styles.sheetText}>
-                            ¿Estás seguro de que quieres cerrar sesión en este dispositivo?
+                            {t('settings:actions.confirmLogoutBody')}
                         </Text>
                         <View style={styles.sheetActions}>
                             <Button variant="outline" style={{ flex: 1 }} onPress={() => setLogoutModalVisible(false)}>
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#374151' }}>Cancelar</Text>
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#374151' }}>{t('common:buttons.cancel')}</Text>
                             </Button>
                             <Button
                                 style={{ flex: 1, backgroundColor: '#dc2626' }}
                                 onPress={handleLogout}
                             >
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Cerrar Sesión</Text>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('settings:actions.logout')}</Text>
                             </Button>
                         </View>
                     </View>
@@ -297,24 +299,24 @@ export default function SettingsScreen({ navigation }: any) {
             <Sheet open={deleteModalVisible} onOpenChange={setDeleteModalVisible}>
                 <SheetContent side="bottom" style={styles.sheetContent}>
                     <SheetHeader>
-                        <SheetTitle>Eliminar Cuenta</SheetTitle>
+                        <SheetTitle>{t('settings:actions.confirmDeleteTitle')}</SheetTitle>
                     </SheetHeader>
                     <View style={styles.sheetBody}>
                         <View style={[styles.confirmationIcon, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2' }]}>
                             <UserX size={32} color={isDark ? '#ef4444' : '#dc2626'} />
                         </View>
                         <Text style={styles.sheetText}>
-                            ¿Estás seguro? Esta acción borrará PERMANENTEMENTE todos tus datos, puntos, nivel de mascota y progreso. No se puede deshacer.
+                            {t('settings:actions.confirmDeleteBody')}
                         </Text>
                         <View style={styles.sheetActions}>
                             <Button variant="outline" style={{ flex: 1 }} onPress={() => setDeleteModalVisible(false)}>
-                                <Text style={{ color: isDark ? '#D1D5DB' : '#374151' }}>Cancelar</Text>
+                                <Text style={{ color: isDark ? '#D1D5DB' : '#374151' }}>{t('common:buttons.cancel')}</Text>
                             </Button>
                             <Button
                                 style={{ flex: 1, backgroundColor: '#dc2626' }}
                                 onPress={handleDelete}
                             >
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Sí, Eliminar</Text>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{t('settings:actions.deleteNow')}</Text>
                             </Button>
                         </View>
                     </View>

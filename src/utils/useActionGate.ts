@@ -118,8 +118,18 @@ export function useActionGate() {
       };
     }
 
+    if (status === 'authenticated' && user && !isKycApproved) {
+      return {
+        reason: 'kyc_required',
+        title: 'Verificación KYC requerida',
+        message: 'Para pagar necesitás completar tu verificación de identidad (KYC) dentro de la app.',
+        ctaLabel: 'Ir a KYC',
+        onCta: () => navigation.navigate(kycRouteName, kycRouteParams),
+      };
+    }
+
     return null;
-  }, [navigation, status]);
+  }, [isKycApproved, kycRouteName, kycRouteParams, navigation, status, user]);
 
   const getSellPublishWithdrawBlock = useCallback((): GateBlock | null => {
     if (status === 'loading') {
@@ -215,7 +225,7 @@ export function useActionGate() {
   );
 
   /**
-   * Gate checkout actions - blocks anonymous users
+   * Gate checkout actions - blocks anonymous and non-KYC users
    * @returns true if allowed, false if blocked
    */
   const gateCheckout = useCallback(
@@ -232,6 +242,11 @@ export function useActionGate() {
             promptBlocked(block, [
               { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
               { text: 'Registrarme', onPress: () => navigation.navigate('SignUp') },
+            ]);
+          } else if (block.reason === 'kyc_required') {
+            promptBlocked(block, [
+              { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
+              { text: 'Ir a KYC', onPress: block.onCta },
             ]);
           } else {
             promptBlocked(block, [{ text: 'Ok', onPress: () => { }, style: 'cancel' }]);

@@ -107,13 +107,13 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                 {/* Create Bonus Card */}
                 <View style={[styles.bonusCard, glassSurface(isDark, 'prominent'), { maxWidth: containerWidth }]}>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.bonusTitle, { color: isDark ? '#fff' : '#111827' }]}>Generador de Bonos</Text>
+                        <Text style={[styles.bonusTitle, { color: isDark ? '#fff' : '#111827' }]}>Bonos</Text>
                         <Text style={[styles.bonusSubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>
-                            Crea cupones de descuento exclusivos para tus seguidores y conviértelos en clientes.
+                            Creá bonos de crédito prepago para tus seguidores (pagás X · crédito Y) y compartilos desde acá.
                         </Text>
                     </View>
                     <Button onPress={() => setModalVisible(true)} style={{ backgroundColor: '#4f46e5', marginTop: 12 }}>
-                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Crear bono de afiliado</Text>
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Crear bono</Text>
                     </Button>
                 </View>
 

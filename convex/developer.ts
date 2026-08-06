@@ -293,7 +293,7 @@ export const seed5Bonos = mutation({
                 price: 50,
                 discountValue: 100,
                 discountType: "fixed",
-                validityDays: 7,
+                validityDays: 4,
                 currency: "USD",
                 category: "bonos",
                 tags: ["premium", "test"],
@@ -312,7 +312,7 @@ export const seed5Bonos = mutation({
                 price: 50,
                 discountValue: 100,
                 discountType: "fixed",
-                validityDays: (bonoListing as any).validityDays ?? 7,
+                validityDays: (bonoListing as any).validityDays ?? 4,
                 updatedAt: new Date().toISOString(),
             });
         }

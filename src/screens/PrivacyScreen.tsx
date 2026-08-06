@@ -6,12 +6,14 @@ import { ArrowLeft, Lock, Eye } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { CommonActions } from '@react-navigation/native';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 
 export default function PrivacyScreen({ navigation, route }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { t } = useTranslation();
     const isSignup = route?.params?.origin === 'signup';
     const returnKey = route?.params?.returnKey as string | undefined;
 
@@ -39,7 +41,7 @@ export default function PrivacyScreen({ navigation, route }: any) {
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                             <ArrowLeft size={24} color={isDark ? "#D1D5DB" : "#4B5563"} />
                         </TouchableOpacity>
-                        <Text style={styles.title}>Política de Privacidad</Text>
+                        <Text style={styles.title}>{t('privacy.title', { defaultValue: 'Política de privacidad' })}</Text>
                         <View style={{ width: 24 }} />
                     </View>
 
@@ -121,7 +123,7 @@ export default function PrivacyScreen({ navigation, route }: any) {
                     </ScrollView>
 
                     <TouchableOpacity onPress={handleAccept} style={styles.btn}>
-                        <Text style={styles.btnText}>{isSignup ? 'Aceptar y Continuar' : 'Entendido'}</Text>
+                        <Text style={styles.btnText}>{isSignup ? t('common:buttons.acceptAndContinue') : t('privacy.understood', { defaultValue: 'Entendido' })}</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>

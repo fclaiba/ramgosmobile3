@@ -1,0 +1,1330 @@
+{
+  "communities": {
+    "0": [
+      "app",
+      "app_app",
+      "app_appnavigator",
+      "app_convex",
+      "app_stack",
+      "app_stripekeygate",
+      "app_styles",
+      "src_contexts_escrowcontext_escrowprovider",
+      "src_contexts_paymentmodecontext",
+      "src_contexts_paymentmodecontext_paymentmode",
+      "src_contexts_paymentmodecontext_paymentmodecontext",
+      "src_contexts_paymentmodecontext_paymentmodecontextvalue",
+      "src_contexts_paymentmodecontext_paymentmodeprovider",
+      "src_contexts_paymentmodecontext_usepaymentmode",
+      "src_contexts_rewardscontext",
+      "src_contexts_rewardscontext_default_rewards",
+      "src_contexts_rewardscontext_rewardscontext",
+      "src_contexts_rewardscontext_rewardsprovider",
+      "src_contexts_rewardscontext_userewards",
+      "src_screens_admindashboardscreen",
+      "src_screens_admindashboardscreen_admindashboardscreen",
+      "src_screens_admindashboardscreen_styles",
+      "src_screens_homescreen",
+      "src_screens_homescreen_categorycards",
+      "src_screens_homescreen_consumptiondata",
+      "src_screens_homescreen_featuredoffers",
+      "src_screens_homescreen_getstyles",
+      "src_screens_homescreen_heroslides",
+      "src_screens_homescreen_homescreen",
+      "src_screens_homescreen_quickactions",
+      "src_screens_mylistingsscreen",
+      "src_screens_mylistingsscreen_getstyles",
+      "src_screens_mylistingsscreen_mylistingsscreen",
+      "src_screens_mylistingsscreen_width",
+      "src_screens_settingsscreen",
+      "src_screens_settingsscreen_getstyles",
+      "src_screens_settingsscreen_settingsscreen"
+    ],
+    "1": [
+      "scripts_dev_completeness_audit",
+      "scripts_dev_completeness_audit_checkresult",
+      "scripts_dev_completeness_audit_expand_glob",
+      "scripts_dev_completeness_audit_finding",
+      "scripts_dev_completeness_audit_infer_module",
+      "scripts_dev_completeness_audit_iter_source_files",
+      "scripts_dev_completeness_audit_main",
+      "scripts_dev_completeness_audit_match_simple",
+      "scripts_dev_completeness_audit_moduleauditor",
+      "scripts_dev_completeness_audit_moduleauditor_audit_module",
+      "scripts_dev_completeness_audit_moduleauditor_audit_navigation",
+      "scripts_dev_completeness_audit_moduleauditor_init",
+      "scripts_dev_completeness_audit_moduleresult",
+      "scripts_dev_completeness_audit_moduleresult_gap_count",
+      "scripts_dev_completeness_audit_moduleresult_score",
+      "scripts_dev_completeness_audit_moduleresult_status",
+      "scripts_dev_completeness_audit_moduleresult_unique_findings",
+      "scripts_dev_completeness_audit_py_path",
+      "scripts_dev_completeness_audit_rationale_591",
+      "scripts_dev_completeness_audit_rationale_638",
+      "scripts_dev_completeness_audit_rationale_659",
+      "scripts_dev_completeness_audit_rationale_673",
+      "scripts_dev_completeness_audit_rationale_690",
+      "scripts_dev_completeness_audit_rationale_70",
+      "scripts_dev_completeness_audit_rationale_734",
+      "scripts_dev_completeness_audit_rationale_787",
+      "scripts_dev_completeness_audit_read_text",
+      "scripts_dev_completeness_audit_reporter",
+      "scripts_dev_completeness_audit_reporter_global_score",
+      "scripts_dev_completeness_audit_reporter_init",
+      "scripts_dev_completeness_audit_reporter_render",
+      "scripts_dev_completeness_audit_reporter_total_gaps",
+      "scripts_dev_completeness_audit_scanner",
+      "scripts_dev_completeness_audit_scanner_init",
+      "scripts_dev_completeness_audit_scanner_scan",
+      "scripts_dev_completeness_audit_short_snippet"
+    ],
+    "2": [
+      "namespace",
+      "scripts_app_integral_audit",
+      "scripts_app_integral_audit_auditor",
+      "scripts_app_integral_audit_auditor_action_plan",
+      "scripts_app_integral_audit_auditor_add",
+      "scripts_app_integral_audit_auditor_audit_architecture",
+      "scripts_app_integral_audit_auditor_audit_finance",
+      "scripts_app_integral_audit_auditor_audit_integrations",
+      "scripts_app_integral_audit_auditor_audit_quality",
+      "scripts_app_integral_audit_auditor_audit_release_readiness",
+      "scripts_app_integral_audit_auditor_audit_security",
+      "scripts_app_integral_audit_auditor_findings_section",
+      "scripts_app_integral_audit_auditor_full_results_table",
+      "scripts_app_integral_audit_auditor_global_status",
+      "scripts_app_integral_audit_auditor_init",
+      "scripts_app_integral_audit_auditor_render_markdown",
+      "scripts_app_integral_audit_auditor_run",
+      "scripts_app_integral_audit_auditor_run_typecheck",
+      "scripts_app_integral_audit_auditor_summary_table",
+      "scripts_app_integral_audit_categoryscore",
+      "scripts_app_integral_audit_categoryscore_score",
+      "scripts_app_integral_audit_checkresult",
+      "scripts_app_integral_audit_dir_exists",
+      "scripts_app_integral_audit_file_exists",
+      "scripts_app_integral_audit_http_head",
+      "scripts_app_integral_audit_main",
+      "scripts_app_integral_audit_parse_args",
+      "scripts_app_integral_audit_py_path",
+      "scripts_app_integral_audit_rationale_117",
+      "scripts_app_integral_audit_read_json",
+      "scripts_app_integral_audit_read_text",
+      "scripts_app_integral_audit_run_command",
+      "scripts_app_integral_audit_short"
+    ],
+    "3": [
+      "agents_rules_ponytail",
+      "agents_rules_ponytail_yagni",
+      "agents_skills_convex_create_component_agents_openai",
+      "agents_skills_convex_create_component_references_advanced_patterns",
+      "agents_skills_convex_create_component_references_advanced_patterns_class_wrapper",
+      "agents_skills_convex_create_component_references_advanced_patterns_functionhandle",
+      "agents_skills_convex_create_component_references_advanced_patterns_globals_table",
+      "agents_skills_convex_create_component_references_hybrid_components",
+      "agents_skills_convex_create_component_references_local_components",
+      "agents_skills_convex_create_component_references_packaged_components",
+      "agents_skills_convex_create_component_skill",
+      "agents_skills_convex_create_component_skill_app_use",
+      "agents_skills_convex_create_component_skill_boundary_rationale",
+      "agents_skills_convex_create_component_skill_definecomponent",
+      "agents_skills_convex_create_component_skill_hybrid_component",
+      "agents_skills_convex_create_component_skill_local_component",
+      "agents_skills_convex_create_component_skill_packaged_component",
+      "agents_skills_convex_quickstart_agents_openai",
+      "agents_skills_convex_quickstart_skill",
+      "agents_skills_convex_quickstart_skill_convex_agent_mode",
+      "agents_skills_convex_quickstart_skill_npx_convex_dev_once",
+      "agents_skills_convex_setup_auth_agents_openai",
+      "agents_skills_convex_setup_auth_references_auth0",
+      "agents_skills_convex_setup_auth_references_auth0_convexproviderwithauth0",
+      "agents_skills_convex_setup_auth_skill",
+      "agents_skills_convex_setup_auth_skill_auth0_provider",
+      "agents_skills_convex_setup_auth_skill_clerk_provider",
+      "agents_skills_convex_setup_auth_skill_convex_auth_provider",
+      "agents_skills_convex_setup_auth_skill_ctx_auth_getuseridentity",
+      "agents_skills_convex_setup_auth_skill_custom_jwt_provider",
+      "agents_skills_convex_setup_auth_skill_workos_authkit_provider",
+      "convex_dev_docs"
+    ],
+    "4": [
+      "src_components_marketplace_escrowsheet",
+      "src_components_marketplace_escrowsheet_escrow_state_meta",
+      "src_components_marketplace_escrowsheet_escrowsheet",
+      "src_components_marketplace_escrowsheet_escrowsheetprops",
+      "src_components_marketplace_escrowsheet_escrowsheetrole",
+      "src_components_marketplace_escrowsheet_escrowstate",
+      "src_components_marketplace_escrowsheet_formatmoney",
+      "src_components_marketplace_escrowsheet_formatshortdate",
+      "src_components_marketplace_escrowsheet_getstyles",
+      "src_components_marketplace_escrowsheet_reasons",
+      "src_components_marketplace_escrowsheet_renderexplanation",
+      "src_components_marketplace_escrowsheet_statemeta",
+      "src_components_marketplace_escrowsheet_terminology",
+      "src_components_marketplace_escrowsheet_tone_colors",
+      "src_components_marketplace_escrowsheet_tone_colors_dark",
+      "src_contexts_escrowcontext",
+      "src_contexts_escrowcontext_escrowcontext",
+      "src_contexts_escrowcontext_escrowcontextvalue",
+      "src_contexts_escrowcontext_escroworder",
+      "src_contexts_escrowcontext_escroworderitem",
+      "src_contexts_escrowcontext_escrowphase",
+      "src_contexts_escrowcontext_escrowstate",
+      "src_contexts_escrowcontext_useescrow",
+      "src_screens_historyscreen",
+      "src_screens_historyscreen_getstyles",
+      "src_screens_historyscreen_historyitem",
+      "src_screens_historyscreen_historyscreen",
+      "src_screens_historyscreen_initialhistoryitems",
+      "src_screens_historyscreen_purchasekindfilter"
+    ],
+    "5": [
+      "agents_skills_convex_migration_helper_agents_openai",
+      "agents_skills_convex_migration_helper_references_migration_patterns",
+      "agents_skills_convex_migration_helper_references_migration_patterns_dual_read",
+      "agents_skills_convex_migration_helper_references_migration_patterns_dual_write",
+      "agents_skills_convex_migration_helper_references_migrations_component",
+      "agents_skills_convex_migration_helper_references_migrations_component_define",
+      "agents_skills_convex_migration_helper_skill",
+      "agents_skills_convex_migration_helper_skill_convex_dev_migrations",
+      "agents_skills_convex_migration_helper_skill_online_migrations",
+      "agents_skills_convex_migration_helper_skill_schema_validation_constraint",
+      "agents_skills_convex_migration_helper_skill_widen_migrate_narrow",
+      "agents_skills_convex_performance_audit_agents_openai",
+      "agents_skills_convex_performance_audit_references_function_budget",
+      "agents_skills_convex_performance_audit_references_hot_path_rules",
+      "agents_skills_convex_performance_audit_references_hot_path_rules_digest_tables",
+      "agents_skills_convex_performance_audit_references_hot_path_rules_push_filters_to_storage",
+      "agents_skills_convex_performance_audit_references_occ_conflicts",
+      "agents_skills_convex_performance_audit_references_occ_conflicts_hot_document_splitting",
+      "agents_skills_convex_performance_audit_references_subscription_cost",
+      "agents_skills_convex_performance_audit_references_subscription_cost_aggregate_component",
+      "agents_skills_convex_performance_audit_references_subscription_cost_point_in_time_reads",
+      "agents_skills_convex_performance_audit_skill",
+      "agents_skills_convex_performance_audit_skill_invalidation_amplification",
+      "agents_skills_convex_performance_audit_skill_occ_conflicts",
+      "agents_skills_convex_performance_audit_skill_read_amplification"
+    ],
+    "6": [
+      "convex_economy",
+      "convex_economy_addcoins",
+      "convex_economy_addpoints",
+      "convex_economy_applypointseventinternal",
+      "convex_economy_claimdailyreward",
+      "convex_economy_cleanvirtualpet",
+      "convex_economy_convertcoinstopoints",
+      "convex_economy_default_pet_state",
+      "convex_economy_ensureeconomystate",
+      "convex_economy_equipaccessory",
+      "convex_economy_feedvirtualpet",
+      "convex_economy_geteconomystate",
+      "convex_economy_getpointshistory",
+      "convex_economy_initializeeconomy",
+      "convex_economy_internaladdcoins",
+      "convex_economy_internalspendcoins",
+      "convex_economy_internalupdatepetstate",
+      "convex_economy_playvirtualpet",
+      "convex_economy_sleepvirtualpet",
+      "convex_economy_spendcoins",
+      "convex_economy_unlockaccessory",
+      "convex_economy_updatepetstate"
+    ],
+    "7": [
+      "a_z_test_report_md",
+      "closed_beta_go_live_runbook_md",
+      "concept_authcontext_tsx",
+      "concept_banuser_gap",
+      "concept_cartscreen_checkout_bug",
+      "concept_diagnostico_audit_script",
+      "concept_gatecheckout",
+      "concept_impersonate_gap",
+      "concept_jest_mock_gap",
+      "concept_mock_convex_store_replacement",
+      "concept_resolvedispute_gap",
+      "concept_stripe_integration",
+      "concept_useactiongate_hook",
+      "convex_migration_plan_md",
+      "credentials_go_live_execution_md",
+      "credentials_handoff_checklist_md",
+      "cursor_plans_plan_maestro_cursor_6c3ee679_plan_md",
+      "dev_completeness_md",
+      "diagnostico_app_estado_actual_md"
+    ],
+    "8": [
+      "agents_skills_convex_setup_auth_references_clerk",
+      "agents_skills_convex_setup_auth_references_convex_auth",
+      "agents_skills_convex_setup_auth_references_convex_auth_widen_migrate_narrow",
+      "agents_skills_convex_setup_auth_references_function_budget_limits",
+      "agents_skills_convex_setup_auth_references_workos_authkit",
+      "agents_skills_convex_skill",
+      "claude_skills_convex_create_component_agents_openai",
+      "claude_skills_convex_create_component_references_advanced_patterns",
+      "claude_skills_convex_create_component_references_hybrid_components",
+      "claude_skills_convex_create_component_references_local_components",
+      "claude_skills_convex_create_component_references_packaged_components",
+      "claude_skills_convex_create_component_skill",
+      "claude_skills_convex_migration_helper_agents_openai",
+      "claude_skills_convex_migration_helper_references_migration_patterns",
+      "claude_skills_convex_migration_helper_references_migrations_component",
+      "claude_skills_convex_migration_helper_skill",
+      "claude_skills_convex_performance_audit_agents_openai",
+      "claude_skills_convex_performance_audit_references_function_budget",
+      "claude_skills_convex_performance_audit_skill"
+    ],
+    "9": [
+      "audit",
+      "audit_analyze_architecture",
+      "audit_analyze_contracts",
+      "audit_analyze_env_deploy",
+      "audit_analyze_security",
+      "audit_codebase",
+      "audit_codebase_get_content",
+      "audit_codebase_get_files_by_pattern",
+      "audit_codebase_init",
+      "audit_codebase_load_codebase",
+      "audit_codebase_relative",
+      "audit_colors",
+      "audit_finding",
+      "audit_finding_to_dict",
+      "audit_main",
+      "audit_print_report",
+      "audit_py_path",
+      "audit_rationale_64",
+      "audit_rationale_84"
+    ],
+    "10": [
+      "claude_skills_convex_quickstart_agents_openai_yaml",
+      "claude_skills_convex_quickstart_skill_md",
+      "claude_skills_convex_setup_auth_agents_openai_yaml",
+      "claude_skills_convex_setup_auth_references_auth0_md",
+      "claude_skills_convex_setup_auth_references_clerk_md",
+      "claude_skills_convex_setup_auth_references_convex_auth_md",
+      "claude_skills_convex_setup_auth_references_workos_authkit_md",
+      "claude_skills_convex_setup_auth_skill_md",
+      "claude_skills_convex_skill_md",
+      "concept_auth_provider_auth0",
+      "concept_auth_provider_clerk",
+      "concept_auth_provider_convex_auth",
+      "concept_auth_provider_workos",
+      "concept_convex_agent_mode",
+      "concept_convex_auth_config_ts",
+      "concept_convex_dev_once",
+      "concept_get_user_identity"
+    ],
+    "11": [
+      "ref_tools_package",
+      "ref_tools_package_dependencies",
+      "ref_tools_package_dependencies_next",
+      "ref_tools_package_dependencies_react",
+      "ref_tools_package_dependencies_react_dom",
+      "ref_tools_package_dependencies_stripe",
+      "ref_tools_package_dependencies_stripe_react_stripe_js",
+      "ref_tools_package_dependencies_stripe_stripe_js",
+      "ref_tools_package_name",
+      "ref_tools_package_scripts",
+      "ref_tools_package_scripts_build",
+      "ref_tools_package_scripts_dev",
+      "ref_tools_package_scripts_start",
+      "ref_tools_package_version"
+    ],
+    "12": [
+      "samples_stripe_connect_v2_package",
+      "samples_stripe_connect_v2_package_dependencies",
+      "samples_stripe_connect_v2_package_dependencies_dotenv",
+      "samples_stripe_connect_v2_package_dependencies_express",
+      "samples_stripe_connect_v2_package_dependencies_stripe",
+      "samples_stripe_connect_v2_package_description",
+      "samples_stripe_connect_v2_package_engines",
+      "samples_stripe_connect_v2_package_engines_node",
+      "samples_stripe_connect_v2_package_name",
+      "samples_stripe_connect_v2_package_private",
+      "samples_stripe_connect_v2_package_scripts",
+      "samples_stripe_connect_v2_package_scripts_start",
+      "samples_stripe_connect_v2_package_type",
+      "samples_stripe_connect_v2_package_version"
+    ],
+    "13": [
+      "financial_operations_validation",
+      "financial_operations_validation_escrow_frozen",
+      "financial_operations_validation_escrow_held",
+      "financial_operations_validation_escrow_refunded",
+      "financial_operations_validation_split_influencer",
+      "financial_operations_validation_split_ramgos",
+      "financial_operations_validation_withdrawal",
+      "legal_gap_analysis",
+      "legal_gap_analysis_kyc",
+      "legal_gap_analysis_membership_tiers",
+      "legal_gap_analysis_refer_system",
+      "legal_gap_analysis_return_7_days",
+      "legal_gap_analysis_rewards_points_value"
+    ],
+    "14": [
+      "app_audit_output",
+      "fin_de_turno_reporte_subscription_dual",
+      "lanzamiento_gtm",
+      "lanzamiento_gtm_convex_prod_url",
+      "lanzamiento_gtm_eas_aab",
+      "m_dulo_pagos_respaldo_iap_actions",
+      "play_console_release_checklist",
+      "play_console_release_checklist_iap_products",
+      "release_android",
+      "store_metadata",
+      "store_ready_baseline",
+      "store_ready_baseline_iap_storekit2"
+    ],
+    "15": [
+      "convex_disputes",
+      "convex_disputes_adddisputemessage",
+      "convex_disputes_addevidence",
+      "convex_disputes_assertorderparticipantorsupport",
+      "convex_disputes_createdispute",
+      "convex_disputes_getdisputedetails",
+      "convex_disputes_getdisputeevidence",
+      "convex_disputes_getdisputemessages",
+      "convex_disputes_internalapplydisputeresolution",
+      "convex_disputes_internalgetorderandrole",
+      "convex_disputes_issupportuser",
+      "convex_disputes_resolvedispute"
+    ],
+    "16": [
+      "fin_de_turno_reporte",
+      "fin_de_turno_reporte_checkout_stripe_modal",
+      "fin_de_turno_reporte_http_ts",
+      "fin_de_turno_reporte_stripe_ts",
+      "m_dulo_pagos_respaldo_connect_v2",
+      "m_dulo_pagos_respaldo_stripe_ts",
+      "payments_setup",
+      "payments_setup_env_vars",
+      "payments_setup_prod_checklist",
+      "payments_setup_stripe_deps",
+      "payments_setup_test_cards",
+      "payments_setup_webhook_endpoint"
+    ],
+    "17": [
+      "influencer_outline",
+      "outline",
+      "samples_stripe-connect-v2_public_cancel",
+      "samples_stripe-connect-v2_public_dashboard",
+      "samples_stripe-connect-v2_public_index",
+      "samples_stripe-connect-v2_public_storefront",
+      "samples_stripe-connect-v2_public_success",
+      "samples_stripe-connect-v2_rdme_concept_destination_charge",
+      "samples_stripe-connect-v2_rdme_concept_onboarding_links",
+      "samples_stripe-connect-v2_rdme_concept_thin_webhooks",
+      "samples_stripe-connect-v2_rdme_concept_v2_accounts_create",
+      "samples_stripe-connect-v2_readme"
+    ],
+    "18": [
+      "convex_orders",
+      "convex_orders_cancelorder",
+      "convex_orders_confirmreceipt",
+      "convex_orders_createorder",
+      "convex_orders_escalatedispute",
+      "convex_orders_getmyorders",
+      "convex_orders_getordersbyseller",
+      "convex_orders_internalupdateorderstatus",
+      "convex_orders_markasdelivered",
+      "convex_orders_markasshipped",
+      "convex_orders_opendispute"
+    ],
+    "19": [
+      "src_contexts_pointscontext",
+      "src_contexts_pointscontext_dailychallenge",
+      "src_contexts_pointscontext_default_challenges",
+      "src_contexts_pointscontext_default_context",
+      "src_contexts_pointscontext_discount_tiers",
+      "src_contexts_pointscontext_membership_tiers",
+      "src_contexts_pointscontext_membershiptier",
+      "src_contexts_pointscontext_pointscontext",
+      "src_contexts_pointscontext_pointsprovider",
+      "src_contexts_pointscontext_usepoints"
+    ],
+    "20": [
+      "mock_report",
+      "ramgos_mobile_feedback",
+      "src_components_games_game_contract",
+      "src_components_games_game_contract_concept_game_adapter",
+      "src_components_games_game_contract_concept_theme_tokens",
+      "tsc_output",
+      "tsc_output_utf8",
+      "typecheck",
+      "typecheck_fix"
+    ],
+    "21": [
+      "src_payments_components_paymentform",
+      "src_payments_components_paymentform_paymentform",
+      "src_payments_components_paymentform_paymentformprops",
+      "src_payments_components_paymentform_st",
+      "src_screens_paymentscreen",
+      "src_screens_paymentscreen_initial_mock_cards",
+      "src_screens_paymentscreen_paymentscreen",
+      "src_screens_paymentscreen_st"
+    ],
+    "22": [
+      "lanzamiento_gtm_ledger_monitoring",
+      "m_dulo_pagos_respaldo",
+      "m_dulo_pagos_respaldo_finance_ts",
+      "m_dulo_pagos_respaldo_reconciliation",
+      "m_dulo_pagos_respaldo_stripe_wrapper",
+      "m_dulo_pagos_respaldo_wallet_screen",
+      "pendientes_front_back_wallet_backend_truth"
+    ],
+    "23": [
+      "agents_skills_ponytail_audit_skill",
+      "agents_skills_ponytail_debt_skill",
+      "agents_skills_ponytail_help_skill",
+      "agents_skills_ponytail_review_skill",
+      "agents_skills_ponytail_review_skill_ladder",
+      "agents_skills_ponytail_skill"
+    ],
+    "24": [
+      "claude_skills_convex_performance_audit_references_hot_path_rules_md",
+      "claude_skills_convex_performance_audit_references_occ_conflicts_md",
+      "claude_skills_convex_performance_audit_references_subscription_cost_md",
+      "concept_hot_path_filter_pushdown",
+      "concept_occ_contention_pattern",
+      "concept_subscription_invalidation"
+    ],
+    "25": [
+      "convex__generated_ai_guidelines",
+      "convex__generated_ai_guidelines_auth",
+      "convex__generated_ai_guidelines_query_filter",
+      "convex_readme",
+      "convex_temp_getbyseller",
+      "pendientes_front_back_server_centric"
+    ],
+    "26": [
+      "fin_de_turno_reporte_internal_release",
+      "financial_operations_validation_escrow_released",
+      "legal_gap_analysis_escrow_15_days",
+      "pendientes_front_back",
+      "pendientes_front_back_cart_unification"
+    ],
+    "27": [
+      "agents_md_root",
+      "claude_md_root",
+      "concept_convex_ai_files_install",
+      "concept_convex_guidelines_file"
+    ],
+    "28": [
+      "agents_skills_convex-create-component_assets_icon",
+      "agents_skills_convex-migration-helper_assets_icon",
+      "agents_skills_convex-performance-audit_assets_icon",
+      "agents_skills_convex-quickstart_assets_icon"
+    ],
+    "29": [
+      "agents_skills_convexsetupauth_assets_icon",
+      "claude_skills_convexcreatecomponent_assets_icon",
+      "claude_skills_convexquickstart_assets_icon",
+      "claude_skills_convexsetupauth_assets_icon"
+    ],
+    "30": [
+      "convex_adminqueries",
+      "convex_adminqueries_getdisputedorescroworders",
+      "convex_adminqueries_getplatformstats",
+      "convex_adminqueries_getrecentorders"
+    ],
+    "31": [
+      "ios_release_enablement",
+      "ios_release_enablement_eas_build",
+      "ios_release_enablement_testflight",
+      "lanzamiento_gtm_eas_ipa"
+    ],
+    "32": [
+      "src_payments_components_paymentform_web",
+      "src_payments_components_paymentform_web_paymentform",
+      "src_payments_components_paymentform_web_paymentformprops",
+      "src_payments_components_paymentform_web_st"
+    ],
+    "33": [
+      "tsconfig",
+      "tsconfig_compileroptions",
+      "tsconfig_compileroptions_strict",
+      "tsconfig_extends"
+    ],
+    "34": [
+      "android_error_log",
+      "build_log",
+      "build_log_r"
+    ],
+    "35": [
+      "assets_adaptiveicon",
+      "assets_icon",
+      "logo"
+    ],
+    "36": [
+      "audit_report",
+      "audit_report_utf8",
+      "audit_results"
+    ],
+    "37": [
+      "convex_http",
+      "convex_http_http",
+      "convex_http_stripe"
+    ],
+    "38": [
+      "convex_payments_actions",
+      "convex_payments_actions_createpaymentintent",
+      "convex_payments_actions_internalprocesstestcartorders"
+    ],
+    "39": [
+      "tsconfig_check",
+      "tsconfig_check_exclude",
+      "tsconfig_check_extends"
+    ],
+    "40": [
+      "agents_hooks_ponytail_statusline_sh__entry",
+      "agents_hooks_ponytail_statusline_sh_agents_hooks_ponytail_statusline"
+    ],
+    "41": [
+      "assets_favicon",
+      "assets_splashicon"
+    ],
+    "42": [
+      "audit_project",
+      "audit_project_audit_and_fix"
+    ],
+    "43": [
+      "claude_skills_convexmigrationhelper_assets_icon",
+      "claude_skills_convexperformanceaudit_assets_icon"
+    ],
+    "44": [
+      "scripts_take_screenshots",
+      "scripts_take_screenshots_sh__entry"
+    ],
+    "45": [
+      "src_contexts_cartcontext_cartitem",
+      "src_hooks_usecheckout_placeorderpayload"
+    ],
+    "46": [
+      "vercel",
+      "vercel_headers"
+    ],
+    "47": [
+      "agents_hooks_ponytail_statusline_ps1_agents_hooks_ponytail_statusline"
+    ],
+    "48": [
+      "build_release"
+    ],
+    "49": [
+      "convex_authhelpers_authactor"
+    ],
+    "50": [
+      "convex_generated_api_api"
+    ],
+    "51": [
+      "convex_generated_api_internal"
+    ],
+    "52": [
+      "convex_generated_datamodel_d_datamodel"
+    ],
+    "53": [
+      "convex_generated_datamodel_d_doc"
+    ],
+    "54": [
+      "convex_generated_datamodel_d_id"
+    ],
+    "55": [
+      "convex_generated_datamodel_d_tablenames"
+    ],
+    "56": [
+      "convex_generated_server_action"
+    ],
+    "57": [
+      "convex_generated_server_d_actionctx"
+    ],
+    "58": [
+      "convex_generated_server_d_databasereader"
+    ],
+    "59": [
+      "convex_generated_server_d_databasewriter"
+    ],
+    "60": [
+      "convex_generated_server_d_mutationctx"
+    ],
+    "61": [
+      "convex_generated_server_d_queryctx"
+    ],
+    "62": [
+      "convex_generated_server_httpaction"
+    ],
+    "63": [
+      "convex_generated_server_internalaction"
+    ],
+    "64": [
+      "convex_generated_server_internalmutation"
+    ],
+    "65": [
+      "convex_generated_server_internalquery"
+    ],
+    "66": [
+      "convex_generated_server_mutation"
+    ],
+    "67": [
+      "convex_generated_server_query"
+    ],
+    "68": [
+      "convex_observability_stripebreadcrumb"
+    ],
+    "69": [
+      "convex_social_followuser"
+    ],
+    "70": [
+      "convex_social_helpers_pageresult"
+    ],
+    "71": [
+      "convex_social_sendmessage"
+    ],
+    "72": [
+      "dev_audit_output"
+    ],
+    "73": [
+      "gemini_loop"
+    ],
+    "74": [
+      "ref_tools_app_api_account_status_accountid_route_get"
+    ],
+    "75": [
+      "ref_tools_app_api_create_account_link_route_post"
+    ],
+    "76": [
+      "ref_tools_app_api_create_checkout_session_route_post"
+    ],
+    "77": [
+      "ref_tools_app_api_create_connect_account_route_post"
+    ],
+    "78": [
+      "ref_tools_app_api_create_product_route_post"
+    ],
+    "79": [
+      "ref_tools_app_api_products_accountid_route_get"
+    ],
+    "80": [
+      "ref_tools_app_api_thin_webhook_route_post"
+    ],
+    "81": [
+      "ref_tools_app_api_webhook_route_post"
+    ],
+    "82": [
+      "ref_tools_app_done_page_page"
+    ],
+    "83": [
+      "ref_tools_app_layout_rootlayout"
+    ],
+    "84": [
+      "ref_tools_app_page_page"
+    ],
+    "85": [
+      "ref_tools_app_storefront_accountid_page_storefront"
+    ],
+    "86": [
+      "scripts_fix_android_build"
+    ],
+    "87": [
+      "scripts_fix_project"
+    ],
+    "88": [
+      "src_components_advancedfilters_filterstate"
+    ],
+    "89": [
+      "src_components_crashhandler_crashhandler"
+    ],
+    "90": [
+      "src_components_desktopsidebar_navsection"
+    ],
+    "91": [
+      "src_components_forms_unifiedlistingform_listingtype"
+    ],
+    "92": [
+      "src_components_games_gamecontracts_gameaction"
+    ],
+    "93": [
+      "src_components_games_gamecontracts_gameadapterhandle"
+    ],
+    "94": [
+      "src_components_games_gamecontracts_gameadapterprops"
+    ],
+    "95": [
+      "src_components_games_gamecontracts_gameendsummary"
+    ],
+    "96": [
+      "src_components_games_gamecontracts_gameevent"
+    ],
+    "97": [
+      "src_components_games_gamecontracts_gameid"
+    ],
+    "98": [
+      "src_components_games_gamecontracts_gamemetrics"
+    ],
+    "99": [
+      "src_components_games_gamecontracts_gamesnapshot"
+    ],
+    "100": [
+      "src_components_games_gamecontracts_gamestatus"
+    ],
+    "101": [
+      "src_components_games_gamecontracts_gamethemefamily"
+    ],
+    "102": [
+      "src_components_games_gamecontracts_gamethemetokens"
+    ],
+    "103": [
+      "src_components_games_gamecontracts_getgametheme"
+    ],
+    "104": [
+      "src_components_games_gamedifficultyconfig_arcadedifficultyparams"
+    ],
+    "105": [
+      "src_components_games_gamedifficultyconfig_getarcadeparams"
+    ],
+    "106": [
+      "src_components_games_gamewrapper_gameactionsignal"
+    ],
+    "107": [
+      "src_components_games_gamewrapper_gamewrapperprops"
+    ],
+    "108": [
+      "src_components_games_usegamelevel_usegamelevel"
+    ],
+    "109": [
+      "src_components_games_usegamelevel_usegamelevelconfig"
+    ],
+    "110": [
+      "src_components_map_custommapmarker_listingtype"
+    ],
+    "111": [
+      "src_components_map_darkmapview_darkmapviewprops"
+    ],
+    "112": [
+      "src_components_map_darkmapview_web_edgepadding"
+    ],
+    "113": [
+      "src_components_map_darkmapview_web_mappressevent"
+    ],
+    "114": [
+      "src_components_map_darkmapview_web_region"
+    ],
+    "115": [
+      "src_components_mobilenav_navsection"
+    ],
+    "116": [
+      "src_config_subscriptionplans_issubscriptionactive"
+    ],
+    "117": [
+      "src_config_subscriptionplans_paidsubscriptiontier"
+    ],
+    "118": [
+      "src_config_unifiedcategories_categorytype"
+    ],
+    "119": [
+      "src_contexts_authcontext_authkycstatus"
+    ],
+    "120": [
+      "src_contexts_authcontext_authuserrole"
+    ],
+    "121": [
+      "src_contexts_authcontext_publicuser"
+    ],
+    "122": [
+      "src_contexts_authcontext_sessionrecord"
+    ],
+    "123": [
+      "src_contexts_authcontext_signupinput"
+    ],
+    "124": [
+      "src_contexts_authcontext_signupresult"
+    ],
+    "125": [
+      "src_contexts_authcontext_socialprofile"
+    ],
+    "126": [
+      "src_contexts_authcontext_socialprovider"
+    ],
+    "127": [
+      "src_contexts_authcontext_subscriptionstatus"
+    ],
+    "128": [
+      "src_contexts_authcontext_subscriptiontier"
+    ],
+    "129": [
+      "src_contexts_businesscontext_businessprovider"
+    ],
+    "130": [
+      "src_contexts_cartcontext_cartcontextdata"
+    ],
+    "131": [
+      "src_contexts_cartcontext_cartprovider"
+    ],
+    "132": [
+      "src_contexts_cartcontext_usecart"
+    ],
+    "133": [
+      "src_contexts_favoritescontext_favoritesprovider"
+    ],
+    "134": [
+      "src_contexts_fintechcontext_fintechprovider"
+    ],
+    "135": [
+      "src_contexts_marketplacecontext_marketplaceprovider"
+    ],
+    "136": [
+      "src_contexts_notificationscontext_appnotification"
+    ],
+    "137": [
+      "src_contexts_notificationscontext_notificationsprovider"
+    ],
+    "138": [
+      "src_contexts_referralcontext_referralprovider"
+    ],
+    "139": [
+      "src_contexts_referralcontext_usereferral"
+    ],
+    "140": [
+      "src_contexts_socialcontext_instagrampost"
+    ],
+    "141": [
+      "src_contexts_socialcontext_post"
+    ],
+    "142": [
+      "src_contexts_socialcontext_socialprovider"
+    ],
+    "143": [
+      "src_contexts_themecontext_themeprovider"
+    ],
+    "144": [
+      "src_contexts_themecontext_usetheme"
+    ],
+    "145": [
+      "src_contexts_walletcontext_walletprovider"
+    ],
+    "146": [
+      "src_data_helparticles_helparticle"
+    ],
+    "147": [
+      "src_data_helparticles_helpcategory"
+    ],
+    "148": [
+      "src_data_helparticles_helpcategoryid"
+    ],
+    "149": [
+      "src_hooks_usecheckout_checkoutshippingdestination"
+    ],
+    "150": [
+      "src_hooks_usecheckout_checkoutshippingmethod"
+    ],
+    "151": [
+      "src_hooks_usecheckout_checkoutshippingquote"
+    ],
+    "152": [
+      "src_hooks_usefavorites_favoriteitem"
+    ],
+    "153": [
+      "src_hooks_usemarketplaceproducts_usemarketplaceproducts"
+    ],
+    "154": [
+      "src_hooks_useorderbyid_useorderbyid"
+    ],
+    "155": [
+      "src_hooks_useresponsive_useresponsive"
+    ],
+    "156": [
+      "src_hooks_usewishlist_wishlistitem"
+    ],
+    "157": [
+      "src_payments_hooks_usesavedcards_usesavedcards"
+    ],
+    "158": [
+      "src_payments_paymentprovider_paymentprovider"
+    ],
+    "159": [
+      "src_payments_paymentprovider_web_paymentprovider"
+    ],
+    "160": [
+      "src_screens_loginscreen_loginscreen"
+    ],
+    "161": [
+      "src_screens_mimascotascreen_mimascotascreen"
+    ],
+    "162": [
+      "src_screens_paymentmethodsscreen_paymentmethodsscreen"
+    ],
+    "163": [
+      "src_screens_paymentmethodsscreen_web_paymentmethodsscreen"
+    ],
+    "164": [
+      "src_services_fintech_paymentproviders_paymentgatewaychargerequest"
+    ],
+    "165": [
+      "src_services_fintech_paymentproviders_paymentgatewaychargeresult"
+    ],
+    "166": [
+      "src_services_fintech_paymentproviders_paymentproviderdefinition"
+    ],
+    "167": [
+      "src_services_fintech_paymentproviders_paymentproviderkey"
+    ],
+    "168": [
+      "src_services_fintech_paymentsplitter_applygatewayfee"
+    ],
+    "169": [
+      "src_services_fintech_paymentsplitter_calculatepaymentsplit"
+    ],
+    "170": [
+      "src_services_fintech_paymentsplitter_paymentsplit"
+    ],
+    "171": [
+      "src_services_fintech_paymentsplitter_paymentsplitinput"
+    ],
+    "172": [
+      "src_services_iap_iapservice_iappurchaseresult"
+    ],
+    "173": [
+      "src_services_iap_iapservice_iapsubscriptiontier"
+    ],
+    "174": [
+      "src_services_raffles_raffleservice_raffleservice"
+    ],
+    "175": [
+      "src_utils_commissionutils_commissionrule"
+    ],
+    "176": [
+      "src_utils_pushnotifications_registerforpushnotificationsasync"
+    ],
+    "177": [
+      "src_utils_support_supportticketpayload"
+    ],
+    "178": [
+      "src_utils_support_supportticketresult"
+    ],
+    "179": [
+      "src_utils_useactiongate_useactiongate"
+    ]
+  },
+  "cohesion": {
+    "0": 0.07207207207207207,
+    "1": 0.10158730158730159,
+    "2": 0.15151515151515152,
+    "3": 0.07258064516129033,
+    "4": 0.10837438423645321,
+    "5": 0.10666666666666667,
+    "6": 0.1038961038961039,
+    "7": 0.14619883040935672,
+    "8": 0.1111111111111111,
+    "9": 0.26900584795321636,
+    "10": 0.15441176470588236,
+    "11": 0.14285714285714285,
+    "12": 0.14285714285714285,
+    "13": 0.16666666666666666,
+    "14": 0.19696969696969696,
+    "15": 0.18181818181818182,
+    "16": 0.18181818181818182,
+    "17": 0.2727272727272727,
+    "18": 0.18181818181818182,
+    "19": 0.2222222222222222,
+    "20": 0.2222222222222222,
+    "21": 0.2857142857142857,
+    "22": 0.2857142857142857,
+    "23": 0.4,
+    "24": 0.4,
+    "25": 0.3333333333333333,
+    "26": 0.4,
+    "27": 0.8333333333333334,
+    "28": 0.5,
+    "29": 0.5,
+    "30": 0.5,
+    "31": 0.5,
+    "32": 0.5,
+    "33": 0.5,
+    "34": 0.6666666666666666,
+    "35": 1.0,
+    "36": 0.6666666666666666,
+    "37": 0.6666666666666666,
+    "38": 0.6666666666666666,
+    "39": 0.6666666666666666,
+    "40": 1.0,
+    "41": 1.0,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0,
+    "98": 1.0,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0,
+    "118": 1.0,
+    "119": 1.0,
+    "120": 1.0,
+    "121": 1.0,
+    "122": 1.0,
+    "123": 1.0,
+    "124": 1.0,
+    "125": 1.0,
+    "126": 1.0,
+    "127": 1.0,
+    "128": 1.0,
+    "129": 1.0,
+    "130": 1.0,
+    "131": 1.0,
+    "132": 1.0,
+    "133": 1.0,
+    "134": 1.0,
+    "135": 1.0,
+    "136": 1.0,
+    "137": 1.0,
+    "138": 1.0,
+    "139": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 1.0,
+    "145": 1.0,
+    "146": 1.0,
+    "147": 1.0,
+    "148": 1.0,
+    "149": 1.0,
+    "150": 1.0,
+    "151": 1.0,
+    "152": 1.0,
+    "153": 1.0,
+    "154": 1.0,
+    "155": 1.0,
+    "156": 1.0,
+    "157": 1.0,
+    "158": 1.0,
+    "159": 1.0,
+    "160": 1.0,
+    "161": 1.0,
+    "162": 1.0,
+    "163": 1.0,
+    "164": 1.0,
+    "165": 1.0,
+    "166": 1.0,
+    "167": 1.0,
+    "168": 1.0,
+    "169": 1.0,
+    "170": 1.0,
+    "171": 1.0,
+    "172": 1.0,
+    "173": 1.0,
+    "174": 1.0,
+    "175": 1.0,
+    "176": 1.0,
+    "177": 1.0,
+    "178": 1.0,
+    "179": 1.0
+  },
+  "gods": [
+    {
+      "id": "scripts_app_integral_audit_auditor",
+      "label": "Auditor",
+      "degree": 18
+    },
+    {
+      "id": "audit_codebase",
+      "label": "Codebase",
+      "degree": 11
+    },
+    {
+      "id": "agents_skills_convex_migration_helper_skill",
+      "label": "convex-migration-helper SKILL.md",
+      "degree": 11
+    },
+    {
+      "id": "scripts_dev_completeness_audit_main",
+      "label": "main()",
+      "degree": 10
+    },
+    {
+      "id": "agents_skills_convex_create_component_skill",
+      "label": "convex-create-component SKILL.md",
+      "degree": 10
+    },
+    {
+      "id": "agents_skills_convex_performance_audit_skill",
+      "label": "convex-performance-audit SKILL.md",
+      "degree": 10
+    },
+    {
+      "id": "agents_skills_convex_setup_auth_skill",
+      "label": "convex-setup-auth SKILL.md",
+      "degree": 10
+    },
+    {
+      "id": "audit_main",
+      "label": "main()",
+      "degree": 9
+    },
+    {
+      "id": "claude_skills_convex_setup_auth_skill_md",
+      "label": "Convex Authentication Setup (SKILL.md)",
+      "degree": 9
+    },
+    {
+      "id": "scripts_app_integral_audit_read_text",
+      "label": "read_text()",
+      "degree": 8
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Diagnostico Integral - ramgos-mobile v1.0.0",
+      "target": "ADSP-02: resolveDispute endpoint missing in convex/disputes.ts",
+      "source_files": [
+        "DIAGNOSTICO_APP_ESTADO_ACTUAL.md",
+        "A_Z_Test_Report.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "semantically_similar_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link; peripheral node `ADSP-02: resolveDispute endpoint missing in convex/disputes.ts` unexpectedly reaches hub `Diagnostico Integral - ramgos-mobile v1.0.0`"
+    },
+    {
+      "source": "convex/reconciliation.ts (reconciliation respaldo)",
+      "target": "Financial Operations Validation",
+      "source_files": [
+        "MÓDULO_PAGOS_RESPALDO.md",
+        "FINANCIAL_OPERATIONS_VALIDATION.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities; peripheral node `convex/reconciliation.ts (reconciliation respaldo)` unexpectedly reaches hub `Financial Operations Validation`"
+    },
+    {
+      "source": "convex/stripe.ts (respaldo)",
+      "target": "convex/stripe.ts (PaymentIntents + 12% commission)",
+      "source_files": [
+        "MÓDULO_PAGOS_RESPALDO.md",
+        "FIN_DE_TURNO_REPORTE.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "semantically_similar_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
+    },
+    {
+      "source": "audit_report.txt (Native Alert + Modal scan 119 files)",
+      "target": "audit_results.txt (duplicate of audit_report)",
+      "source_files": [
+        "audit_report.txt",
+        "audit_results.txt"
+      ],
+      "confidence": "INFERRED",
+      "relation": "semantically_similar_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
+    },
+    {
+      "source": "audit_report_utf8.txt (Toast/Modal/Alert scan 180 files)",
+      "target": "audit_report.txt (Native Alert + Modal scan 119 files)",
+      "source_files": [
+        "audit_report_utf8.txt",
+        "audit_report.txt"
+      ],
+      "confidence": "INFERRED",
+      "relation": "semantically_similar_to",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `Reporte de Cierre - Turno 02/06/2026` connect `Reporte de Cierre - Turno 02/06/2026` to `Escrow released state (delivered->completed)`, `Plan de Lanzamiento a Produccion (GTM)`?",
+      "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `convex-migration-helper SKILL.md` connect `convex-migration-helper SKILL.md` to `convex-create-component SKILL.md`?",
+      "why": "High betweenness centrality (0.003) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 2 inferred relationships involving `convex-migration-helper SKILL.md` (e.g. with `convex-migration-helper openai.yaml` and `docs.convex.dev`) actually correct?",
+      "why": "`convex-migration-helper SKILL.md` has 2 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `ponytail-statusline.sh script`, `Colors`, `Precarga todos los archivos de texto relevantes en memoria para escaneos O(1).` to the rest of the system?",
+      "why": "338 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `App.tsx` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.07207207207207207 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `dev_completeness_audit.py` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.10158730158730159 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `convex-create-component SKILL.md` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.07258064516129033 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

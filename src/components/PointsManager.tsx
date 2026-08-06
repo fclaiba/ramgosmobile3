@@ -44,7 +44,7 @@ export function PointsManager() {
         getArcadeStatus,
     } = useRewards();
     const referralCode = "RAMGOS-2025";
-    const referralLink = "https://ramgos.com/inv/RAMGOS-2025";
+    const referralLink = "https://ramgos.app/inv/RAMGOS-2025";
     const referralSummary = { registrations: 0 };
 
     const { colorScheme } = useTheme();

@@ -2,6 +2,57 @@ import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { assertBonoEconomics } from "./bonoEconomics";
+
+/** Influencer may create a bono only for a business with active campaign or whitelist. */
+async function assertInfluencerCanIssueBonoForBusiness(
+    ctx: any,
+    influencerId: string,
+    businessId: string,
+) {
+    const whitelist = await ctx.db
+        .query("influencerWhitelists")
+        .withIndex("by_business_and_influencer", (q: any) =>
+            q.eq("businessId", businessId).eq("influencerId", influencerId),
+        )
+        .first();
+    if (whitelist && whitelist.status === "active") return;
+
+    const campaigns = await ctx.db
+        .query("influencerCampaigns")
+        .withIndex("by_influencer_business", (q: any) =>
+            q.eq("influencerId", influencerId).eq("businessId", businessId),
+        )
+        .collect();
+    if (campaigns.some((c: any) => c.status === "active")) return;
+
+    throw new Error(
+        "No tenés una campaña o whitelist activa con ese negocio. Pedile que te invite o te autorice antes de crear el bono.",
+    );
+}
+
+async function assertInfluencerKycForBono(ctx: any, influencer: any) {
+    const requireKyc = await ctx.db
+        .query("global_settings")
+        .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
+        .first();
+    const isKycEnabled = requireKyc?.value === true;
+    const effectiveKycStatus = influencer.kycStatus
+        ? influencer.kycStatus
+        : isKycEnabled
+          ? "pending"
+          : "approved";
+
+    if (
+        effectiveKycStatus !== "completed" &&
+        effectiveKycStatus !== "skipped" &&
+        effectiveKycStatus !== "approved"
+    ) {
+        throw new Error(
+            "Debes completar la verificación KYC para crear bonos como influencer.",
+        );
+    }
+}
 
 // --- QUERIES ---
 
@@ -92,20 +143,62 @@ export const getMyListings = query({
         sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         sellerId: v.optional(v.string()),
+        type: v.optional(
+            v.union(
+                v.literal("product"),
+                v.literal("service"),
+                v.literal("event"),
+                v.literal("bono"),
+                v.literal("rental"),
+            ),
+        ),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
+
+        // Influencer: listings they published for a business (createdByInfluencerId).
+        if (
+            actor.role === "influencer" &&
+            (!args.sellerId || args.sellerId === actor.idString)
+        ) {
+            const created = await ctx.db
+                .query("listings")
+                .withIndex("by_created_by_influencer", (q) =>
+                    q.eq("createdByInfluencerId", actor.idString),
+                )
+                .collect();
+            const owned = await ctx.db
+                .query("listings")
+                .withIndex("by_seller", (q) => q.eq("sellerId", actor.idString))
+                .collect();
+            const byId = new Map<string, any>();
+            for (const l of [...created, ...owned]) {
+                byId.set(String(l._id), l);
+            }
+            let rows = Array.from(byId.values());
+            if (args.type) {
+                rows = rows.filter((l) => l.type === args.type);
+            }
+            rows.sort((a, b) =>
+                String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+            );
+            return await Promise.all(rows.map((l) => resolveListingUrls(ctx, l)));
+        }
+
         const targetSellerId = args.sellerId ?? actor.idString;
         if (targetSellerId !== actor.idString) {
             assertAdminOrDeveloper(actor);
         }
-        const listings = await ctx.db
+        let listings = await ctx.db
             .query("listings")
             .withIndex("by_seller", (q) => q.eq("sellerId", targetSellerId))
             .order("desc")
             .collect();
-        return await Promise.all(listings.map(l => resolveListingUrls(ctx, l)));
-    }
+        if (args.type) {
+            listings = listings.filter((l) => l.type === args.type);
+        }
+        return await Promise.all(listings.map((l) => resolveListingUrls(ctx, l)));
+    },
 });
 
 // --- MUTATIONS ---
@@ -165,8 +258,68 @@ export const createListing = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        const sellerId = args.sellerId ?? actor.idString;
-        assertSelfOrAdmin(actor, sellerId);
+        const type = args.type;
+
+        let sellerId = args.sellerId ?? actor.idString;
+        let createdByInfluencerId: string | undefined;
+
+        if (type === "bono") {
+            assertBonoEconomics({
+                price: args.price,
+                discountValue: args.discountValue,
+                discountPercent: args.discountPercent,
+            });
+
+            if (actor.role === "influencer") {
+                if (!args.sellerId || args.sellerId === actor.idString) {
+                    throw new Error(
+                        "Para crear un bono debés indicar el negocio emisor (sellerId del negocio).",
+                    );
+                }
+                sellerId = args.sellerId;
+                const businessNorm = ctx.db.normalizeId("users", sellerId);
+                if (!businessNorm) throw new Error("Negocio emisor inválido.");
+                const business = await ctx.db.get(businessNorm);
+                if (!business) throw new Error("Negocio emisor no encontrado.");
+                if (business.role !== "business" && business.role !== "admin") {
+                    throw new Error("El emisor del bono debe ser un negocio.");
+                }
+
+                const influencer = await ctx.db.get(actor.id);
+                if (!influencer) throw new Error("Usuario no encontrado.");
+                await assertInfluencerKycForBono(ctx, influencer);
+                await assertInfluencerCanIssueBonoForBusiness(
+                    ctx,
+                    actor.idString,
+                    sellerId,
+                );
+                createdByInfluencerId = actor.idString;
+            } else if (
+                actor.role === "business" ||
+                actor.role === "admin" ||
+                actor.role === "developer"
+            ) {
+                assertSelfOrAdmin(actor, sellerId);
+                const normalizedSellerId = ctx.db.normalizeId("users", sellerId);
+                if (!normalizedSellerId) throw new Error("No autorizado.");
+                const seller = await ctx.db.get(normalizedSellerId);
+                if (!seller) throw new Error("Usuario no encontrado.");
+                if (
+                    actor.role === "business" &&
+                    seller.role !== "business" &&
+                    seller.role !== "admin"
+                ) {
+                    throw new Error("El emisor del bono debe ser un negocio.");
+                }
+            } else {
+                throw new Error(
+                    `Los usuarios de tipo ${actor.role} no pueden crear bonos.`,
+                );
+            }
+        } else {
+            assertSelfOrAdmin(actor, sellerId);
+        }
+
         // Validation: Verify Seller Role
         const normalizedSellerId = ctx.db.normalizeId("users", sellerId);
         if (!normalizedSellerId) {
@@ -176,66 +329,51 @@ export const createListing = mutation({
         if (!seller) {
             throw new Error("Usuario no encontrado.");
         }
-        // Allow all roles to create listings (consumer can sell used items, etc.)
-        // Restriction for Events and Bonos:
         const role = seller.role;
-        const type = args.type;
 
-        if (type === 'event') {
-            if (role !== 'business' && role !== 'admin') {
-                throw new Error(`Los usuarios de tipo ${role} no pueden crear eventos. Exclusivo para Negocios.`);
-            }
-        }
-        if (type === 'bono') {
-            if (role !== 'business' && role !== 'admin' && role !== 'influencer') {
-                throw new Error(`Los usuarios de tipo ${role} no pueden crear bonos.`);
-            }
-            if (role === 'influencer') {
-                const requireKyc = await ctx.db
-                    .query("global_settings")
-                    .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
-                    .first();
-                const isKycEnabled = requireKyc?.value === true;
-                const effectiveKycStatus = seller.kycStatus 
-                    ? seller.kycStatus 
-                    : (isKycEnabled ? "pending" : "approved");
-                
-                if (effectiveKycStatus !== 'completed' && effectiveKycStatus !== 'skipped' && effectiveKycStatus !== 'approved') {
-                    throw new Error('Debes completar la verificación KYC para crear bonos como influencer.');
-                }
+        if (type === "event") {
+            if (role !== "business" && role !== "admin") {
+                throw new Error(
+                    `Los usuarios de tipo ${role} no pueden crear eventos. Exclusivo para Negocios.`,
+                );
             }
         }
 
         if (args.openPromotion) {
             const rate = args.openCommissionRate ?? 0;
             if (rate <= 0 || rate > 0.5) {
-                throw new Error('La comisión de promoción abierta debe estar entre 1% y 50%.');
+                throw new Error(
+                    "La comisión de promoción abierta debe estar entre 1% y 50%.",
+                );
             }
         }
 
         // Generate slug from title
-        const slug = args.title
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/(^-|-$)/g, '') + '-' + Math.random().toString(36).slice(2, 7);
+        const slug =
+            args.title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/(^-|-$)/g, "") +
+            "-" +
+            Math.random().toString(36).slice(2, 7);
 
         // ponytail: drop partial dimensionsCm so validator never rejects create
         const rawShip = args.shippingProfile;
         const dims = rawShip?.dimensionsCm;
         const shippingProfile = rawShip
             ? {
-                weightKg: rawShip.weightKg,
-                allowPickup: rawShip.allowPickup,
-                shipsFromCity: rawShip.shipsFromCity,
-                handlingTimeHours: rawShip.handlingTimeHours,
-                shipsFrom: rawShip.shipsFrom,
-                ...(dims &&
-                typeof dims.length === 'number' &&
-                typeof dims.width === 'number' &&
-                typeof dims.height === 'number'
-                    ? { dimensionsCm: dims }
-                    : {}),
-            }
+                  weightKg: rawShip.weightKg,
+                  allowPickup: rawShip.allowPickup,
+                  shipsFromCity: rawShip.shipsFromCity,
+                  handlingTimeHours: rawShip.handlingTimeHours,
+                  shipsFrom: rawShip.shipsFrom,
+                  ...(dims &&
+                  typeof dims.length === "number" &&
+                  typeof dims.width === "number" &&
+                  typeof dims.height === "number"
+                      ? { dimensionsCm: dims }
+                      : {}),
+              }
             : undefined;
 
         const listingId = await ctx.db.insert("listings", {
@@ -261,7 +399,7 @@ export const createListing = mutation({
                               Math.floor(
                                   Number(args.validityDays) > 0
                                       ? Number(args.validityDays)
-                                      : 7,
+                                      : 4,
                               ),
                               1,
                           ),
@@ -269,12 +407,18 @@ export const createListing = mutation({
                       )
                     : args.validityDays,
             discountValue: args.discountValue,
-            discountType: args.discountType,
-            discountPercent: args.discountPercent,
+            discountType:
+                args.type === "bono" ? "fixed" : args.discountType,
+            // Never persist % for prepaid-credit bonos.
+            discountPercent:
+                args.type === "bono" ? undefined : args.discountPercent,
             condition: args.condition,
             openPromotion: args.openPromotion,
             openCommissionRate: args.openCommissionRate,
             sellerId,
+            ...(createdByInfluencerId
+                ? { createdByInfluencerId }
+                : {}),
             slug,
             currency: "USD",
             status: "active",
@@ -394,15 +538,22 @@ export const updateListing = mutation({
             throw new Error("Producto no encontrado");
         }
         const isOwner = listing.sellerId === actor.idString;
+        const isCreator =
+            (listing as any).createdByInfluencerId === actor.idString;
         const isAdmin = actor.role === "admin" || actor.role === "developer";
-        if (!isOwner && !isAdmin) {
+        if (!isOwner && !isAdmin && !isCreator) {
             throw new Error("No autorizado.");
         }
 
         if (args.updates.openPromotion === true) {
-            const rate = args.updates.openCommissionRate ?? listing.openCommissionRate ?? 0;
+            const rate =
+                args.updates.openCommissionRate ??
+                listing.openCommissionRate ??
+                0;
             if (rate <= 0 || rate > 0.5) {
-                throw new Error('La comisión de promoción abierta debe estar entre 1% y 50%.');
+                throw new Error(
+                    "La comisión de promoción abierta debe estar entre 1% y 50%.",
+                );
             }
         }
 
@@ -415,9 +566,29 @@ export const updateListing = mutation({
             patch.validityDays = Math.min(days, 365);
         }
 
+        if ((listing as any).type === "bono") {
+            const nextPrice =
+                patch.price !== undefined
+                    ? Number(patch.price)
+                    : Number(listing.price);
+            const nextCredit =
+                patch.discountValue !== undefined
+                    ? Number(patch.discountValue)
+                    : Number((listing as any).discountValue);
+            assertBonoEconomics({
+                price: nextPrice,
+                discountValue: nextCredit,
+                discountPercent: null,
+            });
+            patch.discountType = "fixed";
+            // Strip any attempt to set percent via loose patch keys
+            delete (patch as any).discountPercent;
+        }
+
+        patch.updatedAt = new Date().toISOString();
         await ctx.db.patch(args.id, patch);
         return { success: true };
-    }
+    },
 });
 
 // ---------------------------------------------------------------------------

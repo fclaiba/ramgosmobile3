@@ -37,7 +37,7 @@ export default function BannedUserScreen() {
                     <Text style={styles.contactBtnText}>Contactar Soporte</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.termsLink} onPress={() => Linking.openURL('https://ramgos.com/terms')}>
+                <TouchableOpacity style={styles.termsLink} onPress={() => Linking.openURL('https://ramgos.app/terms')}>
                     <Text style={styles.termsText}>Leer Términos y Condiciones</Text>
                     <ExternalLink size={14} color="#2196F3" />
                 </TouchableOpacity>

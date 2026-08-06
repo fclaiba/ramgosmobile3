@@ -1,0 +1,46 @@
+{
+  "title": "Settings",
+  "subtitle": "Customize your experience",
+  "sections": {
+    "account": "Account",
+    "payments": "Payments",
+    "appearance": "Appearance",
+    "securityPrivacy": "Security and privacy",
+    "notifications": "Notifications",
+    "legal": "Legal"
+  },
+  "rows": {
+    "editProfile": "Edit profile",
+    "paymentMethods": "Payment methods",
+    "language": "Language",
+    "paymentMode": "Payment mode",
+    "testMode": "TEST (simulated)",
+    "liveMode": "LIVE (real)",
+    "paymentModeInfo": "LIVE payments disabled until launch (TEST mode only)",
+    "testBanner": "TEST MODE: Stripe test cards are used. Orders, escrow and disputes are simulated. No real money moves.",
+    "darkMode": "Dark mode",
+    "privacySecurity": "Privacy and security",
+    "changePassword": "Change password",
+    "notificationInbox": "Notification inbox",
+    "pushNotifications": "Push notifications",
+    "emails": "Emails",
+    "promotions": "Promotions",
+    "termsOfService": "Terms of service",
+    "privacyPolicy": "Privacy policy"
+  },
+  "actions": {
+    "logout": "Sign out",
+    "deleteAccount": "Delete my account and data",
+    "confirmLogoutTitle": "Sign out",
+    "confirmLogoutBody": "Are you sure you want to sign out on this device?",
+    "confirmDeleteTitle": "Delete account",
+    "confirmDeleteBody": "This action permanently deletes your data, points and progress. It cannot be undone.",
+    "deleteNow": "Yes, delete"
+  },
+  "messages": {
+    "saved": "Preference saved",
+    "saveFailed": "Could not save preference",
+    "accountDeleted": "Account deleted successfully",
+    "deleteFailed": "Could not delete account"
+  }
+}

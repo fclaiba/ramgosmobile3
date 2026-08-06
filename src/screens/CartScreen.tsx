@@ -14,6 +14,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 
 function CartScreen({ navigation }: any) {
@@ -22,6 +23,7 @@ function CartScreen({ navigation }: any) {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { t } = useTranslation();
     const { gateCheckout } = useActionGate();
 
     // Obtener descuentos disponibles
@@ -74,7 +76,7 @@ function CartScreen({ navigation }: any) {
         if (!gateCheckout()) return;
 
         if (items.length === 0) {
-            show('El carrito está vacío', 'error');
+            show(t('cart.emptyError', { defaultValue: 'El carrito está vacío' }), 'error');
             return;
         }
 
@@ -103,8 +105,8 @@ function CartScreen({ navigation }: any) {
     return (
         <View style={styles.container}>
             <MobileHeader
-                title="Carrito de Compras"
-                subtitle={`${totalItems} artículos`}
+                title={t('cart.title', { defaultValue: 'Carrito de compras' })}
+                subtitle={t('cart.items', { count: totalItems, defaultValue: `${totalItems} artículos` })}
                 backButton={true}
                 onBack={() => navigation.goBack()}
                 actions={
@@ -124,16 +126,16 @@ function CartScreen({ navigation }: any) {
                         <View style={styles.emptyIcon}>
                             <CartIcon size={40} color={isDark ? '#C4B5FD' : '#2196F3'} />
                         </View>
-                        <Text style={styles.emptyText}>Tu carrito está vacío</Text>
+                    <Text style={styles.emptyText}>{t('cart.emptyTitle', { defaultValue: 'Tu carrito está vacío' })}</Text>
                         <Text style={styles.emptySubText}>
-                            Explora el marketplace y agrega productos, bonos o eventos para continuar.
+                            {t('cart.emptySubtitle', { defaultValue: 'Explora el marketplace y agrega productos, bonos o eventos para continuar.' })}
                         </Text>
                         <View style={styles.emptyTips}>
-                            <Text style={styles.emptyTip}>• Usa el mapa para ofertas cercanas</Text>
-                            <Text style={styles.emptyTip}>• Guarda favoritos para comprar luego</Text>
+                            <Text style={styles.emptyTip}>• {t('cart.tipMap', { defaultValue: 'Usa el mapa para ofertas cercanas' })}</Text>
+                            <Text style={styles.emptyTip}>• {t('cart.tipFav', { defaultValue: 'Guarda favoritos para comprar después' })}</Text>
                         </View>
                         <Button onPress={() => navigation.navigate('Marketplace')} style={styles.emptyCta}>
-                            <Text style={{ color: '#fff', fontWeight: '700' }}>Explorar Tienda</Text>
+                            <Text style={{ color: '#fff', fontWeight: '700' }}>{t('cart.explore', { defaultValue: 'Explorar tienda' })}</Text>
                         </Button>
                     </View>
                 </View>

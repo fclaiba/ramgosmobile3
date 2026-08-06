@@ -23,7 +23,14 @@ export default defineSchema({
         // PHASE 1 ADDITIONS - User Profile Enhancement
         username: v.optional(v.string()),
         usernameLastChangedAt: v.optional(v.number()),
+        /** Legacy invite/attribution code — prefer username + referralAlias for invites. */
         referralCode: v.optional(v.string()),
+        /** Optional vanity invite code (distinct from username). */
+        referralAlias: v.optional(v.string()),
+        referralAliasChangedAt: v.optional(v.number()),
+        /** Canonical referrer link (stable Id). Prefer over referredBy string. */
+        referredByUserId: v.optional(v.id("users")),
+        /** Legacy referrer username/code string — migrated to referredByUserId. */
         referredBy: v.optional(v.string()),
         bio: v.optional(v.string()),
         businessCategory: v.optional(v.string()),
@@ -40,6 +47,8 @@ export default defineSchema({
 
         // Fase 3 - Stripe Payments
         stripeCustomerId: v.optional(v.string()),
+        stripeCustomerIdTest: v.optional(v.string()),
+        stripeCustomerIdLive: v.optional(v.string()),
         stripeConnectAccountId: v.optional(v.string()),
         stripeConnectStatus: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("rejected"))),
 
@@ -76,6 +85,15 @@ export default defineSchema({
         instagramUrl: v.optional(v.string()),
         tiktokUrl: v.optional(v.string()),
 
+        // Store / shop physical location (businesses)
+        storeLocation: v.optional(v.object({
+            lat: v.number(),
+            lng: v.number(),
+            name: v.string(),
+            address: v.optional(v.string()),
+            city: v.optional(v.string()),
+        })),
+
         // PHASE 5: Business Calendar & Appointments
         businessAvailability: v.optional(v.object({
             days: v.array(v.number()), // 0=Sunday, 1=Monday...
@@ -89,7 +107,9 @@ export default defineSchema({
         .index("by_uid", ["uid"])
         .index("by_tokenIdentifier", ["tokenIdentifier"])
         .index("by_username", ["username"])
-        .index("by_referral_code", ["referralCode"]),
+        .index("by_referral_code", ["referralCode"])
+        .index("by_referral_alias", ["referralAlias"])
+        .index("by_referred_by_user", ["referredByUserId"]),
 
     // FASE 1 — Auth server-side estricto.
     // Sesiones emitidas por el servidor en login/register. requireActor solo
@@ -132,8 +152,8 @@ export default defineSchema({
         // Status
         status: v.union(v.literal('active'), v.literal('paused'), v.literal('closed')),
 
-        // Influencer Bono Discount
-        discountPercent: v.optional(v.number()), // For 'bono' type: 40, 50, 60
+        // Influencer Bono Discount — DEPRECATED for type=bono (prepaid credit uses price + discountValue).
+        discountPercent: v.optional(v.number()),
 
         // PHASE 2 ADDITIONS
         slug: v.string(), // URL-friendly identifier
@@ -215,6 +235,9 @@ export default defineSchema({
         openPromotion: v.optional(v.boolean()),
         openCommissionRate: v.optional(v.number()),
 
+        /** Influencer who published this bono listing (sellerId remains the business). */
+        createdByInfluencerId: v.optional(v.string()),
+
         createdAt: v.string(),
         updatedAt: v.optional(v.string()), // PHASE 2
     })
@@ -223,7 +246,8 @@ export default defineSchema({
         .index("by_seller", ["sellerId"])
         .index("by_slug", ["slug"]) // PHASE 2
         .index("by_category", ["category"]) // PHASE 2
-        .index("by_created", ["createdAt"]), // PHASE 2
+        .index("by_created", ["createdAt"]) // PHASE 2
+        .index("by_created_by_influencer", ["createdByInfluencerId"]),
 
     orders: defineTable({
         userId: v.string(), // Buyer

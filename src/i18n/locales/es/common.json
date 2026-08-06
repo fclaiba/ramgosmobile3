@@ -1,0 +1,17 @@
+{
+  "buttons": {
+    "back": "Volver",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "continue": "Continuar",
+    "acceptAndContinue": "Aceptar y continuar",
+    "save": "Guardar"
+  },
+  "security": {
+    "secureConnection": "Conexión segura y cifrada"
+  },
+  "language": {
+    "es": "Español",
+    "en": "Inglés"
+  }
+}

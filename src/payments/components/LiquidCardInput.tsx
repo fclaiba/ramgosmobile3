@@ -80,7 +80,7 @@ export function LiquidCardInput({
                     <View style={[styles.bottomLine, { backgroundColor: borderColor }]} />
                 </View>
                 <Text style={[styles.hint, { color: mutedColor }]}>
-                    Visa, Mastercard o Amex. (Modo de prueba activo)
+                    Visa, Mastercard o Amex · pago seguro dentro de Ramgos
                 </Text>
             </GlassContainer>
         </View>

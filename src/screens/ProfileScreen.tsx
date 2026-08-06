@@ -20,6 +20,8 @@ import { useNotifications } from '../contexts/NotificationsContext';
 import { useSavedPaymentMethods } from '../payments/hooks/useSavedPaymentMethods';
 import { MobileNav } from '../components/MobileNav';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
+import { formatReferralAlias, LIMITS } from '../utils/inputLimits';
 
 
 interface UserProfile {
@@ -31,7 +33,8 @@ interface UserProfile {
     joinDate: string;
     avatarUrl: string;
     username: string;
-    referralCode: string;
+    /** Optional vanity invite alias (distinct from @username). */
+    referralAlias: string;
 }
 
 interface UserStats {
@@ -46,10 +49,11 @@ function ProfileScreen({ navigation }: any) {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { t } = useTranslation();
 
     const { user, logout, sessionToken, refreshActiveSession } = useAuth();
     const { points, currentTier, nextTier, lifetimePoints, transactions } = usePoints();
-    const { referralSummary, referralCode } = useReferral() as any;
+    const { referralSummary, referralCode, username: referralUsername, referralAlias } = useReferral();
     const { unreadCount } = useNotifications();
     const { count: paymentMethodsCount } = useSavedPaymentMethods();
     const [isEditing, setIsEditing] = useState(false);
@@ -64,7 +68,7 @@ function ProfileScreen({ navigation }: any) {
         joinDate: (user as any)?.joinedAt ? new Date((user as any).joinedAt).toLocaleDateString() : '',
         avatarUrl: (user as any)?.avatarUrl || (user as any)?.avatar || '',
         username: (user as any)?.username || '',
-        referralCode: (user as any)?.referralCode || '',
+        referralAlias: (user as any)?.referralAlias || '',
     });
 
     React.useEffect(() => {
@@ -77,11 +81,11 @@ function ProfileScreen({ navigation }: any) {
                 bio: (user as any).bio || '',
                 joinDate: (user as any).joinedAt ? new Date((user as any).joinedAt).toLocaleDateString() : '',
                 avatarUrl: (user as any).avatarUrl || (user as any).avatar || '',
-                username: (user as any).username || '',
-                referralCode: (user as any).referralCode || (user as any).username || '',
+                username: (user as any).username || referralUsername || '',
+                referralAlias: (user as any).referralAlias || referralAlias || '',
             });
         }
-    }, [user]);
+    }, [user, referralUsername, referralAlias]);
 
     const updateProfileMutation = useMutation(api.users.updateProfile);
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -98,7 +102,7 @@ function ProfileScreen({ navigation }: any) {
 
     const handleSave = async () => {
         if (!editedProfile.name.trim()) {
-            show('El nombre es obligatorio', 'error');
+            show(t('profile.nameRequired', { defaultValue: 'El nombre es obligatorio' }), 'error');
             return;
         }
         
@@ -128,7 +132,7 @@ function ProfileScreen({ navigation }: any) {
                 const { storageId } = await response.json();
                 finalAvatarUrl = `convex-storage:${storageId}`;
             } catch (error) {
-                show('Error al subir la imagen', 'error');
+                show(t('profile.imageUploadError', { defaultValue: 'Error al subir la imagen' }), 'error');
                 return;
             }
         }
@@ -140,16 +144,16 @@ function ProfileScreen({ navigation }: any) {
                 updates: {
                     name: editedProfile.name,
                     username: editedProfile.username,
-                    referralCode: editedProfile.referralCode,
+                    referralAlias: editedProfile.referralAlias,
                     avatar: finalAvatarUrl,
                 }
             });
             await refreshActiveSession();
             setProfile({ ...editedProfile, avatarUrl: finalAvatarUrl });
             setIsEditing(false);
-            show('Perfil actualizado exitosamente', 'success');
+            show(t('profile.updated', { defaultValue: 'Perfil actualizado correctamente' }), 'success');
         } catch (error: any) {
-            show(error.message || 'Error al actualizar', 'error');
+            show(error.message || t('profile.updateError', { defaultValue: 'Error al actualizar' }), 'error');
         }
     };
 
@@ -166,7 +170,7 @@ function ProfileScreen({ navigation }: any) {
                 setEditedProfile(prev => ({ ...prev, avatarUrl: result.assets[0].uri }));
             }
         } catch (error) {
-            show('Error al seleccionar imagen', 'error');
+            show(t('profile.pickImageError', { defaultValue: 'Error al seleccionar imagen' }), 'error');
         }
     };
 
@@ -321,19 +325,18 @@ function ProfileScreen({ navigation }: any) {
                                 </BlurView>
                                 <BlurView intensity={20} tint="light" style={[styles.glassInputWrapper, { borderRadius: 20, maxWidth: 200, paddingVertical: 4 }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500', marginRight: 4 }}>Ref:</Text>
+                                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500', marginRight: 4 }}>Alias:</Text>
                                         <TextInput
                                             style={[styles.editInputGlass, { fontSize: 13, fontWeight: '500', minWidth: 80 }]}
-                                            value={editedProfile.referralCode}
+                                            value={editedProfile.referralAlias}
                                             onChangeText={(text) => {
-                                                const alphanumeric = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                                                setEditedProfile({ ...editedProfile, referralCode: alphanumeric.slice(0, 15) });
+                                                setEditedProfile({ ...editedProfile, referralAlias: formatReferralAlias(text) });
                                             }}
-                                            placeholder="REFERIDO"
+                                            placeholder="OPCIONAL"
                                             placeholderTextColor="rgba(255,255,255,0.5)"
                                             autoCapitalize="characters"
                                             selectionColor="rgba(255,255,255,0.8)"
-                                            maxLength={15}
+                                            maxLength={LIMITS.referralAlias}
                                         />
                                     </View>
                                 </BlurView>
@@ -343,7 +346,9 @@ function ProfileScreen({ navigation }: any) {
                                 <Text style={styles.name}>{profile.name}</Text>
                                 <Text style={[styles.email, { opacity: 0.9, marginBottom: 4 }]}>@{profile.username || 'usuario'}</Text>
                                 <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500' }}>
-                                    Cód. Referido: <Text style={{ color: '#fff', fontWeight: 'bold' }}>{profile.referralCode || profile.username || 'N/A'}</Text>
+                                    {profile.referralAlias
+                                        ? `Alias: ${profile.referralAlias} · @ también sirve`
+                                        : 'Código de referido: tu @'}
                                 </Text>
                             </View>
                         )}
@@ -512,17 +517,22 @@ function ProfileScreen({ navigation }: any) {
                                 <Hash size={18} color="#6B7280" />
                             </View>
                             <View style={styles.formContent}>
-                                <Text style={styles.formLabel}>Código de Referido Propio</Text>
+                                <Text style={styles.formLabel}>Alias de referido (opcional)</Text>
                                 {isEditing ?
                                     <TextInput
-                                        value={editedProfile.referralCode}
-                                        onChangeText={t => setEditedProfile({ ...editedProfile, referralCode: t.toUpperCase() })}
+                                        value={editedProfile.referralAlias}
+                                        onChangeText={t => setEditedProfile({ ...editedProfile, referralAlias: formatReferralAlias(t) })}
                                         style={styles.inputObj}
                                         placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                                         placeholder="Ej: MI-CODIGO"
                                         autoCapitalize="characters"
+                                        maxLength={LIMITS.referralAlias}
                                     /> :
-                                    <Text style={styles.formValue}>{profile.referralCode || 'No definido'}</Text>
+                                    <Text style={styles.formValue}>
+                                        {profile.referralAlias
+                                            ? profile.referralAlias
+                                            : `Sin alias — usá @${profile.username || 'usuario'}`}
+                                    </Text>
                                 }
                             </View>
                         </View>
@@ -648,7 +658,9 @@ function ProfileScreen({ navigation }: any) {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.pointsTitle}>Referidos</Text>
                                 <Text style={styles.pointsSubtitle}>
-                                    Código: <Text style={{ fontWeight: '700' }}>{referralCode}</Text>
+                                    @{referralUsername || profile.username || 'usuario'}
+                                    {referralAlias ? ` · alias ${referralAlias}` : ''}
+                                    {referralCode ? ` · share ${referralCode}` : ''}
                                 </Text>
                                 <Text style={styles.pointsSubtitle}>
                                     Registros: {referralSummary.registrations} · Compras: {referralSummary.purchases} · Puntos: {referralSummary.totalPoints}
@@ -695,12 +707,15 @@ function ProfileScreen({ navigation }: any) {
                                     </TouchableOpacity>
                                 )}
                                 {user?.role === 'influencer' && (user as any)?.influencerStatus === 'approved' && (
-                                    <TouchableOpacity style={styles.settingsItem} onPress={() => navigation.navigate('InfluencerBonuses')}>
+                                    <TouchableOpacity
+                                        style={styles.settingsItem}
+                                        onPress={() => navigation.navigate('InfluencerDashboard')}
+                                    >
                                         <View style={styles.settingsLeft}>
                                             <View style={[styles.settingsIcon, { backgroundColor: isDark ? '#064e3b' : '#d1fae5' }]}>
                                                 <Ticket size={18} color={isDark ? '#34d399' : '#059669'} />
                                             </View>
-                                            <Text style={styles.settingsLabel}>Mis Bonos de Descuento</Text>
+                                            <Text style={styles.settingsLabel}>Dashboard Influencer · Bonos</Text>
                                         </View>
                                         <ChevronRight size={18} color="#9CA3AF" />
                                     </TouchableOpacity>

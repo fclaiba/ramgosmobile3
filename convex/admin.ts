@@ -40,7 +40,7 @@ export const wipeAndSeedBonos = mutation({
                 price: 50,
                 discountValue: 100,
                 discountType: "fixed",
-                validityDays: 7,
+                validityDays: 4,
                 currency: "USD",
                 type: "bono",
                 category: "Gastronomía",

@@ -43,8 +43,8 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
     }, []);
 
     const toggle = useCallback(() => {
-        setMode(prev => prev === 'test' ? 'live' : 'test');
-    }, [setMode]);
+        setMode(mode === 'test' ? 'live' : 'test');
+    }, [mode, setMode]);
 
     const stripePublishableKey = mode === 'test'
         ? (process.env.EXPO_PUBLIC_STRIPE_KEY_TEST || process.env.EXPO_PUBLIC_STRIPE_KEY)

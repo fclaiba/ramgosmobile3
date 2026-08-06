@@ -1,28 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { UserPlus, LogIn, UserCircle, Sparkles } from 'lucide-react-native';
-import Svg, { Path } from 'react-native-svg';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { useAuth, getAuthDestination } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useToast } from '../contexts/ToastContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
-
-
-// Social Icons Components
-import { GoogleIcon, AppleIcon } from '../components/ui/SocialIcons';
+import { useTranslation } from 'react-i18next';
 
 export default function WelcomeScreen({ navigation }: any) {
-    const { loginWithSocial, isProcessing, status, user } = useAuth();
+    const { status, user } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
-    const { show } = useToast();
-
-    const [isLoading, setIsLoading] = useState(false);
-    const busy = isProcessing || isLoading;
+    const { t } = useTranslation(['auth', 'common']);
 
     useEffect(() => {
         if (status === 'authenticated' && user) {
@@ -85,22 +77,6 @@ export default function WelcomeScreen({ navigation }: any) {
         ]).start();
     }, []);
 
-    const handleSocialLogin = async (provider: Parameters<typeof loginWithSocial>[0]) => {
-        if (busy) return;
-        setIsLoading(true);
-        try {
-            const decision = await loginWithSocial(provider);
-            const destination = decision.nextRoute ?? { screen: 'Home' as const };
-            navigation.reset({ index: 0, routes: [{ name: destination.screen, params: destination.params }] });
-        } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'No pudimos iniciar sesión con esa cuenta.';
-            show(message, 'error');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     return (
         <AuthBackground>
             <SafeAreaView style={styles.container}>
@@ -121,7 +97,7 @@ export default function WelcomeScreen({ navigation }: any) {
                             {/* Title & Subtitle */}
                             <Animated.View style={{ opacity: titleOpacity, width: '100%', alignItems: 'center', marginBottom: 32 }}>
                                 <Text style={styles.subtitle}>
-                                    Social commerce para descubrir tu ciudad
+                                    {t('auth:welcome.subtitle')}
                                 </Text>
                             </Animated.View>
 
@@ -139,7 +115,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                             style={styles.gradientBtn}
                                         >
                                             <UserPlus size={20} color="#fff" style={{ marginRight: 12 }} />
-                                            <Text style={styles.primaryBtnText}>Crear cuenta</Text>
+                                            <Text style={styles.primaryBtnText}>{t('auth:welcome.createAccount')}</Text>
                                         </LinearGradient>
                                     </TouchableOpacity>
                                 </Animated.View>
@@ -151,7 +127,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                         activeOpacity={0.8}
                                     >
                                         <LogIn size={20} color="#111827" style={{ marginRight: 12 }} />
-                                        <Text style={styles.secondaryBtnText}>Iniciar sesión</Text>
+                                        <Text style={styles.secondaryBtnText}>{t('auth:welcome.signIn')}</Text>
                                     </TouchableOpacity>
                                 </Animated.View>
 
@@ -161,33 +137,18 @@ export default function WelcomeScreen({ navigation }: any) {
                                         onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
                                     >
                                         <UserCircle size={20} color="#6B7280" style={{ marginRight: 12 }} />
-                                        <Text style={styles.ghostBtnText}>Continuar como invitado</Text>
+                                        <Text style={styles.ghostBtnText}>{t('auth:welcome.continueGuest')}</Text>
                                     </TouchableOpacity>
                                 </Animated.View>
                             </View>
 
-                            {/* Footer & Socials */}
+                            {/* Footer */}
                             <Animated.View style={{ opacity: footerOpacity, width: '100%', alignItems: 'center' }}>
-                                <View style={styles.divider}>
-                                    <View style={styles.line} />
-                                    <Text style={styles.orText}>o continuar con</Text>
-                                    <View style={styles.line} />
-                                </View>
-
-                                <View style={[styles.socialRow, { display: 'none' }]}>
-                                    <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('google')} disabled={busy}>
-                                        <GoogleIcon />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.socialBtn} onPress={() => handleSocialLogin('apple')} disabled={busy}>
-                                        <AppleIcon isDark={isDark} />
-                                    </TouchableOpacity>
-                                </View>
-
                                 <Text style={styles.footerText}>
-                                    Al continuar, aceptas nuestros{' '}
-                                    <Text style={styles.link} onPress={() => navigation.navigate('Terms')}>Términos</Text>{' '}
+                                    {t('auth:welcome.termsPrefix')}{' '}
+                                    <Text style={styles.link} onPress={() => navigation.navigate('Terms')}>{t('auth:welcome.terms')}</Text>{' '}
                                     y{' '}
-                                    <Text style={styles.link} onPress={() => navigation.navigate('Privacy')}>Privacidad</Text>
+                                    <Text style={styles.link} onPress={() => navigation.navigate('Privacy')}>{t('auth:welcome.privacy')}</Text>
                                 </Text>
                             </Animated.View>
                         </View>
@@ -195,7 +156,7 @@ export default function WelcomeScreen({ navigation }: any) {
                         {/* Bottom Decoration */}
                         <Animated.View style={[styles.bottomDeco, { opacity: bottomDecoOpacity }]}>
                             <Sparkles size={16} color="#4FC3F7" style={{ marginRight: 8 }} />
-                            <Text style={styles.bottomDecoText}>Una experiencia única te espera</Text>
+                            <Text style={styles.bottomDecoText}>{t('auth:welcome.bottomDeco')}</Text>
                             <Sparkles size={16} color="#4FC3F7" style={{ marginLeft: 8 }} />
                         </Animated.View>
 
@@ -258,14 +219,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
 
     ghostBtn: { flexDirection: 'row', height: 56, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
     ghostBtnText: { color: colors(isDark).textMuted, fontSize: 16, fontWeight: '500' },
-
-    // Footer
-    divider: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 24 },
-    line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
-    orText: { marginHorizontal: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 12 },
-
-    socialRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
-    socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },
 
     footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', textAlign: 'center' },
     link: { color: '#2196F3', fontWeight: '500' },

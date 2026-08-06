@@ -31,6 +31,7 @@ const RADIUS_OPTIONS = [
     { label: '10km', value: 10 },
     { label: '25km', value: 25 },
     { label: '50km', value: 50 },
+    { label: 'Global', value: 20000 },
 ];
 
 const INITIAL_REGION = {
@@ -88,23 +89,32 @@ function MapExplorerScreen() {
     const userLat = location?.coords.latitude ?? INITIAL_REGION.latitude;
     const userLng = location?.coords.longitude ?? INITIAL_REGION.longitude;
 
+    const locatedProducts = useMemo(() => {
+        return products
+            .filter((p) => {
+                if (!p.location?.lat || !p.location?.lng) return false;
+                const type = p.listingType || p.type;
+                if (activeFilter !== 'all' && type !== activeFilter) return false;
+                if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                return true;
+            })
+            .map((p) => {
+                const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
+                return { ...p, listingType: p.listingType || p.type, calculatedDistance: dist };
+            })
+            .sort((a, b) => a.calculatedDistance - b.calculatedDistance);
+    }, [products, activeFilter, searchQuery, userLat, userLng]);
+
+    /** List / "near me": respect radius. Map markers: all geo listings so NY/Caracas appear when you pan. */
     const filteredProducts = useMemo(() => {
-        return products.filter(p => {
-            if (!p.location?.lat || !p.location?.lng) return false;
-            const type = p.listingType || p.type;
-            if (activeFilter !== 'all' && type !== activeFilter) return false;
-            if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            return true;
-        }).map(p => {
-            const dist = getDistance(userLat, userLng, p.location.lat, p.location.lng);
-            return { ...p, listingType: p.listingType || p.type, calculatedDistance: dist };
-        }).filter(p => p.calculatedDistance <= radius)
-          .sort((a, b) => a.calculatedDistance - b.calculatedDistance);
-    }, [products, activeFilter, searchQuery, userLat, userLng, radius]);
+        return locatedProducts.filter((p) => p.calculatedDistance <= radius);
+    }, [locatedProducts, radius]);
+
+    const mapMarkers = locatedProducts;
 
     const selectedMarker = useMemo(() => {
-        return filteredProducts.find(p => p.id === selectedMarkerId) || null;
-    }, [filteredProducts, selectedMarkerId]);
+        return locatedProducts.find(p => p.id === selectedMarkerId) || null;
+    }, [locatedProducts, selectedMarkerId]);
 
     useEffect(() => {
         if (selectedMarker && viewMode === 'map') {
@@ -256,7 +266,7 @@ function MapExplorerScreen() {
                             />
                         )}
 
-                        {filteredProducts.map((product) => (
+                        {mapMarkers.map((product) => (
                             <Marker
                                 key={product.id}
                                 coordinate={{ latitude: product.location.lat, longitude: product.location.lng }}
@@ -359,7 +369,7 @@ function MapExplorerScreen() {
                     {viewMode === 'map' ? (
                         <>
                             <List size={20} color={isDark ? '#fff' : '#111827'} />
-                            <Text style={[styles.viewToggleText, isDark && { color: '#fff' }]}>Ver {filteredProducts.length} resultados</Text>
+                            <Text style={[styles.viewToggleText, isDark && { color: '#fff' }]}>Ver {mapMarkers.length} en mapa</Text>
                         </>
                     ) : (
                         <>

@@ -171,7 +171,9 @@ const formatNumber = (n?: number) => {
 
 export default function ItemDetailScreen({ route, navigation }: any) {
     const slug = route.params?.slug;
-    const itemId = route.params?.itemId;
+    const itemId = route.params?.itemId ?? route.params?.id;
+    const referralCodeFromRoute =
+        typeof route.params?.referralCode === 'string' ? route.params.referralCode.trim() : '';
     const listingFromSlug = useQuery(api.listings.getListingBySlug, slug ? { slug } : "skip");
     const listingById = useQuery(
         api.listings.getListing,
@@ -254,9 +256,10 @@ export default function ItemDetailScreen({ route, navigation }: any) {
             shippingDimensionsCm: item.shippingProfile?.dimensionsCm,
             distanceKm: item.locationDistance,
             quantity,
+            ...(referralCodeFromRoute ? { referralCode: referralCodeFromRoute } : {}),
         });
         openCart();
-    }, [item, quantity, addItem, openCart]);
+    }, [item, quantity, addItem, openCart, referralCodeFromRoute]);
 
     const handleBuyNow = useCallback(() => {
         if (!item) return;

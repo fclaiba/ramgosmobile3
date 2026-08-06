@@ -4,6 +4,7 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 import { useToast } from './ToastContext';
@@ -14,6 +15,45 @@ import { storage } from '../services/auth/storageAdapter';
 import { sessionTokenStore } from '../services/auth/sessionTokenStore';
 
 export const CURRENT_SESSION_KEY = '@ramgos/auth/current-session';
+/** Guarda email + preferencia "Recordarme" (nunca la contraseña). */
+export const REMEMBERED_LOGIN_KEY = '@ramgos/auth/remembered-login';
+
+type RememberedLogin = {
+    email: string;
+    rememberMe: boolean;
+};
+
+async function saveRememberedLogin(email: string): Promise<void> {
+    const payload: RememberedLogin = {
+        email: email.trim(),
+        rememberMe: true,
+    };
+    await storage.setItem(REMEMBERED_LOGIN_KEY, JSON.stringify(payload));
+}
+
+async function clearRememberedLogin(): Promise<void> {
+    await storage.removeItem(REMEMBERED_LOGIN_KEY);
+}
+
+/** Persiste o no la sesión según "Recordarme". */
+async function writeSessionForRememberMe(
+    sessionPayload: string,
+    rememberMe: boolean,
+): Promise<void> {
+    if (rememberMe) {
+        await storage.setItem(CURRENT_SESSION_KEY, sessionPayload);
+    } else {
+        await storage.removeItem(CURRENT_SESSION_KEY);
+    }
+}
+
+async function maybePersistSession(
+    sessionPayload: string,
+    persist: boolean,
+): Promise<void> {
+    if (!persist) return;
+    await storage.setItem(CURRENT_SESSION_KEY, sessionPayload);
+}
 
 const extractErrorMessage = (error: any, fallback: string) => {
     if (!error) return fallback;
@@ -58,6 +98,7 @@ export interface PublicUser {
     kycMetadata?: Record<string, unknown>;
     nickname?: string;
     username?: string;
+    referralAlias?: string;
     tier: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
     termsAcceptedVersion: number;
     subscriptionStatus: SubscriptionStatus;
@@ -93,6 +134,7 @@ export interface SignUpInput {
     businessAddress?: string;
     phone?: string;
     referralCode?: string;
+    referredBy?: string;
     instagramUrl?: string;
     tiktokUrl?: string;
     username?: string;
@@ -145,13 +187,50 @@ interface AuthContextType {
     deviceId?: string;
     pendingVerification?: PendingVerificationState;
     signUpWithEmail: (payload: SignUpInput) => Promise<SignUpResult>;
-    verifyEmailCode: (code: string) => Promise<AuthFlowDecision>;
+    verifyEmailCode: (code: string, rememberMe?: boolean) => Promise<AuthFlowDecision>;
     resendVerificationCode: () => Promise<PendingVerificationState>;
-    loginWithEmail: (email: string, password: string, roleOverride?: UserRole) => Promise<AuthFlowDecision>;
+    loginWithEmail: (
+        email: string,
+        password: string,
+        roleOverride?: UserRole,
+        rememberMe?: boolean,
+    ) => Promise<AuthFlowDecision>;
     loginWithSocial: (
         provider: SocialProvider,
         profile?: SocialProfile,
         roleOverride?: UserRole,
+    ) => Promise<AuthFlowDecision>;
+    loginWithGoogleIdToken: (
+        idToken: string,
+        options?: {
+            mode?: 'login' | 'register';
+            role?: UserRole;
+            username?: string;
+            referredBy?: string;
+            businessCategory?: string;
+            businessName?: string;
+            businessAddress?: string;
+            phone?: string;
+            instagramUrl?: string;
+            tiktokUrl?: string;
+        },
+    ) => Promise<AuthFlowDecision>;
+    loginWithAppleIdToken: (
+        identityToken: string,
+        options?: {
+            mode?: 'login' | 'register';
+            role?: UserRole;
+            email?: string;
+            name?: string;
+            username?: string;
+            referredBy?: string;
+            businessCategory?: string;
+            businessName?: string;
+            businessAddress?: string;
+            phone?: string;
+            instagramUrl?: string;
+            tiktokUrl?: string;
+        },
     ) => Promise<AuthFlowDecision>;
     logout: (force?: boolean) => Promise<void>;
     updateRole: (role: UserRole) => Promise<void>;
@@ -212,10 +291,14 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { show } = useToast();
     const [isProcessing, setIsProcessing] = useState(false);
+    /** Si false, la sesión vive solo en memoria (Recordarme desmarcado). */
+    const persistSessionRef = useRef(true);
     // Note: useAction is proper for actions, let's just use it directly:
     const sendOtpActionCall = useAction(api.auth.sendVerificationEmail);
     const verifyEmailCodeMutation = useMutation(api.auth.verifyEmailCode);
     const removePushTokenMutation = useMutation(api.notifications.removePushToken);
+    const loginWithGoogleAction = useAction(api.oauthGoogle.loginWithGoogle);
+    const loginWithAppleAction = useAction(api.oauthApple.loginWithApple);
 
     // Helper to satisfy strict SessionRecord type
     const createSessionMock = (userId: string, sessionToken?: string): SessionRecord => ({
@@ -288,6 +371,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
 
                     if (storedSession && storedSession.userId) {
+                        persistSessionRef.current = true;
                         setState(prev => ({
                             ...prev,
                             session: storedSession,
@@ -331,6 +415,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 name: userData.name,
                 nickname: userData.nickname,
                 username: userData.username,
+                referralAlias: userData.referralAlias,
                 role: userData.role as UserRole,
                 isTest: userData.isTest,
                 avatar: userData.avatar,
@@ -387,6 +472,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 bio: payload.businessAddress?.trim() || undefined,
                 businessCategory: payload.businessCategory?.trim() || undefined,
                 username: payload.username?.trim() || undefined,
+                referredBy: payload.referredBy?.trim() || payload.referralCode?.trim() || undefined,
                 instagramUrl: payload.instagramUrl?.trim() || undefined,
                 tiktokUrl: payload.tiktokUrl?.trim() || undefined,
             });
@@ -402,6 +488,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 email,
                 name: payload.name.trim(),
                 nickname: payload.businessName?.trim(),
+                username: payload.username?.trim(),
                 role: role,
                 isTest: email.endsWith('@ramgos.com'),
                 avatar: payload.avatar,
@@ -418,6 +505,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
 
             const session = createSessionMock(userId, registerSessionToken);
+            persistSessionRef.current = true;
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
 
             const requiresOtp = registerResult?.requiresOtp !== false && !email.endsWith('@ramgos.com');
@@ -466,7 +554,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const loginWithEmail = async (email: string, password: string, roleOverride?: UserRole): Promise<AuthFlowDecision> => {
+    const loginWithEmail = async (
+        email: string,
+        password: string,
+        roleOverride?: UserRole,
+        rememberMe = true,
+    ): Promise<AuthFlowDecision> => {
         setIsProcessing(true);
         try {
             const result = await loginMutation({ emailOrUsername: email, password });
@@ -485,7 +578,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }));
                 return {
                     user: { id: pendingUserId, email } as PublicUser,
-                    nextRoute: { screen: 'Verification', params: { email, isSignup: false } },
+                    nextRoute: { screen: 'Verification', params: { email, isSignup: false, rememberMe } },
                     requiresKyc: false,
                     kycStatus: 'pending'
                 };
@@ -513,6 +606,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 name: fullResult.name,
                 nickname: fullResult.nickname,
                 username: fullResult.username,
+                referralAlias: fullResult.referralAlias,
                 role: finalRole,
                 isTest: fullResult.isTest,
                 avatar: fullResult.avatar,
@@ -529,7 +623,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
 
             const session = createSessionMock(user.id, (result as any).sessionToken);
-            await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, _mockUser: user }));
+            const sessionPayload = JSON.stringify({ ...session, _mockUser: user });
+            persistSessionRef.current = rememberMe;
+            await writeSessionForRememberMe(sessionPayload, rememberMe);
+            if (rememberMe) {
+                await saveRememberedLogin(email);
+            } else {
+                await clearRememberedLogin();
+            }
 
             setState(prev => ({
                 ...prev,
@@ -554,6 +655,196 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const loginWithGoogleIdToken = async (
+        idToken: string,
+        options?: {
+            mode?: 'login' | 'register';
+            role?: UserRole;
+            username?: string;
+            referredBy?: string;
+            businessCategory?: string;
+            businessName?: string;
+            businessAddress?: string;
+            phone?: string;
+            instagramUrl?: string;
+            tiktokUrl?: string;
+        },
+    ): Promise<AuthFlowDecision> => {
+        setIsProcessing(true);
+        try {
+            const mode = options?.mode ?? 'login';
+            const result = await loginWithGoogleAction({
+                idToken,
+                mode,
+                role: options?.role,
+                username: options?.username,
+                referredBy: options?.referredBy,
+                businessCategory: options?.businessCategory,
+                nickname: options?.businessName,
+                phoneNumber: options?.phone,
+                bio: options?.businessAddress,
+                instagramUrl: options?.instagramUrl,
+                tiktokUrl: options?.tiktokUrl,
+                termsVersion: mode === 'register' ? CURRENT_TERMS_VERSION : undefined,
+            });
+            const fullResult = result as any;
+
+            if (!fullResult?.sessionToken?.startsWith('ses_')) {
+                throw new Error('El servidor no confirmó la sesión con Google.');
+            }
+
+            const user: PublicUser = {
+                id: fullResult._id,
+                email: fullResult.email,
+                name: fullResult.name,
+                nickname: fullResult.nickname,
+                username: fullResult.username,
+                referralAlias: fullResult.referralAlias,
+                role: fullResult.role as UserRole,
+                isTest: fullResult.isTest,
+                avatar: fullResult.avatar,
+                status: 'active',
+                emailVerified: true,
+                requiresKyc: true,
+                termsAcceptedVersion: fullResult.termsAcceptedVersion || 1,
+                createdAt: fullResult.joinedAt || new Date().toISOString(),
+                providers: ['google'],
+                kycStatus: fullResult.kycStatus || 'pending',
+                tier: fullResult.tier || 'Bronze',
+                subscriptionStatus: fullResult.subscriptionStatus || 'inactive',
+                subscriptionTier: fullResult.subscriptionTier || 'free',
+            };
+
+            const session = createSessionMock(user.id, fullResult.sessionToken);
+            persistSessionRef.current = true;
+            await storage.setItem(
+                CURRENT_SESSION_KEY,
+                JSON.stringify({ ...session, _mockUser: user }),
+            );
+
+            setState(prev => ({
+                ...prev,
+                status: 'authenticated',
+                user,
+                session,
+                originalUser: null,
+            }));
+
+            return {
+                user,
+                nextRoute: resolveNextRoute(user),
+                requiresKyc: true,
+                kycStatus: user.kycStatus,
+            };
+        } catch (error: any) {
+            const cleanMsg = extractErrorMessage(
+                error,
+                'Error de inicio de sesión con Google',
+            );
+            setState(prev => ({ ...prev, lastError: cleanMsg }));
+            throw error;
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const loginWithAppleIdToken = async (
+        identityToken: string,
+        options?: {
+            mode?: 'login' | 'register';
+            role?: UserRole;
+            email?: string;
+            name?: string;
+            username?: string;
+            referredBy?: string;
+            businessCategory?: string;
+            businessName?: string;
+            businessAddress?: string;
+            phone?: string;
+            instagramUrl?: string;
+            tiktokUrl?: string;
+        },
+    ): Promise<AuthFlowDecision> => {
+        setIsProcessing(true);
+        try {
+            const mode = options?.mode ?? 'login';
+            const result = await loginWithAppleAction({
+                identityToken,
+                mode,
+                email: options?.email,
+                name: options?.name,
+                role: options?.role,
+                username: options?.username,
+                referredBy: options?.referredBy,
+                businessCategory: options?.businessCategory,
+                nickname: options?.businessName,
+                phoneNumber: options?.phone,
+                bio: options?.businessAddress,
+                instagramUrl: options?.instagramUrl,
+                tiktokUrl: options?.tiktokUrl,
+                termsVersion: mode === 'register' ? CURRENT_TERMS_VERSION : undefined,
+            });
+            const fullResult = result as any;
+
+            if (!fullResult?.sessionToken?.startsWith('ses_')) {
+                throw new Error('El servidor no confirmó la sesión con Apple.');
+            }
+
+            const user: PublicUser = {
+                id: fullResult._id,
+                email: fullResult.email,
+                name: fullResult.name,
+                nickname: fullResult.nickname,
+                username: fullResult.username,
+                referralAlias: fullResult.referralAlias,
+                role: fullResult.role as UserRole,
+                isTest: fullResult.isTest,
+                avatar: fullResult.avatar,
+                status: 'active',
+                emailVerified: true,
+                requiresKyc: true,
+                termsAcceptedVersion: fullResult.termsAcceptedVersion || 1,
+                createdAt: fullResult.joinedAt || new Date().toISOString(),
+                providers: ['apple'],
+                kycStatus: fullResult.kycStatus || 'pending',
+                tier: fullResult.tier || 'Bronze',
+                subscriptionStatus: fullResult.subscriptionStatus || 'inactive',
+                subscriptionTier: fullResult.subscriptionTier || 'free',
+            };
+
+            const session = createSessionMock(user.id, fullResult.sessionToken);
+            persistSessionRef.current = true;
+            await storage.setItem(
+                CURRENT_SESSION_KEY,
+                JSON.stringify({ ...session, _mockUser: user }),
+            );
+
+            setState(prev => ({
+                ...prev,
+                status: 'authenticated',
+                user,
+                session,
+                originalUser: null,
+            }));
+
+            return {
+                user,
+                nextRoute: resolveNextRoute(user),
+                requiresKyc: true,
+                kycStatus: user.kycStatus,
+            };
+        } catch (error: any) {
+            const cleanMsg = extractErrorMessage(
+                error,
+                'Error de inicio de sesión con Apple',
+            );
+            setState(prev => ({ ...prev, lastError: cleanMsg }));
+            throw error;
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const enterImpersonation = async (targetUserId: string) => {
         if (!state.user) throw new Error("Must be logged in to impersonate");
 
@@ -567,6 +858,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 id: targetUser._id,
                 email: targetUser.email,
                 name: targetUser.name,
+                username: (targetUser as any).username,
+                referralAlias: (targetUser as any).referralAlias,
                 role: targetUser.role as UserRole,
                 isTest: targetUser.isTest,
                 avatar: targetUser.avatar,
@@ -676,13 +969,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 nickname: updates.nickname || prev.user.nickname,
             };
             if (prev.session) {
-                storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...prev.session, _mockUser: updatedUser })).catch(console.error);
+                maybePersistSession(
+                    JSON.stringify({ ...prev.session, _mockUser: updatedUser }),
+                    persistSessionRef.current,
+                ).catch(console.error);
             }
             return { ...prev, user: updatedUser };
         });
     };
 
-    const verifyEmailCode = async (code: string): Promise<AuthFlowDecision> => {
+    const verifyEmailCode = async (
+        code: string,
+        rememberMe = true,
+    ): Promise<AuthFlowDecision> => {
         setIsProcessing(true);
         try {
             if (!state.user && !state.pendingVerification?.userId) {
@@ -702,7 +1001,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             if (sessionToken && emailToVerify) {
                 newSession = createSessionMock(state.pendingVerification!.userId, sessionToken);
-                await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...newSession, userId: state.pendingVerification!.userId }));
+                const sessionPayload = JSON.stringify({
+                    ...newSession,
+                    userId: state.pendingVerification!.userId,
+                });
+                persistSessionRef.current = rememberMe;
+                await writeSessionForRememberMe(sessionPayload, rememberMe);
+                if (rememberMe) {
+                    await saveRememberedLogin(emailToVerify);
+                } else {
+                    await clearRememberedLogin();
+                }
             }
 
             // Move from pending_verification to authenticated
@@ -792,6 +1101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             const session = createSessionMock(userId, sessionToken);
+            persistSessionRef.current = true;
             await storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...session, userId }));
 
             const user: PublicUser = {
@@ -844,7 +1154,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (!prev.user) return prev;
                 const updatedUser = { ...prev.user, role };
                 if (prev.session) {
-                    storage.setItem(CURRENT_SESSION_KEY, JSON.stringify({ ...prev.session, _mockUser: updatedUser })).catch(console.error);
+                    maybePersistSession(
+                        JSON.stringify({ ...prev.session, _mockUser: updatedUser }),
+                        persistSessionRef.current,
+                    ).catch(console.error);
                 }
                 return { ...prev, user: updatedUser };
             });
@@ -930,6 +1243,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             resendVerificationCode,
             loginWithEmail,
             loginWithSocial,
+            loginWithGoogleIdToken,
+            loginWithAppleIdToken,
             logout,
             updateRole,
             requireAuth,

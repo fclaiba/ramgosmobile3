@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, ScrollView, Alert, Platform, KeyboardAvoidingView, useWindowDimensions, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
-import { Lock, Eye, EyeOff, Tag, CheckCircle2, Store, MapPin, Award, User, Mail, Sparkles, ArrowLeft, Users, ChevronDown, X, AtSign, Hash } from 'lucide-react-native';
+import { Lock, Eye, EyeOff, Tag, CheckCircle2, Store, MapPin, Award, User, Mail, Sparkles, ArrowLeft, Users, ChevronDown, X, AtSign, Hash, Phone } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthBackground } from '../components/AuthBackground';
 import { Badge } from '../components/ui/badge';
@@ -10,13 +10,23 @@ import { useAuth } from '../contexts/AuthContext';
 import { useReferral } from '../contexts/ReferralContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import {
+    GoogleSignInCancelledError,
+    signInWithGoogle,
+} from '../services/auth/googleSignIn';
+import {
+    AppleSignInCancelledError,
+    signInWithApple,
+} from '../services/auth/appleSignIn';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
-import { GoogleIcon, AppleIcon } from '../components/ui/SocialIcons';
+import { GoogleAuthButton } from '../components/ui/GoogleAuthButton';
+import { AppleAuthButton } from '../components/ui/AppleAuthButton';
 import {
-    LIMITS, MIN, clamp, formatReferralCode, formatSocialHandle,
+    LIMITS, MIN, clamp, formatReferralCode, formatSocialHandle, formatPhone,
 } from '../utils/inputLimits';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 const BUSINESS_CATEGORIES = [
     'Restaurante / Gastronomía',
@@ -63,7 +73,19 @@ export default function RegisterScreen({ navigation, route }: any) {
     const styles = useMemo(() => getStyles(isDark, windowWidth, windowHeight), [isDark, windowHeight, windowWidth]);
 
     const [step, setStep] = useState<'type' | 'form'>('type');
-    const [accountType, setAccountType] = useState<'consumer' | 'business' | 'influencer'>('consumer');
+    const [accountType, setAccountType] = useState<'consumer' | 'business' | 'influencer' | null>(null);
+    const [signupMethod, setSignupMethod] = useState<'google' | 'apple' | 'email'>('email');
+
+    const accountTypeLabel =
+        accountType === 'consumer' ? 'Consumidor'
+        : accountType === 'business' ? 'Negocio'
+        : accountType === 'influencer' ? 'Influencer'
+        : null;
+    const accountTypeColor =
+        accountType === 'consumer' ? '#2563EB'
+        : accountType === 'business' ? '#059669'
+        : accountType === 'influencer' ? '#2196F3'
+        : '#9CA3AF';
 
     // Form Data
     const [formData, setFormData] = useState({
@@ -77,11 +99,14 @@ export default function RegisterScreen({ navigation, route }: any) {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [appleLoading, setAppleLoading] = useState(false);
     const [legalViews, setLegalViews] = useState({ terms: false, privacy: false });
     const [showCategoryModal, setShowCategoryModal] = useState(false);
-    const { signUpWithEmail, loginWithSocial, isProcessing } = useAuth();
+    const { signUpWithEmail, loginWithGoogleIdToken, loginWithAppleIdToken, isProcessing } = useAuth();
     useReferral();
     const { show } = useToast();
+    const { t } = useTranslation('auth');
 
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -126,7 +151,7 @@ export default function RegisterScreen({ navigation, route }: any) {
 
     const handleOpenTerms = () => {
         setLegalViews(prev => ({ ...prev, terms: true }));
-        navigation.navigate('Terms', { origin: 'signup', returnKey: route?.key, accountType });
+        navigation.navigate('Terms', { origin: 'signup', returnKey: route?.key, accountType: accountType ?? 'consumer' });
     };
 
     const handleOpenPrivacy = () => {
@@ -136,8 +161,12 @@ export default function RegisterScreen({ navigation, route }: any) {
 
     const strength = getPasswordStrength(formData.password);
 
-    const handleContinue = () => {
-        // Fade out slightly before switching
+    const handleContinue = (method: 'google' | 'apple' | 'email') => {
+        if (!accountType) {
+            show('Elegí el tipo de cuenta para continuar', 'error');
+            return;
+        }
+        setSignupMethod(method);
         setStep('form');
         Animated.sequence([
             Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
@@ -145,15 +174,166 @@ export default function RegisterScreen({ navigation, route }: any) {
         ]).start();
     };
 
-    const busy = isLoading || isProcessing;
+    const busy = isLoading || isProcessing || googleLoading || appleLoading;
+    const canProceed = !!accountType && !busy;
 
-    const handleSocialLogin = (provider: 'google' | 'apple') => {
-        show(`Iniciando sesión con ${provider} (Próximamente)`, 'info');
+    const normalizeUsername = (raw: string) =>
+        raw.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24);
+
+    /** Shared profile rules for email + Google + Apple signup. */
+    const validateProfileFields = (): string | null => {
+        if (!accountType) return 'Elige el tipo de cuenta para continuar';
+
+        const username = normalizeUsername(formData.username);
+        if (!username) return 'Elegí tu @ de usuario';
+        if (username.length < 3) return 'El usuario debe tener al menos 3 caracteres';
+        if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+            return 'El usuario solo puede tener letras, números o _';
+        }
+
+        if (accountType === 'business') {
+            if (!formData.businessName.trim()) return 'Ingresá el nombre del negocio';
+            if (!formData.businessCategory.trim()) return 'Seleccioná la categoría del negocio';
+        }
+
+        if (accountType === 'influencer') {
+            if (!formData.businessCategory.trim()) return 'Seleccioná tu categoría de influencer';
+            if (!formData.instagramUrl.trim() && !formData.tiktokUrl.trim()) {
+                return 'Debés proporcionar al menos Instagram o TikTok';
+            }
+            if (formData.instagramUrl && !formData.instagramUrl.startsWith('https://')) {
+                return 'El enlace de Instagram debe comenzar con https://';
+            }
+            if (formData.tiktokUrl && !formData.tiktokUrl.startsWith('https://')) {
+                return 'El enlace de TikTok debe comenzar con https://';
+            }
+        }
+
+        if (!formData.acceptTerms || !formData.acceptPrivacy) {
+            return 'Debés aceptar los Términos y Privacidad';
+        }
+
+        return null;
+    };
+
+    const profilePayload = () => ({
+        username: normalizeUsername(formData.username),
+        referredBy: formData.referredBy.trim() || undefined,
+        businessName: accountType === 'business' ? formData.businessName.trim() : undefined,
+        businessCategory:
+            accountType === 'business' || accountType === 'influencer'
+                ? formData.businessCategory.trim()
+                : undefined,
+        businessAddress: accountType === 'business' ? formData.businessAddress.trim() || undefined : undefined,
+        phone: accountType === 'business' ? formData.businessPhone.trim() || undefined : undefined,
+        instagramUrl: accountType === 'influencer' ? formData.instagramUrl.trim() || undefined : undefined,
+        tiktokUrl: accountType === 'influencer' ? formData.tiktokUrl.trim() || undefined : undefined,
+    });
+
+    const handleGoogleSignup = async () => {
+        if (busy) return;
+        const profileError = validateProfileFields();
+        if (profileError) {
+            show(profileError, 'error');
+            return;
+        }
+        if (!accountType) return;
+
+        setGoogleLoading(true);
+        try {
+            const { idToken } = await signInWithGoogle();
+            const profile = profilePayload();
+            const decision = await loginWithGoogleIdToken(idToken, {
+                mode: 'register',
+                role: accountType,
+                ...profile,
+            });
+
+            if (profile.referredBy && decision.user?.id) {
+                await AsyncStorage.setItem(
+                    `@ramgos/referrals/pending/${decision.user.id}`,
+                    profile.referredBy.trim().toUpperCase(),
+                );
+            }
+
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'KYC', params: { accountType } }],
+            });
+        } catch (error) {
+            if (error instanceof GoogleSignInCancelledError) return;
+            let message =
+                error instanceof Error ? error.message : 'No pudimos continuar con Google.';
+            while (message.includes('Uncaught Error:')) {
+                message = message.split('Uncaught Error:').pop()!.split('\n')[0].trim();
+            }
+            message = message
+                .replace(/^ACCOUNT_EXISTS:\s*/, '')
+                .replace(/^NO_ACCOUNT:\s*/, '');
+            show(message, 'error');
+            if (message.toLowerCase().includes('iniciar sesión') || message.includes('ACCOUNT_EXISTS')) {
+                setTimeout(() => navigation.navigate('Login'), 600);
+            }
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
+    const handleAppleSignup = async () => {
+        if (busy) return;
+        const profileError = validateProfileFields();
+        if (profileError) {
+            show(profileError, 'error');
+            return;
+        }
+        if (!accountType) return;
+
+        setAppleLoading(true);
+        try {
+            const { identityToken, email: appleEmail, fullName } = await signInWithApple();
+            const profile = profilePayload();
+            const decision = await loginWithAppleIdToken(identityToken, {
+                mode: 'register',
+                role: accountType,
+                email: appleEmail,
+                name: fullName,
+                ...profile,
+            });
+
+            if (profile.referredBy && decision.user?.id) {
+                await AsyncStorage.setItem(
+                    `@ramgos/referrals/pending/${decision.user.id}`,
+                    profile.referredBy.trim().toUpperCase(),
+                );
+            }
+
+            navigation.reset({
+                index: 0,
+                routes: [{ name: 'KYC', params: { accountType } }],
+            });
+        } catch (error) {
+            if (error instanceof AppleSignInCancelledError) return;
+            let message =
+                error instanceof Error ? error.message : 'No pudimos continuar con Apple.';
+            while (message.includes('Uncaught Error:')) {
+                message = message.split('Uncaught Error:').pop()!.split('\n')[0].trim();
+            }
+            message = message
+                .replace(/^ACCOUNT_EXISTS:\s*/, '')
+                .replace(/^NO_ACCOUNT:\s*/, '');
+            show(message, 'error');
+            if (message.toLowerCase().includes('iniciar sesión') || message.includes('ACCOUNT_EXISTS')) {
+                setTimeout(() => navigation.navigate('Login'), 600);
+            }
+        } finally {
+            setAppleLoading(false);
+        }
     };
 
     const handleRegister = async () => {
-        if (!formData.acceptTerms || !formData.acceptPrivacy) {
-            show('Debes aceptar los Términos y Privacidad', 'error');
+        const profileError = validateProfileFields();
+        if (profileError) {
+            show(profileError, 'error');
             return;
         }
         if (!formData.name.trim() || formData.name.trim().length < MIN.name || !formData.email.trim() || !formData.password.trim()) {
@@ -179,46 +359,30 @@ export default function RegisterScreen({ navigation, route }: any) {
             return;
         }
 
-        if (accountType === 'influencer') {
-            if (!formData.instagramUrl.trim() && !formData.tiktokUrl.trim()) {
-                show('Debes proporcionar al menos el enlace de Instagram o TikTok', 'error');
-                return;
-            }
-            if (formData.instagramUrl && !formData.instagramUrl.startsWith('https://')) {
-                show('El enlace de Instagram debe comenzar con https://', 'error');
-                return;
-            }
-            if (formData.tiktokUrl && !formData.tiktokUrl.startsWith('https://')) {
-                show('El enlace de TikTok debe comenzar con https://', 'error');
-                return;
-            }
+        if (!accountType) {
+            show('Elegí el tipo de cuenta para continuar', 'error');
+            setStep('type');
+            return;
         }
 
         setIsLoading(true);
         try {
+            const profile = profilePayload();
             const signupInput = {
                 name: formData.name.trim(),
                 email: formData.email.trim(),
                 password: formData.password,
                 role: accountType,
-                businessName: accountType === 'business' ? formData.businessName : undefined,
-                businessCategory: accountType === 'business' ? formData.businessCategory : undefined,
-                businessAddress: accountType === 'business' ? formData.businessAddress : undefined,
-                phone: accountType === 'business' ? formData.businessPhone : undefined,
-                username: formData.username || undefined,
-                referralCode: formData.referralCode || undefined,
-                referredBy: formData.referredBy || undefined,
-                instagramUrl: accountType === 'influencer' ? formData.instagramUrl.trim() : undefined,
-                tiktokUrl: accountType === 'influencer' ? formData.tiktokUrl.trim() : undefined,
+                ...profile,
             };
 
             const result = await signUpWithEmail(signupInput);
 
             // Referral attribution: store pending code and redeem after auth is established.
-            if (formData.referredBy) {
+            if (profile.referredBy) {
                 await AsyncStorage.setItem(
                     `@ramgos/referrals/pending/${result.user.id}`,
-                    formData.referredBy.trim().toUpperCase()
+                    profile.referredBy.trim().toUpperCase()
                 );
             }
 
@@ -254,28 +418,6 @@ export default function RegisterScreen({ navigation, route }: any) {
             } else {
                 show(errorMessage || 'Error al registrarse', 'error');
             }
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleSocialSignup = async (provider: Parameters<typeof loginWithSocial>[0]) => {
-        if (busy) return;
-        setIsLoading(true);
-        try {
-            const decision = await loginWithSocial(provider, undefined, accountType);
-
-            // Profile setup is no longer required as a separate step
-
-            // Force KYC for ALL users during registration flow
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'KYC', params: { accountType } }]
-            });
-        } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'No pudimos continuar con tu cuenta social.';
-            show(message, 'error');
         } finally {
             setIsLoading(false);
         }
@@ -334,66 +476,110 @@ export default function RegisterScreen({ navigation, route }: any) {
                                 style={styles.backBtn}
                             >
                                 <ArrowLeft size={20} color={isDark ? "#D1D5DB" : "#4B5563"} />
-                                <Text style={styles.backText}>Volver</Text>
+                                <Text style={styles.backText}>{t('register.back', { defaultValue: 'Volver' })}</Text>
                             </TouchableOpacity>
 
-                            <Text style={styles.title}>Únete a Ramgos</Text>
+                            <Text style={styles.title}>{t('register.title')}</Text>
                             <Text style={styles.subtitle}>
-                                {step === 'type' ? 'Selecciona el tipo de cuenta' : 'Completa tu información'}
+                                {step === 'type'
+                                    ? t('register.subtitleType')
+                                    : signupMethod === 'google'
+                                        ? t('register.subtitleGoogle')
+                                        : signupMethod === 'apple'
+                                            ? t('register.subtitleApple')
+                                            : t('register.subtitleEmail')}
                             </Text>
 
                             {step === 'type' ? (
-                                // STEP 1: Account Type
                                 <View style={{ gap: 12 }}>
-                                    {renderAccountTypeButton('consumer', Users, 'Consumidor', 'Explora productos, bonos y eventos', '#2563EB')}
-                                    {renderAccountTypeButton('business', Store, 'Negocio', 'Vende productos y crea bonos', '#059669')}
-                                    {renderAccountTypeButton('influencer', Award, 'Influencer', 'Gana comisiones por referidos', '#2196F3')}
+                                    {renderAccountTypeButton('consumer', Users, t('register.consumer'), t('register.consumerDesc'), '#2563EB')}
+                                    {renderAccountTypeButton('business', Store, t('register.business'), t('register.businessDesc'), '#059669')}
+                                    {renderAccountTypeButton('influencer', Award, t('register.influencer'), t('register.influencerDesc'), '#2196F3')}
 
-                                    <TouchableOpacity onPress={handleContinue} activeOpacity={0.9} style={styles.submitBtnContainer}>
-                                        <LinearGradient
-                                            colors={['#2196F3', '#29B6F6']}
-                                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                            style={styles.gradientBtn}
-                                        >
-                                            <Sparkles size={20} color="#fff" style={{ marginRight: 8 }} />
-                                            <Text style={styles.btnText}>Continuar</Text>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
+                                    <View
+                                        style={[
+                                            styles.actionsBlock,
+                                            !accountType && styles.actionsBlockMuted,
+                                        ]}
+                                        pointerEvents={accountType ? 'auto' : 'none'}
+                                    >
+                                        <View style={styles.divider}>
+                                            <View style={styles.line} />
+                                            <Text style={styles.orText}>
+                                                {accountType
+                                                    ? `Continuar como ${accountTypeLabel}`
+                                                    : t('register.chooseType')}
+                                            </Text>
+                                            <View style={styles.line} />
+                                        </View>
 
-                                    {/* Social Login Divider */}
-                                    <View style={styles.divider}>
-                                        <View style={styles.line} />
-                                        <Text style={styles.orText}>O continúa con</Text>
-                                        <View style={styles.line} />
-                                    </View>
-                                    <View style={[styles.socialRow, { display: 'none' }]}>
+                                        <GoogleAuthButton
+                                            label={
+                                                accountTypeLabel
+                                                    ? `${t('register.continueWithGoogle')} · ${accountTypeLabel}`
+                                                    : t('register.continueWithGoogle')
+                                            }
+                                            onPress={() => handleContinue('google')}
+                                            disabled={!canProceed}
+                                            loading={false}
+                                            style={{ marginBottom: 12 }}
+                                        />
+
+                                        <AppleAuthButton
+                                            label={
+                                                accountTypeLabel
+                                                    ? `${t('register.continueWithApple')} · ${accountTypeLabel}`
+                                                    : t('register.continueWithApple')
+                                            }
+                                            onPress={() => handleContinue('apple')}
+                                            disabled={!canProceed}
+                                            loading={false}
+                                            style={{ marginBottom: 12 }}
+                                        />
+
                                         <TouchableOpacity
-                                            style={styles.socialBtn}
-                                            onPress={() => handleSocialSignup('google')}
-                                            disabled={busy}
+                                            onPress={() => handleContinue('email')}
+                                            activeOpacity={0.9}
+                                            disabled={!canProceed}
+                                            style={[
+                                                styles.submitBtnContainer,
+                                                !canProceed && { opacity: 0.45 },
+                                            ]}
                                         >
-                                            <GoogleIcon />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.socialBtn}
-                                            onPress={() => handleSocialSignup('apple')}
-                                            disabled={busy}
-                                        >
-                                            <AppleIcon isDark={isDark} />
+                                            <LinearGradient
+                                                colors={['#2196F3', '#29B6F6']}
+                                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                                style={styles.gradientBtn}
+                                            >
+                                                <Sparkles size={20} color="#fff" style={{ marginRight: 8 }} />
+                                                <Text style={styles.btnText}>{t('register.continueWithEmail')}</Text>
+                                            </LinearGradient>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
                             ) : (
-                                // STEP 2: Form
+                                // STEP 2: Form (email/password path)
                                 <View style={styles.form}>
-                                    <View style={{ alignItems: 'center', marginBottom: 12 }}>
-                                        <Badge
-                                            color={accountType === 'consumer' ? '#2563EB' : accountType === 'business' ? '#059669' : '#2196F3'}
-                                        >
-                                            {accountType === 'consumer' ? 'Consumidor' : accountType === 'business' ? 'Negocio' : 'Influencer'}
+                                    <View style={{ alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                                        <Badge color={accountTypeColor}>
+                                            {accountTypeLabel}
+                                            {signupMethod === 'google'
+                                                ? ' · Google'
+                                                : signupMethod === 'apple'
+                                                    ? ' · Apple'
+                                                    : ' · Email'}
                                         </Badge>
+                                        <TouchableOpacity
+                                            onPress={() => setStep('type')}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            <Text style={styles.changeTypeLink}>{t('register.changeAccountType')}</Text>
+                                        </TouchableOpacity>
                                     </View>
 
+                                    {/* Email/password only when not using Google */}
+                                    {signupMethod === 'email' && (
+                                    <>
                                     {/* Common Fields */}
                                     <View style={styles.row}>
                                         <View style={[styles.inputContainer, styles.col]}>
@@ -428,8 +614,11 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             </View>
                                         </View>
                                     </View>
+                                    </>
+                                    )}
 
                                     {/* Passwords */}
+                                    {signupMethod === 'email' && (
                                     <View style={styles.row}>
                                         <View style={[styles.inputContainer, styles.col]}>
                                             <Text style={styles.label}>Contraseña</Text>
@@ -493,9 +682,10 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             )}
                                         </View>
                                     </View>
+                                    )}
 
                                     <View style={styles.inputContainer}>
-                                        <Text style={styles.label}>Nombre de usuario</Text>
+                                        <Text style={styles.label}>Tu @ de usuario *</Text>
                                         <View style={styles.inputWrapper}>
                                             <AtSign size={20} color="#9CA3AF" style={styles.icon} />
                                             <TextInput
@@ -503,23 +693,27 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                 placeholder="juanperez"
                                                 placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                 value={formData.username}
-                                                onChangeText={t => setFormData({ ...formData, username: t.toLowerCase() })}
+                                                onChangeText={t => setFormData({ ...formData, username: normalizeUsername(t) })}
                                                 autoCapitalize="none"
+                                                maxLength={24}
                                             />
                                         </View>
+                                        <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 4 }}>
+                                            3–24 caracteres. Letras, números o _
+                                        </Text>
                                     </View>
 
                                     {/* Referred By (Optional) */}
                                     <View style={styles.inputContainer}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                                            <Text style={styles.label}>¿Te invitó alguien? (Opcional)</Text>
+                                            <Text style={styles.label}>Código de referido (opcional)</Text>
                                             <Text style={{ fontSize: 10, color: isDark ? '#C4B5FD' : '#2196F3', fontWeight: 'bold' }}>¡Gana puntos extra!</Text>
                                         </View>
                                         <View style={[styles.inputWrapper, { borderColor: formData.referredBy ? '#2196F3' : (isDark ? '#4B5563' : '#E5E7EB'), backgroundColor: formData.referredBy ? (isDark ? '#2E1065' : '#FAFAFA') : (isDark ? '#374151' : '#fff') }]}>
                                             <Tag size={20} color={formData.referredBy ? '#2196F3' : '#9CA3AF'} style={styles.icon} />
                                             <TextInput
                                                 style={[styles.input, { color: formData.referredBy ? '#2196F3' : (isDark ? '#F9FAFB' : '#111827'), fontWeight: formData.referredBy ? '600' : '400' }]}
-                                                placeholder="Código de quien te invitó"
+                                                placeholder="Código o @ de quien te invitó"
                                                 placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
                                                 value={formData.referredBy}
                                                 onChangeText={t => setFormData({ ...formData, referredBy: formatReferralCode(t) })}
@@ -535,7 +729,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         <>
                                             <View style={styles.row}>
                                                 <View style={[styles.inputContainer, styles.col]}>
-                                                    <Text style={styles.label}>Nombre del negocio</Text>
+                                                    <Text style={styles.label}>Nombre del negocio *</Text>
                                                     <View style={styles.inputWrapper}>
                                                         <Store size={20} color="#9CA3AF" style={styles.icon} />
                                                         <TextInput
@@ -550,23 +744,42 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                 </View>
 
                                                 <View style={[styles.inputContainer, styles.col]}>
-                                                    <Text style={styles.label}>Dirección</Text>
+                                                    <Text style={styles.label}>Teléfono (opcional)</Text>
                                                     <View style={styles.inputWrapper}>
-                                                        <MapPin size={20} color="#9CA3AF" style={styles.icon} />
+                                                        <Phone size={20} color="#9CA3AF" style={styles.icon} />
                                                         <TextInput
                                                             style={styles.input}
-                                                            placeholder="Calle 123, Brooklyn, NY"
+                                                            placeholder="+1 555 000 0000"
                                                             placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
-                                                            value={formData.businessAddress}
-                                                            onChangeText={t => setFormData({ ...formData, businessAddress: clamp(t, LIMITS.businessAddress) })}
-                                                            maxLength={LIMITS.businessAddress}
+                                                            value={formData.businessPhone}
+                                                            onChangeText={t => setFormData({ ...formData, businessPhone: formatPhone(t) })}
+                                                            keyboardType="phone-pad"
+                                                            maxLength={LIMITS.phone}
                                                         />
                                                     </View>
                                                 </View>
                                             </View>
 
                                             <View style={styles.inputContainer}>
-                                                <Text style={styles.label}>Categoría</Text>
+                                                <Text style={styles.label}>Dirección (opcional)</Text>
+                                                <View style={styles.inputWrapper}>
+                                                    <MapPin size={20} color="#9CA3AF" style={styles.icon} />
+                                                    <TextInput
+                                                        style={styles.input}
+                                                        placeholder="Calle 123, Brooklyn, NY"
+                                                        placeholderTextColor={isDark ? "#6B7280" : "#9CA3AF"}
+                                                        value={formData.businessAddress}
+                                                        onChangeText={t => setFormData({ ...formData, businessAddress: clamp(t, LIMITS.businessAddress) })}
+                                                        maxLength={LIMITS.businessAddress}
+                                                    />
+                                                </View>
+                                                <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 4 }}>
+                                                    La verificación formal (EIN, docs) se hace después en KYC
+                                                </Text>
+                                            </View>
+
+                                            <View style={styles.inputContainer}>
+                                                <Text style={styles.label}>Categoría del negocio *</Text>
                                                 <TouchableOpacity
                                                     style={styles.inputWrapper}
                                                     onPress={() => setShowCategoryModal(true)}
@@ -574,7 +787,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     <Tag size={20} color="#9CA3AF" style={styles.icon} />
                                                     <Text style={[
                                                         styles.input,
-                                                        { lineHeight: isCompact ? 34 : 48 }, // Vertical center fix
+                                                        { lineHeight: isCompact ? 34 : 48 },
                                                         !formData.businessCategory && { color: isDark ? "#6B7280" : "#9CA3AF" }
                                                     ]}>
                                                         {formData.businessCategory || "Seleccionar categoría"}
@@ -588,9 +801,12 @@ export default function RegisterScreen({ navigation, route }: any) {
                                     {/* Influencer Specific Fields */}
                                     {accountType === 'influencer' && (
                                         <>
+                                            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 4 }}>
+                                                Al menos una red social es obligatoria
+                                            </Text>
                                             <View style={styles.row}>
                                                 <View style={[styles.inputContainer, styles.col]}>
-                                                    <Text style={styles.label}>Instagram (URL completa)</Text>
+                                                    <Text style={styles.label}>Instagram (URL)</Text>
                                                     <View style={styles.inputWrapper}>
                                                         <Award size={20} color="#9CA3AF" style={styles.icon} />
                                                         <TextInput
@@ -605,7 +821,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                     </View>
                                                 </View>
                                                 <View style={[styles.inputContainer, styles.col]}>
-                                                    <Text style={styles.label}>TikTok (URL completa)</Text>
+                                                    <Text style={styles.label}>TikTok (URL)</Text>
                                                     <View style={styles.inputWrapper}>
                                                         <Award size={20} color="#9CA3AF" style={styles.icon} />
                                                         <TextInput
@@ -622,7 +838,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             </View>
                                             <View style={styles.row}>
                                                 <View style={[styles.inputContainer, styles.col]}>
-                                                    <Text style={styles.label}>Categoría</Text>
+                                                    <Text style={styles.label}>Categoría de influencer *</Text>
                                                     <TouchableOpacity
                                                         style={styles.inputWrapper}
                                                         onPress={() => setShowCategoryModal(true)}
@@ -630,7 +846,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                                         <Tag size={20} color="#9CA3AF" style={styles.icon} />
                                                         <Text style={[
                                                             styles.input,
-                                                            { lineHeight: isCompact ? 34 : 48 }, // Vertical center fix
+                                                            { lineHeight: isCompact ? 34 : 48 },
                                                             !formData.businessCategory && { color: isDark ? "#6B7280" : "#9CA3AF" }
                                                         ]}>
                                                             {formData.businessCategory || "Seleccionar categoría"}
@@ -696,10 +912,33 @@ export default function RegisterScreen({ navigation, route }: any) {
                                         </Text>
                                     </View>
 
+                                    {signupMethod === 'google' ? (
+                                        <GoogleAuthButton
+                                            label={
+                                                accountTypeLabel
+                                                    ? `Crear cuenta con Google · ${accountTypeLabel}`
+                                                    : 'Crear cuenta con Google'
+                                            }
+                                            onPress={handleGoogleSignup}
+                                            disabled={busy}
+                                            loading={googleLoading}
+                                        />
+                                    ) : signupMethod === 'apple' ? (
+                                        <AppleAuthButton
+                                            label={
+                                                accountTypeLabel
+                                                    ? `Crear cuenta con Apple · ${accountTypeLabel}`
+                                                    : 'Crear cuenta con Apple'
+                                            }
+                                            onPress={handleAppleSignup}
+                                            disabled={busy}
+                                            loading={appleLoading}
+                                        />
+                                    ) : (
                                     <TouchableOpacity
                                         onPress={() => {
                                             if (!formData.acceptTerms || !formData.acceptPrivacy) {
-                                                show('Debes aceptar los Términos y Condiciones y la Política de Privacidad para continuar.', 'warning');
+                                                show('Debes aceptar los términos y la política de privacidad para continuar.', 'warning');
                                                 return;
                                             }
                                             handleRegister();
@@ -714,23 +953,24 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             style={styles.gradientBtn}
                                         >
                                             {busy ? (
-                                                <Text style={styles.btnText}>Creando cuenta...</Text>
+                                                <Text style={styles.btnText}>{t('register.creatingAccount')}</Text>
                                             ) : (
                                                 <>
                                                     <Sparkles size={20} color="#fff" style={{ marginRight: 8 }} />
-                                                    <Text style={styles.btnText}>Crear cuenta</Text>
+                                                    <Text style={styles.btnText}>{t('register.createAccount')}</Text>
                                                 </>
                                             )}
                                         </LinearGradient>
                                     </TouchableOpacity>
+                                    )}
                                 </View>
 
                             )}
 
                             <View style={styles.footer}>
-                                <Text style={styles.footerText}>¿Ya tienes cuenta? </Text>
+                                <Text style={styles.footerText}>{t('register.alreadyAccount')} </Text>
                                 <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                                    <Text style={styles.registerLink}>Inicia sesión</Text>
+                                    <Text style={styles.registerLink}>{t('register.login')}</Text>
                                 </TouchableOpacity>
                             </View>
                             </BlurView>
@@ -895,6 +1135,19 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         divider: { flexDirection: 'row', alignItems: 'center', marginVertical: isCompact ? 16 : 24 },
         line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
         orText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 12 },
+        actionsBlock: {
+            marginTop: 4,
+            gap: 12,
+            opacity: 1,
+        },
+        actionsBlockMuted: {
+            opacity: 0.4,
+        },
+        changeTypeLink: {
+            fontSize: 13,
+            color: '#2196F3',
+            fontWeight: '500',
+        },
 
         socialRow: { flexDirection: 'row', gap: 12, marginBottom: 24, justifyContent: 'center' },
         socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },

@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { CommonActions } from '@react-navigation/native';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { useTranslation } from 'react-i18next';
 
 
 export default function TermsScreen({ navigation, route }: any) {
@@ -14,6 +15,7 @@ export default function TermsScreen({ navigation, route }: any) {
     const { acceptCurrentTerms, user } = useAuth();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { t } = useTranslation();
 
     // Check if opened in blocking mode (forced acceptance)
     const isBlocking = route?.params?.mode === 'blocking';
@@ -73,7 +75,7 @@ export default function TermsScreen({ navigation, route }: any) {
                                 <ArrowLeft size={24} color={isDark ? "#D1D5DB" : "#4B5563"} />
                             </TouchableOpacity>
                         )}
-                        <Text style={styles.title}>Términos y Condiciones</Text>
+                        <Text style={styles.title}>{t('terms.title', { defaultValue: 'Términos y condiciones' })}</Text>
                         <View style={{ width: 24 }} />
                     </View>
 
@@ -202,11 +204,11 @@ export default function TermsScreen({ navigation, route }: any) {
 
                     {isBlocking || isSignup ? (
                         <TouchableOpacity onPress={handleAccept} style={styles.btn}>
-                            <Text style={styles.btnText}>Aceptar y Continuar</Text>
+                            <Text style={styles.btnText}>{t('common:buttons.acceptAndContinue')}</Text>
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.btn}>
-                            <Text style={styles.btnText}>Cerrar</Text>
+                            <Text style={styles.btnText}>{t('common:buttons.close')}</Text>
                         </TouchableOpacity>
                     )}
                 </View>

@@ -1,19 +1,20 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
-import { ArrowLeft, Shield } from 'lucide-react-native';
+import { ArrowLeft, Shield, FlaskConical, Zap, Lock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PaymentForm } from '../payments/components/PaymentForm';
 import { PaymentSuccessBurst } from '../payments/components/PaymentSuccessBurst';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { glassGradient, glassTokens } from '../utils/glass';
-import { Radius, colors } from '../theme/tokens';
-
-
-// Pedidos Ya–style checkout shell + PaymentForm (carrusel / puntos / CTA).
+import { Radius, Type, atmosphere, colors, glassShadow } from '../theme/tokens';
 
 export default function PaymentScreen({ navigation, route }: any) {
     const { user } = useAuth();
+    const { isLive, isTest } = usePaymentMode();
+    const insets = useSafeAreaInsets();
     const userId = (user as any)?.id || (user as any)?._id;
 
     const subtotal = Number(route.params?.subtotal) || Number(route.params?.amount) || 0;
@@ -39,6 +40,7 @@ export default function PaymentScreen({ navigation, route }: any) {
     const dark = colorScheme === 'dark';
     const glass = glassTokens(dark);
     const grad = glassGradient(dark);
+    const atmo = atmosphere(dark);
     const c = colors(dark);
 
     const C = {
@@ -46,7 +48,6 @@ export default function PaymentScreen({ navigation, route }: any) {
         muted: c.textMuted,
         border: c.border,
         accent: c.primary,
-        success: c.success,
         card: c.bgElevated,
     };
 
@@ -64,42 +65,112 @@ export default function PaymentScreen({ navigation, route }: any) {
 
     return (
         <View style={st.root}>
-            <LinearGradient colors={grad} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={atmo} style={StyleSheet.absoluteFill} />
+            <LinearGradient
+                colors={[grad[0], 'transparent']}
+                style={st.topWash}
+                pointerEvents="none"
+            />
 
-            <View style={[st.header, glass as any, { borderBottomColor: C.border }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={16} style={st.backBtn}>
-                    <ArrowLeft color={C.text} size={22} />
+            <View
+                style={[
+                    st.header,
+                    glass as any,
+                    {
+                        borderBottomColor: C.border,
+                        paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 40 : 16) + 8,
+                    },
+                ]}
+            >
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    hitSlop={16}
+                    style={[st.backBtn, { backgroundColor: dark ? 'rgba(255,255,255,0.06)' : 'rgba(24,24,27,0.04)' }]}
+                    accessibilityLabel="Volver"
+                >
+                    <ArrowLeft color={C.text} size={20} style={{ marginLeft: -1 }} />
                 </TouchableOpacity>
                 <View style={st.headerCenter}>
-                    <Shield color={C.accent} size={16} />
-                    <Text style={[st.headerTitle, { color: C.text }]}>Checkout</Text>
+                    <Text style={[st.headerEyebrow, { color: C.muted }]}>Checkout</Text>
+                    <Text style={[st.headerTitle, { color: C.text }]}>Pagar</Text>
                 </View>
-                <View style={{ width: 40 }} />
+                <View
+                    style={[
+                        st.modeChip,
+                        {
+                            backgroundColor: isLive
+                                ? dark
+                                    ? 'rgba(16,185,129,0.18)'
+                                    : '#ECFDF5'
+                                : dark
+                                  ? 'rgba(245,158,11,0.18)'
+                                  : '#FFFBEB',
+                            borderColor: isLive
+                                ? dark
+                                    ? 'rgba(16,185,129,0.35)'
+                                    : '#A7F3D0'
+                                : dark
+                                  ? 'rgba(245,158,11,0.35)'
+                                  : '#FDE68A',
+                        },
+                    ]}
+                >
+                    {isLive ? (
+                        <Zap size={12} color={dark ? '#34D399' : '#059669'} />
+                    ) : (
+                        <FlaskConical size={12} color={dark ? '#FBBF24' : '#D97706'} />
+                    )}
+                    <Text
+                        style={[
+                            st.modeChipText,
+                            { color: isLive ? (dark ? '#A7F3D0' : '#059669') : dark ? '#FDE68A' : '#D97706' },
+                        ]}
+                    >
+                        {isTest ? 'Prueba' : 'Live'}
+                    </Text>
+                </View>
             </View>
 
             <ScrollView
                 style={st.scroll}
-                contentContainerStyle={st.scrollContent}
+                contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 56 }]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                <View style={[st.summaryCard, glass as any]}>
-                    <View style={st.summaryRow}>
-                        <Text style={[st.summaryLabel, { color: C.muted }]}>Subtotal</Text>
-                        <Text style={[st.summaryVal, { color: C.text }]}>{fmt(subtotal)}</Text>
-                    </View>
-                    {shippingCost > 0 && (
-                        <View style={st.summaryRow}>
-                            <Text style={[st.summaryLabel, { color: C.muted }]}>Envío</Text>
-                            <Text style={[st.summaryVal, { color: C.text }]}>{fmt(shippingCost)}</Text>
-                        </View>
-                    )}
-                    <View style={[st.divider, { backgroundColor: C.border }]} />
-                    <View style={st.summaryRow}>
-                        <Text style={[st.totalLabel, { color: C.text }]}>Total</Text>
-                        <Text style={[st.totalVal, { color: C.accent }]}>{fmt(finalAmount)}</Text>
+                <View style={[st.hero, glassShadow(dark), glass as any]}>
+                    <Text style={[st.heroLabel, { color: C.muted }]}>Total a pagar</Text>
+                    <Text style={[st.heroAmount, { color: C.text }]}>{fmt(finalAmount)}</Text>
+                    <View style={st.heroMeta}>
+                        <Text style={[st.heroMetaText, { color: C.muted }]}>
+                            Subtotal {fmt(subtotal)}
+                            {shippingCost > 0 ? ` · Envío ${fmt(shippingCost)}` : ''}
+                        </Text>
                     </View>
                 </View>
+
+                {cartItems.length > 0 ? (
+                    <View style={[st.linesCard, glassShadow(dark), glass as any]}>
+                        <Text style={[st.linesHeading, { color: C.muted }]}>Pedido</Text>
+                        {cartItems.slice(0, 4).map((item: any, idx: number) => (
+                            <View key={item.id || idx} style={st.lineRow}>
+                                <Text
+                                    style={[st.lineTitle, { color: C.text }]}
+                                    numberOfLines={1}
+                                >
+                                    {item.name}
+                                </Text>
+                                <Text style={[st.linePrice, { color: C.muted }]}>
+                                    {fmt(Number(item.price) * Number(item.quantity || 1))}
+                                </Text>
+                            </View>
+                        ))}
+                        {cartItems.length > 4 ? (
+                            <Text style={[st.moreLines, { color: C.muted }]}>
+                                +{cartItems.length - 4} más
+                            </Text>
+                        ) : null}
+                    </View>
+                ) : null}
 
                 <PaymentForm
                     amount={finalAmount}
@@ -122,16 +193,30 @@ export default function PaymentScreen({ navigation, route }: any) {
                 />
 
                 {error && (
-                    <View style={st.errorBanner}>
-                        <Text style={st.errorText}>{error}</Text>
+                    <View
+                        style={[
+                            st.errorBanner,
+                            {
+                                backgroundColor: dark ? 'rgba(239,68,68,0.12)' : '#FEF2F2',
+                                borderColor: dark ? 'rgba(239,68,68,0.35)' : '#FECACA',
+                            },
+                        ]}
+                    >
+                        <Text style={[st.errorText, { color: dark ? '#FCA5A5' : '#DC2626' }]}>
+                            {error}
+                        </Text>
                     </View>
                 )}
 
                 <View style={st.trust}>
-                    <Shield size={14} color={C.muted} />
-                    <Text style={[st.trustText, { color: C.muted }]}>Stripe TEST · SSL</Text>
+                    <Lock size={13} color={C.muted} />
+                    <Shield size={13} color={C.muted} />
+                    <Text style={[st.trustText, { color: C.muted }]}>
+                        {isLive
+                            ? 'Pago in-app · Stripe LIVE · KYC requerido'
+                            : 'Pago in-app · Stripe TEST · sin cobro real'}
+                    </Text>
                 </View>
-                <View style={{ height: 48 }} />
             </ScrollView>
         </View>
     );
@@ -139,40 +224,100 @@ export default function PaymentScreen({ navigation, route }: any) {
 
 const st = StyleSheet.create({
     root: { flex: 1 },
+    topWash: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 180,
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? 40 : 56,
+        paddingHorizontal: 16,
         paddingBottom: 14,
         borderBottomWidth: StyleSheet.hairlineWidth,
+        gap: 10,
     },
-    backBtn: { width: 40, height: 40, justifyContent: 'center' },
-    headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    headerTitle: { fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: Radius.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerCenter: { flex: 1, gap: 1 },
+    headerEyebrow: {
+        ...Type.caption,
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+    },
+    headerTitle: { ...Type.heading, fontSize: 20, lineHeight: 24 },
+    modeChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        borderRadius: Radius.full,
+        borderWidth: 1,
+    },
+    modeChipText: { fontSize: 11, fontWeight: '800' },
     scroll: { flex: 1 },
-    scrollContent: { padding: 20, gap: 16 },
-    summaryCard: { borderRadius: Radius.lg, borderWidth: 1, padding: 18 },
-    summaryRow: {
+    scrollContent: { padding: 20, gap: 18 },
+    hero: {
+        borderRadius: Radius['2xl'],
+        borderWidth: 1,
+        paddingVertical: 22,
+        paddingHorizontal: 22,
+        alignItems: 'flex-start',
+        gap: 4,
+    },
+    heroLabel: { ...Type.caption, textTransform: 'uppercase', letterSpacing: 0.9 },
+    heroAmount: {
+        fontSize: 40,
+        lineHeight: 46,
+        fontWeight: '800',
+        letterSpacing: -1.2,
+        fontVariant: ['tabular-nums'],
+    },
+    heroMeta: { marginTop: 6 },
+    heroMetaText: { ...Type.bodySm },
+    linesCard: {
+        borderRadius: Radius.xl,
+        borderWidth: 1,
+        padding: 16,
+        gap: 8,
+    },
+    linesHeading: {
+        ...Type.caption,
+        textTransform: 'uppercase',
+        letterSpacing: 0.7,
+        marginBottom: 2,
+    },
+    lineRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10,
+        gap: 12,
     },
-    summaryLabel: { fontSize: 14 },
-    summaryVal: { fontSize: 14, fontWeight: '600' },
-    divider: { height: 1, marginVertical: 8 },
-    totalLabel: { fontSize: 16, fontWeight: '800' },
-    totalVal: { fontSize: 22, fontWeight: '900' },
+    lineTitle: { flex: 1, fontSize: 14, fontWeight: '600' },
+    linePrice: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
+    moreLines: { ...Type.bodySm, marginTop: 2 },
     errorBanner: {
-        backgroundColor: '#FEE2E2',
         borderWidth: 1,
-        borderColor: '#FECACA',
-        borderRadius: Radius.md,
+        borderRadius: Radius.lg,
         padding: 14,
     },
-    errorText: { color: '#DC2626', fontSize: 14, fontWeight: '500', textAlign: 'center' },
-    trust: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 },
+    errorText: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
+    trust: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        marginTop: 2,
+        paddingBottom: 8,
+    },
     trustText: { fontSize: 12, fontWeight: '500' },
 });

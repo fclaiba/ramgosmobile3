@@ -7,6 +7,7 @@ import {
     ScrollView,
     TextInput,
     Platform,
+    ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, CreditCard, Pencil, Plus, Trash2, X } from 'lucide-react-native';
@@ -16,9 +17,14 @@ import { useToast } from '../../contexts/ToastContext';
 import { Radius, colors } from '../../theme/tokens';
 
 
-const STORAGE_KEY = '@ramgos/user_payment_cards';
+const STORAGE_KEY_TEST = '@ramgos/user_payment_cards';
+const STORAGE_KEY_LIVE = '@ramgos/user_payment_cards_live';
 
-export type WalletCard = TestCard & { custom?: boolean };
+export type WalletCard = TestCard & {
+    custom?: boolean;
+    /** Stripe PaymentMethod shown in the same carousel (no PAN). */
+    source?: 'local' | 'stripe' | 'preset';
+};
 
 const detectBrand = (digits: string): string => {
     if (/^4/.test(digits)) return 'visa';
@@ -51,6 +57,18 @@ type Props = {
     textColor?: string;
     muted?: string;
     isDark?: boolean;
+    /** When false, hide Stripe test presets — empty carousel until user adds cards. */
+    includePresets?: boolean;
+    /** Override AsyncStorage key (defaults by includePresets). */
+    storageKey?: string;
+    /** Extra cards (e.g. Stripe PMs) shown in the same carousel. */
+    externalCards?: WalletCard[];
+    /** LIVE: replace PAN fields with PCI-safe slot (CardElement / CardField). */
+    secureAdd?: boolean;
+    secureAddSlot?: React.ReactNode;
+    onSecureSave?: () => Promise<void>;
+    secureSaving?: boolean;
+    formHint?: string;
 };
 
 export function SimulatedCardsPanel(props: Props) {
@@ -59,6 +77,13 @@ export function SimulatedCardsPanel(props: Props) {
         onSelect,
         onSelectedCard,
         isDark = false,
+        includePresets = true,
+        externalCards = [],
+        secureAdd = false,
+        secureAddSlot,
+        onSecureSave,
+        secureSaving = false,
+        formHint,
     } = props;
     const glass = glassTokens(isDark);
     const c = colors(isDark);
@@ -74,29 +99,42 @@ export function SimulatedCardsPanel(props: Props) {
     const [cvc, setCvc] = useState('');
     const [label, setLabel] = useState('');
 
-    const cards = useMemo<WalletCard[]>(
-        () => [...STRIPE_TEST_CARDS.map((c) => ({ ...c, custom: false })), ...custom],
-        [custom],
-    );
+    const storageKey =
+        props.storageKey || (includePresets ? STORAGE_KEY_TEST : STORAGE_KEY_LIVE);
+
+    const cards = useMemo<WalletCard[]>(() => {
+        const presets = includePresets
+            ? STRIPE_TEST_CARDS.map((c) => ({ ...c, custom: false, source: 'preset' as const }))
+            : [];
+        const external = externalCards.map((c) => ({
+            ...c,
+            custom: false,
+            source: c.source || ('stripe' as const),
+        }));
+        // In secure LIVE mode, don't mix local PAN cards into the carousel.
+        const locals = secureAdd ? [] : custom;
+        return [...presets, ...external, ...locals];
+    }, [custom, includePresets, externalCards, secureAdd]);
 
     useEffect(() => {
-        AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+        if (secureAdd) return;
+        AsyncStorage.getItem(storageKey).then((raw) => {
             if (!raw) return;
             try {
                 const parsed = JSON.parse(raw) as WalletCard[];
-                if (Array.isArray(parsed)) setCustom(parsed.map((c) => ({ ...c, custom: true })));
+                if (Array.isArray(parsed)) setCustom(parsed.map((c) => ({ ...c, custom: true, source: 'local' })));
             } catch {}
         });
-    }, []);
+    }, [storageKey, secureAdd]);
 
     useEffect(() => {
-        const c = cards.find((x) => x.id === selectedId) || cards[0];
-        if (c) onSelectedCard(c);
-    }, [selectedId, cards, onSelectedCard]);
+        const found = cards.find((x) => x.id === selectedId) || (includePresets ? cards[0] : undefined);
+        if (found) onSelectedCard(found);
+    }, [selectedId, cards, onSelectedCard, includePresets]);
 
     const persist = async (next: WalletCard[]) => {
         setCustom(next);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        await AsyncStorage.setItem(storageKey, JSON.stringify(next));
     };
 
     const resetForm = () => {
@@ -110,16 +148,16 @@ export function SimulatedCardsPanel(props: Props) {
 
     const openAdd = () => {
         setNumber('');
-        setExp('12/34');
-        setCvc('123');
+        setExp(secureAdd ? '' : '12/34');
+        setCvc(secureAdd ? '' : '123');
         setLabel('');
         setEditId(null);
         setMode('add');
     };
 
     const openEdit = (card: WalletCard) => {
-        if (!card.custom) {
-            show('Las tarjetas demo de Stripe no se editan. Agregá una propia.', 'info');
+        if (!card.custom || card.source === 'stripe') {
+            show('Esta tarjeta no se edita acá.', 'info');
             return;
         }
         setEditId(card.id);
@@ -132,20 +170,34 @@ export function SimulatedCardsPanel(props: Props) {
     };
 
     const removeCard = async (card: WalletCard) => {
-        if (!card.custom) {
-            show('Las tarjetas demo no se borran. Solo las que agregaste vos.', 'info');
+        if (!card.custom || card.source === 'stripe') {
+            show('Esta tarjeta no se borra desde el carrusel.', 'info');
             return;
         }
         const next = custom.filter((c) => c.id !== card.id);
         await persist(next);
         if (selectedId === card.id) {
-            onSelect(STRIPE_TEST_CARDS[0].id);
+            const fallback = includePresets
+                ? STRIPE_TEST_CARDS[0]?.id
+                : next[0]?.id || externalCards[0]?.id || '';
+            onSelect(fallback);
         }
         show('Tarjeta eliminada', 'success');
         if (editId === card.id) resetForm();
     };
 
     const saveForm = async () => {
+        if (secureAdd && mode === 'add') {
+            if (!onSecureSave) return;
+            try {
+                await onSecureSave();
+                resetForm();
+            } catch {
+                // Parent shows toast/error
+            }
+            return;
+        }
+
         const digits = number.replace(/\D/g, '');
         if (digits.length < 13) {
             show('Número inválido (mín. 13 dígitos)', 'error');
@@ -166,7 +218,15 @@ export function SimulatedCardsPanel(props: Props) {
         if (mode === 'edit' && editId) {
             const next = custom.map((c) =>
                 c.id === editId
-                    ? { ...c, brand, last4, label: niceLabel, number: digits, cvc: cvc.replace(/\D/g, ''), exp: exp.trim() }
+                    ? {
+                          ...c,
+                          brand,
+                          last4,
+                          label: niceLabel,
+                          number: digits,
+                          cvc: cvc.replace(/\D/g, ''),
+                          exp: exp.trim(),
+                      }
                     : c,
             );
             await persist(next);
@@ -183,6 +243,7 @@ export function SimulatedCardsPanel(props: Props) {
                 cvc: cvc.replace(/\D/g, ''),
                 exp: exp.trim(),
                 custom: true,
+                source: 'local',
             };
             await persist([...custom, card]);
             onSelect(id);
@@ -191,12 +252,19 @@ export function SimulatedCardsPanel(props: Props) {
         resetForm();
     };
 
+    const hint =
+        formHint ||
+        (secureAdd
+            ? 'Producción · datos seguros con Stripe (sin Link)'
+            : 'Modo simulado · cualquier marca');
+
     return (
         <View style={styles.wrap}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel}>
                 {cards.map((c) => {
                     const b = brandStyle(c.brand);
                     const sel = selectedId === c.id;
+                    const canEdit = !!c.custom && c.source !== 'stripe';
                     return (
                         <View key={c.id} style={styles.tileWrap}>
                             <TouchableOpacity
@@ -204,7 +272,11 @@ export function SimulatedCardsPanel(props: Props) {
                                 onPress={() => onSelect(c.id)}
                                 style={[
                                     styles.cardTile,
-                                    { backgroundColor: b.bg, borderColor: sel ? accent : 'transparent', borderWidth: 2 },
+                                    {
+                                        backgroundColor: b.bg,
+                                        borderColor: sel ? accent : 'transparent',
+                                        borderWidth: 2,
+                                    },
                                 ]}
                             >
                                 <View style={styles.cardTileTop}>
@@ -219,15 +291,25 @@ export function SimulatedCardsPanel(props: Props) {
                                 <View style={styles.cardBottomRow}>
                                     <View>
                                         <Text style={styles.cardLast4}>•••• {c.last4}</Text>
-                                        <Text style={styles.cardLabel} numberOfLines={1}>{c.label}</Text>
+                                        <Text style={styles.cardLabel} numberOfLines={1}>
+                                            {c.label}
+                                        </Text>
                                     </View>
-                                    
-                                    {sel && c.custom && (
+
+                                    {sel && canEdit && (
                                         <View style={styles.actionsOverlay}>
-                                            <TouchableOpacity onPress={() => openEdit(c)} hitSlop={8} style={styles.iconBtn}>
+                                            <TouchableOpacity
+                                                onPress={() => openEdit(c)}
+                                                hitSlop={8}
+                                                style={styles.iconBtn}
+                                            >
                                                 <Pencil size={12} color="#fff" />
                                             </TouchableOpacity>
-                                            <TouchableOpacity onPress={() => removeCard(c)} hitSlop={8} style={styles.iconBtn}>
+                                            <TouchableOpacity
+                                                onPress={() => removeCard(c)}
+                                                hitSlop={8}
+                                                style={styles.iconBtn}
+                                            >
                                                 <Trash2 size={12} color="#fff" />
                                             </TouchableOpacity>
                                         </View>
@@ -241,81 +323,118 @@ export function SimulatedCardsPanel(props: Props) {
                 <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={openAdd}
-                    style={[styles.addTile, { backgroundColor: glass.bg, borderColor: mode === 'add' ? accent : glass.border }]}
+                    style={[
+                        styles.addTile,
+                        {
+                            backgroundColor: glass.bg,
+                            borderColor: mode === 'add' ? accent : glass.border,
+                        },
+                    ]}
                 >
                     <View style={[styles.addCircle, { backgroundColor: accent + '22' }]}>
                         <Plus size={22} color={accent} />
                     </View>
-                    <Text style={[styles.addText, { color: textColor }]}>Agregar{'\n'}tarjeta</Text>
+                    <Text style={[styles.addText, { color: textColor }]}>
+                        Agregar{'\n'}tarjeta
+                    </Text>
                 </TouchableOpacity>
             </ScrollView>
 
             {(mode === 'add' || mode === 'edit') && (
-                <View style={[styles.form, { backgroundColor: glass.bg, borderColor: glass.border }, glass.shadow, glass.backdrop]}>
+                <View
+                    style={[
+                        styles.form,
+                        { backgroundColor: glass.bg, borderColor: glass.border },
+                        glass.shadow,
+                        glass.backdrop,
+                    ]}
+                >
                     <View style={styles.formHeader}>
                         <Text style={[styles.formTitle, { color: textColor }]}>
                             {mode === 'edit' ? 'Editar tarjeta' : 'Nueva tarjeta'}
                         </Text>
-                        <TouchableOpacity onPress={resetForm} hitSlop={12}>
+                        <TouchableOpacity onPress={resetForm} hitSlop={12} disabled={secureSaving}>
                             <X size={20} color={muted} />
                         </TouchableOpacity>
                     </View>
-                    <Text style={[styles.hint, { color: muted }]}>Modo simulado · cualquier marca</Text>
+                    <Text style={[styles.hint, { color: muted }]}>{hint}</Text>
 
-                    <Text style={[styles.fieldLabel, { color: muted }]}>Número</Text>
-                    <TextInput
-                        value={formatCardNumber(number.replace(/\D/g, '').slice(0, 19))}
-                        onChangeText={(t) => setNumber(t.replace(/\D/g, '').slice(0, 19))}
-                        keyboardType="number-pad"
-                        placeholder="4242 4242 4242 4242"
-                        placeholderTextColor="#94A3B8"
-                        style={[styles.input, { color: textColor, borderColor: muted + '55' }]}
-                    />
-
-                    <View style={styles.row}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.fieldLabel, { color: muted }]}>Vence</Text>
+                    {secureAdd && mode === 'add' ? (
+                        <View style={{ gap: 10 }}>{secureAddSlot}</View>
+                    ) : (
+                        <>
+                            <Text style={[styles.fieldLabel, { color: muted }]}>Número</Text>
                             <TextInput
-                                value={exp}
-                                onChangeText={(t) => {
-                                    const d = t.replace(/\D/g, '').slice(0, 4);
-                                    setExp(d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d);
-                                }}
+                                value={formatCardNumber(number.replace(/\D/g, '').slice(0, 19))}
+                                onChangeText={(t) => setNumber(t.replace(/\D/g, '').slice(0, 19))}
                                 keyboardType="number-pad"
-                                placeholder="MM/AA"
+                                placeholder="4242 4242 4242 4242"
                                 placeholderTextColor="#94A3B8"
                                 style={[styles.input, { color: textColor, borderColor: muted + '55' }]}
                             />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.fieldLabel, { color: muted }]}>CVC</Text>
+
+                            <View style={styles.row}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.fieldLabel, { color: muted }]}>Vence</Text>
+                                    <TextInput
+                                        value={exp}
+                                        onChangeText={(t) => {
+                                            const d = t.replace(/\D/g, '').slice(0, 4);
+                                            setExp(d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d);
+                                        }}
+                                        keyboardType="number-pad"
+                                        placeholder="MM/AA"
+                                        placeholderTextColor="#94A3B8"
+                                        style={[
+                                            styles.input,
+                                            { color: textColor, borderColor: muted + '55' },
+                                        ]}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.fieldLabel, { color: muted }]}>CVC</Text>
+                                    <TextInput
+                                        value={cvc}
+                                        onChangeText={(t) => setCvc(t.replace(/\D/g, '').slice(0, 4))}
+                                        keyboardType="number-pad"
+                                        placeholder="123"
+                                        placeholderTextColor="#94A3B8"
+                                        style={[
+                                            styles.input,
+                                            { color: textColor, borderColor: muted + '55' },
+                                        ]}
+                                        secureTextEntry
+                                    />
+                                </View>
+                            </View>
+
+                            <Text style={[styles.fieldLabel, { color: muted }]}>Alias (opcional)</Text>
                             <TextInput
-                                value={cvc}
-                                onChangeText={(t) => setCvc(t.replace(/\D/g, '').slice(0, 4))}
-                                keyboardType="number-pad"
-                                placeholder="123"
+                                value={label}
+                                onChangeText={setLabel}
+                                placeholder="Ej. Visa personal"
                                 placeholderTextColor="#94A3B8"
                                 style={[styles.input, { color: textColor, borderColor: muted + '55' }]}
-                                secureTextEntry
                             />
-                        </View>
-                    </View>
-
-                    <Text style={[styles.fieldLabel, { color: muted }]}>Alias (opcional)</Text>
-                    <TextInput
-                        value={label}
-                        onChangeText={setLabel}
-                        placeholder="Ej. Visa personal"
-                        placeholderTextColor="#94A3B8"
-                        style={[styles.input, { color: textColor, borderColor: muted + '55' }]}
-                    />
+                        </>
+                    )}
 
                     <TouchableOpacity
-                        style={[styles.saveBtn, { backgroundColor: accent }]}
+                        style={[
+                            styles.saveBtn,
+                            { backgroundColor: secureSaving ? '#9CA3AF' : accent },
+                        ]}
                         onPress={saveForm}
                         activeOpacity={0.9}
+                        disabled={secureSaving}
                     >
-                        <Text style={styles.saveBtnText}>{mode === 'edit' ? 'Guardar cambios' : 'Agregar tarjeta'}</Text>
+                        {secureSaving ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.saveBtnText}>
+                                {mode === 'edit' ? 'Guardar cambios' : 'Agregar tarjeta'}
+                            </Text>
+                        )}
                     </TouchableOpacity>
                 </View>
             )}

@@ -1,9 +1,11 @@
-// Opción A — referidos reales desde convex/users.ts (getReferralDashboard + ensureReferralCode).
-import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+// Dual referral: @username (identity) + optional referralAlias (vanity).
+// Source of truth: convex/users.getReferralDashboard + updateProfile(referralAlias).
+import React, { createContext, useCallback, useMemo } from 'react';
 import { Share } from 'react-native';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from './AuthContext';
+import { referralWebLink } from '../config/appOrigin';
 
 /** Business constants — locked by constitution.test.tsx */
 export const REFERRAL_REWARDS = {
@@ -34,7 +36,10 @@ export interface ReferralHistoryItem {
 export interface ReferralContextValue {
     referrals: ReferralHistoryItem[];
     stats: ReferralStats;
+    /** Preferred share code (alias if set, else @username). */
     referralCode: string;
+    username: string;
+    referralAlias: string;
     referralLink: string;
     referralSummary: { registrations: number; purchases: number; totalPoints: number };
     history: ReferralHistoryItem[];
@@ -47,6 +52,8 @@ const guestValue: ReferralContextValue = {
     referrals: [],
     stats: { totalInvited: 0, totalEarned: 0, level: 1 },
     referralCode: '',
+    username: '',
+    referralAlias: '',
     referralLink: '',
     referralSummary: { registrations: 0, purchases: 0, totalPoints: 0 },
     history: [],
@@ -58,39 +65,35 @@ const guestValue: ReferralContextValue = {
 const ReferralContext = createContext<ReferralContextValue | null>(null);
 
 function useReferralsState(): ReferralContextValue {
-    const { user, sessionToken } = useAuth();
+    const { sessionToken } = useAuth();
 
     const dashboard = useQuery(
         api.users.getReferralDashboard,
         sessionToken ? { sessionToken } : 'skip',
     );
 
-    const ensureReferralCodeMutation = useMutation(api.users.ensureReferralCode);
-
-    useEffect(() => {
-        if (user?.id && sessionToken && dashboard && !dashboard.referralCode) {
-            ensureReferralCodeMutation({ sessionToken, userId: user.id }).catch(console.error);
-        }
-    }, [user?.id, sessionToken, dashboard, ensureReferralCodeMutation]);
-
+    const username = dashboard?.username ?? '';
+    const referralAlias = dashboard?.referralAlias ?? '';
     const referralCode = dashboard?.referralCode ?? '';
     const referralLink = dashboard?.referralLink ?? '';
 
     const shareReferral = useCallback(async () => {
         if (!referralCode) return;
-        const link = referralLink || `https://ramgos.com/ref/${referralCode}`;
+        const link = referralLink || referralWebLink(referralCode);
+        const label = referralAlias
+            ? `${referralAlias} (también @${username})`
+            : `@${username || referralCode}`;
         await Share.share({
-            message: `¡Unite a Ramgos con mi código ${referralCode}! ${link}`,
+            message: `¡Unite a Ramgos con mi código ${label}! ${link}`,
             url: link,
         });
-    }, [referralCode, referralLink]);
+    }, [referralCode, referralLink, referralAlias, username]);
 
     const generateReferralLink = useCallback(async () => {
         if (referralLink) return referralLink;
-        if (!sessionToken || !user?.id) return '';
-        const code = await ensureReferralCodeMutation({ sessionToken, userId: user.id });
-        return `https://ramgos.com/ref/${code}`;
-    }, [referralLink, ensureReferralCodeMutation, sessionToken, user?.id]);
+        if (referralCode) return referralWebLink(referralCode);
+        return '';
+    }, [referralLink, referralCode]);
 
     return useMemo(() => {
         if (!sessionToken) {
@@ -100,18 +103,21 @@ function useReferralsState(): ReferralContextValue {
             referrals: dashboard?.referrals ?? [],
             stats: dashboard?.stats ?? guestValue.stats,
             referralCode,
+            username,
+            referralAlias,
             referralLink,
             referralSummary: dashboard?.referralSummary ?? guestValue.referralSummary,
             history: dashboard?.history ?? [],
             generateReferralLink,
             shareReferral,
-            // ponytail: dev-only button on ReferralsScreen — no backend simulate endpoint
             simulateReferral: () => {},
         };
     }, [
         sessionToken,
         dashboard,
         referralCode,
+        username,
+        referralAlias,
         referralLink,
         generateReferralLink,
         shareReferral,

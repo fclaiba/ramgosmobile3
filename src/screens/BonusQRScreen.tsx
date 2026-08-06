@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -14,14 +14,23 @@ import * as Brightness from 'expo-brightness';
 import * as Clipboard from 'expo-clipboard';
 import { BlurView } from 'expo-blur';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { X, Clock, AlertCircle, Copy, CheckCircle2, Ticket, ShieldCheck } from 'lucide-react-native';
+import {
+    X,
+    Clock,
+    AlertCircle,
+    Copy,
+    CheckCircle2,
+    Ticket,
+    ShieldCheck,
+    RefreshCw,
+} from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { glassShadow, Radius } from '../theme/tokens';
-
 
 const { width } = Dimensions.get('window');
+/** Privacy: hide QR after idle screen session — NOT the bono validity. */
+const SCREEN_SESSION_SECONDS = 300;
 
 function formatCurrency(n?: number): string {
     if (n === undefined || n === null || Number.isNaN(n)) return '$0';
@@ -33,6 +42,19 @@ function formatCurrency(n?: number): string {
         }).format(Number(n));
     } catch {
         return `$${Number(n).toFixed(0)}`;
+    }
+}
+
+function formatValidUntil(iso?: string): string {
+    if (!iso) return '';
+    try {
+        return new Date(iso).toLocaleDateString('es-AR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
+    } catch {
+        return '';
     }
 }
 
@@ -57,14 +79,23 @@ export default function BonusQRScreen() {
         validUntil,
     } = route.params || {};
 
-    const finalCode = bonoCode || bonusId || 'DEMO-CODE-123';
+    const finalCode = typeof bonoCode === 'string' && bonoCode.trim() ? bonoCode.trim() : '';
+    const hasRealCode = !!finalCode && !finalCode.startsWith('DEMO-');
     const qrData = finalCode;
     const qrSize = Math.min(width * 0.52, 210);
 
-    const [timeLeft, setTimeLeft] = useState(300);
+    const bonoExpired = useMemo(() => {
+        if (!validUntil) return false;
+        const t = new Date(validUntil).getTime();
+        return Number.isFinite(t) && t < Date.now();
+    }, [validUntil]);
+
+    const [sessionLeft, setSessionLeft] = useState(SCREEN_SESSION_SECONDS);
+    const [sessionHidden, setSessionHidden] = useState(false);
     const [initialBrightness, setInitialBrightness] = useState<number | null>(null);
     const [copied, setCopied] = useState(false);
     const [brightnessReady, setBrightnessReady] = useState(false);
+    const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const pulseAnim = useRef(new RNAnimated.Value(0.4)).current;
 
@@ -73,7 +104,7 @@ export default function BonusQRScreen() {
             RNAnimated.sequence([
                 RNAnimated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
                 RNAnimated.timing(pulseAnim, { toValue: 0.4, duration: 1200, useNativeDriver: true }),
-            ])
+            ]),
         ).start();
     }, [pulseAnim]);
 
@@ -87,8 +118,30 @@ export default function BonusQRScreen() {
         }
     }, [initialBrightness]);
 
+    const clearSessionTimer = useCallback(() => {
+        if (sessionTimerRef.current) {
+            clearInterval(sessionTimerRef.current);
+            sessionTimerRef.current = null;
+        }
+    }, []);
+
+    const startScreenSession = useCallback(() => {
+        clearSessionTimer();
+        setSessionLeft(SCREEN_SESSION_SECONDS);
+        setSessionHidden(false);
+        sessionTimerRef.current = setInterval(() => {
+            setSessionLeft((prev) => {
+                if (prev <= 1) {
+                    clearSessionTimer();
+                    setSessionHidden(true);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    }, [clearSessionTimer]);
+
     useEffect(() => {
-        let timer: ReturnType<typeof setInterval> | null = null;
         const setMaxBrightness = async () => {
             try {
                 const { status } = await Brightness.requestPermissionsAsync();
@@ -104,22 +157,15 @@ export default function BonusQRScreen() {
         };
 
         setMaxBrightness();
-
-        timer = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 1) {
-                    if (timer) clearInterval(timer);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
+        if (!bonoExpired && hasRealCode) {
+            startScreenSession();
+        }
 
         return () => {
-            if (timer) clearInterval(timer);
+            clearSessionTimer();
             restoreBrightness();
         };
-    }, [restoreBrightness]);
+    }, [bonoExpired, hasRealCode, startScreenSession, clearSessionTimer, restoreBrightness]);
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -128,21 +174,22 @@ export default function BonusQRScreen() {
     };
 
     const handleCopyCode = async () => {
+        if (!hasRealCode || bonoExpired) return;
         await Clipboard.setStringAsync(finalCode);
         setCopied(true);
         show('Código copiado al portapapeles', 'success');
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const isExpired = timeLeft <= 0;
+    const showQr = hasRealCode && !bonoExpired && !sessionHidden;
     const styles = getStyles(isDark, insets);
     const canvas = isDark ? '#09090B' : '#FAFAFA';
+    const validLabel = formatValidUntil(validUntil);
 
     return (
         <View style={[styles.container, { backgroundColor: canvas }]}>
             <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-            {/* Glass close — chrome only */}
             <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
                 {Platform.OS !== 'web' ? (
                     <BlurView
@@ -161,7 +208,13 @@ export default function BonusQRScreen() {
                             <View style={styles.badge}>
                                 <RNAnimated.View style={[styles.pulseDot, { opacity: pulseAnim }]} />
                                 <Text style={styles.badgeText}>
-                                    {isExpired ? 'Sesión expirada' : 'Listo para canjear'}
+                                    {bonoExpired
+                                        ? 'Bono vencido'
+                                        : !hasRealCode
+                                          ? 'Código no disponible'
+                                          : sessionHidden
+                                            ? 'QR oculto (privacidad)'
+                                            : 'Listo para canjear'}
                                 </Text>
                             </View>
                             <View style={styles.businessIconWrap}>
@@ -171,7 +224,9 @@ export default function BonusQRScreen() {
                                 {businessName || 'Negocio Asociado'}
                             </Text>
                             {!!bonoTitle && (
-                                <Text style={styles.bonoTitle} numberOfLines={1}>{bonoTitle}</Text>
+                                <Text style={styles.bonoTitle} numberOfLines={1}>
+                                    {bonoTitle}
+                                </Text>
                             )}
                             <Text style={styles.subTitle}>Mostrá el QR en la caja</Text>
                         </View>
@@ -191,13 +246,7 @@ export default function BonusQRScreen() {
                         </View>
                         <Text style={styles.paidHint}>
                             Pagaste {formatCurrency(paidAmount)} · vale {formatCurrency(creditTotal)} en el local
-                            {validUntil
-                                ? `\nVálido hasta ${new Date(validUntil).toLocaleDateString('es-AR', {
-                                      day: '2-digit',
-                                      month: 'short',
-                                      year: 'numeric',
-                                  })}`
-                                : ''}
+                            {validLabel ? `\nVálido hasta ${validLabel}` : ''}
                         </Text>
                     </View>
 
@@ -209,14 +258,31 @@ export default function BonusQRScreen() {
 
                     <View style={[styles.ticketSection, styles.ticketBottom]}>
                         <View style={styles.qrWrapper}>
-                            {!isExpired ? (
+                            {showQr ? (
                                 <View style={[styles.qrInner, { width: qrSize, height: qrSize }]}>
                                     <QRCode value={qrData} size={qrSize} color="#09090B" backgroundColor="#FFFFFF" />
                                 </View>
                             ) : (
                                 <View style={[styles.qrInner, styles.expiredInner, { width: qrSize, height: qrSize }]}>
-                                    <AlertCircle size={48} color="#EF4444" />
-                                    <Text style={styles.expiredText}>Expirado</Text>
+                                    <AlertCircle size={48} color={bonoExpired ? '#EF4444' : '#F59E0B'} />
+                                    <Text style={styles.expiredText}>
+                                        {bonoExpired
+                                            ? 'Vencido'
+                                            : !hasRealCode
+                                              ? 'Sin código'
+                                              : 'Oculto'}
+                                    </Text>
+                                    {sessionHidden && !bonoExpired && hasRealCode ? (
+                                        <TouchableOpacity
+                                            style={styles.reshowBtn}
+                                            onPress={startScreenSession}
+                                            accessibilityRole="button"
+                                            accessibilityLabel="Mostrar QR de nuevo"
+                                        >
+                                            <RefreshCw size={16} color="#fff" />
+                                            <Text style={styles.reshowBtnText}>Mostrar QR de nuevo</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
                                 </View>
                             )}
                         </View>
@@ -226,12 +292,12 @@ export default function BonusQRScreen() {
                             style={[styles.codeRow, copied && styles.codeRowCopied]}
                             onPress={handleCopyCode}
                             activeOpacity={0.7}
-                            disabled={isExpired}
+                            disabled={!showQr}
                             accessibilityRole="button"
                             accessibilityLabel="Copiar código del bono"
                         >
-                            <Text style={[styles.codeText, isExpired && { opacity: 0.5 }]} numberOfLines={1}>
-                                {finalCode}
+                            <Text style={[styles.codeText, !showQr && { opacity: 0.5 }]} numberOfLines={1}>
+                                {hasRealCode ? finalCode : '—'}
                             </Text>
                             {copied ? (
                                 <CheckCircle2 size={22} color="#10B981" />
@@ -240,24 +306,32 @@ export default function BonusQRScreen() {
                             )}
                         </TouchableOpacity>
 
-                        {!isExpired && (
+                        {showQr && (
                             <View style={styles.timerRow}>
                                 <Clock size={16} color="#D97706" />
-                                <Text style={styles.timerText}>Pantalla activa {formatTime(timeLeft)}</Text>
+                                <Text style={styles.timerText}>
+                                    Sesión de pantalla {formatTime(sessionLeft)} · no es la vigencia del bono
+                                </Text>
                             </View>
                         )}
 
                         <View style={styles.securityRow}>
                             <ShieldCheck size={14} color={isDark ? '#71717A' : '#A1A1AA'} />
-                            <Text style={styles.securityText}>Código único verificado por Ramgos</Text>
+                            <Text style={styles.securityText}>
+                                {validLabel
+                                    ? `Vigencia del bono hasta ${validLabel}`
+                                    : 'Código único verificado por Ramgos'}
+                            </Text>
                         </View>
                     </View>
                 </View>
 
                 <Text style={styles.bottomDisclaimer}>
-                    {brightnessReady
-                        ? 'Subimos el brillo para facilitar el escaneo.'
-                        : 'Mostrá el código en la caja para canjear tu crédito.'}
+                    {!hasRealCode
+                        ? 'Abrí este QR desde Historial → Usar bono (compras reales).'
+                        : brightnessReady
+                          ? 'Subimos el brillo para facilitar el escaneo.'
+                          : 'Mostrá el código en la caja para canjear tu crédito.'}
                 </Text>
             </View>
         </View>
@@ -278,210 +352,230 @@ function getStyles(isDark: boolean, insets: any) {
             position: 'absolute',
             top: insets.top + 12,
             right: 20,
+            zIndex: 20,
             width: 44,
             height: 44,
-            borderRadius: Radius.xl,
+            borderRadius: 22,
             overflow: 'hidden',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)',
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(9,9,11,0.08)',
-            justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 10,
+            justifyContent: 'center',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
         },
         content: {
             flex: 1,
             justifyContent: 'center',
-            alignItems: 'center',
             paddingHorizontal: 20,
-            paddingTop: insets.top + 56,
-            paddingBottom: Math.max(insets.bottom, 20),
+            paddingTop: insets.top + 48,
+            paddingBottom: insets.bottom + 24,
         },
         ticketContainer: {
-            width: '100%',
-            maxWidth: 360,
-            ...glassShadow(isDark),
-        },
-        ticketSection: {
+            borderRadius: 24,
+            overflow: 'hidden',
             backgroundColor: surface,
-            padding: 24,
-            alignItems: 'center',
             borderWidth: 1,
             borderColor: border,
         },
-        ticketTop: {
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderBottomWidth: 0,
-            paddingBottom: 20,
-        },
-        ticketBottom: {
-            borderBottomLeftRadius: 24,
-            borderBottomRightRadius: 24,
-            borderTopWidth: 0,
-            paddingTop: 28,
-        },
-        header: { alignItems: 'center', width: '100%' },
+        ticketSection: { padding: 22 },
+        ticketTop: { paddingBottom: 8 },
+        ticketBottom: { alignItems: 'center', paddingTop: 8 },
+        header: { alignItems: 'center', marginBottom: 16 },
         badge: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
-            paddingHorizontal: 14,
-            paddingVertical: 7,
-            borderRadius: Radius.xl,
-            marginBottom: 16,
+            gap: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 999,
+            backgroundColor: isDark ? 'rgba(33,150,243,0.15)' : '#E3F2FD',
+            marginBottom: 14,
         },
-        pulseDot: { width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#10B981', marginRight: 8 },
-        badgeText: { color: '#10B981', fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
-        businessIconWrap: {
-            width: 56,
-            height: 56,
-            borderRadius: Radius.lg,
+        pulseDot: {
+            width: 8,
+            height: 8,
+            borderRadius: 4,
             backgroundColor: accent,
-            justifyContent: 'center',
+        },
+        badgeText: {
+            fontSize: 12,
+            fontWeight: '700',
+            color: accent,
+            letterSpacing: 0.2,
+        },
+        businessIconWrap: {
+            width: 52,
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: accent,
             alignItems: 'center',
-            marginBottom: 12,
+            justifyContent: 'center',
+            marginBottom: 10,
         },
         title: {
             fontSize: 22,
             fontWeight: '800',
             color: text,
             textAlign: 'center',
-            marginBottom: 4,
         },
         bonoTitle: {
-            fontSize: 13,
+            marginTop: 4,
+            fontSize: 14,
             fontWeight: '600',
             color: muted,
-            marginBottom: 4,
-        },
-        subTitle: { fontSize: 13, color: muted, fontWeight: '500', marginBottom: 16 },
-
-        creditRow: {
-            flexDirection: 'row',
-            width: '100%',
-            borderRadius: Radius.lg,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(9,9,11,0.03)',
-            paddingVertical: 14,
-            marginBottom: 10,
-        },
-        creditCell: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
-        creditDivider: { width: StyleSheet.hairlineWidth, backgroundColor: border },
-        creditLabel: { fontSize: 11, fontWeight: '600', color: muted, marginBottom: 4 },
-        creditValue: { fontSize: 20, fontWeight: '800', color: text },
-        creditHint: { fontSize: 11, fontWeight: '500', color: muted, marginTop: 2 },
-        paidHint: {
-            fontSize: 12,
-            color: muted,
-            fontWeight: '500',
             textAlign: 'center',
         },
-
+        subTitle: {
+            marginTop: 6,
+            fontSize: 13,
+            color: muted,
+            textAlign: 'center',
+        },
+        creditRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginTop: 8,
+            paddingVertical: 12,
+            borderRadius: 16,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F4F4F5',
+        },
+        creditCell: { flex: 1, alignItems: 'center' },
+        creditDivider: {
+            width: 1,
+            height: 40,
+            backgroundColor: border,
+        },
+        creditLabel: { fontSize: 11, color: muted, marginBottom: 4, fontWeight: '600' },
+        creditValue: { fontSize: 22, fontWeight: '800', color: text },
+        creditHint: { fontSize: 11, color: muted, marginTop: 2 },
+        paidHint: {
+            marginTop: 12,
+            fontSize: 13,
+            lineHeight: 18,
+            color: muted,
+            textAlign: 'center',
+        },
         dividerContainer: {
             flexDirection: 'row',
             alignItems: 'center',
-            height: 1,
-            width: '100%',
-            backgroundColor: surface,
-            position: 'relative',
+            height: 24,
+            backgroundColor: canvas,
+        },
+        circleLeft: {
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: canvas,
+            marginLeft: -12,
+            borderWidth: 1,
+            borderColor: border,
+        },
+        circleRight: {
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: canvas,
+            marginRight: -12,
+            borderWidth: 1,
+            borderColor: border,
         },
         dashedLine: {
             flex: 1,
             height: 1,
+            borderStyle: 'dashed',
             borderWidth: 1,
             borderColor: border,
-            borderStyle: 'dashed',
-            marginHorizontal: 16,
         },
-        circleLeft: {
-            position: 'absolute',
-            left: -12,
-            top: -12,
-            width: 24,
-            height: 24,
-            borderRadius: Radius.md,
-            backgroundColor: canvas,
-        },
-        circleRight: {
-            position: 'absolute',
-            right: -12,
-            top: -12,
-            width: 24,
-            height: 24,
-            borderRadius: Radius.md,
-            backgroundColor: canvas,
-        },
-
         qrWrapper: {
-            padding: 14,
+            padding: 12,
+            borderRadius: 16,
             backgroundColor: '#FFFFFF',
-            borderRadius: Radius.xl,
-            marginBottom: 20,
+            marginBottom: 16,
             borderWidth: 1,
-            borderColor: isDark ? '#E4E4E7' : border,
-            alignSelf: 'center',
+            borderColor: border,
         },
         qrInner: { justifyContent: 'center', alignItems: 'center' },
-        expiredInner: { backgroundColor: '#FEF2F2', borderRadius: Radius.lg },
-        expiredText: { marginTop: 12, fontSize: 16, fontWeight: 'bold', color: '#EF4444' },
-
-        codeLabel: {
-            fontSize: 11,
+        expiredInner: {
+            backgroundColor: isDark ? '#18181B' : '#FAFAFA',
+            borderRadius: 12,
+            gap: 8,
+            padding: 12,
+        },
+        expiredText: {
+            fontSize: 16,
             fontWeight: '800',
             color: muted,
-            letterSpacing: 1.4,
-            marginBottom: 10,
+        },
+        reshowBtn: {
+            marginTop: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: accent,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 12,
+        },
+        reshowBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+        codeLabel: {
+            fontSize: 11,
+            fontWeight: '700',
+            letterSpacing: 1,
+            color: muted,
+            marginBottom: 8,
         },
         codeRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            width: '100%',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(9,9,11,0.03)',
+            gap: 10,
+            maxWidth: '100%',
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            borderRadius: 12,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F4F4F5',
             borderWidth: 1,
             borderColor: border,
-            borderRadius: Radius.lg,
-            paddingVertical: 14,
-            paddingHorizontal: 16,
-            marginBottom: 14,
-            gap: 10,
+            marginBottom: 12,
         },
         codeRowCopied: {
             borderColor: '#10B981',
-            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#ECFDF5',
         },
         codeText: {
             flex: 1,
-            fontSize: 15,
-            fontWeight: '800',
+            fontSize: 14,
+            fontWeight: '700',
             color: text,
-            letterSpacing: 1.2,
+            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
         },
         timerRow: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(217, 119, 6, 0.12)' : '#FFFBEB',
-            paddingHorizontal: 16,
-            paddingVertical: 9,
-            borderRadius: Radius.xl,
-            marginBottom: 12,
+            gap: 6,
+            marginBottom: 10,
+            paddingHorizontal: 8,
         },
-        timerText: { marginLeft: 8, fontSize: 13, fontWeight: '700', color: '#D97706' },
+        timerText: {
+            fontSize: 11,
+            fontWeight: '600',
+            color: '#D97706',
+            flexShrink: 1,
+        },
         securityRow: {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 6,
         },
-        securityText: { fontSize: 11, color: muted, fontWeight: '500' },
-
+        securityText: {
+            fontSize: 11,
+            color: muted,
+            flexShrink: 1,
+            textAlign: 'center',
+        },
         bottomDisclaimer: {
-            marginTop: 24,
+            marginTop: 18,
+            textAlign: 'center',
             fontSize: 12,
             color: muted,
-            textAlign: 'center',
-            maxWidth: 280,
-            fontWeight: '500',
             lineHeight: 17,
+            paddingHorizontal: 12,
         },
     });
 }

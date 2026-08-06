@@ -1,29 +1,51 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
     ActivityIndicator,
     StyleSheet,
-    ScrollView,
     TextInput,
 } from 'react-native';
 import { useAction } from 'convex/react';
-import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react-native';
+import { Sparkles } from 'lucide-react-native';
 import { api } from '../../../convex/_generated/api';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePoints } from '../../contexts/PointsContext';
 import { useStripe } from '@stripe/stripe-react-native';
 import { usePaymentMode } from '../../contexts/PaymentModeContext';
-import { Switch } from 'react-native';
 import { glassTokens } from '../../utils/glass';
-import { STRIPE_TEST_CARDS, formatCardNumber } from '../testCards';
+import { STRIPE_TEST_CARDS } from '../testCards';
 import { SimulatedCardsPanel, type WalletCard } from './SimulatedCardsPanel';
+import { PaymentModeToggle } from './PaymentModeToggle';
+import { LiquidCardInput } from './LiquidCardInput';
+import {
+    CardholderFields,
+    isValidCardholder,
+    type CardholderBilling,
+} from './CardholderFields';
 import { Radius, colors } from '../../theme/tokens';
 
-
 const POINT_USD = 0.01;
+
+function mapStripePm(pm: any): WalletCard {
+    const brand = pm.card?.brand || 'card';
+    const last4 = pm.card?.last4 || '????';
+    const mm = pm.card?.exp_month ? String(pm.card.exp_month).padStart(2, '0') : '12';
+    const yy = pm.card?.exp_year ? String(pm.card.exp_year).slice(-2) : '34';
+    return {
+        id: pm.id,
+        brand,
+        last4,
+        label: brand.charAt(0).toUpperCase() + brand.slice(1),
+        number: `000000000000${last4}`,
+        cvc: '***',
+        exp: `${mm}/${yy}`,
+        custom: false,
+        source: 'stripe',
+    };
+}
 
 interface PaymentFormProps {
     amount: number;
@@ -52,35 +74,54 @@ interface PaymentFormProps {
     };
 }
 
-export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, theme, userId }: PaymentFormProps) {
+export function PaymentForm({
+    amount,
+    cartId,
+    lineItems,
+    onSuccess,
+    onError,
+    theme,
+    userId,
+}: PaymentFormProps) {
     const createPaymentIntent = useAction(api.stripe.createPaymentIntent);
     const [loading, setLoading] = useState(false);
+    const [addingCard, setAddingCard] = useState(false);
     const [selectedId, setSelectedId] = useState(STRIPE_TEST_CARDS[0].id);
-    const [selectedCard, setSelectedCard] = useState<WalletCard>(STRIPE_TEST_CARDS[0]);
-    const [showCheat, setShowCheat] = useState(false);
+    const [selectedCard, setSelectedCard] = useState<WalletCard | null>(STRIPE_TEST_CARDS[0]);
     const [pointsInput, setPointsInput] = useState('');
     const [applyPoints, setApplyPoints] = useState(false);
     const { show } = useToast();
     const { sessionToken } = useAuth();
-    const { mode, toggle, isLive } = usePaymentMode();
-    const { initPaymentSheet, presentPaymentSheet, confirmPayment } = useStripe();
+    const { mode, isLive } = usePaymentMode();
+    const { confirmSetupIntent, confirmPayment } = useStripe();
     const createSetupIntent = useAction(api.stripe.createSetupIntent);
     const listPaymentMethods = useAction(api.stripe.listPaymentMethods);
-    const [realCards, setRealCards] = useState<any[]>([]);
-    const [selectedRealCardId, setSelectedRealCardId] = useState<string | null>(null);
+    const [realCards, setRealCards] = useState<WalletCard[]>([]);
+    const [cardComplete, setCardComplete] = useState(false);
+    const [billing, setBilling] = useState<CardholderBilling>({ fullName: '', postalCode: '' });
 
-    React.useEffect(() => {
-        if (isLive && sessionToken && userId) {
-            listPaymentMethods({ sessionToken, userId, mode: 'live' })
-                .then(cards => {
-                    setRealCards(cards);
-                    if (cards.length > 0 && !selectedRealCardId) {
-                        setSelectedRealCardId(cards[0].id);
-                    }
-                })
-                .catch(e => console.error("Error loading real cards", e));
+    const refreshRealCards = useCallback(async () => {
+        if (!isLive || !sessionToken || !userId) return;
+        try {
+            const cards = await listPaymentMethods({ sessionToken, userId, mode });
+            setRealCards((cards || []).map(mapStripePm));
+        } catch (e) {
+            console.error('Error loading real cards', e);
+            setRealCards([]);
         }
-    }, [isLive, sessionToken, userId, mode]);
+    }, [isLive, sessionToken, userId, mode, listPaymentMethods]);
+
+    useEffect(() => {
+        if (isLive) {
+            setSelectedId('');
+            setSelectedCard(null);
+            void refreshRealCards();
+        } else {
+            setRealCards([]);
+            setSelectedId(STRIPE_TEST_CARDS[0].id);
+            setSelectedCard(STRIPE_TEST_CARDS[0]);
+        }
+    }, [isLive, refreshRealCards]);
 
     const { points, redeemPoints } = usePoints();
     const isDark = !!theme?.dark || theme?.colors?.background === '#1E293B';
@@ -97,7 +138,15 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
 
     const discountUsd = pointsToUse * POINT_USD;
     const chargeAmount = Math.max(0, Math.round((amount - discountUsd) * 100) / 100);
-    const canPay = !loading && (chargeAmount > 0 || pointsToUse > 0);
+    const billingOk = !isLive || isValidCardholder(billing);
+    const hasCard = isLive
+        ? !!selectedId && selectedId.startsWith('pm_')
+        : !!selectedCard && !!selectedId;
+    const canPay =
+        !loading &&
+        billingOk &&
+        (chargeAmount > 0 || pointsToUse > 0) &&
+        (chargeAmount <= 0 || hasCard);
 
     const buildLineItems = (payAmount: number) => {
         const items = (lineItems ?? []).map((i) => ({
@@ -125,33 +174,55 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
         return items;
     };
 
-    
-    const handleAddCard = async () => {
+    const handleSecureSave = async () => {
+        if (!isValidCardholder(billing)) {
+            show('Enter the name on the card', 'error');
+            throw new Error('Billing incompleto');
+        }
+        if (!cardComplete) {
+            show('Completá los datos de la tarjeta', 'error');
+            throw new Error('Card incompleta');
+        }
+        setAddingCard(true);
+        onError(null);
         try {
-            setLoading(true);
             const { clientSecret } = await createSetupIntent({ sessionToken, mode });
-            
-            const { error: initError } = await initPaymentSheet({
-                setupIntentClientSecret: clientSecret || undefined,
-                merchantDisplayName: 'Ramgos',
-                returnURL: 'ramgos://stripe-redirect',
-            });
-            if (initError) throw new Error(initError.message);
-            
-            const { error: presentError } = await presentPaymentSheet();
-            if (presentError) throw new Error(presentError.message);
-            
-            show('Tarjeta agregada exitosamente', 'success');
-            // Refresh cards
-            if (userId) {
-                const cards = await listPaymentMethods({ sessionToken, userId, mode: 'live' });
-                setRealCards(cards);
-                if (cards.length > 0) setSelectedRealCardId(cards[cards.length - 1].id);
+            if (!clientSecret) {
+                throw new Error('No se pudo inicializar la configuración de la tarjeta');
             }
+
+            const { error, setupIntent } = await confirmSetupIntent(clientSecret, {
+                paymentMethodType: 'Card',
+                paymentMethodData: {
+                    billingDetails: {
+                        name: billing.fullName.trim(),
+                        address: {
+                            country: 'US',
+                            ...(billing.postalCode.trim()
+                                ? { postalCode: billing.postalCode.trim() }
+                                : {}),
+                        },
+                    },
+                },
+            });
+            if (error) throw new Error(error.message);
+
+            const pmId =
+                typeof setupIntent?.paymentMethodId === 'string'
+                    ? setupIntent.paymentMethodId
+                    : undefined;
+
+            show('Tarjeta agregada', 'success');
+            setCardComplete(false);
+            await refreshRealCards();
+            if (pmId) setSelectedId(pmId);
         } catch (e: any) {
-            show(e.message || 'Error al agregar tarjeta', 'error');
+            const msg = e?.message || 'Error al agregar tarjeta';
+            onError(msg);
+            show(msg, 'error');
+            throw e;
         } finally {
-            setLoading(false);
+            setAddingCard(false);
         }
     };
 
@@ -169,43 +240,43 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
             }
 
             const items = buildLineItems(chargeAmount);
-            // En modo live, si usamos PaymentSheet para cobrar, necesitamos client_secret.
-            // Pero en la FASE 5, el createPaymentIntent en "simulate" no requiere confirmar en cliente.
-            // Para mantener compatibilidad con tarjetas guardadas, usamos el paymentMethodId.
-            // Si es live, intentamos usar stripe_payment_intent pero por ahora, solo simularemos si isTest.
             const result = await createPaymentIntent({
                 sessionToken,
                 amountInCents: Math.round(chargeAmount * 100),
                 lineItems: items.length > 0 ? items : undefined,
                 cartId,
                 simulate: !isLive,
-                mode: mode,
+                mode,
+                metadata: isLive
+                    ? {
+                          cardholderName: billing.fullName.trim(),
+                          billingCountry: 'US',
+                          billingMarket: 'US-NY',
+                          ...(billing.postalCode.trim()
+                              ? { postalCode: billing.postalCode.trim() }
+                              : {}),
+                      }
+                    : undefined,
             });
 
             if (isLive && result.clientSecret) {
-                // Confirm the payment with the selected saved card
-                if (!selectedRealCardId) throw new Error("Selecciona una tarjeta para pagar");
-                
-                const { error: confirmError, paymentIntent } = await confirmPayment(result.clientSecret, {
+                if (!selectedId.startsWith('pm_')) {
+                    throw new Error('Seleccioná una tarjeta del carrusel para pagar');
+                }
+
+                const { error: confirmError } = await confirmPayment(result.clientSecret, {
                     paymentMethodType: 'Card',
                     paymentMethodData: {
-                        paymentMethodId: selectedRealCardId,
-                    }
+                        paymentMethodId: selectedId,
+                    },
                 });
-                
-                if (confirmError) {
-                    throw new Error(confirmError.message);
-                }
+
+                if (confirmError) throw new Error(confirmError.message);
             }
 
             if (pointsToUse > 0) await redeemPoints(pointsToUse, result.paymentIntentId);
             const pts = Number((result as any)?.pointsAwarded) || 0;
-            show(
-                pts > 0
-                    ? `Pago OK · +${pts} pts`
-                    : `Pago OK`,
-                'success',
-            );
+            show(pts > 0 ? `Pago OK · +${pts} pts` : 'Pago OK', 'success');
             onSuccess(result.paymentIntentId, { pointsRedeemed: pointsToUse });
         } catch (e: any) {
             const msg = e?.message || 'Error inesperado';
@@ -223,86 +294,54 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
 
     return (
         <View style={styles.root}>
-            
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: 12, backgroundColor: glass.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: glass.border }}>
-                <View>
-                    <Text style={{ color: textColor, fontWeight: '700' }}>{isLive ? 'Modo Real' : 'Modo Prueba'}</Text>
-                    <Text style={{ color: muted, fontSize: 12 }}>{isLive ? 'Usarás tarjetas verdaderas' : 'Transacciones simuladas'}</Text>
-                </View>
-                <Switch 
-                    value={isLive} 
-                    onValueChange={toggle}
-                    trackColor={{ false: '#9CA3AF', true: accent }}
-                />
-            </View>
+            <PaymentModeToggle isDark={isDark} />
 
-            <Text style={[styles.sectionLabel, { color: textColor }]}>Medio de pago {isLive ? '(real)' : '(simulado)'}</Text>
-
+            <Text style={[styles.sectionLabel, { color: textColor }]}>
+                {isLive ? 'Tus tarjetas' : 'Tarjetas de prueba'}
+            </Text>
+            <Text style={[styles.hint, { color: muted }]}>
+                {isLive
+                    ? 'Mismo carrusel · producción Stripe in-app · KYC requerido'
+                    : 'Mismo carrusel · simulación local · sin cobro real'}
+            </Text>
 
             {isLive ? (
-                <View style={{ gap: 10 }}>
-                    {realCards.length === 0 ? (
-                        <Text style={{ color: muted, textAlign: 'center', padding: 20 }}>No tienes tarjetas guardadas.</Text>
-                    ) : (
-                        realCards.map(card => (
-                            <TouchableOpacity
-                                key={card.id}
-                                onPress={() => setSelectedRealCardId(card.id)}
-                                style={[styles.cheatToggle, { borderColor: selectedRealCardId === card.id ? accent : glass.border, backgroundColor: glass.bg }]}
-                            >
-                                <Text style={[styles.cheatToggleText, { color: textColor }]}>
-                                    {card.card?.brand?.toUpperCase()} •••• {card.card?.last4}
-                                </Text>
-                            </TouchableOpacity>
-                        ))
-                    )}
-                    <TouchableOpacity onPress={handleAddCard} style={[styles.cheatToggle, { borderColor: glass.border, backgroundColor: glass.bg, justifyContent: 'center' }]}>
-                        <Text style={[styles.cheatToggleText, { color: accent, textAlign: 'center' }]}>+ Agregar Nueva Tarjeta</Text>
-                    </TouchableOpacity>
-                </View>
-            ) : (
-                <SimulatedCardsPanel
-                    selectedId={selectedId}
-                    onSelect={setSelectedId}
-                    onSelectedCard={onSelectedCard}
-                    accent={accent}
-                    textColor={textColor}
-                    muted={muted}
-                    isDark={isDark}
-                />
-            )}
+                <CardholderFields value={billing} onChange={setBilling} isDark={isDark} />
+            ) : null}
 
-
-            <TouchableOpacity
-                onPress={() => setShowCheat((v) => !v)}
-                style={[styles.cheatToggle, { borderColor: glass.border, backgroundColor: glass.bg }]}
-            >
-                <Sparkles size={16} color={accent} />
-                <Text style={[styles.cheatToggleText, { color: textColor }]}>Tarjetas de prueba Stripe</Text>
-                {showCheat ? <ChevronUp size={18} color={muted} /> : <ChevronDown size={18} color={muted} />}
-            </TouchableOpacity>
-
-            {showCheat && (
-                <View style={[styles.cheatSheet, { backgroundColor: glass.bg, borderColor: glass.border }]}>
-                    <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-                        {STRIPE_TEST_CARDS.map((c) => (
-                            <TouchableOpacity
-                                key={c.id}
-                                style={[styles.cheatRow, { borderBottomColor: glass.border }]}
-                                onPress={() => setSelectedId(c.id)}
-                            >
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[styles.cheatBrand, { color: textColor }]}>{c.label}</Text>
-                                    <Text style={[styles.cheatNum, { color: muted }]}>{formatCardNumber(c.number)}</Text>
-                                </View>
-                                <Text style={[styles.cheatMeta, { color: muted }]}>
-                                    {c.exp} · {c.cvc}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
-            )}
+            <SimulatedCardsPanel
+                key={isLive ? 'live' : 'test'}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onSelectedCard={onSelectedCard}
+                accent={accent}
+                textColor={textColor}
+                muted={muted}
+                isDark={isDark}
+                includePresets={!isLive}
+                externalCards={isLive ? realCards : []}
+                secureAdd={isLive}
+                secureSaving={addingCard}
+                onSecureSave={isLive ? handleSecureSave : undefined}
+                secureAddSlot={
+                    isLive ? (
+                        <LiquidCardInput
+                            isDark={isDark}
+                            accentColor={accent}
+                            textColor={textColor}
+                            mutedColor={muted}
+                            backgroundColor={glass.bg}
+                            borderColor={glass.border}
+                            onCardChange={(details: any) => setCardComplete(!!details?.complete)}
+                        />
+                    ) : undefined
+                }
+                formHint={
+                    isLive
+                        ? 'Producción · CardField in-app (sin Link)'
+                        : 'Modo simulado · cualquier marca'
+                }
+            />
 
             <View style={[styles.pointsBar, { backgroundColor: glass.bg, borderColor: glass.border }]}>
                 <View style={styles.pointsLeft}>
@@ -318,14 +357,18 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
                     <TouchableOpacity
                         onPress={() => {
                             setApplyPoints((v) => !v);
-                            if (!applyPoints) setPointsInput(String(Math.min(points, Math.floor(amount / POINT_USD))));
+                            if (!applyPoints) {
+                                setPointsInput(
+                                    String(Math.min(points, Math.floor(amount / POINT_USD))),
+                                );
+                            }
                         }}
                         style={[styles.toggle, { backgroundColor: applyPoints ? accent : '#CBD5E1' }]}
                     >
                         <Text style={styles.toggleText}>{applyPoints ? 'ON' : 'OFF'}</Text>
                     </TouchableOpacity>
                 </View>
-                {applyPoints && (
+                {applyPoints ? (
                     <View style={styles.pointsRow}>
                         <TextInput
                             value={pointsInput}
@@ -335,16 +378,25 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
                             placeholderTextColor="#94A3B8"
                             style={[styles.pointsInput, { color: textColor, borderColor: muted + '44' }]}
                         />
-                        <Text style={[styles.discountTag, { color: accent }]}>-${discountUsd.toFixed(2)}</Text>
+                        <Text style={[styles.discountTag, { color: accent }]}>
+                            -${discountUsd.toFixed(2)}
+                        </Text>
                     </View>
-                )}
+                ) : null}
             </View>
 
             <View style={[styles.payDock, { backgroundColor: glass.bg, borderColor: glass.border }]}>
                 <View style={styles.payMeta}>
                     <Text style={[styles.payMetaLabel, { color: muted }]}>Total</Text>
-                    <Text style={[styles.payMetaVal, { color: textColor }]}>${chargeAmount.toFixed(2)}</Text>
+                    <Text style={[styles.payMetaVal, { color: textColor }]}>
+                        ${chargeAmount.toFixed(2)}
+                    </Text>
                 </View>
+                {chargeAmount > 0 && !hasCard ? (
+                    <Text style={[styles.hint, { color: muted }]}>
+                        Agregá o elegí una tarjeta del carrusel
+                    </Text>
+                ) : null}
                 <TouchableOpacity
                     onPress={handlePay}
                     disabled={!canPay}
@@ -355,7 +407,9 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
                         <ActivityIndicator color="#fff" />
                     ) : (
                         <Text style={styles.payBtnText}>
-                            {chargeAmount > 0 ? `Pagar $${chargeAmount.toFixed(2)}` : 'Pagar con puntos'}
+                            {chargeAmount > 0
+                                ? `Pagar $${chargeAmount.toFixed(2)}`
+                                : 'Pagar con puntos'}
                         </Text>
                     )}
                 </TouchableOpacity>
@@ -365,32 +419,18 @@ export function PaymentForm({ amount, cartId, lineItems, onSuccess, onError, the
 }
 
 const styles = StyleSheet.create({
-    root: { gap: 12 },
-    sectionLabel: { fontSize: 15, fontWeight: '800', marginLeft: 2 },
-    cheatToggle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderRadius: Radius.md,
-        borderWidth: 1,
-    },
-    cheatToggleText: { flex: 1, fontSize: 13, fontWeight: '700' },
-    cheatSheet: { borderRadius: Radius.lg, borderWidth: 1, padding: 14 },
-    cheatRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        gap: 8,
-    },
-    cheatBrand: { fontSize: 13, fontWeight: '700' },
-    cheatNum: { fontSize: 12, marginTop: 2 },
-    cheatMeta: { fontSize: 11, fontWeight: '600' },
+    root: { gap: 14 },
+    sectionLabel: { fontSize: 15, fontWeight: '800', marginLeft: 2, marginTop: 4 },
+    hint: { fontSize: 12, lineHeight: 17, marginLeft: 2 },
     pointsBar: { gap: 10, borderRadius: Radius.lg, borderWidth: 1, padding: 14 },
     pointsLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    pointsIcon: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+    pointsIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: Radius.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     pointsTitle: { fontSize: 14, fontWeight: '800' },
     pointsSub: { fontSize: 12, marginTop: 2 },
     toggle: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full },
@@ -406,7 +446,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     discountTag: { fontSize: 15, fontWeight: '800' },
-    payDock: { marginTop: 4, padding: 14, borderRadius: Radius.lg, gap: 12, borderWidth: 1 },
+    payDock: { marginTop: 4, padding: 14, borderRadius: Radius.lg, gap: 10, borderWidth: 1 },
     payMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
     payMetaLabel: { fontSize: 13, fontWeight: '600' },
     payMetaVal: { fontSize: 22, fontWeight: '900' },

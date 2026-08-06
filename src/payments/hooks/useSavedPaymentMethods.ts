@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAction } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePaymentMode } from '../../contexts/PaymentModeContext';
 import { STRIPE_TEST_CARDS, type TestCard } from '../testCards';
 
 const STORAGE_KEY = '@ramgos_saved_payment_methods';
@@ -61,6 +62,7 @@ async function saveLocal(cards: SavedPaymentMethod[]) {
 
 export function useSavedPaymentMethods() {
     const { user, sessionToken } = useAuth();
+    const { mode, isLive } = usePaymentMode();
     const listPaymentMethods = useAction(api.stripe.listPaymentMethods);
     const detachPaymentMethod = useAction(api.stripe.detachPaymentMethod);
     const setDefaultPaymentMethod = useAction(api.stripe.setDefaultPaymentMethod);
@@ -78,6 +80,7 @@ export function useSavedPaymentMethods() {
                     const data = await listPaymentMethods({
                         sessionToken,
                         userId: user.id,
+                        mode,
                     });
                     remote = (data || []).map((pm: any) => mapStripePm(pm));
                 } catch {
@@ -99,6 +102,11 @@ export function useSavedPaymentMethods() {
                 setCards(merged);
                 await saveLocal(merged.filter((c) => c.source === 'local'));
             } else {
+                if (isLive) {
+                    setCards([]);
+                    await saveLocal(local.filter((c) => c.source === 'local'));
+                    return;
+                }
                 if (local.length === 0) {
                     // Seed two test cards so Profile badge "2" matches a usable wallet.
                     const seeded: SavedPaymentMethod[] = [
@@ -132,7 +140,7 @@ export function useSavedPaymentMethods() {
         } finally {
             setLoading(false);
         }
-    }, [user?.id, sessionToken, listPaymentMethods]);
+    }, [user?.id, sessionToken, listPaymentMethods, mode, isLive]);
 
     useEffect(() => {
         refresh();
@@ -165,7 +173,7 @@ export function useSavedPaymentMethods() {
             setBusyId(card.id);
             try {
                 if (card.source === 'stripe' && sessionToken) {
-                    await detachPaymentMethod({ sessionToken, paymentMethodId: card.id });
+                    await detachPaymentMethod({ sessionToken, paymentMethodId: card.id, mode });
                 }
                 setCards((prev) => {
                     let next = prev.filter((c) => c.id !== card.id);
@@ -179,7 +187,7 @@ export function useSavedPaymentMethods() {
                 setBusyId(null);
             }
         },
-        [detachPaymentMethod, sessionToken],
+        [detachPaymentMethod, sessionToken, mode],
     );
 
     const setDefault = useCallback(
@@ -187,7 +195,7 @@ export function useSavedPaymentMethods() {
             setBusyId(card.id);
             try {
                 if (card.source === 'stripe' && sessionToken) {
-                    await setDefaultPaymentMethod({ sessionToken, paymentMethodId: card.id });
+                    await setDefaultPaymentMethod({ sessionToken, paymentMethodId: card.id, mode });
                 }
                 setCards((prev) => {
                     const next = prev.map((c) => ({ ...c, isDefault: c.id === card.id }));
@@ -198,7 +206,7 @@ export function useSavedPaymentMethods() {
                 setBusyId(null);
             }
         },
-        [sessionToken, setDefaultPaymentMethod],
+        [sessionToken, setDefaultPaymentMethod, mode],
     );
 
     return {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Platform, ImageBackground , KeyboardAvoidingView} from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft, Clock, MapPin, Phone, ExternalLink, Ticket, ArrowRight, Share2, Star, FileText, Mail } from 'lucide-react-native';
@@ -9,13 +9,6 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 
-// Mock Bonuses for the business
-const BUSINESS_BONUSES = [
-    { id: '1', title: '20% OFF en Toda la Carta', description: 'Válido lunes y martes', pointsCost: 0, expires: '15 Oct' },
-    { id: '2', title: '2x1 en Tragos de Autor', description: 'Happy hour 18-20hs', pointsCost: 50, expires: '30 Oct' },
-    { id: '3', title: 'Postre Gratis', description: 'Con compra mínima de $15', pointsCost: 100, expires: '1 Nov' },
-];
-
 export default function BusinessProfileScreen() {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -23,6 +16,12 @@ export default function BusinessProfileScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { business } = route.params || {};
+
+    // #region agent log
+    useEffect(() => {
+        fetch('http://127.0.0.1:7267/ingest/b723f072-677c-4eaf-9dfe-2dd7fddd1aa6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1445e'},body:JSON.stringify({sessionId:'f1445e',runId:'post-fix',hypothesisId:'D',location:'BusinessProfileScreen.tsx:mount',message:'BusinessProfileScreen mounted after JSX fix',data:{ok:true},timestamp:Date.now()})}).catch(()=>{});
+    }, []);
+    // #endregion
 
     // Fallback data if accessed directly or incomplete
     const data = {
@@ -115,27 +114,28 @@ export default function BusinessProfileScreen() {
                     </View>
                 </View>
 
-                {/* Bonuses Section */}
+                {/* Bonos: no DEMO QR — canje real solo desde Historial con bonoCode emitido */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Bonos Disponibles</Text>
-                    {BUSINESS_BONUSES.map((bonus) => (
-                        <View key={bonus.id} style={styles.bonusCard}>
-                            <View style={styles.ticketLeft}>
-                                <Ticket size={24} color="#2196F3" />
-                            </View>
-                            <View style={styles.ticketContent}>
-                                <Text style={styles.bonusTitle}>{bonus.title}</Text>
-                                <Text style={styles.bonusDesc}>{bonus.description}</Text>
-                                <Text style={styles.bonusMeta}>Expira: {bonus.expires} • {bonus.pointsCost > 0 ? `${bonus.pointsCost} Pts` : 'Gratis'}</Text>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.claimBtn}
-                                onPress={() => navigation.navigate('BonusQR', { bonusId: bonus.id, businessName: data.name })}
-                            >
-                                <Text style={styles.claimBtnText}>Usar</Text>
-                            </TouchableOpacity>
+                    <Text style={styles.sectionTitle}>Mis bonos canjeables</Text>
+                    <TouchableOpacity
+                        style={styles.bonusCard}
+                        onPress={() => navigation.navigate('History')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Ir a Historial para usar bonos"
+                    >
+                        <View style={styles.ticketLeft}>
+                            <Ticket size={24} color="#2196F3" />
                         </View>
-                    ))}
+                        <View style={styles.ticketContent}>
+                            <Text style={styles.bonusTitle}>Usá tus bonos desde Historial</Text>
+                            <Text style={styles.bonusDesc}>
+                                Después de comprar un bono, abrí Historial → Usar bono para mostrar el QR real.
+                            </Text>
+                        </View>
+                        <View style={styles.claimBtn}>
+                            <Text style={styles.claimBtnText}>Ir</Text>
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
                 {/* Forms Section */}

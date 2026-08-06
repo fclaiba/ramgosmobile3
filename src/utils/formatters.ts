@@ -1,11 +1,19 @@
 import { Coupon } from "../contexts/BusinessContext";
+import i18n from "../i18n";
+
+const getLocale = () => (i18n.language.startsWith("en") ? "en-US" : "es-419");
 
 export const formatCurrency = (value: number) =>
-    `$${value.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    new Intl.NumberFormat(getLocale(), {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(value);
 
 export const formatDateShort = (value: string | number | Date) => {
     const date = new Date(value);
-    return date.toLocaleDateString("es-AR", {
+    return date.toLocaleDateString(getLocale(), {
         day: "numeric",
         month: "short",
     });
