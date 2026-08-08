@@ -1,27 +1,75 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, useWindowDimensions } from 'react-native';
-import { ChevronLeft, Share2, Heart, ShieldCheck, MapPin, Truck, AlertTriangle } from 'lucide-react-native';
+import React, { useCallback, useMemo } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    Image,
+    TouchableOpacity,
+    Share,
+    useWindowDimensions,
+} from 'react-native';
+import { ChevronLeft, Share2, Heart, ShieldCheck, Truck, AlertTriangle } from 'lucide-react-native';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useCart } from '../../contexts/CartContext';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useFavorites } from '../../hooks/useFavorites';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
-
-
-// const { width } = Dimensions.get('window'); removed
+import { webPath } from '../../config/appOrigin';
 
 export default function ProductDetailScreen({ route, navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const insets = useSafeAreaInsets();
     const styles = getStyles(isDark);
     const { width } = useWindowDimensions();
     const { productId } = route.params || {};
     const { getProductById } = useMarketplace();
     const { addItem } = useCart();
     const { show } = useToast();
+    const { user, sessionToken } = useAuth();
+    const { isFavorite, toggleFavorite } = useFavorites();
 
     const product = useMemo(() => getProductById(productId), [productId, getProductById]);
+
+    const isSaved = product ? isFavorite(product.id) : false;
+
+    const handleShare = useCallback(async () => {
+        if (!product) return;
+        try {
+            const url = webPath(`/p/${encodeURIComponent(String(product.id))}`);
+            await Share.share({
+                title: product.title,
+                message: `Mirá esto: ${product.title} - $${product.price}\n${url}`,
+                url,
+            });
+        } catch {
+            /* user cancelled */
+        }
+    }, [product]);
+
+    const handleToggleFavorite = useCallback(async () => {
+        if (!product) return;
+        if (!user || !sessionToken) {
+            show('Iniciá sesión para guardar', 'warning');
+            return;
+        }
+        try {
+            await toggleFavorite({
+                id: product.id,
+                name: product.title,
+                price: product.price,
+                image: product.images?.[0]?.url ?? '',
+                type: 'product',
+                category: product.category || '',
+            });
+        } catch (e: any) {
+            show(e?.message || 'No se pudo guardar el producto', 'error');
+        }
+    }, [product, user, sessionToken, toggleFavorite, show]);
 
     if (!product) {
         return (
@@ -58,23 +106,10 @@ export default function ProductDetailScreen({ route, navigation }: any) {
         navigation.navigate('Cart');
     };
 
+    const iconColor = isDark ? '#FFF' : '#000';
+
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-                    <ChevronLeft size={24} color="#000" />
-                </TouchableOpacity>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <TouchableOpacity style={styles.iconBtn}>
-                        <Share2 size={24} color="#000" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.iconBtn}>
-                        <Heart size={24} color="#000" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Image Carousel */}
                 <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carousel}>
@@ -159,6 +194,46 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                 </View>
             </ScrollView>
 
+            {/* Header after scroll — wins touch stack on mobile */}
+            <View
+                pointerEvents="box-none"
+                style={[styles.header, { top: Math.max(insets.top, 8) + 8 }]}
+            >
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={styles.iconBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Volver"
+                >
+                    <ChevronLeft size={24} color={iconColor} />
+                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 12 }} pointerEvents="box-none">
+                    <TouchableOpacity
+                        style={styles.iconBtn}
+                        onPress={handleShare}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Compartir"
+                    >
+                        <Share2 size={24} color={iconColor} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconBtn}
+                        onPress={handleToggleFavorite}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Guardar"
+                    >
+                        <Heart
+                            size={24}
+                            color={isSaved ? '#EF4444' : iconColor}
+                            fill={isSaved ? '#EF4444' : 'transparent'}
+                        />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             {/* Bottom Actions */}
             <View style={styles.bottomBar}>
                 <TouchableOpacity style={styles.cartBtn} onPress={handleAddToCart}>
@@ -177,27 +252,30 @@ const getStyles = (isDark: any) => StyleSheet.create({
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: {
         position: 'absolute',
-        top: 40,
         left: 0,
         right: 0,
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        zIndex: 10
+        zIndex: 200,
+        elevation: 24,
     },
     iconBtn: {
         width: 40,
         height: 40,
         borderRadius: Radius.xl,
-        backgroundColor: 'rgba(255,255,255,0.9)',
+        backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)',
         justifyContent: 'center',
         alignItems: 'center',
-        ...glassShadow(isDark),},
+        zIndex: 201,
+        elevation: 28,
+        ...glassShadow(isDark),
+    },
     carousel: { height: 350 },
     productImage: { height: 350, resizeMode: 'contain' },
     content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: colors(isDark).glass },
-    title: { fontSize: 24, fontWeight: '400', color: '#1F2937', marginBottom: 12 },
-    price: { fontSize: 32, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
+    title: { fontSize: 24, fontWeight: '400', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 12 },
+    price: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#FAFAFA' : '#111827', marginBottom: 4 },
 
     badgesRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
     badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radius.md, borderWidth: 1 },
@@ -207,25 +285,25 @@ const getStyles = (isDark: any) => StyleSheet.create({
     textNew: { color: '#059669' },
     textUsed: { color: '#C2410C' },
     verificationBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, backgroundColor: colors(isDark).glass, borderRadius: Radius.md },
-    verificationText: { fontSize: 12, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563' },
+    verificationText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#4B5563' },
 
     warningBox: { backgroundColor: '#FFFBEB', padding: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: '#FCD34D', marginBottom: 16 },
     warningTitle: { fontSize: 14, fontWeight: 'bold', color: '#92400E', marginBottom: 4 },
     warningText: { fontSize: 14, color: '#B45309' },
 
     separator: { height: 1, backgroundColor: colors(isDark).glass, marginVertical: 20 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 8 },
-    description: { fontSize: 16, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', lineHeight: 24 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 8 },
+    description: { fontSize: 16, color: isDark ? '#9CA3AF' : '#4B5563', lineHeight: 24 },
 
     sellerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     sellerAvatar: { width: 48, height: 48, borderRadius: Radius.xl },
-    sellerName: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-    sellerRating: { fontSize: 14, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#6B7280' },
+    sellerName: { fontSize: 16, fontWeight: '600', color: isDark ? '#F9FAFB' : '#1F2937' },
+    sellerRating: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' },
 
-    safetyBox: { flexDirection: 'row', gap: 12, backgroundColor: '#FAFAFA', padding: 16, borderRadius: Radius.md, alignItems: 'flex-start' },
-    shippingBox: { flexDirection: 'row', gap: 12, backgroundColor: '#EFF6FF', padding: 16, borderRadius: Radius.md, marginTop: 12, alignItems: 'flex-start' },
-    safetyTitle: { fontSize: 14, fontWeight: 'bold', color: '#1F2937' },
-    safetyDesc: { fontSize: 13, color: isDark ? isDark ? '#6B7280' : '#9CA3AF' : '#4B5563', marginTop: 2 },
+    safetyBox: { flexDirection: 'row', gap: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FAFAFA', padding: 16, borderRadius: Radius.md, alignItems: 'flex-start' },
+    shippingBox: { flexDirection: 'row', gap: 12, backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : '#EFF6FF', padding: 16, borderRadius: Radius.md, marginTop: 12, alignItems: 'flex-start' },
+    safetyTitle: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937' },
+    safetyDesc: { fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563', marginTop: 2 },
 
     bottomBar: {
         position: 'absolute',
@@ -237,7 +315,9 @@ const getStyles = (isDark: any) => StyleSheet.create({
         backgroundColor: colors(isDark).glass,
         borderTopWidth: 1,
         borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
-        gap: 12
+        gap: 12,
+        zIndex: 50,
+        elevation: 12,
     },
     cartBtn: {
         flex: 1,
@@ -256,5 +336,5 @@ const getStyles = (isDark: any) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center'
     },
-    buyBtnText: { color: isDark ? '#09090B' : '#FAFAFA', fontWeight: 'bold', fontSize: 16 }
+    buyBtnText: { color: '#FAFAFA', fontWeight: 'bold', fontSize: 16 }
 });

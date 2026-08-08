@@ -1,36 +1,214 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    TextInput,
+    ActivityIndicator,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { UserPlus, Users } from "lucide-react-native";
-import { Radius } from '../../theme/tokens';
+import { UserPlus, Users, Megaphone, ListChecks } from "lucide-react-native";
+import { Radius } from "../../theme/tokens";
 
+export type InviteModalMode = "whitelist" | "invite";
 
 export function InfluencersTab({
     styles,
-    setInviteModalVisible,
+    openInviteModal,
     pendingProposalsFromInfluencers,
     pendingMyInvitations,
     whitelist,
+    listings,
     handleRespondToInfluencerProposal,
     handleEndBusinessCampaign,
     handleRemoveFromWhitelist,
-    isDark
+    handleToggleOpenPromotion,
+    isDark,
 }: any) {
+    const [savingListingId, setSavingListingId] = useState<string | null>(null);
+    const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+
+    const onToggle = async (listing: any, nextOpen: boolean) => {
+        const id = String(listing._id);
+        const draft = rateDrafts[id];
+        const pct =
+            draft !== undefined
+                ? parseFloat(draft)
+                : (Number(listing.openCommissionRate) || 0) * 100;
+        setSavingListingId(id);
+        try {
+            await handleToggleOpenPromotion(listing, nextOpen, pct);
+        } finally {
+            setSavingListingId(null);
+        }
+    };
+
     return (
         <View style={styles.sectionGap}>
-            <TouchableOpacity
-                style={styles.bigCreateBtn}
-                onPress={() => setInviteModalVisible(true)}
-            >
-                <LinearGradient
-                    colors={["#2196F3", "#5B21B6"]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                />
-                <UserPlus size={24} color="#fff" />
-                <Text style={styles.bigCreateText}>Invitar influencer</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                    style={[styles.bigCreateBtn, { flex: 1 }]}
+                    onPress={() => openInviteModal("whitelist")}
+                >
+                    <LinearGradient
+                        colors={["#16a34a", "#15803d"]}
+                        style={StyleSheet.absoluteFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                    />
+                    <ListChecks size={22} color="#fff" />
+                    <Text style={styles.bigCreateText}>Añadir a Whitelist</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.bigCreateBtn, { flex: 1 }]}
+                    onPress={() => openInviteModal("invite")}
+                >
+                    <LinearGradient
+                        colors={["#2196F3", "#5B21B6"]}
+                        style={StyleSheet.absoluteFill}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                    />
+                    <UserPlus size={22} color="#fff" />
+                    <Text style={styles.bigCreateText}>Invitar campaña</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Productos abiertos a influencers */}
+            <View style={{ gap: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Megaphone size={18} color={isDark ? "#5DD3F3" : "#2196F3"} />
+                    <Text
+                        style={{
+                            fontWeight: "700",
+                            color: isDark ? "#F9FAFB" : "#111827",
+                        }}
+                    >
+                        Productos abiertos a influencers
+                    </Text>
+                </View>
+                <Text
+                    style={{
+                        fontSize: 12,
+                        color: isDark ? "#9CA3AF" : "#6B7280",
+                        marginTop: -4,
+                    }}
+                >
+                    Activá un producto para que cualquier influencer pueda promocionarlo.
+                    Si está apagado, solo whitelist o campaña pueden promoverlo.
+                </Text>
+                {!listings || listings.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyTitle}>Sin productos</Text>
+                        <Text style={styles.emptyDesc}>
+                            Creá un bono o listing primero para configurar promoción abierta.
+                        </Text>
+                    </View>
+                ) : (
+                    listings.map((listing: any) => {
+                        const id = String(listing._id);
+                        const isOpen = listing.openPromotion === true;
+                        const ratePct =
+                            rateDrafts[id] ??
+                            String(
+                                Math.round(
+                                    (Number(listing.openCommissionRate) || 0.05) * 100,
+                                ),
+                            );
+                        const saving = savingListingId === id;
+                        return (
+                            <View key={id} style={styles.couponCard}>
+                                <View style={styles.couponHeader}>
+                                    <View style={{ flex: 1, paddingRight: 8 }}>
+                                        <Text style={styles.couponTitle} numberOfLines={2}>
+                                            {listing.title || "Sin título"}
+                                        </Text>
+                                        <Text style={styles.couponCode}>
+                                            {isOpen
+                                                ? "Público: cualquier influencer"
+                                                : "Solo whitelist / campaña"}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        disabled={saving}
+                                        onPress={() => onToggle(listing, !isOpen)}
+                                        style={{
+                                            width: 50,
+                                            height: 28,
+                                            borderRadius: Radius.md,
+                                            backgroundColor: isOpen
+                                                ? "#2196F3"
+                                                : isDark
+                                                  ? "#374151"
+                                                  : "#E5E7EB",
+                                            justifyContent: "center",
+                                            paddingHorizontal: 3,
+                                            opacity: saving ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {saving ? (
+                                            <ActivityIndicator size="small" color="#fff" />
+                                        ) : (
+                                            <View
+                                                style={{
+                                                    width: 22,
+                                                    height: 22,
+                                                    borderRadius: Radius.md,
+                                                    backgroundColor: "rgba(255,255,255,0.62)",
+                                                    alignSelf: isOpen ? "flex-end" : "flex-start",
+                                                }}
+                                            />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                                {isOpen && (
+                                    <View
+                                        style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            marginTop: 10,
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 12,
+                                                color: isDark ? "#CBD5E1" : "#64748b",
+                                                fontWeight: "600",
+                                            }}
+                                        >
+                                            Comisión %
+                                        </Text>
+                                        <TextInput
+                                            value={ratePct}
+                                            onChangeText={(v) =>
+                                                setRateDrafts((prev) => ({ ...prev, [id]: v }))
+                                            }
+                                            onBlur={() => {
+                                                if (isOpen) onToggle(listing, true);
+                                            }}
+                                            keyboardType="numeric"
+                                            style={{
+                                                borderWidth: 1,
+                                                borderColor: isDark ? "#374151" : "#E5E7EB",
+                                                borderRadius: Radius.sm,
+                                                paddingHorizontal: 10,
+                                                paddingVertical: 6,
+                                                minWidth: 56,
+                                                color: isDark ? "#F9FAFB" : "#111827",
+                                                backgroundColor: isDark
+                                                    ? "rgba(255,255,255,0.05)"
+                                                    : "#fff",
+                                            }}
+                                        />
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })
+                )}
+            </View>
 
             {/* Pending proposals from influencers */}
             {pendingProposalsFromInfluencers.length > 0 && (
@@ -53,9 +231,7 @@ export function InfluencersTab({
                         >
                             <View style={styles.couponHeader}>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.couponTitle}>
-                                        {c.influencerName}
-                                    </Text>
+                                    <Text style={styles.couponTitle}>{c.influencerName}</Text>
                                     <Text style={styles.couponCode}>
                                         {(c.commissionRate * 100).toFixed(1)}% por venta
                                         {c.influencerReferralCode
@@ -121,9 +297,7 @@ export function InfluencersTab({
                         <View key={c._id} style={styles.couponCard}>
                             <View style={styles.couponHeader}>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.couponTitle}>
-                                        {c.influencerName}
-                                    </Text>
+                                    <Text style={styles.couponTitle}>{c.influencerName}</Text>
                                     <Text style={styles.couponCode}>
                                         {(c.commissionRate * 100).toFixed(1)}% propuesto
                                     </Text>
@@ -167,7 +341,7 @@ export function InfluencersTab({
                 </View>
             )}
 
-            {/* Whitelist campaigns */}
+            {/* Whitelist */}
             <View style={{ gap: 12 }}>
                 <Text
                     style={{
@@ -180,13 +354,10 @@ export function InfluencersTab({
                 {whitelist.length === 0 ? (
                     <View style={styles.emptyState}>
                         <Users size={48} color={isDark ? "#4B5563" : "#E5E7EB"} />
-                        <Text style={styles.emptyTitle}>
-                            Sin influencers en Whitelist
-                        </Text>
+                        <Text style={styles.emptyTitle}>Sin influencers en Whitelist</Text>
                         <Text style={styles.emptyDesc}>
-                            Añade influencers a tu Whitelist para que puedan promover
-                            tus bonos cuando la opción de promoción abierta esté
-                            desactivada.
+                            Añadí influencers por @ para que puedan crear y promover tus bonos
+                            cuando la promoción abierta esté desactivada.
                         </Text>
                     </View>
                 ) : (

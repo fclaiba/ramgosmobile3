@@ -39,6 +39,7 @@ import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFavorites } from '../hooks/useFavorites';
 import { usePoints } from '../contexts/PointsContext';
+import { useToast } from '../contexts/ToastContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
@@ -51,6 +52,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { Radius, colors } from '../theme/tokens';
+import { webPath } from '../config/appOrigin';
 
 
 const { width } = Dimensions.get('window');
@@ -60,7 +62,7 @@ const MIN_HEADER_HEIGHT = Platform.OS === 'ios' ? 96 : 80;
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-const AnimatedButton = ({ onPress, style, children, isDark, active = true }: any) => {
+const AnimatedButton = ({ onPress, style, children, isDark, active = true, hitSlop }: any) => {
     const scale = useSharedValue(1);
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ scale: scale.value }],
@@ -84,6 +86,7 @@ const AnimatedButton = ({ onPress, style, children, isDark, active = true }: any
             onPress={active ? onPress : undefined}
             style={[style, animatedStyle]}
             activeOpacity={0.9}
+            hitSlop={hitSlop ?? { top: 8, bottom: 8, left: 8, right: 8 }}
         >
             {children}
         </AnimatedTouchable>
@@ -184,9 +187,10 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const item = useMemo(() => normalizeItem(rawItem), [rawItem]);
 
     const { addItem, openCart } = useCart();
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { isFavorite, toggleFavorite } = useFavorites();
     const { progressChallenge } = usePoints();
+    const { show } = useToast();
     const [quantity, setQuantity] = useState(1);
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -224,19 +228,33 @@ export default function ItemDetailScreen({ route, navigation }: any) {
 
     const isSaved = item ? isFavorite(item.id) : false;
 
-    const handleToggleFavorite = useCallback(() => {
+    const handleToggleFavorite = useCallback(async () => {
         if (!item) return;
-        toggleFavorite(item);
-    }, [item, toggleFavorite]);
+        if (!user || !sessionToken) {
+            show('Iniciá sesión para guardar', 'warning');
+            return;
+        }
+        try {
+            await toggleFavorite(item);
+        } catch (e: any) {
+            show(e?.message || 'No se pudo guardar el producto', 'error');
+        }
+    }, [item, user, sessionToken, toggleFavorite, show]);
 
     const handleShare = useCallback(async () => {
         if (!item) return;
         try {
+            const pathKey = item.slug || item.id;
+            const url = pathKey ? webPath(`/p/${encodeURIComponent(String(pathKey))}`) : '';
+            const message = url
+                ? `Mirá esto: ${item.name} - $${item.price}\n${url}`
+                : `Mirá esto: ${item.name} - $${item.price}`;
             await Share.share({
                 title: item.name,
-                message: `Mirá esto: ${item.name} - $${item.price}`,
+                message,
+                url: url || undefined,
             });
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* user cancelled */ }
     }, [item]);
 
     const handleAddToCart = useCallback(() => {
@@ -308,31 +326,16 @@ export default function ItemDetailScreen({ route, navigation }: any) {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Sticky header background */}
-            <Animated.View style={[styles.stickyHeader, headerOpacity]}>
+            {/* Sticky header background — no touches (buttons live in topBar) */}
+            <Animated.View
+                pointerEvents="none"
+                style={[styles.stickyHeader, headerOpacity]}
+            >
                 <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
                 <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
                     <Text style={styles.stickyHeaderTitle} numberOfLines={1}>{item.name}</Text>
                 </View>
             </Animated.View>
-
-            {/* Top floating controls */}
-            <View style={[styles.topBar, { top: insets.top + 8 }]}>
-                <AnimatedButton style={styles.glassBtn} onPress={() => navigation.goBack()} isDark={isDark}>
-                    <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
-                </AnimatedButton>
-                <View style={styles.topBarActions}>
-                    <AnimatedButton style={styles.glassBtn} onPress={openCart} isDark={isDark}>
-                        <ShoppingCart size={22} color={isDark ? '#FFF' : '#000'} />
-                    </AnimatedButton>
-                    <AnimatedButton style={styles.glassBtn} onPress={handleShare} isDark={isDark}>
-                        <Share2 size={22} color={isDark ? '#FFF' : '#000'} />
-                    </AnimatedButton>
-                    <AnimatedButton style={styles.glassBtn} onPress={handleToggleFavorite} isDark={isDark}>
-                        <Heart size={22} color={isSaved ? '#EF4444' : (isDark ? '#FFF' : '#000')} fill={isSaved ? '#EF4444' : 'transparent'} />
-                    </AnimatedButton>
-                </View>
-            </View>
 
             <MainScrollView
                 {...mainScrollProps}
@@ -627,6 +630,27 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                 </View>
             </MainScrollView>
 
+            {/* Top floating controls — after scroll so they win the touch stack */}
+            <View
+                pointerEvents="box-none"
+                style={[styles.topBar, { top: insets.top + 8 }]}
+            >
+                <AnimatedButton style={styles.glassBtn} onPress={() => navigation.goBack()} isDark={isDark}>
+                    <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
+                </AnimatedButton>
+                <View style={styles.topBarActions} pointerEvents="box-none">
+                    <AnimatedButton style={styles.glassBtn} onPress={openCart} isDark={isDark}>
+                        <ShoppingCart size={22} color={isDark ? '#FFF' : '#000'} />
+                    </AnimatedButton>
+                    <AnimatedButton style={styles.glassBtn} onPress={handleShare} isDark={isDark}>
+                        <Share2 size={22} color={isDark ? '#FFF' : '#000'} />
+                    </AnimatedButton>
+                    <AnimatedButton style={styles.glassBtn} onPress={handleToggleFavorite} isDark={isDark}>
+                        <Heart size={22} color={isSaved ? '#EF4444' : (isDark ? '#FFF' : '#000')} fill={isSaved ? '#EF4444' : 'transparent'} />
+                    </AnimatedButton>
+                </View>
+            </View>
+
             {/* ── STICKY FOOTER: single action button ── */}
             <View style={styles.footer}>
                 <BlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
@@ -752,7 +776,8 @@ function getStyles(isDark: boolean, insets: any) {
             right: 16,
             flexDirection: 'row',
             justifyContent: 'space-between',
-            zIndex: 100,
+            zIndex: 200,
+            elevation: 24,
         },
         topBarActions: { flexDirection: 'row', gap: 10 },
         glassBtn: {
@@ -763,6 +788,8 @@ function getStyles(isDark: boolean, insets: any) {
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)',
+            zIndex: 201,
+            elevation: 28,
         },
 
         heroContainer: {

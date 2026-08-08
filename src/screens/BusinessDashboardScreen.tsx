@@ -56,7 +56,10 @@ import { DesktopSidebar } from "../components/DesktopSidebar";
 import { OverviewTab } from "../components/dashboard/OverviewTab";
 import { InventoryManager } from "../components/dashboard/InventoryManager";
 import { ReviewsTab } from "../components/dashboard/ReviewsTab";
-import { InfluencersTab } from "../components/dashboard/InfluencersTab";
+import {
+  InfluencersTab,
+  type InviteModalMode,
+} from "../components/dashboard/InfluencersTab";
 import { LeadsTab } from "../components/dashboard/LeadsTab";
 import { AgendaConfigTab } from "../components/dashboard/AgendaConfigTab";
 
@@ -131,7 +134,9 @@ function BusinessDashboardScreen({
   const businessCampaigns =
     useQuery(
       api.campaigns.getBusinessCampaigns,
-      user?.id ? { businessId: user.id as any } : "skip",
+      user?.id && sessionToken
+        ? { businessId: user.id as any, sessionToken }
+        : "skip",
     ) ?? [];
   const inviteInfluencerMutation = useMutation(api.campaigns.inviteInfluencer);
   const respondToCampaignMutation = useMutation(
@@ -139,10 +144,14 @@ function BusinessDashboardScreen({
   );
   const endCampaignMutation = useMutation(api.campaigns.endCampaign);
   const pauseCampaignMutation = useMutation(api.campaigns.pauseCampaign);
+  const updateListingMutation = useMutation(api.listings.updateListing);
 
   // Whitelist Mutations and Queries
   const whitelist =
-    useQuery(api.influencers.getWhitelist, user?.id ? {} : "skip") ?? [];
+    useQuery(
+      api.influencers.getWhitelist,
+      user?.id && sessionToken ? { sessionToken } : "skip",
+    ) ?? [];
   const addToWhitelistMutation = useMutation(api.influencers.addToWhitelist);
   const removeFromWhitelistMutation = useMutation(
     api.influencers.removeFromWhitelist,
@@ -150,6 +159,8 @@ function BusinessDashboardScreen({
 
   // Lookup by @username or referralCode — never by email.
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteModalMode, setInviteModalMode] =
+    useState<InviteModalMode>("whitelist");
   const [inviteLookupTerm, setInviteLookupTerm] = useState("");
   const [invitedInfluencerId, setInvitedInfluencerId] = useState<string | null>(
     null,
@@ -158,8 +169,8 @@ function BusinessDashboardScreen({
   const [submittingInvite, setSubmittingInvite] = useState(false);
   const lookupResult = useQuery(
     api.campaigns.lookupInfluencer,
-    user?.id && inviteLookupTerm.trim().length > 0
-      ? { handleOrCode: inviteLookupTerm }
+    user?.id && sessionToken && inviteLookupTerm.trim().length > 0
+      ? { handleOrCode: inviteLookupTerm, sessionToken }
       : "skip",
   );
 
@@ -168,6 +179,14 @@ function BusinessDashboardScreen({
       setInvitedInfluencerId(String(lookupResult._id));
     }
   }, [lookupResult]);
+
+  const openInviteModal = (mode: InviteModalMode) => {
+    setInviteModalMode(mode);
+    setInviteLookupTerm("");
+    setInvitedInfluencerId(null);
+    setInviteRatePct("5");
+    setInviteModalVisible(true);
+  };
 
   const pendingProposalsFromInfluencers = useMemo(
     () =>
@@ -198,17 +217,23 @@ function BusinessDashboardScreen({
     ) || [];
 
   const handleInviteInfluencer = async () => {
-    if (!user?.id) return;
+    if (!user?.id || !sessionToken) return;
     if (!invitedInfluencerId) {
       show("Por favor, selecciona un influencer válido primero", "error");
+      return;
+    }
+    const rate = parseFloat(inviteRatePct) / 100;
+    if (!Number.isFinite(rate) || rate <= 0 || rate > 0.5) {
+      show("La comisión debe estar entre 1% y 50%.", "error");
       return;
     }
     setSubmittingInvite(true);
     try {
       await inviteInfluencerMutation({
+        sessionToken,
         businessId: user.id as Id<"users">,
         influencerId: invitedInfluencerId as Id<"users">,
-        commissionRate: parseFloat(inviteRatePct) / 100,
+        commissionRate: rate,
       });
       show("Invitación enviada", "success");
       setInviteModalVisible(false);
@@ -222,6 +247,10 @@ function BusinessDashboardScreen({
   };
 
   const handleAddToWhitelist = async () => {
+    if (!sessionToken) {
+      show("Sesión no válida. Volvé a iniciar sesión.", "error");
+      return;
+    }
     if (!invitedInfluencerId) {
       show("Por favor, selecciona un influencer válido primero", "error");
       return;
@@ -229,7 +258,8 @@ function BusinessDashboardScreen({
     setSubmittingInvite(true);
     try {
       await addToWhitelistMutation({
-        influencerId: invitedInfluencerId as Id<"users">,
+        sessionToken,
+        influencerId: String(invitedInfluencerId),
       });
       show("Influencer añadido a la Whitelist", "success");
       setInviteModalVisible(false);
@@ -243,11 +273,52 @@ function BusinessDashboardScreen({
   };
 
   const handleRemoveFromWhitelist = async (influencerId: string) => {
+    if (!sessionToken) {
+      show("Sesión no válida. Volvé a iniciar sesión.", "error");
+      return;
+    }
     try {
-      await removeFromWhitelistMutation({ influencerId: influencerId as Id<"users"> });
+      await removeFromWhitelistMutation({
+        sessionToken,
+        influencerId: String(influencerId),
+      });
       show("Influencer removido de la Whitelist", "success");
     } catch (e: any) {
       show(e.message, "error");
+    }
+  };
+
+  const handleToggleOpenPromotion = async (
+    listing: any,
+    nextOpen: boolean,
+    ratePct: number,
+  ) => {
+    if (!sessionToken) {
+      show("Sesión no válida. Volvé a iniciar sesión.", "error");
+      return;
+    }
+    const rate = (Number.isFinite(ratePct) ? ratePct : 5) / 100;
+    if (nextOpen && (rate <= 0 || rate > 0.5)) {
+      show("La comisión de promoción abierta debe estar entre 1% y 50%.", "error");
+      return;
+    }
+    try {
+      await updateListingMutation({
+        sessionToken,
+        id: listing._id as Id<"listings">,
+        updates: {
+          openPromotion: nextOpen,
+          ...(nextOpen ? { openCommissionRate: rate } : {}),
+        },
+      });
+      show(
+        nextOpen
+          ? "Producto abierto a cualquier influencer"
+          : "Producto restringido a whitelist/campaña",
+        "success",
+      );
+    } catch (e: any) {
+      show(e.message || "No se pudo actualizar el producto", "error");
     }
   };
 
@@ -255,9 +326,10 @@ function BusinessDashboardScreen({
     campaignId: string,
     decision: "accept" | "reject",
   ) => {
-    if (!user?.id) return;
+    if (!user?.id || !sessionToken) return;
     try {
       await respondToCampaignMutation({
+        sessionToken,
         campaignId: campaignId as any,
         decision,
       });
@@ -271,9 +343,10 @@ function BusinessDashboardScreen({
   };
 
   const handlePauseCampaign = async (campaignId: string) => {
-    if (!user?.id) return;
+    if (!user?.id || !sessionToken) return;
     try {
       await pauseCampaignMutation({
+        sessionToken,
         campaignId: campaignId as any,
       });
       show("Campaña pausada.", "success");
@@ -283,9 +356,10 @@ function BusinessDashboardScreen({
   };
 
   const handleEndBusinessCampaign = async (campaignId: string) => {
-    if (!user?.id) return;
+    if (!user?.id || !sessionToken) return;
     try {
       await endCampaignMutation({
+        sessionToken,
         campaignId: campaignId as any,
       });
       show("Campaña finalizada.", "success");
@@ -824,20 +898,22 @@ function BusinessDashboardScreen({
           {activeTab === "influencers" && (
             <InfluencersTab
               styles={styles}
-              setInviteModalVisible={setInviteModalVisible}
+              openInviteModal={openInviteModal}
               pendingProposalsFromInfluencers={pendingProposalsFromInfluencers}
               pendingMyInvitations={pendingMyInvitations}
               whitelist={whitelist}
+              listings={convexListings}
               handleRespondToInfluencerProposal={handleRespondToInfluencerProposal}
               handleEndBusinessCampaign={handleEndBusinessCampaign}
               handleRemoveFromWhitelist={handleRemoveFromWhitelist}
+              handleToggleOpenPromotion={handleToggleOpenPromotion}
               isDark={isDark}
             />
           )}
         </View>
       </ScrollView>
 
-      {/* --- Invite Influencer Modal --- */}
+      {/* --- Whitelist / Invite Influencer Modal --- */}
       <Modal
         visible={inviteModalVisible}
         animationType="fade"
@@ -862,7 +938,11 @@ function BusinessDashboardScreen({
           <View style={styles.modalDim} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Invitar influencer</Text>
+              <Text style={styles.modalTitle}>
+                {inviteModalMode === "whitelist"
+                  ? "Añadir a Whitelist"
+                  : "Invitar a campaña"}
+              </Text>
               <TouchableOpacity
                 onPress={() => setInviteModalVisible(false)}
                 style={styles.modalCloseBtn}
@@ -884,7 +964,29 @@ function BusinessDashboardScreen({
               autoCapitalize="none"
               autoCorrect={false}
             />
-            {inviteLookupTerm.trim().length > 0 && lookupResult && (
+            {!sessionToken && inviteLookupTerm.trim().length > 0 && (
+              <Text
+                style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}
+              >
+                Sesión no válida. Cerrá sesión y volvé a entrar.
+              </Text>
+            )}
+            {sessionToken &&
+              inviteLookupTerm.trim().length > 0 &&
+              lookupResult === undefined && (
+                <Text
+                  style={{
+                    color: isDark ? "#9CA3AF" : "#6B7280",
+                    fontSize: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  Buscando…
+                </Text>
+              )}
+            {sessionToken &&
+              inviteLookupTerm.trim().length > 0 &&
+              lookupResult && (
               <View
                 style={{
                   backgroundColor: isDark ? "#0f172a" : "#f0fdf4",
@@ -917,7 +1019,9 @@ function BusinessDashboardScreen({
                 </Text>
               </View>
             )}
-            {inviteLookupTerm.trim().length > 0 && !lookupResult && (
+            {sessionToken &&
+              inviteLookupTerm.trim().length > 0 &&
+              lookupResult === null && (
               <Text
                 style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}
               >
@@ -925,15 +1029,19 @@ function BusinessDashboardScreen({
               </Text>
             )}
 
-            <Text style={styles.modalLabel}>Comisión por venta (%)</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="5"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="numeric"
-              value={inviteRatePct}
-              onChangeText={setInviteRatePct}
-            />
+            {inviteModalMode === "invite" && (
+              <>
+                <Text style={styles.modalLabel}>Comisión por venta (%)</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="5"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                  value={inviteRatePct}
+                  onChangeText={setInviteRatePct}
+                />
+              </>
+            )}
 
             <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
               <TouchableOpacity
@@ -944,14 +1052,20 @@ function BusinessDashboardScreen({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalConfirmBtn, submittingInvite && { opacity: 0.7 }]}
-                onPress={handleAddToWhitelist}
-                disabled={submittingInvite}
+                onPress={
+                  inviteModalMode === "whitelist"
+                    ? handleAddToWhitelist
+                    : handleInviteInfluencer
+                }
+                disabled={submittingInvite || !invitedInfluencerId}
               >
                 {submittingInvite ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={{ color: "#fff", fontWeight: "600" }}>
-                    Añadir a Whitelist
+                    {inviteModalMode === "whitelist"
+                      ? "Añadir a Whitelist"
+                      : "Enviar invitación"}
                   </Text>
                 )}
               </TouchableOpacity>

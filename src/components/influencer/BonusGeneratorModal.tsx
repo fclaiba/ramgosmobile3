@@ -47,6 +47,11 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
             api.campaigns.getMyCampaigns,
             user?.id ? { influencerId: user.id as Id<'users'>, sessionToken } : 'skip',
         ) ?? [];
+    const whitelistedBusinesses =
+        useQuery(
+            api.influencers.getMyWhitelistedBusinesses,
+            user?.id && sessionToken ? { sessionToken } : 'skip',
+        ) ?? [];
 
     const businessOptions = useMemo(() => {
         const active = campaignRows.filter((c: any) => c.status === 'active');
@@ -59,8 +64,16 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                 name: c.businessName || 'Negocio',
             });
         }
+        for (const b of whitelistedBusinesses) {
+            const id = String(b.businessId || '');
+            if (!id || byId.has(id)) continue;
+            byId.set(id, {
+                id,
+                name: b.name || 'Negocio',
+            });
+        }
         return Array.from(byId.values());
-    }, [campaignRows]);
+    }, [campaignRows, whitelistedBusinesses]);
 
     const resetForm = () => {
         setBonoTitle('');
@@ -120,7 +133,10 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
             return;
         }
         if (!selectedBusinessId) {
-            show('Elegí el negocio emisor (necesitás una campaña activa).', 'warning');
+            show(
+                'Elegí el negocio emisor (necesitás campaña activa o estar en su whitelist).',
+                'warning',
+            );
             return;
         }
         if (photos.length === 0) {
@@ -221,8 +237,8 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                                         lineHeight: 18,
                                     }}
                                 >
-                                    No tenés campañas activas. Pedile a un negocio que te invite o aceptá una
-                                    propuesta primero.
+                                    No tenés negocios autorizados. Pedile a un negocio que te añada a su
+                                    whitelist o que te invite a una campaña (y aceptala).
                                 </Text>
                             ) : (
                                 <View style={{ gap: 8 }}>
