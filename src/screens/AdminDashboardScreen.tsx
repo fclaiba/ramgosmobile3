@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Platform, Image , KeyboardAvoidingView} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Platform, Image, KeyboardAvoidingView, Modal, Pressable } from 'react-native';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -13,7 +14,7 @@ import {
     DollarSign, ShoppingBag, TrendingUp, AlertTriangle, ShieldCheck,
     Users, XCircle, Ban, RotateCcw, Gavel, Shield,
     KeyRound, ScrollText, Activity, LayoutDashboard, LogOut as SessionIcon,
-    FileCheck, ChevronDown, ChevronUp, Filter, Wallet, ArrowUpRight, Clock,
+    FileCheck, ChevronDown, ChevronUp, Filter, Wallet, ArrowUpRight, Clock, X, ChevronRight,
 } from 'lucide-react-native';
 import { Radius, colors } from '../theme/tokens';
 
@@ -116,6 +117,7 @@ export default function AdminDashboardScreen({ navigation }: any) {
     const [securityFilters, setSecurityFilters] = useState({ q: '', hashType: '', sessionState: '' });
     const [logFilters, setLogFilters] = useState({ q: '', action: '' });
     const [listPage, setListPage] = useState<Record<string, number>>({});
+    const [selectedUserId, setSelectedUserId] = useState<Id<'users'> | null>(null);
     const pageOf = (key: string) => listPage[key] ?? 1;
     const setPageOf = (key: string, p: number) => setListPage((prev) => ({ ...prev, [key]: p }));
     const resetPage = (key: string) => setPageOf(key, 1);
@@ -125,6 +127,12 @@ export default function AdminDashboardScreen({ navigation }: any) {
     const escrowOrders = useQuery(api.adminQueries.getDisputedOrEscrowOrders, queryArgs) ?? [];
     const usersRaw = useQuery(api.users.listUsers, queryArgs);
     const users = usersRaw ?? [];
+    const userDetail = useQuery(
+        api.adminQueries.getAdminUserDetail,
+        selectedUserId && sessionToken
+            ? { sessionToken, userId: selectedUserId }
+            : 'skip',
+    );
     const kycQueue = useQuery(api.adminQueries.getKycReviewQueue, activeTab === 'kyc' ? queryArgs : 'skip') ?? [];
     const platformIncome = useQuery(api.adminQueries.getPlatformIncome, activeTab === 'ingresos' ? queryArgs : 'skip');
     const incomeLedger = useQuery(
@@ -493,22 +501,29 @@ export default function AdminDashboardScreen({ navigation }: any) {
                     const kyc = KYC_STATUS[u.kycStatus ?? 'unverified'] ?? KYC_STATUS.unverified;
                     return (
                         <View key={u._id} style={[styles.card, styles.userCard]}>
-                            <View style={[styles.avatar, { backgroundColor: roleColor + '22' }]}>
-                                <Text style={[styles.avatarText, { color: roleColor }]}>
-                                    {(u.name || u.email || '?').charAt(0).toUpperCase()}
-                                </Text>
-                            </View>
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                                <View style={styles.rowWrap}>
-                                    <Text style={styles.cardTitle} numberOfLines={1}>{u.name || u.email}</Text>
-                                    {u.isBanned && <Chip styles={styles} label="Baneado" color="#EF4444" />}
+                            <TouchableOpacity
+                                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, gap: 10 }}
+                                onPress={() => setSelectedUserId(u._id)}
+                                activeOpacity={0.75}
+                            >
+                                <View style={[styles.avatar, { backgroundColor: roleColor + '22' }]}>
+                                    <Text style={[styles.avatarText, { color: roleColor }]}>
+                                        {(u.name || u.email || '?').charAt(0).toUpperCase()}
+                                    </Text>
                                 </View>
-                                <Text style={styles.cardMeta} numberOfLines={1}>{u.email}</Text>
-                                <View style={[styles.rowWrap, { marginTop: 6 }]}>
-                                    <Chip styles={styles} label={u.role} color={roleColor} />
-                                    <Chip styles={styles} label={kyc.label} color={kyc.color} />
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <View style={styles.rowWrap}>
+                                        <Text style={styles.cardTitle} numberOfLines={1}>{u.name || u.email}</Text>
+                                        {u.isBanned && <Chip styles={styles} label="Baneado" color="#EF4444" />}
+                                    </View>
+                                    <Text style={styles.cardMeta} numberOfLines={1}>{u.email}</Text>
+                                    <View style={[styles.rowWrap, { marginTop: 6 }]}>
+                                        <Chip styles={styles} label={u.role} color={roleColor} />
+                                        <Chip styles={styles} label={kyc.label} color={kyc.color} />
+                                    </View>
                                 </View>
-                            </View>
+                                <ChevronRight size={18} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                            </TouchableOpacity>
                             {u.role !== 'admin' && (
                                 <TouchableOpacity
                                     style={[styles.iconBtn, u.isBanned ? styles.btnSuccess : styles.btnDanger, isProcessing && styles.btnDisabled]}
@@ -909,8 +924,169 @@ export default function AdminDashboardScreen({ navigation }: any) {
                 {activeTab === 'seguridad' && renderSeguridad()}
                 {activeTab === 'logs' && renderLogs()}
             </ScrollView>
+
+            <Modal
+                visible={!!selectedUserId}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setSelectedUserId(null)}
+            >
+                <Pressable style={styles.modalBackdrop} onPress={() => setSelectedUserId(null)}>
+                    <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation?.()}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Detalle de usuario</Text>
+                            <TouchableOpacity onPress={() => setSelectedUserId(null)} hitSlop={12}>
+                                <X size={22} color={isDark ? '#E5E7EB' : '#374151'} />
+                            </TouchableOpacity>
+                        </View>
+                        {selectedUserId && userDetail === undefined ? (
+                            <Loading styles={styles} label="Cargando ficha…" />
+                        ) : !userDetail ? (
+                            <Empty styles={styles} icon={Users} label="Usuario no encontrado." />
+                        ) : (
+                            <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator>
+                                {renderUserDetailBody(userDetail, styles, isDark)}
+                                <View style={styles.modalActions}>
+                                    {(userDetail.kycStatus === 'pending' || userDetail.kycStatus === 'unverified') && (
+                                        <>
+                                            <ActionBtn
+                                                styles={styles}
+                                                kind="success"
+                                                label="Aprobar KYC"
+                                                busy={!!processingIds[userDetail._id]}
+                                                onPress={() => handleApproveKyc(userDetail._id, userDetail.email)}
+                                            />
+                                            <ActionBtn
+                                                styles={styles}
+                                                kind="danger"
+                                                label="Rechazar KYC"
+                                                busy={!!processingIds[userDetail._id]}
+                                                onPress={() => handleRejectKyc(userDetail._id, userDetail.email)}
+                                            />
+                                        </>
+                                    )}
+                                    {userDetail.role !== 'admin' && (
+                                        <ActionBtn
+                                            styles={styles}
+                                            kind={userDetail.isBanned ? 'success' : 'danger'}
+                                            label={userDetail.isBanned ? 'Desbanear' : 'Banear'}
+                                            busy={!!processingIds[userDetail._id]}
+                                            onPress={() => handleBanToggle(userDetail)}
+                                        />
+                                    )}
+                                </View>
+                            </ScrollView>
+                        )}
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
         </KeyboardAvoidingView>
+    );
+}
+
+function DetailRow({ styles, label, value }: { styles: any; label: string; value?: string | null }) {
+    if (!value) return null;
+    return (
+        <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>{label}</Text>
+            <Text style={styles.detailValue} selectable>{value}</Text>
+        </View>
+    );
+}
+
+function DetailSection({ styles, title, children }: { styles: any; title: string; children: React.ReactNode }) {
+    return (
+        <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>{title}</Text>
+            {children}
+        </View>
+    );
+}
+
+function renderUserDetailBody(u: any, styles: any, _isDark: boolean) {
+    const kyc = KYC_STATUS[u.kycStatus ?? 'unverified'] ?? KYC_STATUS.unverified;
+    const roleColor = ROLE_COLORS[u.role] ?? '#6B7280';
+    const kp = u.kycProfile ?? {};
+    const docs = u.verificationDocuments ?? [];
+    const social =
+        u.socialLinks?.instagram ||
+        u.socialLinks?.tiktok ||
+        u.socialLinks?.youtube ||
+        u.socialLinks?.website ||
+        u.instagramUrl ||
+        u.tiktokUrl ||
+        kp.socialLink;
+
+    return (
+        <>
+            <View style={[styles.rowWrap, { marginBottom: 12, gap: 8 }]}>
+                <Chip styles={styles} label={u.role} color={roleColor} />
+                <Chip styles={styles} label={kyc.label} color={kyc.color} />
+                {u.isBanned && <Chip styles={styles} label="Baneado" color="#EF4444" />}
+                {u.isTest && <Chip styles={styles} label="Test" color="#4FC3F7" />}
+            </View>
+
+            <DetailSection styles={styles} title="Cuenta">
+                <DetailRow styles={styles} label="Nombre" value={u.name} />
+                <DetailRow styles={styles} label="Email" value={u.email} />
+                <DetailRow styles={styles} label="Usuario" value={u.username ? `@${u.username}` : undefined} />
+                <DetailRow styles={styles} label="Apodo / negocio" value={u.nickname || kp.businessName} />
+                <DetailRow styles={styles} label="Registro" value={fmtDate(u.joinedAt)} />
+                <DetailRow styles={styles} label="ID" value={String(u._id)} />
+                <DetailRow styles={styles} label="Tier" value={u.tier} />
+                <DetailRow styles={styles} label="Suscripción" value={u.subscriptionTier || u.subscriptionStatus} />
+                <DetailRow styles={styles} label="Email verificado" value={u.emailVerified ? 'Sí' : 'No'} />
+            </DetailSection>
+
+            <DetailSection styles={styles} title="Contacto y negocio">
+                <DetailRow styles={styles} label="Teléfono" value={u.phoneNumber || kp.contactPhone} />
+                <DetailRow styles={styles} label="Email contacto KYC" value={kp.contactEmail} />
+                <DetailRow styles={styles} label="Categoría" value={u.businessCategory} />
+                <DetailRow styles={styles} label="Dirección" value={kp.businessAddress || u.storeLocation?.address} />
+                <DetailRow styles={styles} label="EIN / Tax ID" value={kp.ein} />
+                <DetailRow styles={styles} label="Rep. legal" value={kp.legalRep} />
+                <DetailRow styles={styles} label="Local" value={u.storeLocation?.name} />
+                {/* Legacy fallback when old KYC stuffed fields into bio */}
+                {!kp.ein && !kp.businessAddress && !kp.contactEmail && u.bio ? (
+                    <DetailRow styles={styles} label="Notas (bio legacy)" value={u.bio} />
+                ) : null}
+            </DetailSection>
+
+            <DetailSection styles={styles} title="Redes y referidos">
+                <DetailRow styles={styles} label="Red social" value={social} />
+                <DetailRow styles={styles} label="Instagram" value={u.instagramUrl || u.socialLinks?.instagram} />
+                <DetailRow styles={styles} label="TikTok" value={u.tiktokUrl || u.socialLinks?.tiktok} />
+                <DetailRow styles={styles} label="Alias referido" value={u.referralAlias} />
+                <DetailRow styles={styles} label="Referido por" value={u.referredByLabel} />
+                <DetailRow styles={styles} label="Estado influencer" value={u.influencerStatus} />
+            </DetailSection>
+
+            <DetailSection styles={styles} title="KYC">
+                <DetailRow styles={styles} label="Estado" value={kyc.label} />
+                <DetailRow styles={styles} label="Enviado" value={fmtDate(kp.submittedAt)} />
+                <DetailRow styles={styles} label="Origen" value={kp.submittedFrom} />
+                <DetailRow
+                    styles={styles}
+                    label="Selfie"
+                    value={typeof kp.selfieValidated === 'boolean' ? (kp.selfieValidated ? 'Validado' : 'No') : undefined}
+                />
+                {docs.length === 0 ? (
+                    <Text style={[styles.cardMeta, { fontStyle: 'italic' }]}>Sin documentos adjuntos.</Text>
+                ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                        <View style={styles.docRow}>
+                            {docs.map((doc: any, i: number) => (
+                                <View key={`${doc.type}-${i}`} style={styles.docThumb}>
+                                    <Image source={{ uri: doc.url }} style={styles.docImage} resizeMode="cover" />
+                                    <Text style={styles.docLabel}>{DOC_LABELS[doc.type] ?? doc.type}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    </ScrollView>
+                )}
+            </DetailSection>
+        </>
     );
 }
 
@@ -1125,6 +1301,43 @@ const getStyles = (isDark: boolean) => {
         docThumb: { width: 110, alignItems: 'center' },
         docImage: { width: 100, height: 72, borderRadius: Radius.md, backgroundColor: colors(isDark).glass },
         docLabel: { fontSize: 10, color: textMuted, marginTop: 4, textAlign: 'center' },
+
+        modalBackdrop: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+        },
+        modalCard: {
+            width: '100%',
+            maxWidth: 520,
+            maxHeight: '90%',
+            borderRadius: Radius.xl,
+            padding: 16,
+            ...glassCard,
+            backgroundColor: isDark ? 'rgba(17, 24, 39, 0.97)' : 'rgba(255,255,255,0.98)',
+        },
+        modalHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 12,
+        },
+        modalTitle: { fontSize: 17, fontWeight: '800', color: textPrimary },
+        modalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, marginBottom: 8 },
+        detailSection: { marginBottom: 14 },
+        detailSectionTitle: {
+            fontSize: 12,
+            fontWeight: '800',
+            color: isDark ? '#C7D2FE' : '#4F46E5',
+            marginBottom: 6,
+            textTransform: 'uppercase',
+            letterSpacing: 0.4,
+        },
+        detailRow: { marginBottom: 6 },
+        detailLabel: { fontSize: 11, fontWeight: '600', color: textMuted, marginBottom: 2 },
+        detailValue: { fontSize: 13.5, color: textPrimary, fontWeight: '500' },
 
         chartCard: { padding: 14, borderRadius: Radius.lg, marginBottom: 14, ...glassCard },
         chartTitle: { fontSize: 13, fontWeight: '700', color: textPrimary, marginBottom: 10 },

@@ -21,3 +21,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Hide browser native password-reveal (Edge/IE) — we use our own Eye toggle */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

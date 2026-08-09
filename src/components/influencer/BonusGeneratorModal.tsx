@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView, TextInput } from 'react-native';
 import { X, Gift } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -55,25 +55,46 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
 
     const businessOptions = useMemo(() => {
         const active = campaignRows.filter((c: any) => c.status === 'active');
-        const byId = new Map<string, { id: string; name: string }>();
+        const byId = new Map<string, { id: string; name: string; source: string }>();
         for (const c of active) {
             const id = String(c.businessId || '');
             if (!id || byId.has(id)) continue;
             byId.set(id, {
                 id,
                 name: c.businessName || 'Negocio',
+                source: 'campaña',
             });
         }
         for (const b of whitelistedBusinesses) {
             const id = String(b.businessId || '');
-            if (!id || byId.has(id)) continue;
+            if (!id) continue;
+            if (byId.has(id)) {
+                const prev = byId.get(id)!;
+                byId.set(id, { ...prev, source: 'campaña + whitelist' });
+                continue;
+            }
             byId.set(id, {
                 id,
                 name: b.name || 'Negocio',
+                source: 'whitelist',
             });
         }
         return Array.from(byId.values());
     }, [campaignRows, whitelistedBusinesses]);
+
+    useEffect(() => {
+        if (!visible) return;
+        if (businessOptions.length === 1) {
+            setSelectedBusinessId(businessOptions[0].id);
+            return;
+        }
+        if (
+            selectedBusinessId &&
+            !businessOptions.some((b) => b.id === selectedBusinessId)
+        ) {
+            setSelectedBusinessId('');
+        }
+    }, [visible, businessOptions, selectedBusinessId]);
 
     const resetForm = () => {
         setBonoTitle('');
@@ -274,6 +295,15 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                                                     }}
                                                 >
                                                     {b.name}
+                                                </Text>
+                                                <Text
+                                                    style={{
+                                                        color: isDark ? '#94A3B8' : '#6B7280',
+                                                        fontSize: 12,
+                                                        marginTop: 4,
+                                                    }}
+                                                >
+                                                    Autorizado por {b.source}
                                                 </Text>
                                             </TouchableOpacity>
                                         );

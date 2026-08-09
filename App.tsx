@@ -29,12 +29,10 @@ import { CrashHandler } from './src/components/CrashHandler';
 import { Platform } from 'react-native';
 
 import { configureGoogleSignIn } from './src/services/auth/googleSignIn';
-import { configureAppleSignIn } from './src/services/auth/appleSignIn';
 import './src/i18n';
 import { I18nProvider } from './src/i18n/I18nProvider';
 
 configureGoogleSignIn();
-configureAppleSignIn();
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
@@ -129,6 +127,7 @@ import UserListScreen from './src/screens/social/UserListScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import MapExplorerScreen from './src/screens/MapExplorerScreen';
 import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
+import { HybridProfileScreen } from './src/screens/HybridProfileScreen';
 import AnalyticsDashboardScreen from './src/screens/AnalyticsDashboardScreen';
 
 const Stack = createNativeStackNavigator();
@@ -286,6 +285,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="Games" component={GamesScreen} />
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
+                    <Stack.Screen name="HybridProfile" component={HybridProfileScreen} />
                     <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
                     <Stack.Screen name="InfluencerBonuses" component={InfluencerBonusesScreen} />
                 </Stack.Navigator>

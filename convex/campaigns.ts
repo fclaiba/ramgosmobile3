@@ -35,8 +35,14 @@ import { internal } from './_generated/api';
 import {
     assertAdminOrDeveloper,
     assertSelfOrAdmin,
+    getActorOrNull,
     requireActor,
 } from './authHelpers';
+import {
+    findUserByHandleOrCode,
+    isInfluencer,
+    toInfluencerLookupDto,
+} from './userLookup';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,6 +89,12 @@ const assertInfluencerRole = async (ctx: any, influencerId: string) => {
         throw new Error('El destinatario debe tener rol influencer.');
     }
     return influencer;
+};
+
+const assertInfluencerForInvite = (influencer: any) => {
+    if (!isInfluencer(influencer)) {
+        throw new Error('El destinatario debe tener rol influencer.');
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -178,7 +190,11 @@ export const inviteInfluencer = mutation({
         }
 
         await assertBusinessRole(ctx, String(args.businessId));
-        await assertInfluencerRole(ctx, String(args.influencerId));
+        const influencer = await assertInfluencerRole(
+            ctx,
+            String(args.influencerId),
+        );
+        assertInfluencerForInvite(influencer);
 
         const existing = await findExistingPair(
             ctx,
@@ -507,9 +523,9 @@ export const getBusinessCampaigns = query({
 });
 
 /**
- * Lookup helper used by the BusinessDashboard "invite influencer" modal:
- * resolve an @username (social handle), nickname, or referralCode.
- * Never by email — the UI must cite the user's @.
+ * Exact resolve for BusinessDashboard whitelist / invite modal.
+ * Uses the same identity path as referrals (`users.username` → alias → code).
+ * Returns any user with role influencer; otherwise null.
  */
 export const lookupInfluencer = query({
     args: {
@@ -520,70 +536,29 @@ export const lookupInfluencer = query({
         handleOrCode: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx, (args as any).sessionToken);
+        // Return null instead of throwing — useQuery must not crash the dashboard.
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (
+            !actor ||
+            (actor.role !== 'business' &&
+                actor.role !== 'admin' &&
+                actor.role !== 'developer')
+        ) {
+            return null;
+        }
+
         const raw = (args.handleOrCode ?? args.emailOrCode ?? '').trim();
         if (!raw) return null;
 
-        const handle = raw.replace(/^@+/, '').toLowerCase();
-        if (!handle) return null;
+        const user = await findUserByHandleOrCode(ctx, raw);
+        if (!user || !isInfluencer(user)) return null;
 
-        const present = async (user: any, username?: string | null) => {
-            if (!user || user.role !== 'influencer') return null;
-            let resolvedUsername = username ?? null;
-            if (!resolvedUsername) {
-                const social = await ctx.db
-                    .query('socialUsers')
-                    .withIndex('by_user', (q) => q.eq('userId', String(user._id)))
-                    .first();
-                resolvedUsername =
-                    social?.username ??
-                    (user.nickname ? String(user.nickname).toLowerCase() : null);
-            }
-            if (!resolvedUsername) return null;
-            return {
-                _id: user._id,
-                name: user.name,
-                username: resolvedUsername,
-                nickname: user.nickname ?? null,
-                referralCode: user.referralCode ?? null,
-            };
-        };
-
-        // 1) Social @username (canonical handle)
         const social = await ctx.db
             .query('socialUsers')
-            .withIndex('by_username', (q) => q.eq('username', handle))
+            .withIndex('by_user', (q) => q.eq('userId', String(user._id)))
             .first();
-        if (social) {
-            const userNorm = ctx.db.normalizeId('users', social.userId);
-            const user = userNorm ? await ctx.db.get(userNorm) : null;
-            const hit = await present(user, social.username);
-            if (hit) return hit;
-        }
 
-        // 2) Referral code (uppercase convention)
-        const byCode = await ctx.db
-            .query('users')
-            .withIndex('by_referral_code', (q) =>
-                q.eq('referralCode', raw.toUpperCase()),
-            )
-            .first();
-        {
-            const hit = await present(byCode);
-            if (hit) return hit;
-        }
-
-        // 3) Nickname fallback among influencers (no email)
-        const influencers = await ctx.db
-            .query('users')
-            .filter((q) => q.eq(q.field('role'), 'influencer'))
-            .take(200);
-        const byNick = influencers.find(
-            (u) =>
-                u.nickname &&
-                String(u.nickname).toLowerCase().replace(/^@+/, '') === handle,
-        );
-        return (await present(byNick)) ?? null;
+        return toInfluencerLookupDto(user, social?.username);
     },
 });
 
@@ -772,7 +747,7 @@ export const internalResolveCartAttribution = internalQuery({
 });
 
 /**
- * Dev seed: business@test.com → @influencer1 with an **active** campaign
+ * Dev seed: business@test.com → @influencer_test with an **active** campaign
  * so the influencer can create bonos. Safe to re-run (idempotent).
  */
 export const seedBusinessInviteInfluencer1 = mutation({
@@ -792,13 +767,27 @@ export const seedBusinessInviteInfluencer1 = mutation({
         let influencer =
             (await ctx.db
                 .query('users')
-                .withIndex('by_username', (q) => q.eq('username', 'influencer1'))
+                .withIndex('by_username', (q) =>
+                    q.eq('username', 'influencer_test'),
+                )
                 .first()) ?? null;
+
+        if (!influencer) {
+            influencer =
+                (await ctx.db
+                    .query('users')
+                    .withIndex('by_username', (q) =>
+                        q.eq('username', 'influencer1'),
+                    )
+                    .first()) ?? null;
+        }
 
         if (!influencer) {
             const profile = await ctx.db
                 .query('socialUsers')
-                .withIndex('by_username', (q) => q.eq('username', 'influencer1'))
+                .withIndex('by_username', (q) =>
+                    q.eq('username', 'influencer_test'),
+                )
                 .first();
             if (profile) {
                 const uid = ctx.db.normalizeId('users', String((profile as any).userId));
@@ -815,7 +804,7 @@ export const seedBusinessInviteInfluencer1 = mutation({
 
         if (!influencer) {
             throw new Error(
-                'No encontré @influencer1 ni influencer@test.com. Creá el usuario o ajustá el username.',
+                'No encontré @influencer_test ni influencer@test.com. Corré seedUsers / ensureDemoInfluencerIdentity.',
             );
         }
 
@@ -823,7 +812,8 @@ export const seedBusinessInviteInfluencer1 = mutation({
             role: 'influencer',
             influencerStatus: 'approved',
             kycStatus: 'approved',
-            username: (influencer as any).username || 'influencer1',
+            username: 'influencer_test',
+            referralCode: 'INFLUENCER_TEST',
         } as any);
 
         const influencerId = String(influencer._id);

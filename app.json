@@ -15,7 +15,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fclaiba.ramgosmobile",
-      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -57,7 +56,6 @@
           "iosUrlScheme": "com.googleusercontent.apps.216016729359-hgdrjnvl502jmln1abopk8mpge6vd3a2"
         }
       ],
-      "expo-apple-authentication",
       "expo-web-browser",
       "expo-localization"
     ],

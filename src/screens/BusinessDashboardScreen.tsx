@@ -9,12 +9,10 @@ import {
   Platform,
   Linking,
   ActivityIndicator,
-  Modal,
-  TextInput, KeyboardAvoidingView
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Plus as PlusIcon,
@@ -33,8 +31,6 @@ import {
   CreditCard,
   CheckCircle2,
   ExternalLink,
-  UserPlus,
-  X,
   ListTodo,
   CalendarDays,
 } from "lucide-react-native";
@@ -60,6 +56,7 @@ import {
   InfluencersTab,
   type InviteModalMode,
 } from "../components/dashboard/InfluencersTab";
+import { InfluencerInviteModal } from "../components/dashboard/InfluencerInviteModal";
 import { LeadsTab } from "../components/dashboard/LeadsTab";
 import { AgendaConfigTab } from "../components/dashboard/AgendaConfigTab";
 
@@ -157,34 +154,13 @@ function BusinessDashboardScreen({
     api.influencers.removeFromWhitelist,
   );
 
-  // Lookup by @username or referralCode — never by email.
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [inviteModalMode, setInviteModalMode] =
     useState<InviteModalMode>("whitelist");
-  const [inviteLookupTerm, setInviteLookupTerm] = useState("");
-  const [invitedInfluencerId, setInvitedInfluencerId] = useState<string | null>(
-    null,
-  );
-  const [inviteRatePct, setInviteRatePct] = useState("5");
   const [submittingInvite, setSubmittingInvite] = useState(false);
-  const lookupResult = useQuery(
-    api.campaigns.lookupInfluencer,
-    user?.id && sessionToken && inviteLookupTerm.trim().length > 0
-      ? { handleOrCode: inviteLookupTerm, sessionToken }
-      : "skip",
-  );
-
-  useEffect(() => {
-    if (lookupResult?._id) {
-      setInvitedInfluencerId(String(lookupResult._id));
-    }
-  }, [lookupResult]);
 
   const openInviteModal = (mode: InviteModalMode) => {
     setInviteModalMode(mode);
-    setInviteLookupTerm("");
-    setInvitedInfluencerId(null);
-    setInviteRatePct("5");
     setInviteModalVisible(true);
   };
 
@@ -216,55 +192,38 @@ function BusinessDashboardScreen({
       user?.id && sessionToken ? { sellerId: user.id, sessionToken } : "skip",
     ) || [];
 
-  const handleInviteInfluencer = async () => {
-    if (!user?.id || !sessionToken) return;
-    if (!invitedInfluencerId) {
-      show("Por favor, selecciona un influencer válido primero", "error");
-      return;
-    }
-    const rate = parseFloat(inviteRatePct) / 100;
-    if (!Number.isFinite(rate) || rate <= 0 || rate > 0.5) {
-      show("La comisión debe estar entre 1% y 50%.", "error");
-      return;
-    }
-    setSubmittingInvite(true);
-    try {
-      await inviteInfluencerMutation({
-        sessionToken,
-        businessId: user.id as Id<"users">,
-        influencerId: invitedInfluencerId as Id<"users">,
-        commissionRate: rate,
-      });
-      show("Invitación enviada", "success");
-      setInviteModalVisible(false);
-      setInviteLookupTerm("");
-      setInvitedInfluencerId(null);
-    } catch (e: any) {
-      show(e.message, "error");
-    } finally {
-      setSubmittingInvite(false);
-    }
-  };
-
-  const handleAddToWhitelist = async () => {
-    if (!sessionToken) {
+  const handleInviteModalConfirm = async (args: {
+    influencerId: string;
+    commissionPct?: string;
+  }) => {
+    if (!user?.id || !sessionToken) {
       show("Sesión no válida. Volvé a iniciar sesión.", "error");
       return;
     }
-    if (!invitedInfluencerId) {
-      show("Por favor, selecciona un influencer válido primero", "error");
-      return;
-    }
     setSubmittingInvite(true);
     try {
-      await addToWhitelistMutation({
-        sessionToken,
-        influencerId: String(invitedInfluencerId),
-      });
-      show("Influencer añadido a la Whitelist", "success");
+      if (inviteModalMode === "whitelist") {
+        await addToWhitelistMutation({
+          sessionToken,
+          influencerId: String(args.influencerId),
+        });
+        show("Influencer añadido a la Whitelist", "success");
+      } else {
+        const rate = parseFloat(args.commissionPct || "5") / 100;
+        if (!Number.isFinite(rate) || rate <= 0 || rate > 0.5) {
+          show("La comisión debe estar entre 1% y 50%.", "error");
+          setSubmittingInvite(false);
+          return;
+        }
+        await inviteInfluencerMutation({
+          sessionToken,
+          businessId: user.id as Id<"users">,
+          influencerId: args.influencerId as Id<"users">,
+          commissionRate: rate,
+        });
+        show("Invitación enviada", "success");
+      }
       setInviteModalVisible(false);
-      setInviteLookupTerm("");
-      setInvitedInfluencerId(null);
     } catch (e: any) {
       show(e.message, "error");
     } finally {
@@ -897,10 +856,10 @@ function BusinessDashboardScreen({
           {/* --- INFLUENCERS TAB --- */}
           {activeTab === "influencers" && (
             <InfluencersTab
-              styles={styles}
               openInviteModal={openInviteModal}
               pendingProposalsFromInfluencers={pendingProposalsFromInfluencers}
               pendingMyInvitations={pendingMyInvitations}
+              activeBusinessCampaigns={activeBusinessCampaigns}
               whitelist={whitelist}
               listings={convexListings}
               handleRespondToInfluencerProposal={handleRespondToInfluencerProposal}
@@ -913,166 +872,17 @@ function BusinessDashboardScreen({
         </View>
       </ScrollView>
 
-      {/* --- Whitelist / Invite Influencer Modal --- */}
-      <Modal
+      <InfluencerInviteModal
         visible={inviteModalVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setInviteModalVisible(false)}
-      >
-        <View
-          style={[
-            styles.modalOverlay,
-            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 },
-          ]}
-        >
-          {Platform.OS !== "web" ? (
-            <BlurView
-              intensity={isDark ? 48 : 64}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, styles.modalBlurWeb]} />
-          )}
-          <View style={styles.modalDim} />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {inviteModalMode === "whitelist"
-                  ? "Añadir a Whitelist"
-                  : "Invitar a campaña"}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setInviteModalVisible(false)}
-                style={styles.modalCloseBtn}
-              >
-                <X size={18} color={isDark ? "#CBD5E1" : "#64748b"} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalLabel}>@ del influencer</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="@usuario o código JORGE10"
-              placeholderTextColor="#9CA3AF"
-              value={inviteLookupTerm}
-              onChangeText={(v) => {
-                setInviteLookupTerm(v);
-                setInvitedInfluencerId(null);
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {!sessionToken && inviteLookupTerm.trim().length > 0 && (
-              <Text
-                style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}
-              >
-                Sesión no válida. Cerrá sesión y volvé a entrar.
-              </Text>
-            )}
-            {sessionToken &&
-              inviteLookupTerm.trim().length > 0 &&
-              lookupResult === undefined && (
-                <Text
-                  style={{
-                    color: isDark ? "#9CA3AF" : "#6B7280",
-                    fontSize: 12,
-                    marginBottom: 12,
-                  }}
-                >
-                  Buscando…
-                </Text>
-              )}
-            {sessionToken &&
-              inviteLookupTerm.trim().length > 0 &&
-              lookupResult && (
-              <View
-                style={{
-                  backgroundColor: isDark ? "#0f172a" : "#f0fdf4",
-                  padding: 10,
-                  borderRadius: Radius.sm,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: "#16a34a",
-                }}
-              >
-                <Text
-                  style={{
-                    color: isDark ? "#86efac" : "#166534",
-                    fontSize: 13,
-                    fontWeight: "600",
-                  }}
-                >
-                  @{(lookupResult as any).username}
-                </Text>
-                <Text
-                  style={{
-                    color: isDark ? "#86efac" : "#166534",
-                    fontSize: 12,
-                  }}
-                >
-                  {(lookupResult as any).name}
-                  {(lookupResult as any).referralCode
-                    ? ` • ${(lookupResult as any).referralCode}`
-                    : ""}
-                </Text>
-              </View>
-            )}
-            {sessionToken &&
-              inviteLookupTerm.trim().length > 0 &&
-              lookupResult === null && (
-              <Text
-                style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}
-              >
-                No se encontró un influencer con ese @ o código.
-              </Text>
-            )}
-
-            {inviteModalMode === "invite" && (
-              <>
-                <Text style={styles.modalLabel}>Comisión por venta (%)</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  placeholder="5"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="numeric"
-                  value={inviteRatePct}
-                  onChangeText={setInviteRatePct}
-                />
-              </>
-            )}
-
-            <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
-              <TouchableOpacity
-                style={[styles.modalCancelBtn]}
-                onPress={() => setInviteModalVisible(false)}
-              >
-                <Text style={{ color: isDark ? '#D1D5DB' : '#64748b', fontWeight: '600' }}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirmBtn, submittingInvite && { opacity: 0.7 }]}
-                onPress={
-                  inviteModalMode === "whitelist"
-                    ? handleAddToWhitelist
-                    : handleInviteInfluencer
-                }
-                disabled={submittingInvite || !invitedInfluencerId}
-              >
-                {submittingInvite ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={{ color: "#fff", fontWeight: "600" }}>
-                    {inviteModalMode === "whitelist"
-                      ? "Añadir a Whitelist"
-                      : "Enviar invitación"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        mode={inviteModalMode}
+        isDark={isDark}
+        sessionToken={sessionToken}
+        topInset={insets.top}
+        bottomInset={insets.bottom}
+        submitting={submittingInvite}
+        onClose={() => setInviteModalVisible(false)}
+        onConfirm={handleInviteModalConfirm}
+      />
     </ResponsiveLayout>
   );
 }

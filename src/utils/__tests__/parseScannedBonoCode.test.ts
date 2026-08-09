@@ -22,6 +22,12 @@ describe('parseScannedBonoCode', () => {
         expect(parseScannedBonoCode('ramgos://bono/BNO-4444-DDDD')).toBe('BNO-4444-DDDD');
     });
 
+    it('parses redeem deep link payload', () => {
+        expect(parseScannedBonoCode('ramgos://redeem/BNO-5555-EEEE')).toBe(
+            'BNO-5555-EEEE',
+        );
+    });
+
     it('returns null for empty / garbage', () => {
         expect(parseScannedBonoCode('')).toBeNull();
         expect(parseScannedBonoCode(null)).toBeNull();

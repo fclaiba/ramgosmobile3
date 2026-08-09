@@ -13,6 +13,7 @@ import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { storage } from '../services/auth/storageAdapter';
 import { sessionTokenStore } from '../services/auth/sessionTokenStore';
+import { uploadKycPayloadImages } from '../utils/uploadToConvexStorage';
 
 export const CURRENT_SESSION_KEY = '@ramgos/auth/current-session';
 /** Guarda email + preferencia "Recordarme" (nunca la contraseña). */
@@ -76,7 +77,7 @@ export type AuthUserRole = 'consumer' | 'business' | 'influencer' | 'admin';
 export type AuthKycStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 export type SubscriptionStatus = 'active' | 'inactive';
 export type SubscriptionTier = 'free' | 'pro' | 'business';
-export type SocialProvider = 'google' | 'facebook' | 'apple';
+export type SocialProvider = 'google' | 'facebook';
 
 export interface SocialProfile {
     providerUserId: string;
@@ -215,23 +216,6 @@ interface AuthContextType {
             tiktokUrl?: string;
         },
     ) => Promise<AuthFlowDecision>;
-    loginWithAppleIdToken: (
-        identityToken: string,
-        options?: {
-            mode?: 'login' | 'register';
-            role?: UserRole;
-            email?: string;
-            name?: string;
-            username?: string;
-            referredBy?: string;
-            businessCategory?: string;
-            businessName?: string;
-            businessAddress?: string;
-            phone?: string;
-            instagramUrl?: string;
-            tiktokUrl?: string;
-        },
-    ) => Promise<AuthFlowDecision>;
     logout: (force?: boolean) => Promise<void>;
     updateRole: (role: UserRole) => Promise<void>;
     requireAuth: (callback: () => void, options?: { prompt?: boolean; message?: string }) => boolean;
@@ -298,7 +282,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const verifyEmailCodeMutation = useMutation(api.auth.verifyEmailCode);
     const removePushTokenMutation = useMutation(api.notifications.removePushToken);
     const loginWithGoogleAction = useAction(api.oauthGoogle.loginWithGoogle);
-    const loginWithAppleAction = useAction(api.oauthApple.loginWithApple);
 
     // Helper to satisfy strict SessionRecord type
     const createSessionMock = (userId: string, sessionToken?: string): SessionRecord => ({
@@ -320,6 +303,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const registerMutation = useMutation(api.users.register);
     const syncUserMutation = useMutation(api.users.syncUser);
     const submitKycMutation = useMutation(api.users.submitKyc);
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
     const updateSubscriptionMutation = useMutation(api.users.updateSubscription);
     const updateProfileMutation = useMutation(api.users.updateProfile);
     const updateUserMutation = useMutation(api.users.updateUser);
@@ -469,7 +453,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         ? payload.businessName?.trim()
                         : undefined,
                 phoneNumber: payload.phone?.trim() || undefined,
-                bio: payload.businessAddress?.trim() || undefined,
+                businessAddress: payload.businessAddress?.trim() || undefined,
                 businessCategory: payload.businessCategory?.trim() || undefined,
                 username: payload.username?.trim() || undefined,
                 referredBy: payload.referredBy?.trim() || payload.referralCode?.trim() || undefined,
@@ -682,7 +666,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 businessCategory: options?.businessCategory,
                 nickname: options?.businessName,
                 phoneNumber: options?.phone,
-                bio: options?.businessAddress,
+                businessAddress: options?.businessAddress,
                 instagramUrl: options?.instagramUrl,
                 tiktokUrl: options?.tiktokUrl,
                 termsVersion: mode === 'register' ? CURRENT_TERMS_VERSION : undefined,
@@ -740,103 +724,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const cleanMsg = extractErrorMessage(
                 error,
                 'Error de inicio de sesión con Google',
-            );
-            setState(prev => ({ ...prev, lastError: cleanMsg }));
-            throw error;
-        } finally {
-            setIsProcessing(false);
-        }
-    };
-
-    const loginWithAppleIdToken = async (
-        identityToken: string,
-        options?: {
-            mode?: 'login' | 'register';
-            role?: UserRole;
-            email?: string;
-            name?: string;
-            username?: string;
-            referredBy?: string;
-            businessCategory?: string;
-            businessName?: string;
-            businessAddress?: string;
-            phone?: string;
-            instagramUrl?: string;
-            tiktokUrl?: string;
-        },
-    ): Promise<AuthFlowDecision> => {
-        setIsProcessing(true);
-        try {
-            const mode = options?.mode ?? 'login';
-            const result = await loginWithAppleAction({
-                identityToken,
-                mode,
-                email: options?.email,
-                name: options?.name,
-                role: options?.role,
-                username: options?.username,
-                referredBy: options?.referredBy,
-                businessCategory: options?.businessCategory,
-                nickname: options?.businessName,
-                phoneNumber: options?.phone,
-                bio: options?.businessAddress,
-                instagramUrl: options?.instagramUrl,
-                tiktokUrl: options?.tiktokUrl,
-                termsVersion: mode === 'register' ? CURRENT_TERMS_VERSION : undefined,
-            });
-            const fullResult = result as any;
-
-            if (!fullResult?.sessionToken?.startsWith('ses_')) {
-                throw new Error('El servidor no confirmó la sesión con Apple.');
-            }
-
-            const user: PublicUser = {
-                id: fullResult._id,
-                email: fullResult.email,
-                name: fullResult.name,
-                nickname: fullResult.nickname,
-                username: fullResult.username,
-                referralAlias: fullResult.referralAlias,
-                role: fullResult.role as UserRole,
-                isTest: fullResult.isTest,
-                avatar: fullResult.avatar,
-                status: 'active',
-                emailVerified: true,
-                requiresKyc: true,
-                termsAcceptedVersion: fullResult.termsAcceptedVersion || 1,
-                createdAt: fullResult.joinedAt || new Date().toISOString(),
-                providers: ['apple'],
-                kycStatus: fullResult.kycStatus || 'pending',
-                tier: fullResult.tier || 'Bronze',
-                subscriptionStatus: fullResult.subscriptionStatus || 'inactive',
-                subscriptionTier: fullResult.subscriptionTier || 'free',
-            };
-
-            const session = createSessionMock(user.id, fullResult.sessionToken);
-            persistSessionRef.current = true;
-            await storage.setItem(
-                CURRENT_SESSION_KEY,
-                JSON.stringify({ ...session, _mockUser: user }),
-            );
-
-            setState(prev => ({
-                ...prev,
-                status: 'authenticated',
-                user,
-                session,
-                originalUser: null,
-            }));
-
-            return {
-                user,
-                nextRoute: resolveNextRoute(user),
-                requiresKyc: true,
-                kycStatus: user.kycStatus,
-            };
-        } catch (error: any) {
-            const cleanMsg = extractErrorMessage(
-                error,
-                'Error de inicio de sesión con Apple',
             );
             setState(prev => ({ ...prev, lastError: cleanMsg }));
             throw error;
@@ -1172,10 +1059,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const markKycSubmitted = async (data: Record<string, unknown>) => {
         if (!state.user) throw new Error("No hay usuario autenticado.");
 
+        const sessionToken = state.session?.sessionToken;
+        const payload = await uploadKycPayloadImages(data, {
+            generateUploadUrl,
+            sessionToken,
+            actorId: String(state.user.id),
+        });
+
         await submitKycMutation({
-            sessionToken: state.session?.sessionToken,
+            sessionToken,
             id: state.user.id as any,
-            payload: data,
+            payload,
         });
         setState(prev => prev.user ? ({
             ...prev,
@@ -1244,7 +1138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             loginWithEmail,
             loginWithSocial,
             loginWithGoogleIdToken,
-            loginWithAppleIdToken,
             logout,
             updateRole,
             requireAuth,

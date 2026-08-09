@@ -8,8 +8,12 @@ import {
     TouchableOpacity,
     Share,
     useWindowDimensions,
+    ActivityIndicator,
 } from 'react-native';
 import { ChevronLeft, Share2, Heart, ShieldCheck, Truck, AlertTriangle } from 'lucide-react-native';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useCart } from '../../contexts/CartContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -33,7 +37,45 @@ export default function ProductDetailScreen({ route, navigation }: any) {
     const { user, sessionToken } = useAuth();
     const { isFavorite, toggleFavorite } = useFavorites();
 
-    const product = useMemo(() => getProductById(productId), [productId, getProductById]);
+    const listingId =
+        typeof productId === 'string' && productId.length > 10
+            ? (productId as Id<'listings'>)
+            : null;
+    const listingFromDb = useQuery(
+        api.listings.getListing,
+        listingId ? { id: listingId } : 'skip',
+    );
+    const feedProduct = useMemo(
+        () => (!listingId ? getProductById(productId) : null),
+        [listingId, productId, getProductById],
+    );
+
+    const product = useMemo(() => {
+        const raw = listingFromDb || feedProduct;
+        if (!raw) return null;
+        const images = (raw as any).images?.length
+            ? (raw as any).images
+            : (raw as any).image
+                ? [{ id: '1', url: (raw as any).image }]
+                : [];
+        return {
+            id: String((raw as any)._id || (raw as any).id),
+            title: (raw as any).title || (raw as any).name,
+            price: Number((raw as any).price || 0),
+            description: (raw as any).description || '',
+            condition: (raw as any).condition,
+            damageDescription: (raw as any).damageDescription,
+            category: (raw as any).category,
+            images,
+            location: (raw as any).location,
+            shippingProfile: (raw as any).shippingProfile,
+            seller: (raw as any).seller || {
+                id: (raw as any).sellerId,
+                name: (raw as any).sellerName,
+            },
+            type: (raw as any).type || 'product',
+        };
+    }, [listingFromDb, feedProduct]);
 
     const isSaved = product ? isFavorite(product.id) : false;
 
@@ -71,6 +113,14 @@ export default function ProductDetailScreen({ route, navigation }: any) {
         }
     }, [product, user, sessionToken, toggleFavorite, show]);
 
+    if (listingId && listingFromDb === undefined) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color="#2196F3" />
+            </View>
+        );
+    }
+
     if (!product) {
         return (
             <View style={styles.center}>
@@ -82,27 +132,31 @@ export default function ProductDetailScreen({ route, navigation }: any) {
         );
     }
 
-    const handleAddToCart = () => {
-        addItem({
-            id: product.id,
-            name: product.title,
-            price: product.price,
-            image: product.images?.[0]?.url ?? '',
-            type: 'product',
-            location: product.location?.name ?? '',
-            sellerId: product.seller?.id ?? '',
-            sellerName: product.seller?.name ?? '',
-            condition: product.condition,
-            shippingWeightKg: product.shippingProfile?.weightKg ?? 0,
-            shippingDimensionsCm: product.shippingProfile?.dimensionsCm,
-            distanceKm: product.location?.distanceKm,
-            quantity: 1,
-        });
-        show('Producto agregado al carrito', 'success');
+    const handleAddToCart = async () => {
+        try {
+            await addItem({
+                id: product.id,
+                name: product.title,
+                price: product.price,
+                image: product.images?.[0]?.url ?? '',
+                type: product.type || 'product',
+                location: product.location?.name ?? '',
+                sellerId: product.seller?.id ?? '',
+                sellerName: product.seller?.name ?? '',
+                condition: product.condition,
+                shippingWeightKg: product.shippingProfile?.weightKg ?? 0,
+                shippingDimensionsCm: product.shippingProfile?.dimensionsCm,
+                distanceKm: product.location?.distanceKm,
+                quantity: 1,
+            });
+            show('Producto agregado al carrito', 'success');
+        } catch {
+            /* CartContext toast */
+        }
     };
 
-    const handleBuyNow = () => {
-        handleAddToCart();
+    const handleBuyNow = async () => {
+        await handleAddToCart();
         navigation.navigate('Cart');
     };
 
@@ -165,13 +219,23 @@ export default function ProductDetailScreen({ route, navigation }: any) {
 
                     {/* Seller Info */}
                     <Text style={styles.sectionTitle}>Vendedor</Text>
-                    <View style={styles.sellerRow}>
+                    <TouchableOpacity
+                        style={styles.sellerRow}
+                        activeOpacity={0.8}
+                        disabled={!product.seller?.id}
+                        onPress={() =>
+                            product.seller?.id &&
+                            navigation.navigate('CommercialProfile', {
+                                sellerId: String(product.seller.id),
+                            })
+                        }
+                    >
                         <Image source={{ uri: product.seller?.avatar || 'https://placehold.co/100x100.png' }} style={styles.sellerAvatar} />
                         <View>
                             <Text style={styles.sellerName}>{product.seller?.name || 'Vendedor'}</Text>
                             <Text style={styles.sellerRating}>★ {product.seller?.rating || '0.0'} • Tiempo respuesta: {product.seller?.responseTimeHours || 24}h</Text>
                         </View>
-                    </View>
+                    </TouchableOpacity>
 
                     <View style={styles.separator} />
 
@@ -305,11 +369,13 @@ const getStyles = (isDark: any) => StyleSheet.create({
     safetyTitle: { fontSize: 14, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#1F2937' },
     safetyDesc: { fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563', marginTop: 2 },
 
-    bottomBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
+        bottomBar: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 100,
+            elevation: 20,
         flexDirection: 'row',
         padding: 16,
         backgroundColor: colors(isDark).glass,

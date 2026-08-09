@@ -173,7 +173,7 @@ Este reporte detalla el estado de implementación de las funcionalidades requeri
 **Estado Actual:** `PointsContext` Completo.
 
 *   `[IMPLEMENTADO]` **Caducidad Trimestral:** Lógica de expiración implementada en `PointsContext`.
-*   `[IMPLEMENTADO]` **Validación QR en Puntos de Venta:** Integrado el botón "Escanear QR" en `BusinessDashboard` que abre `BusinessQRScannerScreen` (Simulado).
+*   `[IMPLEMENTADO]` **Validación QR en Puntos de Venta:** `BusinessDashboard` → `BusinessScanner` (POS producción): cámara + código manual + `lookupBono` / `redeemBono` sobre `bonoRedemptions` reales. `BusinessQR` redirige al mismo scanner.
 
 ### 5. Pagos y Legal (Sección 6)
 **Estado Actual:** Flujos completos.

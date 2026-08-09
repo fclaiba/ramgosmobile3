@@ -14,8 +14,8 @@ export function parseScannedBonoCode(raw: string | null | undefined): string | n
     const fromUrl = extractFromUrlLike(text);
     if (fromUrl) return normalizeCode(fromUrl);
 
-    // Path-ish: …/bono/CODE or …/code/CODE
-    const pathMatch = text.match(/(?:bono|code|bn)[/:=]([A-Za-z0-9_-]+)/i);
+    // Path-ish: …/redeem/CODE, …/bono/CODE or …/code/CODE
+    const pathMatch = text.match(/(?:redeem|bono|code|bn)[/:=]([A-Za-z0-9_-]+)/i);
     if (pathMatch?.[1]) return normalizeCode(pathMatch[1]);
 
     // Plain code (may include spaces the cashier typed)
@@ -45,11 +45,19 @@ function extractFromUrlLike(text: string): string | null {
             if (v) return v;
         }
 
-        // pathname: /bono/CODE or /p/... ignore; /bono/CODE
+        // pathname: /redeem/CODE or /bono/CODE (POS QR uses redeem)
         const parts = url.pathname.split('/').filter(Boolean);
+        const redeemIdx = parts.findIndex((p) => p.toLowerCase() === 'redeem');
+        if (redeemIdx >= 0 && parts[redeemIdx + 1]) {
+            return parts[redeemIdx + 1];
+        }
         const bonoIdx = parts.findIndex((p) => p.toLowerCase() === 'bono');
         if (bonoIdx >= 0 && parts[bonoIdx + 1]) {
-            return parts[bonoIdx + 1];
+            const candidate = parts[bonoIdx + 1];
+            // Marketing links use listing ids; redeem codes look like BNO-…
+            if (/^BNO[-_]/i.test(candidate) || candidate.length >= 8) {
+                return candidate;
+            }
         }
     } catch {
         // fall through

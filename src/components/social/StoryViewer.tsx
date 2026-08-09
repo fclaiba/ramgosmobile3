@@ -257,6 +257,16 @@ export const StoryViewer = ({
     const stories = currentGroup?.stories ?? [];
     const author = currentGroup?.author;
     const currentStory = stories[activeStoryIdx];
+    const viewStoryMut = useMutation(api.social.viewStory);
+
+    useEffect(() => {
+        const id = currentStory?._id;
+        if (!id || !sessionToken) return;
+        viewStoryMut({
+            sessionToken,
+            storyId: id as any,
+        }).catch(() => {});
+    }, [currentStory?._id, sessionToken, viewStoryMut]);
 
     const handleNext = () => {
         if (activeStoryIdx < stories.length - 1) {

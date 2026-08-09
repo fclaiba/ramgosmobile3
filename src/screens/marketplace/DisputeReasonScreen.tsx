@@ -150,8 +150,8 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
                 <View style={styles.iconBtn} />
             </View>
 
-            <Animated.View style={[styles.stickyHeader, headerOpacity]}>
-                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
+            <Animated.View style={[styles.stickyHeader, headerOpacity]} pointerEvents="none">
+                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} pointerEvents="none" />
                 <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
                     <Text style={styles.stickyTitle}>Reportar Problema</Text>
                 </View>

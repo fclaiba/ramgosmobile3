@@ -462,10 +462,24 @@ Listing type=bono
 
 ## 15. Social, gamificación y puntos
 
-### Social (`convex/social.ts` + `SocialContext`)
+### Social (`convex/social.ts`)
+- **Entrada UI:** navbar `MobileNav` → sección `social` → `HomeScreen` monta `SocialScreen` (`isTabMode`).
 - Handles en `socialUsers.username` (`@usuario`)
-- Posts, likes, comments, follows, stories, DMs, highlights
+- Posts, likes, comments, follows, stories, DMs, highlights (Convex directo; no usar stubs de `SocialContext`)
+- Creator Studio (`CreatorStudioModal`) con `CommerceLinker` / `attachedListingId`
+- Checkout in-feed: `OneClickCheckoutSheet` + `simulateSocialCommercePayment`
+- Perfiles desde el feed: `HybridProfile` (feed \| catálogo \| bonos); marketplace sigue usando `CommercialProfile`
 - Lookup influencers por `@` (no email) en campañas / whitelist
+- Doc de visión / gaps: `docs/ARQUITECTURA_SOCIAL_COMMERCE.md`
+
+#### Seguidores en perfiles comerciales
+- **Misma red social:** `CommercialProfile` / `HybridProfile` no tienen un contador aparte.
+- Identidad: `sellerId` (users) = `socialFollows.followeeUserId`.
+- Acumulador denormalizado: `socialUsers.followerCount`, actualizado en `follow` / `unfollow`.
+- Al seguir un negocio sin perfil social previo, `ensureSocialUser` crea la fila (actor + followee) para que el contador crezca.
+- Stats públicas (sin sesión): `getPublicSocialStats({ userId })` → `{ followerCount, followingCount, postCount, username }`.
+- Lista detallada: `getFollowers` (requiere auth) vía pantalla `UserList`.
+- UI: contador + tap “Seguidores” en `CommercialProfileScreen` / `HybridProfileScreen`; Seguir usa las mismas mutations `social.follow` / `unfollow`.
 
 ### Economía (`economy.ts` + `PointsContext` / `RewardsContext`)
 - Puntos: **$1 cash ≈ 1 pt** en compras (con bonus de tier)

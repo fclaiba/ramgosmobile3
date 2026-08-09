@@ -213,6 +213,7 @@ export const register = mutation({
         nickname: v.optional(v.string()),
         phoneNumber: v.optional(v.string()),
         bio: v.optional(v.string()),
+        businessAddress: v.optional(v.string()),
         businessCategory: v.optional(v.string()),
         username: v.optional(v.string()),
         referralCode: v.optional(v.string()),
@@ -291,6 +292,16 @@ export const register = mutation({
         const hashedPassword = hashPassword(args.password);
         const initialInfluencerStatus = args.role === 'influencer' ? 'pending' : undefined;
 
+        const businessName = args.nickname?.trim() || undefined;
+        const businessAddress = args.businessAddress?.trim() || undefined;
+        const kycProfile =
+            businessName || businessAddress
+                ? {
+                      ...(businessName ? { businessName } : {}),
+                      ...(businessAddress ? { businessAddress } : {}),
+                  }
+                : undefined;
+
         const userId = await ctx.db.insert("users", {
             uid: Math.random().toString(36).slice(2),
             email,
@@ -298,12 +309,13 @@ export const register = mutation({
             name,
             role: args.role as any,
             avatar: args.avatar,
-            nickname: args.nickname?.trim() || undefined,
+            nickname: businessName,
             phoneNumber: args.phoneNumber?.trim() || undefined,
             bio: args.bio?.trim() || undefined,
             businessCategory: args.businessCategory?.trim() || undefined,
             username: finalUsername,
             ...(referredByUserId ? { referredByUserId } : {}),
+            ...(kycProfile ? { kycProfile } : {}),
             kycStatus: "pending",
             influencerStatus: initialInfluencerStatus as any,
             instagramUrl: args.instagramUrl?.trim() || undefined,
@@ -406,6 +418,7 @@ export const oauthLoginFromProvider = internalMutation({
         nickname: v.optional(v.string()),
         phoneNumber: v.optional(v.string()),
         bio: v.optional(v.string()),
+        businessAddress: v.optional(v.string()),
         instagramUrl: v.optional(v.string()),
         tiktokUrl: v.optional(v.string()),
         termsVersion: v.optional(v.number()),
@@ -490,6 +503,16 @@ export const oauthLoginFromProvider = internalMutation({
             const initialInfluencerStatus =
                 args.role === "influencer" ? "pending" : undefined;
 
+            const businessName = args.nickname?.trim() || undefined;
+            const businessAddress = args.businessAddress?.trim() || undefined;
+            const kycProfile =
+                businessName || businessAddress
+                    ? {
+                          ...(businessName ? { businessName } : {}),
+                          ...(businessAddress ? { businessAddress } : {}),
+                      }
+                    : undefined;
+
             const userId = await ctx.db.insert("users", {
                 uid,
                 email,
@@ -497,10 +520,11 @@ export const oauthLoginFromProvider = internalMutation({
                 role: args.role as any,
                 username: finalUsername,
                 ...(referredByUserId ? { referredByUserId } : {}),
-                nickname: args.nickname?.trim() || undefined,
+                nickname: businessName,
                 phoneNumber: args.phoneNumber?.trim() || undefined,
                 bio: args.bio?.trim() || undefined,
                 businessCategory: args.businessCategory?.trim() || undefined,
+                ...(kycProfile ? { kycProfile } : {}),
                 instagramUrl: args.instagramUrl?.trim() || undefined,
                 tiktokUrl: args.tiktokUrl?.trim() || undefined,
                 influencerStatus: initialInfluencerStatus as any,
@@ -1131,9 +1155,15 @@ export const submitKyc = mutation({
         const docs: Array<{ type: string; url: string; status: 'pending' | 'approved' | 'rejected'; uploadedAt: string; reviewedAt?: string }> = [];
 
         const pushDoc = (type: string, url: unknown) => {
-            if (typeof url === 'string' && url.trim()) {
-                docs.push({ type, url: url.trim(), status: 'pending', uploadedAt: now });
+            if (typeof url !== 'string' || !url.trim()) return;
+            const trimmed = url.trim();
+            // Base64 in mutation args hits Convex ~1 MiB limit — must use File Storage first.
+            if (trimmed.startsWith('data:')) {
+                throw new Error(
+                    'Las fotos KYC deben subirse al almacenamiento antes de enviar. Volvé a adjuntarlas e intentá de nuevo.',
+                );
             }
+            docs.push({ type, url: trimmed, status: 'pending', uploadedAt: now });
         };
 
         pushDoc('id_front', payload.documentFront);
@@ -1141,34 +1171,71 @@ export const submitKyc = mutation({
         pushDoc('business_license', payload.incorporationDoc);
         pushDoc('address_proof', payload.premisesPhoto);
 
+        const existing = await ctx.db.get(args.id);
+        const prevProfile = (existing as any)?.kycProfile ?? {};
+
+        const str = (v: unknown) =>
+            typeof v === 'string' && v.trim() ? v.trim() : undefined;
+
+        const businessAddress =
+            str(payload.businessAddress) || str(payload.address) || prevProfile.businessAddress;
+        const ein = str(payload.ein) || str(payload.taxId) || prevProfile.ein;
+        const contactPhone = str(payload.contactPhone) || prevProfile.contactPhone;
+        const contactEmail = str(payload.contactEmail) || prevProfile.contactEmail;
+        const socialLink = str(payload.socialLink) || prevProfile.socialLink;
+        const legalRep = str(payload.legalRep) || prevProfile.legalRep;
+        const businessName =
+            str(payload.businessName) || prevProfile.businessName || (existing as any)?.nickname;
+        const submittedAt = str(payload.submittedAt) || now;
+        const submittedFrom = str(payload.submittedFrom) || prevProfile.submittedFrom;
+        const selfieValidated =
+            typeof payload.selfieValidated === 'boolean'
+                ? payload.selfieValidated
+                : prevProfile.selfieValidated;
+
+        const kycProfile = {
+            ...(businessAddress ? { businessAddress } : {}),
+            ...(ein ? { ein } : {}),
+            ...(contactPhone ? { contactPhone } : {}),
+            ...(contactEmail ? { contactEmail } : {}),
+            ...(socialLink ? { socialLink } : {}),
+            ...(legalRep ? { legalRep } : {}),
+            ...(businessName ? { businessName } : {}),
+            ...(submittedAt ? { submittedAt } : {}),
+            ...(submittedFrom ? { submittedFrom } : {}),
+            ...(typeof selfieValidated === 'boolean' ? { selfieValidated } : {}),
+        };
+
         const patch: Record<string, unknown> = {
             kycStatus: 'pending',
+            kycProfile: Object.keys(kycProfile).length > 0 ? kycProfile : undefined,
             verificationDocuments: docs.length > 0 ? docs : undefined,
         };
 
-        if (typeof payload.businessAddress === 'string' && payload.businessAddress.trim()) {
-            patch.bio = payload.businessAddress.trim();
-        }
-        if (typeof payload.socialLink === 'string' && payload.socialLink.trim()) {
-            const url = payload.socialLink.trim();
+        if (socialLink) {
+            const url = socialLink;
             const socialData: any = { website: url };
-            if (url.includes('instagram.com')) { socialData.instagram = url; delete socialData.website; }
-            else if (url.includes('tiktok.com')) { socialData.tiktok = url; delete socialData.website; }
-            else if (url.includes('youtube.com')) { socialData.youtube = url; delete socialData.website; }
+            if (url.includes('instagram.com')) {
+                socialData.instagram = url;
+                delete socialData.website;
+                patch.instagramUrl = url;
+            } else if (url.includes('tiktok.com')) {
+                socialData.tiktok = url;
+                delete socialData.website;
+                patch.tiktokUrl = url;
+            } else if (url.includes('youtube.com')) {
+                socialData.youtube = url;
+                delete socialData.website;
+            }
             patch.socialLinks = socialData;
         }
-        if (typeof payload.ein === 'string' && payload.ein.trim()) {
-            const prevBio = typeof patch.bio === 'string' ? `${patch.bio} | ` : '';
-            patch.bio = `${prevBio}EIN: ${payload.ein.trim()}`;
+
+        if (contactPhone) {
+            patch.phoneNumber = contactPhone;
         }
-        
-        if (typeof payload.contactPhone === 'string' && payload.contactPhone.trim()) {
-            patch.phoneNumber = payload.contactPhone.trim();
-        }
-        
-        if (typeof payload.contactEmail === 'string' && payload.contactEmail.trim()) {
-            const prevBio = typeof patch.bio === 'string' ? `${patch.bio} | ` : '';
-            patch.bio = `${prevBio}Contacto KYC: ${payload.contactEmail.trim()}`;
+
+        if (businessName && !(existing as any)?.nickname) {
+            patch.nickname = businessName;
         }
 
         await ctx.db.patch(args.id, patch);

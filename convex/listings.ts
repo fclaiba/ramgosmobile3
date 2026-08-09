@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 import { assertBonoEconomics } from "./bonoEconomics";
 
@@ -135,6 +134,46 @@ export const getListing = query({
     handler: async (ctx, args) => {
         const listing = await ctx.db.get(args.id);
         return await resolveListingUrls(ctx, listing);
+    },
+});
+
+/** Public catalog for a seller profile (active listings only). */
+export const getPublicListingsBySeller = query({
+    args: { sellerId: v.string() },
+    handler: async (ctx, args) => {
+        const sellerId = args.sellerId.trim();
+        if (!sellerId) return [];
+
+        const rows = await ctx.db
+            .query("listings")
+            .withIndex("by_seller", (q) => q.eq("sellerId", sellerId))
+            .collect();
+
+        const active = rows.filter((l) => l.status === "active");
+        active.sort((a, b) =>
+            String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+        );
+
+        const sellerDocId = ctx.db.normalizeId("users", sellerId);
+        const sellerDoc: any = sellerDocId ? await ctx.db.get(sellerDocId) : null;
+        const sellerName = sellerDoc?.nickname || sellerDoc?.name || undefined;
+
+        const enriched = await Promise.all(
+            active.map(async (l) => {
+                const resolved = await resolveListingUrls(ctx, l);
+                if (!resolved) return null;
+                return {
+                    ...resolved,
+                    seller: {
+                        id: sellerId,
+                        name: sellerName,
+                        avatar: sellerDoc?.avatar,
+                        type: sellerDoc?.role || "individual",
+                    },
+                };
+            }),
+        );
+        return enriched.filter(Boolean);
     },
 });
 
@@ -489,11 +528,8 @@ export const purchaseItem = mutation({
             orderCount: (listing.orderCount || 0) + 1,
         });
 
-        if ((listing as any).type === "bono") {
-            await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, {
-                orderId,
-            });
-        }
+        // Bonos se emiten solo tras pago confirmado (stripe/orders → internalIssueBonosForOrder).
+        // No emitir aquí: la orden queda status=pending.
 
         return { success: true, newStock, orderId };
     },

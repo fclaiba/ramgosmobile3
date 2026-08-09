@@ -203,6 +203,7 @@ export default function KYCScreen({ navigation, route }: any) {
                                         images={idFront ? [idFront] : []}
                                         onChange={(imgs) => setIdFront(imgs[0] ?? null)}
                                         maxImages={1}
+                                        maxFileSizeMB={25}
                                     />
                                 </View>
                                 <View style={styles.docCol}>
@@ -212,6 +213,7 @@ export default function KYCScreen({ navigation, route }: any) {
                                         images={idBack ? [idBack] : []}
                                         onChange={(imgs) => setIdBack(imgs[0] ?? null)}
                                         maxImages={1}
+                                        maxFileSizeMB={25}
                                     />
                                 </View>
                             </View>
@@ -231,9 +233,9 @@ export default function KYCScreen({ navigation, route }: any) {
                             {accountType === 'business' && (
                                 <>
                                     <FormField styles={styles} label="Número EIN" value={ein} onChangeText={(t) => setEin(formatEin(t))} placeholder="XX-XXXXXXX" isDark={isDark} maxLength={LIMITS.ein} hint="9 dígitos · formato XX-XXXXXXX" keyboardType="number-pad" />
-                                    <ImageUploadField variant="document" title="Certificado de incorporación" images={incorporationDoc ? [incorporationDoc] : []} onChange={(imgs) => setIncorporationDoc(imgs[0] ?? null)} maxImages={1} />
+                                    <ImageUploadField variant="document" title="Certificado de incorporación" images={incorporationDoc ? [incorporationDoc] : []} onChange={(imgs) => setIncorporationDoc(imgs[0] ?? null)} maxImages={1} maxFileSizeMB={25} />
                                     <FormField styles={styles} label="Dirección del local" value={businessAddress} onChangeText={(t) => setBusinessAddress(clamp(t, LIMITS.businessAddress))} placeholder="Calle, ciudad, NY" isDark={isDark} maxLength={LIMITS.businessAddress} hint={`${businessAddress.length}/${LIMITS.businessAddress} · mín. ${MIN.businessAddress}`} />
-                                    <ImageUploadField variant="document" title="Foto del local comercial" images={premisesPhoto ? [premisesPhoto] : []} onChange={(imgs) => setPremisesPhoto(imgs[0] ?? null)} maxImages={1} />
+                                    <ImageUploadField variant="document" title="Foto del local comercial" images={premisesPhoto ? [premisesPhoto] : []} onChange={(imgs) => setPremisesPhoto(imgs[0] ?? null)} maxImages={1} maxFileSizeMB={25} />
                                 </>
                             )}
                             {accountType === 'influencer' && (

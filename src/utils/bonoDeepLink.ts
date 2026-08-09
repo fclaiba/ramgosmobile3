@@ -12,6 +12,19 @@ export type ParsedBonoDeepLink = {
     referralCode: string;
 };
 
+/**
+ * Canonical POS redeem QR payload (not a marketing listing link).
+ * Parsed by `parseScannedBonoCode` → plain BNO-… code.
+ */
+export function buildBonoRedeemPayload(bonoCode: string): string {
+    const code = String(bonoCode || '')
+        .trim()
+        .replace(/\s+/g, '')
+        .toUpperCase();
+    if (!code) return '';
+    return `ramgos://redeem/${encodeURIComponent(code)}`;
+}
+
 /** Build share URL for an influencer bono listing. */
 export function buildBonoShareLink(opts: {
     referralCodeOrLink: string;

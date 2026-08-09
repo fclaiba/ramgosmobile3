@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
-import { Post as PostType, useSocial } from '../../contexts/SocialContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Radius, colors } from '../../theme/tokens';
 import { glassSurface } from '../../utils/glass';

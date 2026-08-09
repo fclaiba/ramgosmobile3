@@ -1,6 +1,12 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireActor, getActorOrNull } from "./authHelpers";
+import {
+    displayUsernameForUser,
+    findUserByHandleOrCode,
+    isInfluencer,
+    toInfluencerLookupDto,
+} from "./userLookup";
 
 // 1. Añadir Influencer a Whitelist
 export const addToWhitelist = mutation({
@@ -16,8 +22,8 @@ export const addToWhitelist = mutation({
 
         const influencerNorm = ctx.db.normalizeId("users", args.influencerId);
         const influencer = influencerNorm ? await ctx.db.get(influencerNorm) : null;
-        if (!influencer || influencer.role !== "influencer") {
-            throw new Error("El usuario indicado no es un influencer válido.");
+        if (!isInfluencer(influencer)) {
+            throw new Error("El usuario indicado no es un influencer.");
         }
 
         const businessId = actor.idString;
@@ -105,11 +111,7 @@ export const getWhitelist = query({
                     .query("socialUsers")
                     .withIndex("by_user", (q) => q.eq("userId", item.influencerId))
                     .first();
-                const username =
-                    social?.username ||
-                    (userObj?.nickname
-                        ? String(userObj.nickname).toLowerCase().replace(/^@+/, "")
-                        : null);
+                const username = displayUsernameForUser(userObj, social?.username);
                 return {
                     whitelistId: item._id,
                     influencerId: item.influencerId,
@@ -154,68 +156,81 @@ export const getMyWhitelistedBusinesses = query({
     },
 });
 
-// 4. Buscar influencer para añadir a Whitelist (por @ / nombre — no email)
+// 4. Buscar cualquier influencer (role) por @ / alias / nombre
 export const searchInfluencers = query({
     args: {
         sessionToken: v.optional(v.string()),
         searchTerm: v.string(),
     },
     handler: async (ctx, args) => {
-        await requireActor(ctx, args.sessionToken);
+        // Empty list instead of throw — keeps BusinessDashboard useQuery stable.
+        const actor = await getActorOrNull(ctx, args.sessionToken);
+        if (
+            !actor ||
+            (actor.role !== "business" &&
+                actor.role !== "admin" &&
+                actor.role !== "developer")
+        ) {
+            return [];
+        }
+
         const term = args.searchTerm.toLowerCase().trim().replace(/^@+/, "");
         if (term.length < 2) return [];
 
-        const socialHits = await ctx.db
-            .query("socialUsers")
-            .withSearchIndex("search_username", (q) => q.search("username", term))
-            .take(20);
-
         const results: Array<{
-            id: string;
+            _id: string;
             name: string;
             username: string;
-            avatar?: string;
+            referralAlias: string | null;
+            avatar: string | null;
         }> = [];
+        const seen = new Set<string>();
 
-        for (const social of socialHits) {
-            const userNorm = ctx.db.normalizeId("users", social.userId);
-            const user = userNorm ? await ctx.db.get(userNorm) : null;
-            if (!user || user.role !== "influencer") continue;
-            results.push({
-                id: String(user._id),
-                name: user.name,
-                username: social.username,
-                avatar: user.avatar || social.avatar,
-            });
-            if (results.length >= 10) break;
+        const push = (user: any, usernameHint?: string | null) => {
+            if (!isInfluencer(user)) return;
+            const dto = toInfluencerLookupDto(user, usernameHint);
+            if (!dto || seen.has(dto._id)) return;
+            seen.add(dto._id);
+            results.push(dto);
+        };
+
+        const exact = await findUserByHandleOrCode(ctx, term);
+        if (exact) {
+            const social = await ctx.db
+                .query("socialUsers")
+                .withIndex("by_user", (q) => q.eq("userId", String(exact._id)))
+                .first();
+            push(exact, social?.username);
         }
 
-        if (results.length > 0) return results;
-
-        // Fallback: nickname / display name among influencers
         const influencers = await ctx.db
             .query("users")
             .filter((q) => q.eq(q.field("role"), "influencer"))
-            .take(200);
+            .take(300);
 
-        return influencers
-            .filter(
-                (u) =>
-                    u.name.toLowerCase().includes(term) ||
-                    (u.nickname &&
-                        String(u.nickname)
-                            .toLowerCase()
-                            .replace(/^@+/, "")
-                            .includes(term)),
-            )
-            .slice(0, 10)
-            .map((u) => ({
-                id: String(u._id),
-                name: u.name,
-                username: u.nickname
-                    ? String(u.nickname).toLowerCase().replace(/^@+/, "")
-                    : "",
-                avatar: u.avatar,
-            }));
+        for (const u of influencers) {
+            if (results.length >= 5) break;
+            const uname = displayUsernameForUser(u) || "";
+            const nick = u.nickname
+                ? String(u.nickname).toLowerCase().replace(/^@+/, "")
+                : "";
+            const alias = u.referralAlias
+                ? String(u.referralAlias).toLowerCase()
+                : "";
+            const code = u.referralCode
+                ? String(u.referralCode).toLowerCase()
+                : "";
+            if (
+                uname.includes(term) ||
+                nick.includes(term) ||
+                alias.includes(term) ||
+                code.includes(term) ||
+                u.name.toLowerCase().includes(term)
+            ) {
+                push(u);
+            }
+        }
+
+        return results.slice(0, 5);
     },
 });

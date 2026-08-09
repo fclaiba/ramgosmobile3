@@ -27,7 +27,6 @@ import {
     MapPin,
     Calendar,
     Clock,
-    MoreVertical,
     Package,
     Ticket,
     PartyPopper,
@@ -45,10 +44,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useFavorites } from '../hooks/useFavorites';
 import { useCart } from '../contexts/CartContext';
-import { useSocial } from '../contexts/SocialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { formatCompactCount } from '../utils/formatCompactCount';
 import { DirectMessages } from '../components/social/DirectMessages';
 import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, interpolate, Extrapolation } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
@@ -123,7 +122,10 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     const isFollowingResult = useQuery(api.social.isFollowing, (currentUserId && sellerId) ? { followerUserId: currentUserId, followeeUserId: sellerId, sessionToken: sessionToken || '' } : 'skip');
     const alreadyFollowing = isFollowingResult === true;
 
-    const socialProfile = useQuery(api.social.lookupUserSocial, sellerId ? { userId: sellerId, sessionToken: sessionToken || '' } : 'skip');
+    const socialStats = useQuery(
+        api.social.getPublicSocialStats,
+        sellerId ? { userId: String(sellerId) } : 'skip',
+    );
 
     const [activeTab, setActiveTab] = useState<TabType>('product');
     const [followLoading, setFollowLoading] = useState(false);
@@ -132,12 +134,11 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     const [formOpen, setFormOpen] = useState(false);
 
     const profile = useQuery(api.users.getUser, sellerId ? { id: sellerId as any } : "skip");
-    const allListings = useQuery(api.listings.getFeed);
-
-    const listings = useMemo(() => {
-        if (!allListings) return [];
-        return allListings.filter((l: any) => (l.seller as any)?.id === sellerId || l.sellerId === sellerId);
-    }, [allListings, sellerId]);
+    const listingsRaw = useQuery(
+        api.listings.getPublicListingsBySeller,
+        sellerId ? { sellerId: String(sellerId) } : "skip",
+    );
+    const listings = listingsRaw ?? [];
 
     const activeItems = useMemo(() => {
         return listings.filter((item: any) => (item.listingType || item.type || 'product') === activeTab);
@@ -158,23 +159,28 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         { id: 'bono', label: 'Bonos', icon: Ticket },
     ];
 
-    const handleAddToCart = (item: any) => {
-        addItem({
-            id: String(item._id || item.id),
-            name: item.title || item.name,
-            price: item.price,
-            image: item.image || item.images?.[0]?.url,
-            type: item.listingType || item.type || 'product',
-            location: item.location?.name || '',
-            sellerId: item.seller?.id || item.sellerId,
-            sellerName: item.seller?.name || item.sellerName,
-            condition: item.condition,
-            shippingWeightKg: item.shippingProfile?.weightKg,
-            shippingDimensionsCm: item.shippingProfile?.dimensionsCm,
-            distanceKm: item.location?.distanceKm,
-            quantity: 1,
-        });
-        openCart();
+    const handleAddToCart = async (item: any) => {
+        try {
+            await addItem({
+                id: String(item._id || item.id),
+                name: item.title || item.name,
+                price: item.price,
+                image: item.image || item.images?.[0]?.url,
+                type: item.listingType || item.type || 'product',
+                location: item.location?.name || '',
+                sellerId: item.seller?.id || item.sellerId || sellerId,
+                sellerName: item.seller?.name || item.sellerName || profile?.name,
+                condition: item.condition,
+                shippingWeightKg: item.shippingProfile?.weightKg,
+                shippingDimensionsCm: item.shippingProfile?.dimensionsCm,
+                distanceKm: item.location?.distanceKm,
+                quantity: 1,
+            });
+            show('Agregado al carrito', 'success');
+            openCart();
+        } catch {
+            // Toast from CartContext
+        }
     };
 
     const handleToggleFollow = async () => {
@@ -195,6 +201,18 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         } finally {
             setTimeout(() => setFollowLoading(false), 500);
         }
+    };
+
+    const openFollowersList = () => {
+        if (!sellerId) return;
+        if (!authUser || !sessionToken) {
+            show('Iniciá sesión para ver la lista de seguidores', 'warning');
+            return;
+        }
+        navigation.navigate('UserList', {
+            type: 'followers',
+            userId: String(sellerId),
+        });
     };
 
     const handleContact = async () => {
@@ -237,7 +255,12 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
             <TouchableOpacity
                 style={[styles.gridCard, { width: (width - 48) / 2 }]}
                 activeOpacity={0.9}
-                onPress={() => navigation.navigate('ItemDetail', { itemId: item._id || item.id, itemData: item })}
+                onPress={() =>
+                    navigation.navigate('ItemDetail', {
+                        itemId: String(item._id || item.id),
+                        itemData: item,
+                    })
+                }
             >
                 <View style={styles.gridImgContainer}>
                     <ImageWithFallback src={imageUrl} style={styles.cardImg} />
@@ -249,7 +272,10 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                         style={[styles.favBtn, saved && styles.favBtnActive]}
                         onPress={(e) => {
                             e.stopPropagation();
-                            toggleFavorite({ id: item._id || item.id, type: item.listingType || item.type || 'product' });
+                            void toggleFavorite({
+                                id: String(item._id || item.id),
+                                type: item.listingType || item.type || 'product',
+                            });
                         }}
                     >
                         <Heart size={16} color={saved ? '#EF4444' : (isDark ? '#E5E7EB' : '#4B5563')} fill={saved ? '#EF4444' : 'transparent'} />
@@ -294,21 +320,6 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FAFAFA']} style={styles.heroGradient} />
             </View>
 
-            {/* Floating top bar */}
-            <View style={[styles.topBar, { top: insets.top + 8 }]}>
-                <AnimatedButton style={styles.glassBtn} onPress={() => navigation.goBack()} isDark={isDark}>
-                    <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
-                </AnimatedButton>
-                <View style={styles.topBarActions}>
-                    <AnimatedButton style={styles.glassBtn} onPress={handleShare} isDark={isDark}>
-                        <Share2 size={20} color={isDark ? '#FFF' : '#000'} />
-                    </AnimatedButton>
-                    <AnimatedButton style={styles.glassBtn} onPress={() => {}} isDark={isDark}>
-                        <MoreVertical size={20} color={isDark ? '#FFF' : '#000'} />
-                    </AnimatedButton>
-                </View>
-            </View>
-
             {/* Profile header card */}
             <View style={styles.profileCard}>
                 <View style={styles.avatarWrapper}>
@@ -333,7 +344,9 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 <Text style={styles.name}>{profile?.name || 'Usuario Comercial'}</Text>
 
                 <View style={styles.handleRow}>
-                    <Text style={styles.handle}>@{profile?.name?.toLowerCase().replace(/\s+/g, '') || 'usuario'}</Text>
+                    <Text style={styles.handle}>
+                        @{(profile as any)?.username || profile?.name?.toLowerCase().replace(/\s+/g, '') || 'usuario'}
+                    </Text>
                     <View style={[
                         styles.roleTag, 
                         profile?.role === 'business' ? styles.roleTagBusiness : 
@@ -368,7 +381,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                     </View>
                 </View>
 
-                {/* Stats */}
+                {/* Stats — followerCount = socialUsers (misma red social) */}
                 <View style={styles.statsContainer}>
                     {isBusiness ? (
                         <>
@@ -380,10 +393,17 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                                 <Text style={styles.statLabel}>{profile?.sellerReviewCount || 0} reseñas</Text>
                             </View>
                             <View style={styles.statDivider} />
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{socialProfile?.followerCount ?? 0}</Text>
+                            <TouchableOpacity
+                                style={styles.statBox}
+                                onPress={openFollowersList}
+                                accessibilityRole="button"
+                                accessibilityLabel="Ver seguidores"
+                            >
+                                <Text style={styles.statValue}>
+                                    {formatCompactCount(socialStats?.followerCount ?? 0)}
+                                </Text>
                                 <Text style={styles.statLabel}>Seguidores</Text>
-                            </View>
+                            </TouchableOpacity>
                             <View style={styles.statDivider} />
                             <View style={styles.statBox}>
                                 <View style={styles.statValueRow}>
@@ -395,18 +415,29 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                         </>
                     ) : (
                         <>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{socialProfile?.followerCount ?? 0}</Text>
+                            <TouchableOpacity
+                                style={styles.statBox}
+                                onPress={openFollowersList}
+                                accessibilityRole="button"
+                                accessibilityLabel="Ver seguidores"
+                            >
+                                <Text style={styles.statValue}>
+                                    {formatCompactCount(socialStats?.followerCount ?? 0)}
+                                </Text>
                                 <Text style={styles.statLabel}>Seguidores</Text>
-                            </View>
+                            </TouchableOpacity>
                             <View style={styles.statDivider} />
                             <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{socialProfile?.followingCount ?? 0}</Text>
+                                <Text style={styles.statValue}>
+                                    {formatCompactCount(socialStats?.followingCount ?? 0)}
+                                </Text>
                                 <Text style={styles.statLabel}>Siguiendo</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{socialProfile?.postCount ?? 0}</Text>
+                                <Text style={styles.statValue}>
+                                    {formatCompactCount(socialStats?.postCount ?? 0)}
+                                </Text>
                                 <Text style={styles.statLabel}>Publicaciones</Text>
                             </View>
                         </>
@@ -495,9 +526,17 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Sticky header */}
-            <Animated.View style={[styles.stickyHeader, headerOpacity]}>
-                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
+            {/* Sticky header — no touches (buttons live in topBar) */}
+            <Animated.View
+                pointerEvents="none"
+                style={[styles.stickyHeader, headerOpacity]}
+            >
+                <AnimatedBlurView
+                    tint={isDark ? 'dark' : 'light'}
+                    intensity={90}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                />
                 <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
                     <Text style={styles.stickyHeaderTitle} numberOfLines={1}>{profile?.name || 'Perfil comercial'}</Text>
                 </View>
@@ -512,13 +551,40 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 ListHeaderComponent={renderHeader}
+                onScroll={
+                    Platform.OS === 'web'
+                        ? (e: any) => {
+                              scrollY.value = e.nativeEvent.contentOffset.y;
+                          }
+                        : scrollHandler
+                }
+                scrollEventThrottle={16}
                 ListEmptyComponent={() => (
                     <View style={styles.emptyContainer}>
                         <Package size={48} color={isDark ? '#374151' : '#E5E7EB'} />
-                        <Text style={styles.emptyText}>No hay {tabs.find(t => t.id === activeTab)?.label.toLowerCase()} disponibles.</Text>
+                        <Text style={styles.emptyText}>
+                            {listingsRaw === undefined
+                                ? 'Cargando…'
+                                : `No hay ${tabs.find(t => t.id === activeTab)?.label.toLowerCase()} disponibles.`}
+                        </Text>
                     </View>
                 )}
             />
+
+            {/* Top floating controls — after list so they win the touch stack */}
+            <View
+                pointerEvents="box-none"
+                style={[styles.topBar, { top: insets.top + 8 }]}
+            >
+                <AnimatedButton style={styles.glassBtn} onPress={() => navigation.goBack()} isDark={isDark}>
+                    <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
+                </AnimatedButton>
+                <View style={styles.topBarActions} pointerEvents="box-none">
+                    <AnimatedButton style={styles.glassBtn} onPress={handleShare} isDark={isDark}>
+                        <Share2 size={20} color={isDark ? '#FFF' : '#000'} />
+                    </AnimatedButton>
+                </View>
+            </View>
 
             {/* Direct Messages Sheet */}
             {dmOpen && (
@@ -597,7 +663,8 @@ function getStyles(isDark: boolean, insets: any) {
             right: 16,
             flexDirection: 'row',
             justifyContent: 'space-between',
-            zIndex: 100,
+            zIndex: 200,
+            elevation: 24,
         },
         topBarActions: { flexDirection: 'row', gap: 10 },
         glassBtn: {
@@ -608,6 +675,8 @@ function getStyles(isDark: boolean, insets: any) {
             justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.9)',
+            zIndex: 201,
+            elevation: 28,
         },
 
         profileCard: {

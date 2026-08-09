@@ -625,7 +625,7 @@ export default function HistoryScreen({ navigation, route }: any) {
 
             {/* Sticky header backdrop */}
             <Animated.View style={[styles.stickyHeader, headerOpacity]} pointerEvents="none">
-                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
+                <AnimatedBlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} pointerEvents="none" />
                 <View style={[styles.stickyHeaderContent, { paddingTop: insets.top }]}>
                     <Text style={styles.stickyTitle}>Mis compras</Text>
                 </View>

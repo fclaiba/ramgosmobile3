@@ -77,7 +77,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         categoryId: 'compras',
         title: '¿Cómo uso mi bono o entrada con QR?',
         summary: 'Mostralo al comercio para validar tu compra.',
-        body: `Cada bono o entrada de evento que compres genera un **código QR único** en **Mis Compras → Bonos / Eventos**.\n\nCuando llegues al comercio o evento:\n\n1. Abrí el bono.\n2. Mostrá el QR al vendedor.\n3. Esperá la confirmación (verás el bono en estado **Canjeado**).\n\nEl QR es de un solo uso. Si lo perdés, podés generarlo de nuevo desde la app sin costo.`,
+        body: `Cada bono que compres genera un **código QR único** en **Historial → Usar bono** (también podés copiar el código \`BNO-…\`).\n\nCuando llegues al comercio:\n\n1. Abrí **Historial** y tocá **Usar bono**.\n2. Mostrá el QR al vendedor (o dictale el código).\n3. Esperá la confirmación (el bono pasa a **Canjeado**).\n\nEl QR es de un solo uso. Si lo cerrás, podés abrirlo de nuevo desde Historial mientras no esté canjeado.`,
     },
 
     // -------- Vendedor (5) --------
@@ -115,6 +115,13 @@ export const HELP_ARTICLES: HelpArticle[] = [
         title: '¿Puedo vender más de un tipo de cosa?',
         summary: 'Sí: bonos, eventos, productos físicos y servicios desde la misma cuenta.',
         body: `Una sola cuenta de vendedor puede publicar todos los tipos:\n\n- **Bonos:** cupones que el comprador canjea presencialmente con QR.\n- **Eventos:** entradas con cupos limitados, fecha y lugar.\n- **Productos:** ítems físicos con stock y envío.\n- **Servicios:** turnos / horas de trabajo, on-site o remoto.\n\nCada tipo tiene su flujo de fulfillment, pero todos pasan por el mismo escrow y wallet. Podés gestionar todo desde **Mis Listados** y **Pedidos**.`,
+    },
+    {
+        id: 'vendedor-6-canjear-qr',
+        categoryId: 'vendedor',
+        title: '¿Cómo canjeo el QR de un bono en el local?',
+        summary: 'Usá el POS Canjear bono: escanear, confirmar y listo.',
+        body: `Cuando un cliente te muestra el QR de un bono que vendiste:\n\n1. Iniciá sesión con tu cuenta de **negocio**.\n2. Abrí el dashboard y tocá **Canjear QR** (pantalla **Canjear bono**).\n3. Escaneá el QR con la cámara, o pasá a **Código** e ingresá el \`BNO-…\` a mano.\n4. Revisá título, crédito, vencimiento y cliente → tocá **Canjear**.\n\nSolo podés canjear bonos de **tu** negocio. Si el código ya fue usado, está vencido o es de otro comercio, la app te lo dice.\n\nSin permiso de cámara podés canjear igual con el modo Código. También hay una lista de **pendientes de canje** para elegir un bono emitido y confirmarlo.`,
     },
 
     // -------- Cuenta (4) --------

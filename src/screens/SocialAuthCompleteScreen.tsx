@@ -11,7 +11,7 @@ import { glassShadow, Radius, colors } from '../theme/tokens';
 interface SocialAuthCompleteScreenProps {
     route: {
         params: {
-            provider: 'google' | 'facebook' | 'apple';
+            provider: 'google' | 'facebook';
         };
     };
 }
@@ -49,8 +49,6 @@ export const SocialAuthCompleteScreen = ({ route }: SocialAuthCompleteScreenProp
                 return { name: 'Google', colors: ['#4285F4', '#34A853'] };
             case 'facebook':
                 return { name: 'Facebook', colors: ['#1877F2', '#0C5DC7'] };
-            case 'apple':
-                return { name: 'Apple', colors: ['#000000', '#333333'] };
             default:
                 return { name: 'Social', colors: ['#4FC3F7', '#EC4899'] };
         }

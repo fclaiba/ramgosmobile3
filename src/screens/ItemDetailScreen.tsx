@@ -138,6 +138,7 @@ const normalizeItem = (raw: any) => {
         discount: raw.discount ? Number(raw.discount) : undefined,
         discountValue: raw.discountValue ? Number(raw.discountValue) : undefined,
         stock: raw.stock ?? 1,
+        status: raw.status || 'active',
         description: raw.description || 'Este artículo no tiene una descripción detallada.',
         image: primaryImage,
         gallery: gallery.length ? gallery : [primaryImage],
@@ -177,14 +178,24 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const itemId = route.params?.itemId ?? route.params?.id;
     const referralCodeFromRoute =
         typeof route.params?.referralCode === 'string' ? route.params.referralCode.trim() : '';
+    // Always subscribe when we have an id/slug — itemData is only a loading placeholder.
     const listingFromSlug = useQuery(api.listings.getListingBySlug, slug ? { slug } : "skip");
     const listingById = useQuery(
         api.listings.getListing,
-        itemId && !route.params?.itemData && !route.params?.item ? { id: itemId as Id<"listings"> } : "skip"
+        itemId ? { id: itemId as Id<"listings"> } : "skip",
     );
     const passedItem = route.params?.itemData || route.params?.item;
-    const rawItem = passedItem || listingFromSlug || listingById;
+    const rawItem = useMemo(() => {
+        const hasDbSource = Boolean(slug || itemId);
+        if (!hasDbSource) return passedItem ?? null;
+        const slugLoading = Boolean(slug) && listingFromSlug === undefined;
+        const idLoading = Boolean(itemId) && listingById === undefined;
+        if (slugLoading || idLoading) return passedItem ?? null;
+        return listingFromSlug ?? listingById ?? null;
+    }, [slug, itemId, listingFromSlug, listingById, passedItem]);
     const item = useMemo(() => normalizeItem(rawItem), [rawItem]);
+    const dbSettled =
+        (!slug || listingFromSlug !== undefined) && (!itemId || listingById !== undefined);
 
     const { addItem, openCart } = useCart();
     const { user, sessionToken } = useAuth();
@@ -192,6 +203,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const { progressChallenge } = usePoints();
     const { show } = useToast();
     const [quantity, setQuantity] = useState(1);
+    const [addingToCart, setAddingToCart] = useState(false);
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const recordView = useMutation(api.listings.recordView);
@@ -257,36 +269,46 @@ export default function ItemDetailScreen({ route, navigation }: any) {
         } catch (e) { /* user cancelled */ }
     }, [item]);
 
-    const handleAddToCart = useCallback(() => {
-        if (!item) return;
-        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        addItem({
-            id: String(item.id),
-            name: item.name,
-            price: item.price,
-            image: item.image,
-            type: item.type,
-            location: item.locationName,
-            sellerId: item.seller?.id,
-            sellerName: item.seller?.name,
-            condition: item.condition,
-            shippingWeightKg: item.shippingProfile?.weightKg,
-            shippingDimensionsCm: item.shippingProfile?.dimensionsCm,
-            distanceKm: item.locationDistance,
-            quantity,
-            ...(referralCodeFromRoute ? { referralCode: referralCodeFromRoute } : {}),
-        });
-        openCart();
-    }, [item, quantity, addItem, openCart, referralCodeFromRoute]);
+    const handleAddToCart = useCallback(async () => {
+        if (!item || addingToCart) return;
+        setAddingToCart(true);
+        try {
+            if (Platform.OS !== 'web') {
+                void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            await addItem({
+                id: String(item.id),
+                name: item.name,
+                price: item.price,
+                image: item.image,
+                type: item.type,
+                location: item.locationName,
+                sellerId: item.seller?.id || item.sellerId,
+                sellerName: item.seller?.name,
+                condition: item.condition,
+                shippingWeightKg: item.shippingProfile?.weightKg,
+                shippingDimensionsCm: item.shippingProfile?.dimensionsCm,
+                distanceKm: item.locationDistance,
+                quantity,
+                ...(referralCodeFromRoute ? { referralCode: referralCodeFromRoute } : {}),
+            });
+            show('Agregado al carrito', 'success');
+            openCart();
+        } catch {
+            // Toast already shown by CartContext
+        } finally {
+            setAddingToCart(false);
+        }
+    }, [item, quantity, addItem, openCart, referralCodeFromRoute, addingToCart, show]);
 
     const handleBuyNow = useCallback(() => {
         if (!item) return;
         if (item.type === 'business') {
-            navigation.navigate('BusinessDetail', { businessId: item.id });
+            const businessId = item.seller?.id || item.sellerId || item.id;
+            navigation.navigate('CommercialProfile', { sellerId: String(businessId) });
             return;
         }
-        handleAddToCart();
-        navigation.navigate('Cart');
+        void handleAddToCart();
     }, [item, handleAddToCart, navigation]);
 
     const headerOpacity = useAnimatedStyle(() => ({
@@ -300,7 +322,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
         ],
     }));
 
-    if ((slug || itemId) && !item) {
+    if ((slug || itemId) && !item && !dbSettled) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <Text style={{ color: isDark ? '#fff' : '#000' }}>Cargando...</Text>
@@ -318,9 +340,14 @@ export default function ItemDetailScreen({ route, navigation }: any) {
 
     const TypeIcon = item.meta.icon;
     const sellerName = sellerProfile?.name || item.seller?.name || 'Vendedor Verificado';
+    const sellerHandle =
+        sellerProfile?.username ||
+        item.seller?.username ||
+        sellerName.toLowerCase().replace(/\s/g, '');
     const sellerRole = sellerProfile?.role || item.seller?.type || 'individual';
     const isOutOfStock = item.type === 'product' && item.stock <= 0;
-    const canPurchase = item.type !== 'business' && !isOutOfStock;
+    const isListingActive = !item.status || item.status === 'active';
+    const canPurchase = item.type !== 'business' && !isOutOfStock && isListingActive;
 
     return (
         <View style={styles.container}>
@@ -583,7 +610,9 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                         </View>
                         <View style={styles.sellerInfo}>
                             <Text style={styles.sellerName}>{sellerName}</Text>
-                            <Text style={styles.sellerHandle}>@{sellerName.toLowerCase().replace(/\s/g, '')}</Text>
+                            <Text style={styles.sellerHandle}>
+                                @{String(sellerHandle).replace(/^@/, '')}
+                            </Text>
                             <View style={styles.sellerRating}>
                                 <Star size={12} color={styles.star.color} fill={styles.star.color} />
                                 <Text style={styles.sellerRatingText}>4.9 • 120 ventas</Text>
@@ -652,8 +681,13 @@ export default function ItemDetailScreen({ route, navigation }: any) {
             </View>
 
             {/* ── STICKY FOOTER: single action button ── */}
-            <View style={styles.footer}>
-                <BlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={StyleSheet.absoluteFill} />
+            <View style={styles.footer} pointerEvents="box-none">
+                <BlurView
+                    tint={isDark ? 'dark' : 'light'}
+                    intensity={90}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                />
                 <View style={[styles.footerInner, { paddingBottom: Math.max(insets.bottom, 12) }]}>
                     {item.type === 'product' && !isOutOfStock && item.stock > 1 ? (
                         <View style={styles.qtyWrapper}>
@@ -676,10 +710,17 @@ export default function ItemDetailScreen({ route, navigation }: any) {
 
                     <View style={[styles.footerActions, { flex: 1 }]}>
                         {canPurchase ? (
-                            <AnimatedButton style={[styles.footerBtn, styles.footerBtnPrimary, { flex: 1 }]} onPress={handleAddToCart} isDark={isDark}>
+                            <AnimatedButton
+                                style={[styles.footerBtn, styles.footerBtnPrimary, { flex: 1 }]}
+                                onPress={handleAddToCart}
+                                isDark={isDark}
+                                active={!addingToCart}
+                            >
                                 <ShoppingCart size={18} color="#fff" style={{ marginRight: 8 }} />
                                 <Text style={styles.footerBtnPrimaryText}>
-                                    Agregar al carrito • ${formatNumber(item.price * quantity)}
+                                    {addingToCart
+                                        ? 'Agregando…'
+                                        : `${item.meta.cta} • $${formatNumber(item.price * quantity)}`}
                                 </Text>
                             </AnimatedButton>
                         ) : item.type === 'business' ? (
@@ -688,7 +729,9 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                             </AnimatedButton>
                         ) : (
                             <AnimatedButton style={[styles.footerBtn, styles.footerBtnPrimary, { flex: 1 }]} onPress={() => {}} isDark={isDark} active={false}>
-                                <Text style={styles.footerBtnPrimaryText}>No disponible</Text>
+                                <Text style={styles.footerBtnPrimaryText}>
+                                    {isOutOfStock ? 'Sin stock' : 'No disponible'}
+                                </Text>
                             </AnimatedButton>
                         )}
                     </View>
@@ -1223,6 +1266,8 @@ function getStyles(isDark: boolean, insets: any) {
             bottom: 0,
             left: 0,
             right: 0,
+            zIndex: 100,
+            elevation: 20,
             overflow: 'hidden',
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,

@@ -75,6 +75,20 @@ export default defineSchema({
             reviewedAt: v.optional(v.string()),
         }))),
 
+        /** Structured KYC / registration business fields (not stuffed into bio). */
+        kycProfile: v.optional(v.object({
+            businessAddress: v.optional(v.string()),
+            ein: v.optional(v.string()),
+            contactPhone: v.optional(v.string()),
+            contactEmail: v.optional(v.string()),
+            socialLink: v.optional(v.string()),
+            legalRep: v.optional(v.string()),
+            businessName: v.optional(v.string()),
+            submittedAt: v.optional(v.string()),
+            submittedFrom: v.optional(v.string()),
+            selfieValidated: v.optional(v.boolean()),
+        })),
+
         // User Stats
         totalOrders: v.optional(v.number()),
         lastActiveAt: v.optional(v.string()), // Kept only one instance

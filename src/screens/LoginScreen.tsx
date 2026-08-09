@@ -13,12 +13,7 @@ import {
     GoogleSignInCancelledError,
     signInWithGoogle,
 } from '../services/auth/googleSignIn';
-import {
-    AppleSignInCancelledError,
-    signInWithApple,
-} from '../services/auth/appleSignIn';
 import { GoogleAuthButton } from '../components/ui/GoogleAuthButton';
-import { AppleAuthButton } from '../components/ui/AppleAuthButton';
 import { useTranslation } from 'react-i18next';
 import { mapAuthError } from '../i18n/errorMap';
 
@@ -51,7 +46,7 @@ const isNoAccountError = (error: unknown): boolean => {
 };
 
 export default function LoginScreen({ navigation }: any) {
-    const { loginWithEmail, loginWithGoogleIdToken, loginWithAppleIdToken, pendingVerification, isProcessing, status, user } = useAuth();
+    const { loginWithEmail, loginWithGoogleIdToken, pendingVerification, isProcessing, status, user } = useAuth();
     const { colorScheme } = useTheme();
     const { show } = useToast();
     const { t } = useTranslation(['auth', 'common']);
@@ -63,7 +58,6 @@ export default function LoginScreen({ navigation }: any) {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const [appleLoading, setAppleLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
 
     useEffect(() => {
@@ -105,7 +99,7 @@ export default function LoginScreen({ navigation }: any) {
         ]).start();
     }, []);
 
-    const busy = isLoading || isProcessing || googleLoading || appleLoading;
+    const busy = isLoading || isProcessing || googleLoading;
 
     const mapRoleToAccountType = (role?: string) => {
         switch (role) {
@@ -183,30 +177,6 @@ export default function LoginScreen({ navigation }: any) {
             }
         } finally {
             setGoogleLoading(false);
-        }
-    };
-
-    const handleAppleLogin = async () => {
-        if (busy || appleLoading) return;
-        setAppleLoading(true);
-        try {
-            const { identityToken, email: appleEmail, fullName } = await signInWithApple();
-            const decision = await loginWithAppleIdToken(identityToken, {
-                mode: 'login',
-                email: appleEmail,
-                name: fullName,
-            });
-            navigateAfterAuth(decision);
-        } catch (error) {
-            if (error instanceof AppleSignInCancelledError) return;
-            console.error('[LoginScreen] Apple login error:', error);
-            const cleanMsg = getCleanErrorMessage(error, t('auth:login.appleFailed'));
-            show(mapAuthError(cleanMsg), 'error');
-            if (isNoAccountError(error)) {
-                setTimeout(() => navigation.navigate('SignUp'), 600);
-            }
-        } finally {
-            setAppleLoading(false);
         }
     };
 
@@ -332,12 +302,6 @@ export default function LoginScreen({ navigation }: any) {
                                     disabled={busy || googleLoading}
                                     loading={googleLoading}
                                     style={{ marginBottom: 12 }}
-                                />
-                                <AppleAuthButton
-                                    label={t('auth:login.continueWithApple')}
-                                    onPress={handleAppleLogin}
-                                    disabled={busy || appleLoading}
-                                    loading={appleLoading}
                                 />
                             </View>
 

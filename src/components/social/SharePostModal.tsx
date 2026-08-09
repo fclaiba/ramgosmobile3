@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList } from 'react-native';
 import { X, Search } from 'lucide-react-native';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useSocial } from '../../contexts/SocialContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
@@ -18,8 +18,8 @@ interface SharePostModalProps {
 }
 
 export const SharePostModal = ({ postContent, visible, onClose }: SharePostModalProps) => {
-    const { sendMessage } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
+    const { show } = useToast();
     const [searchText, setSearchText] = useState('');
     const [sentTo, setSentTo] = useState<string[]>([]);
 
@@ -27,9 +27,11 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
+    const sendDm = useMutation(api.social.sendDirectMessage);
+
     const chatsRows = useQuery(
         api.social.getMyChats,
-        authUser ? {} : 'skip',
+        authUser && sessionToken ? { sessionToken } : 'skip',
     );
 
     const flat = (chatsRows ?? []).map((c: any) => {
@@ -48,9 +50,21 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
             c.username.toLowerCase().includes(searchText.toLowerCase()),
     );
 
-    const handleSend = (chatId: string) => {
-        sendMessage(chatId, `Shared Post: ${postContent}`);
-        setSentTo((prev) => [...prev, chatId]);
+    const handleSend = async (chatId: string) => {
+        if (!sessionToken) {
+            show('Iniciá sesión para compartir', 'warning');
+            return;
+        }
+        try {
+            await sendDm({
+                sessionToken,
+                chatId: chatId as any,
+                body: `Shared Post: ${postContent}`,
+            });
+            setSentTo((prev) => [...prev, chatId]);
+        } catch (e: any) {
+            show(e?.message || 'No se pudo enviar', 'error');
+        }
     };
 
     const renderItem = ({ item }: { item: typeof flat[number] }) => {

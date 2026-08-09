@@ -44,7 +44,6 @@ import type * as influencers from "../influencers.js";
 import type * as listings from "../listings.js";
 import type * as locations from "../locations.js";
 import type * as notifications from "../notifications.js";
-import type * as oauthApple from "../oauthApple.js";
 import type * as oauthGoogle from "../oauthGoogle.js";
 import type * as observability from "../observability.js";
 import type * as orders from "../orders.js";
@@ -69,6 +68,7 @@ import type * as temp from "../temp.js";
 import type * as testMock from "../testMock.js";
 import type * as testMock2 from "../testMock2.js";
 import type * as testQuery from "../testQuery.js";
+import type * as userLookup from "../userLookup.js";
 import type * as userProfile from "../userProfile.js";
 import type * as users from "../users.js";
 
@@ -115,7 +115,6 @@ declare const fullApi: ApiFromModules<{
   listings: typeof listings;
   locations: typeof locations;
   notifications: typeof notifications;
-  oauthApple: typeof oauthApple;
   oauthGoogle: typeof oauthGoogle;
   observability: typeof observability;
   orders: typeof orders;
@@ -140,6 +139,7 @@ declare const fullApi: ApiFromModules<{
   testMock: typeof testMock;
   testMock2: typeof testMock2;
   testQuery: typeof testQuery;
+  userLookup: typeof userLookup;
   userProfile: typeof userProfile;
   users: typeof users;
 }>;

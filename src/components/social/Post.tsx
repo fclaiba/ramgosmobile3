@@ -6,62 +6,95 @@ import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 
-import { Post as PostType, useSocial } from '../../contexts/SocialContext';
-import { useCart } from '../../contexts/CartContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useMarketplace } from '../../contexts/MarketplaceContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Radius, colors, glassShadow } from '../../theme/tokens';
 import { glassSurface } from '../../utils/glass';
 
 interface PostProps {
-    post: PostType;
+    post: any;
     onUserClick: (id: string) => void;
     onCommercePress?: (listingId: string, postId: string) => void;
 }
 
 export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }) => {
-    const { isPostSaved, savePost, unsavePost, currentUser, deletePost } = useSocial();
-    
+    const { user: authUser, sessionToken } = useAuth();
     const { addToWishlist } = useMarketplace();
     const [liked, setLiked] = useState(post.likedByUser || false);
     const [likes, setLikes] = useState(post.likeCount || post.likes?.length || 0);
     const [showComments, setShowComments] = useState(false);
     const [showShare, setShowShare] = useState(false);
-    const saved = isPostSaved(post.id) || isPostSaved(post._id);
+    const [savedLocal, setSavedLocal] = useState<boolean | null>(null);
 
+    const postId = String(post._id || post.id);
     const toggleLikeMut = useMutation(api.social.toggleLike);
     const toggleSaveMut = useMutation(api.social.toggleSavePost);
+    const deletePostMut = useMutation(api.social.deletePost);
+
+    const savedRows = useQuery(
+        api.social.getSavedPosts,
+        sessionToken ? { sessionToken, limit: 50 } : 'skip',
+    );
+    const savedFromServer = Boolean(
+        (savedRows as any)?.items?.some((p: any) => String(p._id) === postId),
+    );
+    const saved = savedLocal ?? savedFromServer;
 
     const { theme, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const myId = authUser?.id ? String(authUser.id) : '';
+    const authorId = String(
+        (post.author || post.user)?.userId || (post.author || post.user)?.id || '',
+    );
 
-    const handleSave = () => {
-        if (saved) unsavePost(post._id || post.id);
-        else savePost(post._id || post.id);
-        toggleSaveMut({ postId: post._id || post.id }).catch(e => console.warn(e));
+    const handleSave = async () => {
+        if (!sessionToken) return;
+        const prev = saved;
+        setSavedLocal(!prev);
+        try {
+            const res = await toggleSaveMut({
+                sessionToken,
+                postId: postId as any,
+            });
+            setSavedLocal(Boolean((res as any)?.saved));
+        } catch (e) {
+            setSavedLocal(prev);
+            console.warn(e);
+        }
     };
 
     const handleLike = () => {
+        if (!sessionToken) return;
         setLiked(!liked);
-        setLikes((prev: number) => liked ? prev - 1 : prev + 1);
-        toggleLikeMut({ targetType: 'post', targetId: post._id || post.id }).catch(e => console.warn(e));
+        setLikes((prev: number) => (liked ? prev - 1 : prev + 1));
+        toggleLikeMut({
+            sessionToken,
+            targetType: 'post',
+            targetId: postId,
+        }).catch((e) => console.warn(e));
     };
 
     const handleDelete = async () => {
+        if (!sessionToken) return;
         const ok = await confirmAction(
-            "Eliminar publicación",
-            "¿Estás seguro de que quieres eliminar esta publicación?",
+            'Eliminar publicación',
+            '¿Estás seguro de que quieres eliminar esta publicación?',
         );
-        if (ok) deletePost(post._id || post.id);
+        if (!ok) return;
+        try {
+            await deletePostMut({ sessionToken, postId: postId as any });
+        } catch (e) {
+            console.warn(e);
+        }
     };
 
     const handleMoreOptions = () => {
-        // Only owner action today is delete; go straight to the styled confirm.
-        if (currentUser.id === (post.author || post.user)?.userId || currentUser.id === (post.author || post.user)?.id) handleDelete();
+        if (myId && myId === authorId) handleDelete();
     };
 
     return (
@@ -101,7 +134,7 @@ export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }
                                 {post.commercialProduct.name}
                             </Text>
                             <Text style={[styles.commercialSubtitle, isDark ? { color: '#9CA3AF' } : { color: '#6B7280' }]}>
-                                {post.commercialProduct.type.toUpperCase()}
+                                {(post.commercialProduct.type || 'item').toUpperCase()}
                             </Text>
                         </View>
                         <View style={styles.commercialFooter}>

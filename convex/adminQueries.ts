@@ -171,6 +171,22 @@ export const getActiveSessions = query({
     },
 });
 
+const resolveDocUrl = async (ctx: any, raw: string): Promise<string> => {
+    if (!raw) return raw;
+    if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) {
+        return raw;
+    }
+    const storageId = raw.startsWith("convex-storage:")
+        ? raw.replace("convex-storage:", "")
+        : raw;
+    try {
+        const url = await ctx.storage.getUrl(storageId as any);
+        return url || raw;
+    } catch {
+        return raw;
+    }
+};
+
 export const getKycReviewQueue = query({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
@@ -178,18 +194,93 @@ export const getKycReviewQueue = query({
         assertAdmin(actor);
 
         const users = await ctx.db.query("users").collect();
-        return users
+        const pending = users
             .filter((u) => u.kycStatus === "pending" || u.kycStatus === "unverified")
-            .map((u) => ({
-                _id: u._id,
-                name: u.name,
-                email: u.email,
-                role: u.role,
-                kycStatus: u.kycStatus ?? "unverified",
-                joinedAt: u.joinedAt,
-                verificationDocuments: u.verificationDocuments ?? [],
-            }))
             .sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
+
+        return await Promise.all(
+            pending.map(async (u) => {
+                const docs = u.verificationDocuments ?? [];
+                const verificationDocuments = await Promise.all(
+                    docs.map(async (d) => ({
+                        ...d,
+                        url: await resolveDocUrl(ctx, d.url),
+                    })),
+                );
+                return {
+                    _id: u._id,
+                    name: u.name,
+                    email: u.email,
+                    role: u.role,
+                    kycStatus: u.kycStatus ?? "unverified",
+                    joinedAt: u.joinedAt,
+                    verificationDocuments,
+                };
+            }),
+        );
+    },
+});
+
+export const getAdminUserDetail = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        userId: v.id("users"),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        assertAdmin(actor);
+
+        const u = await ctx.db.get(args.userId);
+        if (!u) return null;
+
+        const docs = u.verificationDocuments ?? [];
+        const verificationDocuments = await Promise.all(
+            docs.map(async (d) => ({
+                ...d,
+                url: await resolveDocUrl(ctx, d.url),
+            })),
+        );
+
+        let referredByLabel: string | undefined;
+        if (u.referredByUserId) {
+            const ref = await ctx.db.get(u.referredByUserId);
+            if (ref) {
+                referredByLabel = ref.username
+                    ? `@${ref.username}`
+                    : ref.email || String(ref._id);
+            }
+        }
+
+        return {
+            _id: u._id,
+            name: u.name,
+            email: u.email,
+            username: u.username,
+            nickname: u.nickname,
+            role: u.role,
+            avatar: u.avatar,
+            joinedAt: u.joinedAt,
+            isBanned: !!u.isBanned,
+            isTest: !!u.isTest,
+            tier: u.tier,
+            subscriptionStatus: u.subscriptionStatus,
+            subscriptionTier: u.subscriptionTier,
+            emailVerified: !!u.emailVerified,
+            phoneNumber: u.phoneNumber,
+            bio: u.bio,
+            businessCategory: u.businessCategory,
+            storeLocation: u.storeLocation,
+            socialLinks: u.socialLinks,
+            instagramUrl: u.instagramUrl,
+            tiktokUrl: u.tiktokUrl,
+            referralAlias: u.referralAlias,
+            referredByUserId: u.referredByUserId,
+            referredByLabel,
+            kycStatus: u.kycStatus ?? "unverified",
+            influencerStatus: u.influencerStatus,
+            kycProfile: u.kycProfile,
+            verificationDocuments,
+        };
     },
 });
 

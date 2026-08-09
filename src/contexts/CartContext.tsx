@@ -34,7 +34,7 @@ export interface CartContextData {
     items: CartItem[];
     isOpen: boolean;
     isLoading: boolean;
-    addItem: (item: CartItem) => void;
+    addItem: (item: CartItem) => Promise<void>;
     removeItem: (id: string) => void;
     updateQuantity: (id: string, quantity: number) => void;
     clearCart: () => void;
@@ -117,30 +117,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         show(message, 'error');
     };
 
-    const addItem = (item: CartItem) => {
+    const addItem = async (item: CartItem): Promise<void> => {
         const quantity = item.quantity || 1;
         if (isAuthenticated) {
-            addToCartMutation({
-                sessionToken,
-                listingId: item.id,
-                quantity,
-                // Solo se usa server-side para items "virtual:"; los listings reales
-                // se snapshotean desde la DB (el precio del cliente no se confía).
-                snapshot: {
-                    title: item.name,
-                    price: item.price,
-                    image: item.image || undefined,
-                    sellerId: item.sellerId,
-                    type: toSnapshotType(item.type),
-                    location: item.location,
-                    sellerName: item.sellerName,
-                    condition: toSnapshotCondition(item.condition),
-                    shippingWeightKg: item.shippingWeightKg,
-                    shippingDimensionsCm: item.shippingDimensionsCm,
-                    distanceKm: item.distanceKm,
-                    referralCode: item.referralCode,
-                },
-            }).catch((e) => reportError(e, 'No se pudo agregar al carrito.'));
+            try {
+                await addToCartMutation({
+                    sessionToken,
+                    listingId: item.id,
+                    quantity,
+                    // Solo se usa server-side para items "virtual:"; los listings reales
+                    // se snapshotean desde la DB (el precio del cliente no se confía).
+                    snapshot: {
+                        title: item.name,
+                        price: item.price,
+                        image: item.image || undefined,
+                        sellerId: item.sellerId,
+                        type: toSnapshotType(item.type),
+                        location: item.location,
+                        sellerName: item.sellerName,
+                        condition: toSnapshotCondition(item.condition),
+                        shippingWeightKg: item.shippingWeightKg,
+                        shippingDimensionsCm: item.shippingDimensionsCm,
+                        distanceKm: item.distanceKm,
+                        referralCode: item.referralCode,
+                    },
+                });
+            } catch (e) {
+                reportError(e, 'No se pudo agregar al carrito.');
+                throw e;
+            }
             return;
         }
         setGuestItems(prev => {

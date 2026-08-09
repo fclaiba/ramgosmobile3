@@ -27,6 +27,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { buildBonoRedeemPayload } from '../utils/bonoDeepLink';
 
 const { width } = Dimensions.get('window');
 /** Privacy: hide QR after idle screen session — NOT the bono validity. */
@@ -81,7 +82,8 @@ export default function BonusQRScreen() {
 
     const finalCode = typeof bonoCode === 'string' && bonoCode.trim() ? bonoCode.trim() : '';
     const hasRealCode = !!finalCode && !finalCode.startsWith('DEMO-');
-    const qrData = finalCode;
+    // QR encodes redeem deep link; human-readable BNO-… stays on screen / clipboard
+    const qrData = hasRealCode ? buildBonoRedeemPayload(finalCode) : '';
     const qrSize = Math.min(width * 0.52, 210);
 
     const bonoExpired = useMemo(() => {

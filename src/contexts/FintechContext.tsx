@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from './AuthContext';
+import { uploadKycPayloadImages } from '../utils/uploadToConvexStorage';
 
 export type PaymentRecord = {
     _id: string;
@@ -85,6 +86,7 @@ function useFintechState(): FintechContextValue {
 
     const ensureWalletMutation = useMutation(api.finance.ensureWalletAccount);
     const submitKycMutation = useMutation(api.users.submitKyc);
+    const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
     const payments = useMemo<PaymentRecord[]>(() => {
         if (!Array.isArray(rawPayments)) return [];
@@ -172,13 +174,21 @@ function useFintechState(): FintechContextValue {
     const submitKyc = useCallback(
         async (payload: KycPayload) => {
             if (!sessionToken || !userId || payload.ownerId !== userId) return;
+            const data = await uploadKycPayloadImages(
+                payload.data as Record<string, unknown>,
+                {
+                    generateUploadUrl,
+                    sessionToken,
+                    actorId: String(userId),
+                },
+            );
             await submitKycMutation({
                 sessionToken,
                 id: userId as Id<'users'>,
-                payload: payload.data,
+                payload: data,
             });
         },
-        [sessionToken, submitKycMutation, userId],
+        [sessionToken, submitKycMutation, generateUploadUrl, userId],
     );
 
     return useMemo(

@@ -125,21 +125,32 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 * `generateUploadUrl()`: Obtiene URL segura de Convex Storage.
 * `createPost(mediaUrl, text, type, attachedListingId?)`: Impacta el nuevo post en la base de datos, asociando el producto si lo hubiera.
 
-## 10. Análisis de Brechas (Gap Analysis): ¿Qué falta para la visión integral?
+## 10. Análisis de Brechas (Gap Analysis)
 
-Para que Ramgos se consolida como esta plataforma unificada y sin fisuras (donde el creador tiene *todo en sus manos* y el negocio escala pasivamente), actualmente **faltan desarrollar las siguientes piezas clave**:
+### Hecho (tab Social del navbar — Oleada A)
+Entrada: `HomeScreen` → sección `social` → `SocialScreen`.
 
-### A. Lo que falta en el Módulo de Red Social (Core)
-1. **El Feed Unificado (Scroll Infinito):** Si bien ya tenemos las Historias (`<StoryViewer />`), nos falta construir el contenedor principal vertical (`<UnifiedFeed />` usando `@shopify/flash-list`) que renderice videos y carruseles mezclados sin cuelgues.
-2. **El "CommerceTag" (Botón de Acción):** Desarrollar el componente visual holográfico (Liquid Glass) que se superpone al contenido y conecta el video con el producto.
-3. **Flujo de Publicación Híbrido (Creator Studio):** Faltan las pantallas donde el influencer, al momento de subir una foto o video, puede abrir un cajón y "engancharle" un bono de afiliado o un producto de un tercero.
-4. **Motor de Recomendación (Algoritmo):** Construir la lógica de consultas espaciales (geolocalización) y de interacciones (views/likes) en Convex para que el feed muestre productos relevantes cercanos y contenido social global.
+| Capacidad | Estado |
+|---|---|
+| Feed + Loops (`getFeed`, paginación) | Hecho |
+| Stories (crear / ver / `viewStory`) | Hecho |
+| Creator Studio + CommerceLinker + `attachedListingId` | Hecho |
+| CTA comercial → `OneClickCheckoutSheet` + pago simulado | Hecho |
+| Likes / comentarios / save / delete / follow vía Convex | Hecho |
+| DMs (`DirectMessages` + share a chat) | Hecho |
+| Búsqueda de usuarios | Hecho |
+| Perfil híbrido (`HybridProfile` registrado) | Hecho |
+| Seguidores = `socialFollows` / `socialUsers.followerCount` | Hecho |
 
-### B. Lo que falta en el Ecosistema Global (Toda la App)
-1. **Checkout de 1-Click In-App:** Nos falta la pasarela de pago ultra-optimizada (BottomSheet) que no saque al usuario de la app. Hoy Stripe funciona, pero hay que adaptarlo al "Dogma de Fricción Cero".
-2. **Motor de Gamificación (Puntos):** Conectar las acciones sociales (likes, crear posts, asistir a eventos) con el monedero de puntos del usuario, haciendo que el ecosistema se mueva por economía interna antes que por tarjetas de crédito.
-3. **Bandeja de Entrada de Mensajes Directos (DMs):** Ya existe el backend (mutaciones de `socialChats`), pero falta la interfaz de chat en vivo para que los usuarios puedan mensajearse fluidamente, lo cual es vital para la retención social.
-4. **Explorador / Buscador (Discovery):** Una lupa que permita buscar personas, negocios o productos. Idealmente alimentada por búsqueda vectorial (Vector Search) para soportar búsquedas naturales ("zapatillas rojas cerca de mí").
+### Aún abierto
+1. **FlashList unificado estricto** (`@shopify/flash-list` + pre-cache video agresivo) — hoy FlatList + LoopFeed.
+2. **CommerceTag holográfico** overlay tipo Liquid Glass (hoy card/CTA en el post).
+3. **Algoritmo geo / intereses** — `getFeed` es cronológico.
+4. **`claimFromPost` bono one-click** — no hay mutation dedicada; checkout de listing sí.
+5. **Discovery vectorial** (personas + productos en una lupa).
+6. **Comunidades comerciales** (Sprint 4).
+7. **Matching de eventos** (Sprint 5).
+8. **Gamificación social** (puntos por likes/posts) — puntos en checkout simulado sí.
 
 ---
 

@@ -94,6 +94,18 @@ const ensureSocialUser = async (
     return await ctx.db.get(id);
 };
 
+/** Load auth user row for seeding a lazy socialUsers profile. */
+const loadUserSeed = async (ctx: any, userId: string) => {
+    const normId = ctx.db.normalizeId('users', userId);
+    const user = normId ? await ctx.db.get(normId) : null;
+    if (!user) return undefined;
+    return {
+        name: user.name || user.nickname || undefined,
+        email: user.email || undefined,
+        avatar: user.avatar || undefined,
+    };
+};
+
 // ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
@@ -167,6 +179,31 @@ export const lookupUserSocial = query({
                 .first();
         }
         return profile ?? null;
+    },
+});
+
+/** Public counters for commercial / hybrid profiles (no session required). */
+export const getPublicSocialStats = query({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        const profile = await ctx.db
+            .query('socialUsers')
+            .withIndex('by_user', (q) => q.eq('userId', args.userId))
+            .first();
+        if (!profile) {
+            return {
+                followerCount: 0,
+                followingCount: 0,
+                postCount: 0,
+                username: null as string | null,
+            };
+        }
+        return {
+            followerCount: profile.followerCount ?? 0,
+            followingCount: profile.followingCount ?? 0,
+            postCount: profile.postCount ?? 0,
+            username: profile.username ?? null,
+        };
     },
 });
 
@@ -737,29 +774,33 @@ export const follow = mutation({
             .first();
         if (existing) return { followed: true };
 
+        // Ensure both sides have socialUsers so commercial profiles accumulate followers.
+        const [actorSeed, targetSeed] = await Promise.all([
+            loadUserSeed(ctx, actor.idString),
+            loadUserSeed(ctx, args.targetUserId),
+        ]);
+        const [followerProfile, followeeProfile] = await Promise.all([
+            ensureSocialUser(ctx, actor.idString, actorSeed ?? {
+                name: actor.email,
+                email: actor.email,
+            }),
+            ensureSocialUser(ctx, args.targetUserId, targetSeed),
+        ]);
+
         await ctx.db.insert('socialFollows', {
             followerUserId: actor.idString,
             followeeUserId: args.targetUserId,
             createdAt: NOW(),
         });
 
-        // Update counters.
-        const [followerProfile, followeeProfile] = await Promise.all([
-            ctx.db.query('socialUsers').withIndex('by_user', (q) => q.eq('userId', actor.idString)).first(),
-            ctx.db.query('socialUsers').withIndex('by_user', (q) => q.eq('userId', args.targetUserId)).first(),
-        ]);
-        if (followerProfile) {
-            await ctx.db.patch(followerProfile._id, {
-                followingCount: followerProfile.followingCount + 1,
-                updatedAt: NOW(),
-            });
-        }
-        if (followeeProfile) {
-            await ctx.db.patch(followeeProfile._id, {
-                followerCount: followeeProfile.followerCount + 1,
-                updatedAt: NOW(),
-            });
-        }
+        await ctx.db.patch(followerProfile._id, {
+            followingCount: (followerProfile.followingCount ?? 0) + 1,
+            updatedAt: NOW(),
+        });
+        await ctx.db.patch(followeeProfile._id, {
+            followerCount: (followeeProfile.followerCount ?? 0) + 1,
+            updatedAt: NOW(),
+        });
 
         // Push to followed user.
         await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
@@ -792,22 +833,26 @@ export const unfollow = mutation({
 
         await ctx.db.delete(existing._id);
 
-        const [followerProfile, followeeProfile] = await Promise.all([
-            ctx.db.query('socialUsers').withIndex('by_user', (q) => q.eq('userId', actor.idString)).first(),
-            ctx.db.query('socialUsers').withIndex('by_user', (q) => q.eq('userId', args.targetUserId)).first(),
+        const [actorSeed, targetSeed] = await Promise.all([
+            loadUserSeed(ctx, actor.idString),
+            loadUserSeed(ctx, args.targetUserId),
         ]);
-        if (followerProfile) {
-            await ctx.db.patch(followerProfile._id, {
-                followingCount: Math.max(0, followerProfile.followingCount - 1),
-                updatedAt: NOW(),
-            });
-        }
-        if (followeeProfile) {
-            await ctx.db.patch(followeeProfile._id, {
-                followerCount: Math.max(0, followeeProfile.followerCount - 1),
-                updatedAt: NOW(),
-            });
-        }
+        const [followerProfile, followeeProfile] = await Promise.all([
+            ensureSocialUser(ctx, actor.idString, actorSeed ?? {
+                name: actor.email,
+                email: actor.email,
+            }),
+            ensureSocialUser(ctx, args.targetUserId, targetSeed),
+        ]);
+
+        await ctx.db.patch(followerProfile._id, {
+            followingCount: Math.max(0, (followerProfile.followingCount ?? 0) - 1),
+            updatedAt: NOW(),
+        });
+        await ctx.db.patch(followeeProfile._id, {
+            followerCount: Math.max(0, (followeeProfile.followerCount ?? 0) - 1),
+            updatedAt: NOW(),
+        });
         return { followed: false };
     },
 });

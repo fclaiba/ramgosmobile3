@@ -44,8 +44,13 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const convexMetrics = useQuery((api as any).dashboard?.getInfluencerMetrics, user?.id ? { influencerId: user.id } : "skip");
     const campaignRows = useQuery(
         api.campaigns.getMyCampaigns,
-        user?.id ? { influencerId: user.id as Id<"users"> } : 'skip',
+        user?.id ? { influencerId: user.id as Id<"users">, sessionToken } : 'skip',
     ) ?? [];
+    const whitelistedBusinesses =
+        useQuery(
+            api.influencers.getMyWhitelistedBusinesses,
+            user?.id && sessionToken ? { sessionToken } : 'skip',
+        ) ?? [];
 
     const myListings = useQuery(
         api.listings.getMyListings,
@@ -61,6 +66,34 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const pendingInvitations = useMemo(() => campaignRows.filter((c: any) => c.status === 'pending' && c.initiatedBy === 'business'), [campaignRows]);
     const myProposals = useMemo(() => campaignRows.filter((c: any) => c.status === 'pending' && c.initiatedBy === 'influencer'), [campaignRows]);
     const activeCampaigns = useMemo(() => campaignRows.filter((c: any) => c.status === 'active' || c.status === 'paused'), [campaignRows]);
+
+    const authorizedBusinesses = useMemo(() => {
+        const byId = new Map<string, { id: string; name: string; source: string }>();
+        for (const c of campaignRows.filter((row: any) => row.status === 'active')) {
+            const id = String(c.businessId || '');
+            if (!id || byId.has(id)) continue;
+            byId.set(id, {
+                id,
+                name: c.businessName || 'Negocio',
+                source: 'campaña',
+            });
+        }
+        for (const b of whitelistedBusinesses) {
+            const id = String(b.businessId || '');
+            if (!id) continue;
+            if (byId.has(id)) {
+                const prev = byId.get(id)!;
+                byId.set(id, { ...prev, source: 'campaña + whitelist' });
+                continue;
+            }
+            byId.set(id, {
+                id,
+                name: b.name || 'Negocio',
+                source: 'whitelist',
+            });
+        }
+        return Array.from(byId.values());
+    }, [campaignRows, whitelistedBusinesses]);
 
     const referrals = referralSummary.registrations;
     const getLevelInfo = (count: number) => {
@@ -104,6 +137,63 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                 {/* Affiliate Link Card */}
                 <AffiliateLinkCard referralLink={referralLink} containerWidth={containerWidth} />
 
+                {/* Negocios autorizados (whitelist + campañas) */}
+                <View style={[styles.bonusCard, glassSurface(isDark, 'prominent'), { maxWidth: containerWidth }]}>
+                    <Text style={[styles.bonusTitle, { color: isDark ? '#fff' : '#111827' }]}>
+                        Negocios que te autorizaron
+                    </Text>
+                    <Text style={[styles.bonusSubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>
+                        Podés emitir bonos solo para estos negocios (whitelist o campaña activa).
+                    </Text>
+                    {authorizedBusinesses.length === 0 ? (
+                        <Text
+                            style={{
+                                marginTop: 12,
+                                color: isDark ? '#FCA5A5' : '#B91C1C',
+                                fontSize: 13,
+                                lineHeight: 18,
+                            }}
+                        >
+                            Todavía no tenés negocios autorizados. Pedile a un negocio que te añada a su
+                            whitelist o que te invite a una campaña.
+                        </Text>
+                    ) : (
+                        <View style={{ marginTop: 12, gap: 8 }}>
+                            {authorizedBusinesses.map((b) => (
+                                <View
+                                    key={b.id}
+                                    style={{
+                                        paddingVertical: 10,
+                                        paddingHorizontal: 12,
+                                        borderRadius: 10,
+                                        backgroundColor: isDark
+                                            ? 'rgba(255,255,255,0.06)'
+                                            : 'rgba(15,23,42,0.04)',
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            color: isDark ? '#fff' : '#111827',
+                                            fontWeight: '700',
+                                        }}
+                                    >
+                                        {b.name}
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            color: isDark ? '#94A3B8' : '#6B7280',
+                                            fontSize: 12,
+                                            marginTop: 2,
+                                        }}
+                                    >
+                                        Autorizado por {b.source}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </View>
+
                 {/* Create Bonus Card */}
                 <View style={[styles.bonusCard, glassSurface(isDark, 'prominent'), { maxWidth: containerWidth }]}>
                     <View style={{ flex: 1 }}>
@@ -112,7 +202,15 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                             Creá bonos de crédito prepago para tus seguidores (pagás X · crédito Y) y compartilos desde acá.
                         </Text>
                     </View>
-                    <Button onPress={() => setModalVisible(true)} style={{ backgroundColor: '#4f46e5', marginTop: 12 }}>
+                    <Button
+                        onPress={() => setModalVisible(true)}
+                        style={{
+                            backgroundColor: '#4f46e5',
+                            marginTop: 12,
+                            opacity: authorizedBusinesses.length === 0 ? 0.55 : 1,
+                        }}
+                        disabled={authorizedBusinesses.length === 0}
+                    >
                         <Text style={{ color: '#fff', fontWeight: 'bold' }}>Crear bono</Text>
                     </Button>
                 </View>

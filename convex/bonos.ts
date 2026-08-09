@@ -247,10 +247,14 @@ export const redeemBono = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
+        const code = String(args.bonoCode || "")
+            .trim()
+            .replace(/\s+/g, "")
+            .toUpperCase();
 
         const bono = await ctx.db
             .query("bonoRedemptions")
-            .withIndex("by_code", (q) => q.eq("bonoCode", args.bonoCode))
+            .withIndex("by_code", (q) => q.eq("bonoCode", code))
             .first();
         if (!bono) {
             bonoUserError("No encontramos ese código. Revisalo e intentá de nuevo.");
@@ -640,29 +644,59 @@ export const getBusinessBonos = query({
     },
 });
 
-// Lookup by code (used by the scanner before calling redeemBono, so the
-// UI can preview seller name / amount before confirming).
+// Lookup by code (POS preview before redeemBono). Auth required — business/admin only.
 export const lookupBono = query({
-    args: { bonoCode: v.string() },
+    args: {
+        sessionToken: v.optional(v.string()),
+        bonoCode: v.string(),
+    },
     handler: async (ctx, args) => {
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (!actor) return null;
+        const role = actor.role;
+        if (
+            role !== "business" &&
+            role !== "admin" &&
+            role !== "developer"
+        ) {
+            return null;
+        }
+
+        const code = String(args.bonoCode || "")
+            .trim()
+            .replace(/\s+/g, "")
+            .toUpperCase();
+        if (!code) return null;
+
         const bono = await ctx.db
             .query("bonoRedemptions")
-            .withIndex("by_code", (q) => q.eq("bonoCode", args.bonoCode))
+            .withIndex("by_code", (q) => q.eq("bonoCode", code))
             .first();
         if (!bono) return null;
-        
-        // Hydrate listing for display.
+
         const listingNormId = ctx.db.normalizeId("listings", bono.listingId);
         const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
-        
-        // Hydrate user for display
+
         const ownerNormId = ctx.db.normalizeId("users", bono.ownerUserId);
         const owner = ownerNormId ? await ctx.db.get(ownerNormId) : null;
-        
-        return { 
-            ...bono, 
+
+        const eco = resolveBonoEconomics(listing);
+
+        return {
+            ...bono,
             listing,
-            ownerName: owner ? (owner.name || owner.nickname || 'Cliente') : 'Cliente'
+            ownerName: owner
+                ? owner.name || owner.nickname || "Cliente"
+                : "Cliente",
+            paidAmount: bono.paidAmount ?? eco.paidAmount,
+            creditTotal: bono.creditTotal ?? eco.creditTotal,
+            creditRemaining:
+                bono.creditRemaining ??
+                (bono.status === "issued" ? eco.creditTotal : 0),
+            usesTotal: bono.usesTotal ?? eco.usesTotal,
+            usesRemaining:
+                bono.usesRemaining ??
+                (bono.status === "issued" ? eco.usesTotal : 0),
         };
     },
 });

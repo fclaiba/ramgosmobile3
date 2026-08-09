@@ -12,3 +12,5 @@ export * from './LoopFeed';
 export * from './LoopItem';
 export * from './UnifiedFeed';
 export * from './OneClickCheckoutSheet';
+export * from './CreatorStudioModal';
+export * from './SocialFollowButton';

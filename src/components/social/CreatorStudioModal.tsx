@@ -79,13 +79,19 @@ export function CreatorStudioModal({ visible, onClose }: CreatorStudioModalProps
             } : undefined;
 
             // 3. Llamar a la mutación de social.ts
+            const listingId = attachedProduct?.listingId;
             await createPost({
                 sessionToken: sessionToken || '',
-                type: mediaType || 'text',
+                type: attachedProduct
+                    ? 'commercial'
+                    : mediaType || 'text',
                 content: caption,
                 videoUrl: mediaType === 'video' ? finalMediaUrl : undefined,
                 images: mediaType === 'image' && finalMediaUrl ? [finalMediaUrl] : undefined,
                 commercialProduct,
+                ...(listingId
+                    ? { attachedListingId: listingId as any }
+                    : {}),
             });
 
             show('¡Publicado con éxito!', 'success');

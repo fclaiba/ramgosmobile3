@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -44,17 +44,32 @@ function InfluencerBonusesScreen({ navigation }: any) {
             api.campaigns.getMyCampaigns,
             user?.id ? { influencerId: user.id as Id<'users'>, sessionToken } : 'skip',
         ) ?? [];
+    const whitelistedBusinesses =
+        useQuery(
+            api.influencers.getMyWhitelistedBusinesses,
+            user?.id && sessionToken ? { sessionToken } : 'skip',
+        ) ?? [];
 
     const businessOptions = useMemo(() => {
         const active = campaignRows.filter((c: any) => c.status === 'active');
-        const byId = new Map<string, { id: string; name: string }>();
+        const byId = new Map<string, { id: string; name: string; source: string }>();
         for (const c of active) {
             const id = String(c.businessId || '');
             if (!id || byId.has(id)) continue;
-            byId.set(id, { id, name: c.businessName || 'Negocio' });
+            byId.set(id, { id, name: c.businessName || 'Negocio', source: 'campaña' });
+        }
+        for (const b of whitelistedBusinesses) {
+            const id = String(b.businessId || '');
+            if (!id) continue;
+            if (byId.has(id)) {
+                const prev = byId.get(id)!;
+                byId.set(id, { ...prev, source: 'campaña + whitelist' });
+                continue;
+            }
+            byId.set(id, { id, name: b.name || 'Negocio', source: 'whitelist' });
         }
         return Array.from(byId.values());
-    }, [campaignRows]);
+    }, [campaignRows, whitelistedBusinesses]);
 
     const createBono = useMutation(api.listings.createListing);
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -67,6 +82,19 @@ function InfluencerBonusesScreen({ navigation }: any) {
     const [validityDays, setValidityDays] = useState('4');
     const [selectedBusinessId, setSelectedBusinessId] = useState('');
     const [photos, setPhotos] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (businessOptions.length === 1) {
+            setSelectedBusinessId(businessOptions[0].id);
+            return;
+        }
+        if (
+            selectedBusinessId &&
+            !businessOptions.some((b) => b.id === selectedBusinessId)
+        ) {
+            setSelectedBusinessId('');
+        }
+    }, [businessOptions, selectedBusinessId]);
 
     const shareBase = referralLink || referralCode || '';
 
@@ -114,7 +142,10 @@ function InfluencerBonusesScreen({ navigation }: any) {
             return;
         }
         if (!selectedBusinessId) {
-            show('Elegí el negocio emisor (campaña activa).', 'error');
+            show(
+                'Elegí el negocio emisor (necesitás campaña activa o estar en su whitelist).',
+                'error',
+            );
             return;
         }
         if (photos.length === 0) {
@@ -310,7 +341,8 @@ function InfluencerBonusesScreen({ navigation }: any) {
                         <Text style={styles.label}>Negocio emisor</Text>
                         {businessOptions.length === 0 ? (
                             <Text style={{ color: '#EF4444', marginBottom: 12 }}>
-                                No tenés campañas activas. Necesitás una para emitir bonos.
+                                No tenés negocios autorizados. Pedile a un negocio que te añada a su
+                                whitelist o que te invite a una campaña (y aceptala).
                             </Text>
                         ) : (
                             businessOptions.map((b) => (
@@ -324,6 +356,15 @@ function InfluencerBonusesScreen({ navigation }: any) {
                                 >
                                     <Text style={{ color: isDark ? '#fff' : '#111827', fontWeight: '600' }}>
                                         {b.name}
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            color: isDark ? '#9CA3AF' : '#6B7280',
+                                            fontSize: 12,
+                                            marginTop: 4,
+                                        }}
+                                    >
+                                        Autorizado por {b.source}
                                     </Text>
                                 </TouchableOpacity>
                             ))

@@ -43,18 +43,22 @@ export const seedTestUsers = mutation({
         const testUsers = [
             {
                 email: "consumer@test.com", name: "Test Consumer", role: "consumer",
+                username: "consumer_test",
                 tier: "Silver", kycStatus: "approved", avatar: "https://i.pravatar.cc/150?u=consumer"
             },
             {
                 email: "business@test.com", name: "Test Business", role: "business",
+                username: "business_test",
                 tier: "Gold", kycStatus: "approved", avatar: "https://i.pravatar.cc/150?u=business"
             },
             {
                 email: "influencer@test.com", name: "Test Influencer", role: "influencer",
-                tier: "Platinum", kycStatus: "questionnaire_submitted", avatar: "https://i.pravatar.cc/150?u=influencer"
+                username: "influencer_test",
+                tier: "Platinum", kycStatus: "approved", avatar: "https://i.pravatar.cc/150?u=influencer"
             },
             {
                 email: "admin@test.com", name: "Test Admin", role: "admin",
+                username: "admin_test",
                 tier: "Platinum", kycStatus: "approved", avatar: "https://i.pravatar.cc/150?u=admin"
             },
         ];
@@ -69,11 +73,16 @@ export const seedTestUsers = mutation({
                 .first();
 
             if (existing) {
-                // Ensure flags
+                // Ensure flags + searchable @handle for whitelist / campaign invite
                 await ctx.db.patch(existing._id, {
                     isTest: true,
                     password: hashPassword(DEMO_PASSWORD),
-                    kycStatus: u.kycStatus // Also ensure KYC status matches expectations
+                    kycStatus: u.kycStatus,
+                    username: u.username,
+                    referralCode: u.username.toUpperCase(),
+                    ...(u.role === "influencer"
+                        ? { influencerStatus: "approved" as const }
+                        : {}),
                 });
                 results.push({ ...sanitizeDevUser(existing), status: 'updated' });
             } else {
@@ -83,8 +92,13 @@ export const seedTestUsers = mutation({
                     email: u.email,
                     name: u.name,
                     role: u.role as any,
+                    username: u.username,
+                    referralCode: u.username.toUpperCase(),
                     tier: u.tier,
                     kycStatus: u.kycStatus,
+                    ...(u.role === "influencer"
+                        ? { influencerStatus: "approved" as const }
+                        : {}),
                     avatar: u.avatar,
                     isTest: true,
                     joinedAt: new Date().toISOString(),

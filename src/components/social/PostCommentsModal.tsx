@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Keyboard
 import { X, Send, Trash2 } from 'lucide-react-native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useSocial } from '../../contexts/SocialContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
@@ -19,9 +19,10 @@ interface PostCommentsModalProps {
 }
 
 export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModalProps) => {
-    const { addComment, currentUser } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
+    const { show } = useToast();
     const [commentText, setCommentText] = useState('');
+    const [sending, setSending] = useState(false);
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -29,23 +30,43 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
 
     const commentsResult = useQuery(
         api.social.getCommentsForPost,
-        authUser ? { postId: postId as any, limit: 100 } : 'skip',
+        authUser && sessionToken
+            ? { postId: postId as any, limit: 100, sessionToken }
+            : 'skip',
     );
+    const addCommentMut = useMutation(api.social.addComment);
     const deleteCommentMut = useMutation(api.social.deleteComment);
 
     const comments = commentsResult?.items ?? [];
+    const myId = authUser?.id ? String(authUser.id) : '';
 
-    const handleSendComment = () => {
+    const handleSendComment = async () => {
         if (!commentText.trim()) return;
-        addComment(postId, commentText);
-        setCommentText('');
+        if (!sessionToken) {
+            show('Iniciá sesión para comentar', 'warning');
+            return;
+        }
+        setSending(true);
+        try {
+            await addCommentMut({
+                sessionToken,
+                postId: postId as any,
+                content: commentText.trim(),
+            });
+            setCommentText('');
+        } catch (e: any) {
+            show(e?.message || 'No se pudo comentar', 'error');
+        } finally {
+            setSending(false);
+        }
     };
 
     const handleDelete = (commentId: string) => {
-        if (!authUser) return;
-        deleteCommentMut({ commentId: commentId as any }).catch(
-            (err) => console.warn('[comments] delete failed', err),
-        );
+        if (!authUser || !sessionToken) return;
+        deleteCommentMut({
+            commentId: commentId as any,
+            sessionToken,
+        }).catch((err) => console.warn('[comments] delete failed', err));
     };
 
     const renderComment = ({ item }: { item: any }) => {
@@ -67,7 +88,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                     </View>
                     <Text style={styles.commentText}>{item.content}</Text>
                 </View>
-                {item.authorUserId === currentUser.id && (
+                {myId && item.authorUserId === myId && (
                     <TouchableOpacity onPress={() => handleDelete(item._id)}>
                         <Trash2 size={16} color={isDark ? "#9CA3AF" : "#9CA3AF"} />
                     </TouchableOpacity>
@@ -104,8 +125,10 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                 >
                     <View style={styles.inputContainer}>
                         <Avatar style={styles.inputAvatar}>
-                            <AvatarImage src={currentUser.avatar} />
-                            <AvatarFallback>{(currentUser?.name || currentUser?.displayName || 'U')[0]}</AvatarFallback>
+                            {authUser?.avatar ? <AvatarImage src={authUser.avatar} /> : null}
+                            <AvatarFallback>
+                                {(authUser?.name || authUser?.nickname || 'U')[0]}
+                            </AvatarFallback>
                         </Avatar>
                         <TextInput
                             style={styles.input}
@@ -116,8 +139,9 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                             multiline
                         />
                         <TouchableOpacity
-                            style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
+                            style={[styles.sendBtn, (!commentText.trim() || sending) && styles.sendBtnDisabled]}
                             onPress={handleSendComment}
+                            disabled={sending || !commentText.trim()}
                             disabled={!commentText.trim()}
                         >
                             <Send size={20} color="#fff" />

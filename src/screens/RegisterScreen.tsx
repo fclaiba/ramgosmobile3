@@ -14,14 +14,9 @@ import {
     GoogleSignInCancelledError,
     signInWithGoogle,
 } from '../services/auth/googleSignIn';
-import {
-    AppleSignInCancelledError,
-    signInWithApple,
-} from '../services/auth/appleSignIn';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { GoogleAuthButton } from '../components/ui/GoogleAuthButton';
-import { AppleAuthButton } from '../components/ui/AppleAuthButton';
 import {
     LIMITS, MIN, clamp, formatReferralCode, formatSocialHandle, formatPhone,
 } from '../utils/inputLimits';
@@ -74,7 +69,7 @@ export default function RegisterScreen({ navigation, route }: any) {
 
     const [step, setStep] = useState<'type' | 'form'>('type');
     const [accountType, setAccountType] = useState<'consumer' | 'business' | 'influencer' | null>(null);
-    const [signupMethod, setSignupMethod] = useState<'google' | 'apple' | 'email'>('email');
+    const [signupMethod, setSignupMethod] = useState<'google' | 'email'>('email');
 
     const accountTypeLabel =
         accountType === 'consumer' ? 'Consumidor'
@@ -100,10 +95,9 @@ export default function RegisterScreen({ navigation, route }: any) {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const [appleLoading, setAppleLoading] = useState(false);
     const [legalViews, setLegalViews] = useState({ terms: false, privacy: false });
     const [showCategoryModal, setShowCategoryModal] = useState(false);
-    const { signUpWithEmail, loginWithGoogleIdToken, loginWithAppleIdToken, isProcessing } = useAuth();
+    const { signUpWithEmail, loginWithGoogleIdToken, isProcessing } = useAuth();
     useReferral();
     const { show } = useToast();
     const { t } = useTranslation('auth');
@@ -161,7 +155,7 @@ export default function RegisterScreen({ navigation, route }: any) {
 
     const strength = getPasswordStrength(formData.password);
 
-    const handleContinue = (method: 'google' | 'apple' | 'email') => {
+    const handleContinue = (method: 'google' | 'email') => {
         if (!accountType) {
             show('Elegí el tipo de cuenta para continuar', 'error');
             return;
@@ -174,13 +168,13 @@ export default function RegisterScreen({ navigation, route }: any) {
         ]).start();
     };
 
-    const busy = isLoading || isProcessing || googleLoading || appleLoading;
+    const busy = isLoading || isProcessing || googleLoading;
     const canProceed = !!accountType && !busy;
 
     const normalizeUsername = (raw: string) =>
         raw.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24);
 
-    /** Shared profile rules for email + Google + Apple signup. */
+    /** Shared profile rules for email + Google signup. */
     const validateProfileFields = (): string | null => {
         if (!accountType) return 'Elige el tipo de cuenta para continuar';
 
@@ -276,57 +270,6 @@ export default function RegisterScreen({ navigation, route }: any) {
             }
         } finally {
             setGoogleLoading(false);
-        }
-    };
-
-    const handleAppleSignup = async () => {
-        if (busy) return;
-        const profileError = validateProfileFields();
-        if (profileError) {
-            show(profileError, 'error');
-            return;
-        }
-        if (!accountType) return;
-
-        setAppleLoading(true);
-        try {
-            const { identityToken, email: appleEmail, fullName } = await signInWithApple();
-            const profile = profilePayload();
-            const decision = await loginWithAppleIdToken(identityToken, {
-                mode: 'register',
-                role: accountType,
-                email: appleEmail,
-                name: fullName,
-                ...profile,
-            });
-
-            if (profile.referredBy && decision.user?.id) {
-                await AsyncStorage.setItem(
-                    `@ramgos/referrals/pending/${decision.user.id}`,
-                    profile.referredBy.trim().toUpperCase(),
-                );
-            }
-
-            navigation.reset({
-                index: 0,
-                routes: [{ name: 'KYC', params: { accountType } }],
-            });
-        } catch (error) {
-            if (error instanceof AppleSignInCancelledError) return;
-            let message =
-                error instanceof Error ? error.message : 'No pudimos continuar con Apple.';
-            while (message.includes('Uncaught Error:')) {
-                message = message.split('Uncaught Error:').pop()!.split('\n')[0].trim();
-            }
-            message = message
-                .replace(/^ACCOUNT_EXISTS:\s*/, '')
-                .replace(/^NO_ACCOUNT:\s*/, '');
-            show(message, 'error');
-            if (message.toLowerCase().includes('iniciar sesión') || message.includes('ACCOUNT_EXISTS')) {
-                setTimeout(() => navigation.navigate('Login'), 600);
-            }
-        } finally {
-            setAppleLoading(false);
         }
     };
 
@@ -485,9 +428,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                     ? t('register.subtitleType')
                                     : signupMethod === 'google'
                                         ? t('register.subtitleGoogle')
-                                        : signupMethod === 'apple'
-                                            ? t('register.subtitleApple')
-                                            : t('register.subtitleEmail')}
+                                        : t('register.subtitleEmail')}
                             </Text>
 
                             {step === 'type' ? (
@@ -525,18 +466,6 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             style={{ marginBottom: 12 }}
                                         />
 
-                                        <AppleAuthButton
-                                            label={
-                                                accountTypeLabel
-                                                    ? `${t('register.continueWithApple')} · ${accountTypeLabel}`
-                                                    : t('register.continueWithApple')
-                                            }
-                                            onPress={() => handleContinue('apple')}
-                                            disabled={!canProceed}
-                                            loading={false}
-                                            style={{ marginBottom: 12 }}
-                                        />
-
                                         <TouchableOpacity
                                             onPress={() => handleContinue('email')}
                                             activeOpacity={0.9}
@@ -563,11 +492,7 @@ export default function RegisterScreen({ navigation, route }: any) {
                                     <View style={{ alignItems: 'center', marginBottom: 12, gap: 8 }}>
                                         <Badge color={accountTypeColor}>
                                             {accountTypeLabel}
-                                            {signupMethod === 'google'
-                                                ? ' · Google'
-                                                : signupMethod === 'apple'
-                                                    ? ' · Apple'
-                                                    : ' · Email'}
+                                            {signupMethod === 'google' ? ' · Google' : ' · Email'}
                                         </Badge>
                                         <TouchableOpacity
                                             onPress={() => setStep('type')}
@@ -922,17 +847,6 @@ export default function RegisterScreen({ navigation, route }: any) {
                                             onPress={handleGoogleSignup}
                                             disabled={busy}
                                             loading={googleLoading}
-                                        />
-                                    ) : signupMethod === 'apple' ? (
-                                        <AppleAuthButton
-                                            label={
-                                                accountTypeLabel
-                                                    ? `Crear cuenta con Apple · ${accountTypeLabel}`
-                                                    : 'Crear cuenta con Apple'
-                                            }
-                                            onPress={handleAppleSignup}
-                                            disabled={busy}
-                                            loading={appleLoading}
                                         />
                                     ) : (
                                     <TouchableOpacity

@@ -1,15 +1,30 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Image, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import React, { useMemo, useState } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Dimensions,
+    TouchableOpacity,
+    Image,
+    Platform,
+    FlatList,
+    Share,
+    ActivityIndicator,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MapPin, Grid, ShoppingBag, Ticket, Star, ChevronLeft, MoreHorizontal } from 'lucide-react-native';
+import { Grid, ShoppingBag, Ticket, Star, ChevronLeft, Share2 } from 'lucide-react-native';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
 import { useTheme } from '../contexts/ThemeContext';
-import { glassShadow, colors, Radius } from '../theme/tokens';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { Radius } from '../theme/tokens';
 import { UnifiedFeed } from '../components/social/UnifiedFeed';
+import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { formatCompactCount } from '../utils/formatCompactCount';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 type TabType = 'feed' | 'catalogo' | 'bonos';
 
@@ -17,19 +32,102 @@ export function HybridProfileScreen({ route, navigation }: any) {
     const { userId } = route?.params || {};
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const { user: authUser, sessionToken } = useAuth();
+    const { show } = useToast();
     const [activeTab, setActiveTab] = useState<TabType>('feed');
 
-    // MOCK DATA - Reemplazar con query real cuando esté lista en Convex
-    const profile = {
-        name: 'Ramgos Influencer',
-        username: 'ramgosofficial',
-        role: 'influencer',
-        avatar: 'https://i.pravatar.cc/150?img=12',
-        bio: 'Creando el mejor contenido de moda y lifestyle. 🔥 Usá mi código RAMGOS20.',
-        location: 'Buenos Aires, AR',
-        followers: '12.4K',
-        following: '342',
-        rating: 4.9,
+    const profileId =
+        typeof userId === 'string' && userId.length > 10
+            ? (userId as Id<'users'>)
+            : null;
+
+    const profile = useQuery(
+        api.users.getUser,
+        profileId ? { id: profileId } : 'skip',
+    );
+    const socialStats = useQuery(
+        api.social.getPublicSocialStats,
+        profileId ? { userId: String(profileId) } : 'skip',
+    );
+    const listings = useQuery(
+        api.listings.getPublicListingsBySeller,
+        profileId ? { sellerId: String(profileId) } : 'skip',
+    );
+
+    const catalogItems = useMemo(() => {
+        const rows = listings || [];
+        return rows.filter((l: any) => (l.type || l.listingType) !== 'bono');
+    }, [listings]);
+
+    const bonoItems = useMemo(() => {
+        const rows = listings || [];
+        return rows.filter((l: any) => (l.type || l.listingType) === 'bono');
+    }, [listings]);
+
+    const handleShare = async () => {
+        const name = profile?.name || 'Perfil';
+        try {
+            await Share.share({
+                title: name,
+                message: `Mirá el perfil de ${name} en Ramgos`,
+            });
+        } catch {
+            /* cancelled */
+        }
+    };
+
+    const openItem = (item: any) => {
+        navigation.navigate('ItemDetail', {
+            itemId: String(item._id || item.id),
+            itemData: item,
+        });
+    };
+
+    const renderListing = ({ item }: { item: any }) => (
+        <TouchableOpacity
+            style={[styles.listingCard, { backgroundColor: isDark ? '#111827' : '#FFF' }]}
+            onPress={() => openItem(item)}
+            activeOpacity={0.85}
+        >
+            <ImageWithFallback
+                src={item.image || item.images?.[0]?.url}
+                style={styles.listingImg}
+            />
+            <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                <Text style={[styles.listingTitle, { color: isDark ? '#FFF' : '#111' }]} numberOfLines={2}>
+                    {item.title || item.name}
+                </Text>
+                <Text style={styles.listingPrice}>${item.price}</Text>
+            </View>
+        </TouchableOpacity>
+    );
+
+    if (profileId && profile === undefined) {
+        return (
+            <View style={[styles.container, styles.center]}>
+                <ActivityIndicator size="large" color="#4F46E5" />
+            </View>
+        );
+    }
+
+    const displayName = profile?.nickname || profile?.name || 'Usuario';
+    const username = (profile as any)?.username || 'usuario';
+    const avatar = profile?.avatar || 'https://i.pravatar.cc/150?u=ramgos';
+    const bio = profile?.bio || '';
+    const followers = socialStats?.followerCount ?? 0;
+    const following = socialStats?.followingCount ?? 0;
+    const rating = profile?.sellerRating ?? 0;
+
+    const openFollowersList = () => {
+        if (!profileId) return;
+        if (!authUser || !sessionToken) {
+            show('Iniciá sesión para ver la lista de seguidores', 'warning');
+            return;
+        }
+        navigation.navigate('UserList', {
+            type: 'followers',
+            userId: String(profileId),
+        });
     };
 
     const renderHeader = () => (
@@ -38,60 +136,80 @@ export function HybridProfileScreen({ route, navigation }: any) {
                 colors={isDark ? ['#1E1B4B', '#312E81', '#000000'] : ['#E0E7FF', '#C7D2FE', '#F3F4F6']}
                 style={StyleSheet.absoluteFill}
             />
-            
+
             <View style={styles.topNav}>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
                     <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.iconBtn}>
-                    <MoreHorizontal size={24} color={isDark ? '#FFF' : '#000'} />
+                <TouchableOpacity style={styles.iconBtn} onPress={handleShare}>
+                    <Share2 size={22} color={isDark ? '#FFF' : '#000'} />
                 </TouchableOpacity>
             </View>
 
             <View style={styles.profileInfo}>
-                <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+                <Image source={{ uri: avatar }} style={styles.avatar} />
                 <View style={styles.nameRow}>
-                    <Text style={styles.name}>{profile.name}</Text>
-                    {profile.role === 'influencer' && (
+                    <Text style={[styles.name, !isDark && { color: '#111827' }]}>{displayName}</Text>
+                    {profile?.role === 'influencer' && (
                         <View style={styles.badge}>
                             <Star size={10} color="#FCD34D" fill="#FCD34D" />
                             <Text style={styles.badgeText}>PRO</Text>
                         </View>
                     )}
                 </View>
-                <Text style={styles.username}>@{profile.username}</Text>
-                
-                <Text style={styles.bio}>{profile.bio}</Text>
-                
+                <Text style={[styles.username, !isDark && { color: '#6B7280' }]}>@{username}</Text>
+
+                {bio ? (
+                    <Text style={[styles.bio, !isDark && { color: '#374151' }]}>{bio}</Text>
+                ) : null}
+
                 <View style={styles.statsRow}>
-                    <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{profile.followers}</Text>
+                    <TouchableOpacity
+                        style={styles.statBox}
+                        onPress={openFollowersList}
+                        accessibilityRole="button"
+                        accessibilityLabel="Ver seguidores"
+                    >
+                        <Text style={styles.statValue}>{formatCompactCount(followers)}</Text>
                         <Text style={styles.statLabel}>Seguidores</Text>
-                    </View>
+                    </TouchableOpacity>
                     <View style={styles.statDivider} />
                     <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{profile.following}</Text>
+                        <Text style={styles.statValue}>{formatCompactCount(following)}</Text>
                         <Text style={styles.statLabel}>Seguidos</Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statBox}>
-                        <Text style={styles.statValue}>{profile.rating}</Text>
+                        <Text style={styles.statValue}>{Number(rating).toFixed(1)}</Text>
                         <Text style={styles.statLabel}>Rating</Text>
                     </View>
                 </View>
             </View>
 
-            {/* Custom Tab Bar */}
             <View style={styles.tabBar}>
-                <TouchableOpacity style={[styles.tabBtn, activeTab === 'feed' && styles.tabBtnActive]} onPress={() => setActiveTab('feed')}>
+                <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'feed' && styles.tabBtnActive]}
+                    onPress={() => setActiveTab('feed')}
+                >
                     <Grid size={20} color={activeTab === 'feed' ? (isDark ? '#FFF' : '#000') : '#9CA3AF'} />
                     <Text style={[styles.tabText, activeTab === 'feed' && styles.tabTextActive]}>Feed</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.tabBtn, activeTab === 'catalogo' && styles.tabBtnActive]} onPress={() => setActiveTab('catalogo')}>
-                    <ShoppingBag size={20} color={activeTab === 'catalogo' ? (isDark ? '#FFF' : '#000') : '#9CA3AF'} />
-                    <Text style={[styles.tabText, activeTab === 'catalogo' && styles.tabTextActive]}>Catálogo</Text>
+                <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'catalogo' && styles.tabBtnActive]}
+                    onPress={() => setActiveTab('catalogo')}
+                >
+                    <ShoppingBag
+                        size={20}
+                        color={activeTab === 'catalogo' ? (isDark ? '#FFF' : '#000') : '#9CA3AF'}
+                    />
+                    <Text style={[styles.tabText, activeTab === 'catalogo' && styles.tabTextActive]}>
+                        Catálogo
+                    </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.tabBtn, activeTab === 'bonos' && styles.tabBtnActive]} onPress={() => setActiveTab('bonos')}>
+                <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'bonos' && styles.tabBtnActive]}
+                    onPress={() => setActiveTab('bonos')}
+                >
                     <Ticket size={20} color={activeTab === 'bonos' ? (isDark ? '#FFF' : '#000') : '#9CA3AF'} />
                     <Text style={[styles.tabText, activeTab === 'bonos' && styles.tabTextActive]}>Bonos</Text>
                 </TouchableOpacity>
@@ -99,30 +217,68 @@ export function HybridProfileScreen({ route, navigation }: any) {
         </View>
     );
 
+    if (!profileId) {
+        return (
+            <View style={[styles.container, styles.center, { backgroundColor: isDark ? '#000' : '#F9FAFB' }]}>
+                <Text style={{ color: isDark ? '#FFF' : '#111', marginBottom: 12 }}>Perfil no disponible</Text>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Text style={{ color: '#4F46E5', fontWeight: '700' }}>Volver</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
     return (
         <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#F9FAFB' }]}>
             {renderHeader()}
-            
+
             <View style={styles.contentContainer}>
-                {activeTab === 'feed' && (
-                    // Inyectamos el UnifiedFeed directamente para no romper la virtualización
-                    <UnifiedFeed />
-                )}
-                
+                {activeTab === 'feed' && <UnifiedFeed />}
+
                 {activeTab === 'catalogo' && (
-                    <View style={styles.placeholderContainer}>
-                        <ShoppingBag size={48} color="#9CA3AF" />
-                        <Text style={styles.placeholderText}>Catálogo Comercial</Text>
-                        <Text style={styles.placeholderSub}>Los productos de este creador aparecerán aquí.</Text>
-                    </View>
+                    listings === undefined ? (
+                        <View style={styles.center}>
+                            <ActivityIndicator color="#4F46E5" />
+                        </View>
+                    ) : catalogItems.length === 0 ? (
+                        <View style={styles.placeholderContainer}>
+                            <ShoppingBag size={48} color="#9CA3AF" />
+                            <Text style={styles.placeholderText}>Catálogo vacío</Text>
+                            <Text style={styles.placeholderSub}>
+                                Este creador aún no publicó productos o servicios.
+                            </Text>
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={catalogItems}
+                            keyExtractor={(item: any) => String(item._id || item.id)}
+                            renderItem={renderListing}
+                            contentContainerStyle={{ padding: 16, gap: 10 }}
+                        />
+                    )
                 )}
 
                 {activeTab === 'bonos' && (
-                    <View style={styles.placeholderContainer}>
-                        <Ticket size={48} color="#9CA3AF" />
-                        <Text style={styles.placeholderText}>Bonos y Descuentos</Text>
-                        <Text style={styles.placeholderSub}>Ofertas exclusivas para la comunidad.</Text>
-                    </View>
+                    listings === undefined ? (
+                        <View style={styles.center}>
+                            <ActivityIndicator color="#4F46E5" />
+                        </View>
+                    ) : bonoItems.length === 0 ? (
+                        <View style={styles.placeholderContainer}>
+                            <Ticket size={48} color="#9CA3AF" />
+                            <Text style={styles.placeholderText}>Sin bonos</Text>
+                            <Text style={styles.placeholderSub}>
+                                Todavía no hay bonos públicos de este perfil.
+                            </Text>
+                        </View>
+                    ) : (
+                        <FlatList
+                            data={bonoItems}
+                            keyExtractor={(item: any) => String(item._id || item.id)}
+                            renderItem={renderListing}
+                            contentContainerStyle={{ padding: 16, gap: 10 }}
+                        />
+                    )
                 )}
             </View>
         </View>
@@ -130,9 +286,8 @@ export function HybridProfileScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     headerContainer: {
         paddingTop: Platform.OS === 'ios' ? 50 : 30,
         paddingHorizontal: 20,
@@ -174,7 +329,7 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: '#fff', // TODO: Adaptar a isDark si el fondo no es siempre oscuro
+        color: '#fff',
     },
     badge: {
         flexDirection: 'row',
@@ -214,24 +369,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         gap: 20,
     },
-    statBox: {
-        alignItems: 'center',
-    },
-    statValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#fff',
-    },
-    statLabel: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.6)',
-        marginTop: 4,
-    },
-    statDivider: {
-        width: 1,
-        height: 24,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-    },
+    statBox: { alignItems: 'center' },
+    statValue: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+    statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+    statDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.2)' },
     tabBar: {
         flexDirection: 'row',
         borderTopWidth: 1,
@@ -247,20 +388,10 @@ const styles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: 'transparent',
     },
-    tabBtnActive: {
-        borderBottomColor: '#4F46E5', // Color de acento
-    },
-    tabText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#9CA3AF',
-    },
-    tabTextActive: {
-        color: '#4F46E5',
-    },
-    contentContainer: {
-        flex: 1,
-    },
+    tabBtnActive: { borderBottomColor: '#4F46E5' },
+    tabText: { fontSize: 14, fontWeight: '600', color: '#9CA3AF' },
+    tabTextActive: { color: '#4F46E5' },
+    contentContainer: { flex: 1 },
     placeholderContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -278,5 +409,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#9CA3AF',
         textAlign: 'center',
-    }
+    },
+    listingCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: Radius.lg,
+        overflow: 'hidden',
+        marginBottom: 10,
+    },
+    listingImg: { width: 72, height: 72 },
+    listingTitle: { fontSize: 14, fontWeight: '700' },
+    listingPrice: { fontSize: 15, fontWeight: '800', color: '#10B981', marginTop: 4 },
 });
