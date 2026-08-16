@@ -22,6 +22,11 @@ import { Button } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
 
 const getCleanErrorMessage = (error: unknown, fallback: string): string => {
+    // ConvexError con payload objeto ({ code, message }) → el texto está en .data.
+    const data = (error as { data?: unknown })?.data;
+    if (data && typeof data === 'object' && typeof (data as any).message === 'string') {
+        return (data as any).message || fallback;
+    }
     if (error instanceof Error) {
         let msg = error.message;
         if (msg.includes('[ConvexError]')) {

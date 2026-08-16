@@ -15,6 +15,7 @@ import {
     Star,
     MapPin,
     Share2,
+    MessageCircle,
     Heart,
     ShoppingBag,
     Plus as PlusIcon,
@@ -45,6 +46,7 @@ import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { ReviewsList } from '../components/ReviewsList';
 import { AddReviewModal } from '../components/AddReviewModal';
+import { ShareListingModal } from '../components/social/ShareListingModal';
 import { useTheme } from '../contexts/ThemeContext';
 import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, interpolate, Extrapolation, withSpring } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
@@ -204,6 +206,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const { show } = useToast();
     const [quantity, setQuantity] = useState(1);
     const [addingToCart, setAddingToCart] = useState(false);
+    const [dmShareOpen, setDmShareOpen] = useState(false);
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const recordView = useMutation(api.listings.recordView);
@@ -672,8 +675,16 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                     <AnimatedButton style={styles.glassBtn} onPress={openCart} isDark={isDark}>
                         <ShoppingCart size={22} color={isDark ? '#FFF' : '#000'} />
                     </AnimatedButton>
-                    <AnimatedButton style={styles.glassBtn} onPress={handleShare} isDark={isDark}>
+                    <AnimatedButton
+                        style={styles.glassBtn}
+                        onPress={handleShare}
+                        onLongPress={() => setDmShareOpen(true)}
+                        isDark={isDark}
+                    >
                         <Share2 size={22} color={isDark ? '#FFF' : '#000'} />
+                    </AnimatedButton>
+                    <AnimatedButton style={styles.glassBtn} onPress={() => setDmShareOpen(true)} isDark={isDark}>
+                        <MessageCircle size={22} color={isDark ? '#FFF' : '#000'} />
                     </AnimatedButton>
                     <AnimatedButton style={styles.glassBtn} onPress={handleToggleFavorite} isDark={isDark}>
                         <Heart size={22} color={isSaved ? '#EF4444' : (isDark ? '#FFF' : '#000')} fill={isSaved ? '#EF4444' : 'transparent'} />
@@ -742,6 +753,12 @@ export default function ItemDetailScreen({ route, navigation }: any) {
             <AddReviewModal
                 visible={isReviewOpen}
                 onClose={() => setIsReviewOpen(false)}
+                listingId={String(item.id)}
+            />
+
+            <ShareListingModal
+                visible={dmShareOpen}
+                onClose={() => setDmShareOpen(false)}
                 listingId={String(item.id)}
             />
         </View>

@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react-native';
 import * as Sentry from '@sentry/react-native';
 import { glassShadow, Radius } from '../theme/tokens';
+import { isSessionExpiredError } from '../utils/errors';
+import { CURRENT_SESSION_KEY } from '../services/auth/sessionKeys';
 
 
 interface Props {
@@ -26,6 +28,11 @@ export class CrashHandler extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        // Una sesión vencida no es un crash: no ensucia Sentry.
+        if (isSessionExpiredError(error)) {
+            console.warn("CrashHandler: sesión expirada", error.message);
+            return;
+        }
         console.error("CrashHandler caught error:", error, errorInfo);
         Sentry.captureException(error, {
             extra: {
@@ -33,6 +40,23 @@ export class CrashHandler extends Component<Props, State> {
             },
         });
     }
+
+    /**
+     * Sesión expirada que se escapó del SessionGuard (p.ej. lanzada antes de que
+     * montara el árbol de providers): borramos SOLO la sesión, no todo el storage.
+     */
+    handleSessionReset = async () => {
+        try {
+            await AsyncStorage.removeItem(CURRENT_SESSION_KEY);
+        } catch (e) {
+            console.error("Failed to clear session", e);
+        }
+        if (typeof window !== 'undefined') {
+            window.location.reload();
+        } else {
+            this.setState({ hasError: false, error: null });
+        }
+    };
 
     handleReset = async () => {
         try {
@@ -54,6 +78,29 @@ export class CrashHandler extends Component<Props, State> {
     };
 
     render() {
+        if (this.state.hasError && isSessionExpiredError(this.state.error)) {
+            return (
+                <View style={styles.container}>
+                    <View style={styles.card}>
+                        <AlertTriangle size={48} color="#F59E0B" style={{ marginBottom: 16 }} />
+                        <Text style={styles.title}>Tu sesión expiró</Text>
+                        <Text style={styles.subtitle}>
+                            Iniciá sesión nuevamente para continuar.
+                        </Text>
+
+                        <TouchableOpacity
+                            style={styles.resetBtn}
+                            onPress={this.handleSessionReset}
+                            activeOpacity={0.8}
+                        >
+                            <RefreshCw size={20} color="#fff" style={{ marginRight: 8 }} />
+                            <Text style={styles.btnText}>Volver a iniciar sesión</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            );
+        }
+
         if (this.state.hasError) {
 
             return (

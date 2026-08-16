@@ -99,8 +99,8 @@ export default function HomeScreen({ navigation, route }: any) {
     const styles = getStyles(isDark);
     const { t } = useTranslation();
 
-    const myOrders = useQuery(api.orders.getMyOrders, user?.id ? { sessionToken, userId: user.id } : "skip") || [];
-    const mySellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id ? { sellerId: user.id } : "skip") || [];
+    const myOrders = useQuery(api.orders.getMyOrders, user?.id && sessionToken ? { sessionToken, userId: user.id } : "skip") || [];
+    const mySellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id && sessionToken ? { sellerId: user.id, sessionToken } : "skip") || [];
 
     const allActivity = useMemo(() => {
         const purchases = myOrders.map((o: any) => ({

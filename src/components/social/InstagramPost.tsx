@@ -100,6 +100,8 @@ export const InstagramPost = ({ post }: { post: InstagramPostItem }) => {
 
             <SharePostModal
                 postContent={post.caption || 'Mira esta foto!'}
+                postId={String(post._id ?? post.id ?? '')}
+                postPreviewImage={post.image ?? post.mediaUrl}
                 visible={showShare}
                 onClose={() => setShowShare(false)}
             />

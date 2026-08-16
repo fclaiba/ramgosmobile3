@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireActor } from "./authHelpers";
+import { getActorOrNull, requireActor } from "./authHelpers";
 import { Id } from "./_generated/dataModel";
 
 export const createForm = mutation({
@@ -40,8 +40,9 @@ export const listFormsByBusiness = query({
         sessionToken: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.sessionToken);
-        
+        const actor = await getActorOrNull(ctx, args.sessionToken);
+        if (!actor) return [];
+
         const forms = await ctx.db
             .query("businessForms")
             .withIndex("by_business", q => q.eq("businessId", actor.idString))
@@ -151,8 +152,9 @@ export const listLeads = query({
         formId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.sessionToken);
-        
+        const actor = await getActorOrNull(ctx, args.sessionToken);
+        if (!actor) return [];
+
         if (args.formId) {
             return await ctx.db
                 .query("businessFormLeads")
@@ -171,7 +173,8 @@ export const listLeads = query({
 export const getMyLeads = query({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, args.sessionToken);
+        const actor = await getActorOrNull(ctx, args.sessionToken);
+        if (!actor) return [];
         const leads = await ctx.db
             .query("businessFormLeads")
             .filter(q => q.eq(q.field("userId"), actor.idString))

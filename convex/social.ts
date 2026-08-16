@@ -27,7 +27,7 @@ import {
     internalMutation,
     internalAction,
 } from './_generated/server';
-import { internal } from './_generated/api';
+import { api, internal } from './_generated/api';
 import { assertSocialActor, paginateQuery } from './social/_helpers';
 
 // ---------------------------------------------------------------------------
@@ -1411,52 +1411,28 @@ export const internalExpireStories = internalMutation({
 
 
 
+// ---------------------------------------------------------------------------
+// DM — shims de compatibilidad.
+//
+// La mensajería vive ahora en `convex/social/dm.ts` sobre el modelo de
+// `socialChatMembers`. Estas seis funciones quedan como adaptadores finos
+// porque el bundle web desplegado todavía las llama: borrarlas rompería
+// producción hasta el próximo deploy del frontend (exactamente el desfasaje
+// de contrato que ya nos costó una caída). Se eliminan cuando el frontend
+// nuevo esté publicado.
+// ---------------------------------------------------------------------------
+
 export const createChat = mutation({
     args: {
         sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         participantId: v.string(),
     },
-    handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        if (actor.idString === args.participantId) {
-            throw new Error('No podés crear un chat con vos mismo.');
-        }
-
-        const key = sortedKey([actor.idString, args.participantId]);
-        const existing = await ctx.db
-            .query('socialChats')
-            .withIndex('by_participants_key', (q) => q.eq('participantsKey', key))
-            .first();
-        if (existing) return existing._id;
-
-        // Rows created before `participantsKey` existed are not reachable by
-        // the index; find them once by scanning the caller's own chats and
-        // backfill the key so this path stops being hit.
-        const legacy = await ctx.db
-            .query('socialChats')
-            .withIndex('by_participants_key', (q) => q.eq('participantsKey', undefined))
-            .collect();
-        const legacyMatch = legacy.find(
-            (c: any) =>
-                c.participantIds.length === 2 &&
-                c.participantIds.includes(actor.idString) &&
-                c.participantIds.includes(args.participantId),
-        );
-        if (legacyMatch) {
-            await ctx.db.patch(legacyMatch._id, { participantsKey: key });
-            return legacyMatch._id;
-        }
-
-        const now = NOW();
-        return await ctx.db.insert('socialChats', {
-            participantIds: [actor.idString, args.participantId],
-            participantsKey: key,
-            lastMessageAt: now,
-            unreadCounts: { [actor.idString]: 0, [args.participantId]: 0 },
-            createdAt: now,
-        });
-    },
+    handler: async (ctx, args): Promise<string> =>
+        await ctx.runMutation(api.social.dm.getOrCreateDirectChat, {
+            sessionToken: args.sessionToken,
+            participantId: args.participantId,
+        }),
 });
 
 export const sendDirectMessage = mutation({
@@ -1466,82 +1442,24 @@ export const sendDirectMessage = mutation({
         chatId: v.id('socialChats'),
         body: v.string(),
         attachments: v.optional(v.array(v.object({
-            type: v.union(v.literal('image'), v.literal('video'), v.literal('document'), v.literal('post')),
+            type: v.union(
+                v.literal('image'),
+                v.literal('video'),
+                v.literal('document'),
+                v.literal('post'),
+                v.literal('listing'),
+            ),
             url: v.string(),
             metadata: v.optional(v.any()),
         }))),
     },
-    handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        const chat = await ctx.db.get(args.chatId);
-        if (!chat) throw new Error('Chat no encontrado.');
-        if (!chat.participantIds.includes(actor.idString)) {
-            throw new Error('No autorizado.');
-        }
-
-        const now = NOW();
-        const messageId = await ctx.db.insert('socialMessages', {
-            chatId: String(args.chatId),
-            senderUserId: actor.idString,
+    handler: async (ctx, args): Promise<string> =>
+        await ctx.runMutation(api.social.dm.sendMessage, {
+            sessionToken: args.sessionToken,
+            chatId: args.chatId,
             body: args.body,
             attachments: args.attachments,
-            readBy: [actor.idString],
-            createdAt: now,
-        });
-
-        const unreadCounts: Record<string, number> = { ...(chat.unreadCounts ?? {}) };
-        for (const pid of chat.participantIds) {
-            if (pid === actor.idString) continue;
-            unreadCounts[pid] = (unreadCounts[pid] ?? 0) + 1;
-        }
-
-        const preview = args.body.length > 60 ? args.body.slice(0, 57) + '…' : args.body;
-        const patchData: any = {
-            lastMessageAt: now,
-            lastMessagePreview: preview,
-            unreadCounts,
-        };
-
-        // Ponytail: Simple response time calculation on first reply
-        if (!(chat as any).firstRepliedAt && chat.participantIds[0] !== actor.idString) {
-            patchData.firstRepliedAt = now;
-            patchData.firstReplierId = actor.idString;
-            
-            const diffMs = new Date(now).getTime() - new Date(chat.createdAt).getTime();
-            const diffHours = diffMs / (1000 * 60 * 60);
-
-            const userRef = ctx.db.normalizeId('users', actor.idString);
-            if (userRef) {
-                const user = await ctx.db.get(userRef);
-                if (user && user.role === 'business') {
-                    const currentAvg = user.sellerResponseTimeHours || 0;
-                    const newAvg = currentAvg === 0 ? diffHours : (currentAvg * 9 + diffHours) / 10;
-                    await ctx.db.patch(user._id, { sellerResponseTimeHours: newAvg });
-                }
-            }
-        }
-
-        await ctx.db.patch(args.chatId, patchData);
-
-        // Push to all other participants.
-        const senderProfile = await ctx.db
-            .query('socialUsers')
-            .withIndex('by_user', (q) => q.eq('userId', actor.idString))
-            .first();
-        const senderName = senderProfile?.displayName ?? 'Alguien';
-        for (const pid of chat.participantIds) {
-            if (pid === actor.idString) continue;
-            await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-                sendEmail: true,
-                title: senderName,
-                body: preview,
-                category: 'social',
-                data: { type: 'dm', chatId: String(args.chatId), messageId: String(messageId) },
-                userId: pid,
-            });
-        }
-        return messageId;
-    },
+        }),
 });
 
 export const markChatAsRead = mutation({
@@ -1550,67 +1468,41 @@ export const markChatAsRead = mutation({
         actorId: v.optional(v.any()),
         chatId: v.id('socialChats'),
     },
-    handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        const chat = await ctx.db.get(args.chatId);
-        if (!chat || !chat.participantIds.includes(actor.idString)) {
-            throw new Error('No autorizado.');
-        }
-        const unreadCounts = { ...(chat.unreadCounts ?? {}) };
-        unreadCounts[actor.idString] = 0;
-        await ctx.db.patch(args.chatId, { unreadCounts });
-
-        // Mark messages as read.
-        const messages = await ctx.db
-            .query('socialMessages')
-            .withIndex('by_chat', (q) => q.eq('chatId', String(args.chatId)))
-            .collect();
-        for (const msg of messages) {
-            const readBy: string[] = msg.readBy ?? [];
-            if (!readBy.includes(actor.idString)) {
-                await ctx.db.patch(msg._id, { readBy: [...readBy, actor.idString] });
-            }
-        }
+    handler: async (ctx, args): Promise<null> => {
+        await ctx.runMutation(api.social.dm.markChatRead, {
+            sessionToken: args.sessionToken,
+            chatId: args.chatId,
+        });
+        return null;
     },
 });
 
+/** Forma vieja: array plano con `otherParticipants` y `unreadCount`. */
 export const getMyChats = query({
     args: {
-        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()) },
-    handler: async (ctx, args) => {
-        let actor;
-        try {
-            actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        } catch {
-            return [];
-        }
-        const all = await ctx.db
-            .query('socialChats')
-            .withIndex('by_lastMessage')
-            .order('desc')
-            .collect();
-        const mine = all.filter((c: any) => c.participantIds.includes(actor.idString));
-
-        // Hydrate other-participant info for the UI.
-        const result = await Promise.all(
-            mine.map(async (chat: any) => {
-                const otherIds = chat.participantIds.filter((id: string) => id !== actor.idString);
-                const others = await Promise.all(
-                    otherIds.map((id: string) =>
-                        ctx.db
-                            .query('socialUsers')
-                            .withIndex('by_user', (q: any) => q.eq('userId', id))
-                            .first(),
-                    ),
-                );
-                return {
-                    ...chat,
-                    otherParticipants: others.filter(Boolean),
-                    unreadCount: (chat.unreadCounts ?? {})[actor.idString] ?? 0,
-                };
-            }),
-        );
-        return result;
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+    },
+    handler: async (ctx, args): Promise<any[]> => {
+        const page: any = await ctx.runQuery(api.social.dm.listChats, {
+            sessionToken: args.sessionToken,
+            folder: 'inbox',
+            limit: 50,
+        });
+        return page.items.map((chat: any) => ({
+            _id: chat.chatId,
+            participantIds: [],
+            lastMessagePreview: chat.lastMessagePreview ?? undefined,
+            lastMessageAt: chat.lastMessageAt,
+            otherParticipants: chat.participants.map((p: any) => ({
+                userId: p.userId,
+                username: p.username,
+                displayName: p.displayName,
+                avatar: p.avatar,
+                verified: p.verified,
+            })),
+            unreadCount: chat.unreadCount,
+        }));
     },
 });
 
@@ -1622,22 +1514,22 @@ export const getChatMessages = query({
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        const chat = await ctx.db.get(args.chatId);
-        if (!chat || !chat.participantIds.includes(actor.idString)) {
-            throw new Error('No autorizado.');
-        }
-        const cap = Math.min(args.limit ?? 50, 200);
-        const result = await ctx.db
-            .query('socialMessages')
-            .withIndex('by_chat_created', (q) => q.eq('chatId', String(args.chatId)))
-            .order('desc')
-            .paginate({ cursor: args.cursor ?? null, numItems: cap });
-
+    handler: async (ctx, args): Promise<any> => {
+        const page: any = await ctx.runQuery(api.social.dm.getChatMessages, {
+            sessionToken: args.sessionToken,
+            chatId: args.chatId,
+            cursor: args.cursor,
+            limit: args.limit,
+        });
         return {
-            items: [...result.page].reverse(), // chronological order for chat UI
-            nextCursor: result.isDone ? null : result.continueCursor,
+            items: page.items.map((m: any) => ({
+                _id: m._id,
+                senderUserId: m.senderUserId,
+                body: m.body,
+                attachments: m.attachments,
+                createdAt: m.createdAt,
+            })),
+            nextCursor: page.nextCursor,
         };
     },
 });

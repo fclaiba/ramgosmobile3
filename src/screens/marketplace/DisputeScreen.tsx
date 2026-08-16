@@ -82,7 +82,7 @@ export default function DisputeScreen({ navigation, route }: DisputeScreenProps)
 
     const orderQuery = useQuery(
         api.orders.getOrderById,
-        orderId ? { sessionToken, orderId: orderId as any } : 'skip'
+        orderId && sessionToken ? { sessionToken, orderId: orderId as any } : 'skip'
     );
     const order = orderQuery as any;
 

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Search, Plus as PlusIcon, Send, Film, List } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
@@ -27,30 +28,35 @@ import {
     StoryViewer,
     CreateStory,
     UserSearch,
-    DirectMessages,
 } from '../components/social';
 import { CreatorStudioModal } from '../components/social/CreatorStudioModal';
 
 import { useResponsive } from '../hooks/useResponsive';
+import { useUnreadMessages } from '../hooks/useMessaging';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { Radius, colors, glassShadow } from '../theme/tokens';
 import { glassSurface } from '../utils/glass';
 
-export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any) {
+export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMode }: any) {
+    // En modo tab (HomeScreen monta esta pantalla sin props de navegación)
+    // `navigation` llega undefined, así que caemos al hook del navigator.
+    const navFromHook = useNavigation<any>();
+    const navigation = navProp ?? navFromHook;
+
     const { width: _width } = useWindowDimensions();
     const { colorScheme } = useTheme();
     const { sessionToken } = useAuth();
     const { isDesktop } = useResponsive();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const { unreadCount } = useUnreadMessages();
 
     const [activeTab, setActiveTab] = useState<'feed' | 'reels'>('feed');
     const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [showCreateStory, setShowCreateStory] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
-    const [showMessages, setShowMessages] = useState(false);
 
     const { show } = useToast();
     const addPostProductToCart = useMutation(api.commerce.addPostProductToCart);
@@ -218,9 +224,16 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.iconBtn}
-                            onPress={() => setShowMessages(true)}
+                            onPress={() => navigation.navigate('Inbox')}
                         >
                             <Send size={20} color={isDark ? '#fff' : '#111827'} />
+                            {unreadCount > 0 && (
+                                <View style={styles.msgBadge}>
+                                    <Text style={styles.msgBadgeText}>
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 }
@@ -361,7 +374,6 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                     onUserSelect={handleUserClick}
                 />
             )}
-            {showMessages && <DirectMessages onClose={() => setShowMessages(false)} />}
         </ResponsiveLayout>
     );
 }
@@ -378,6 +390,19 @@ const getStyles = (isDark: boolean) => {
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: c.glassBorder,
         },
+        msgBadge: {
+            position: 'absolute',
+            top: -2,
+            right: -2,
+            minWidth: 18,
+            height: 18,
+            paddingHorizontal: 4,
+            borderRadius: 9,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#EF4444',
+        },
+        msgBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
 
         tabContainer: {
             paddingHorizontal: 16,

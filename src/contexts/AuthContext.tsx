@@ -13,11 +13,11 @@ import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { storage } from '../services/auth/storageAdapter';
 import { sessionTokenStore } from '../services/auth/sessionTokenStore';
+import { CURRENT_SESSION_KEY, REMEMBERED_LOGIN_KEY } from '../services/auth/sessionKeys';
 import { uploadKycPayloadImages } from '../utils/uploadToConvexStorage';
 
-export const CURRENT_SESSION_KEY = '@ramgos/auth/current-session';
-/** Guarda email + preferencia "Recordarme" (nunca la contraseña). */
-export const REMEMBERED_LOGIN_KEY = '@ramgos/auth/remembered-login';
+/** Re-export: las claves viven en services/auth/sessionKeys (sin deps de Convex). */
+export { CURRENT_SESSION_KEY, REMEMBERED_LOGIN_KEY } from '../services/auth/sessionKeys';
 
 type RememberedLogin = {
     email: string;
@@ -58,6 +58,12 @@ async function maybePersistSession(
 
 const extractErrorMessage = (error: any, fallback: string) => {
     if (!error) return fallback;
+    // ConvexError con payload objeto ({ code, message }): el mensaje vive en .data,
+    // no en .message (que trae el JSON crudo envuelto en ruido de Convex).
+    if (error.data && typeof error.data === 'object' && typeof error.data.message === 'string') {
+        return error.data.message;
+    }
+    if (typeof error.data === 'string' && error.data.trim()) return error.data;
     const msg = error.message || fallback;
     if (typeof msg !== 'string') return fallback;
     if (msg.includes('Uncaught Error: ')) {
@@ -431,8 +437,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // FASE 3: publicar el sessionToken para consumidores fuera del árbol de
     // AuthProvider (CartContext envuelve a AuthProvider en App.tsx).
     useEffect(() => {
-        sessionTokenStore.set(state.session?.sessionToken);
-    }, [state.session?.sessionToken]);
+        sessionTokenStore.set(
+            state.status === 'authenticated' ? state.session?.sessionToken : undefined,
+        );
+    }, [state.status, state.session?.sessionToken]);
 
     const signUpWithEmail = async (payload: SignUpInput) => {
         setIsProcessing(true);
@@ -1129,7 +1137,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isProcessing,
             user: state.user,
             session: state.session,
-            sessionToken: state.session?.sessionToken,
+            // Gate: el token se publica solo cuando el server ya lo validó
+            // (status === 'authenticated' lo setea el efecto que consume getUser).
+            // Durante el boot los consumidores ven undefined y sus queries hacen
+            // 'skip', así que ninguna query sale con un token sin validar.
+            sessionToken: state.status === 'authenticated' ? state.session?.sessionToken : undefined,
             deviceId: 'backend-device',
             pendingVerification: undefined,
             signUpWithEmail,

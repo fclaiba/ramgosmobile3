@@ -74,13 +74,13 @@ export default function DisputeChatScreen({ route, navigation }: any) {
 
     const orderQuery = useQuery(
         api.orders.getOrderById,
-        orderId ? { orderId: orderId as any } : 'skip'
+        orderId && sessionToken ? { orderId: orderId as any, sessionToken } : 'skip'
     );
     const order = orderQuery as any;
 
     const liveMessages = useQuery(
         api.disputes.getDisputeMessages,
-        orderId && user?.id ? { orderId } : 'skip'
+        orderId && user?.id && sessionToken ? { orderId, sessionToken } : 'skip'
     ) ?? [];
 
     const addDisputeMessage = useMutation(api.disputes.addDisputeMessage);

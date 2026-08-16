@@ -1,13 +1,16 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireActor, assertSelfOrAdmin } from "./authHelpers";
+import { getActorOrNull, assertSelfOrAdmin } from "./authHelpers";
 
 // ponytail: métricas financieras privadas (revenue/balance). Solo el propio dueño o un admin
 // pueden verlas — se exige sessionToken y se valida con assertSelfOrAdmin (cierra el IDOR).
+// Sin sesión válida devolvemos null en vez de tirar: un token vencido no puede tumbar la app
+// (useQuery re-lanza el error en render). El cliente trata el null como "deslogueate".
 export const getBusinessMetrics = query({
   args: { businessId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const actor = await requireActor(ctx, args.sessionToken);
+    const actor = await getActorOrNull(ctx, args.sessionToken);
+    if (!actor) return null;
     assertSelfOrAdmin(actor, args.businessId);
 
     // 1. Get listings (coupons, events, etc.)
@@ -88,7 +91,8 @@ export const getBusinessMetrics = query({
 export const getInfluencerMetrics = query({
   args: { influencerId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const actor = await requireActor(ctx, args.sessionToken);
+    const actor = await getActorOrNull(ctx, args.sessionToken);
+    if (!actor) return null;
     assertSelfOrAdmin(actor, args.influencerId);
 
     // Campaigns

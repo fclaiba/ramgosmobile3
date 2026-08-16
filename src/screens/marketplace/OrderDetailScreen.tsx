@@ -35,7 +35,6 @@ import {
 } from 'lucide-react-native';
 import { Button } from '../../components/ui/button';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
-import { DirectMessages } from '../../components/social/DirectMessages';
 import { AddReviewModal } from '../../components/AddReviewModal';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -123,16 +122,17 @@ export default function OrderDetailScreen() {
     const { show } = useToast();
     const { openEscrow } = useEscrow();
     const { currentTier } = usePoints();
-    const createChat = useMutation(api.social.createChat);
+    const createChat = useMutation(api.social.dm.getOrCreateDirectChat);
 
-    const [dmOpen, setDmOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
     const [confirming, setConfirming] = useState(false);
 
     const effectiveOrderId = passedOrderId || passedOrder?.id || passedOrder?._id;
     const fetchedOrder = useQuery(
         api.orders.getOrderById,
-        effectiveOrderId && !passedOrder ? { orderId: effectiveOrderId as any } : 'skip'
+        effectiveOrderId && !passedOrder && sessionToken
+            ? { orderId: effectiveOrderId as any, sessionToken }
+            : 'skip'
     );
 
     const order = useMemo(() => {
@@ -215,8 +215,8 @@ export default function OrderDetailScreen() {
     const handleContact = async () => {
         if (!targetUserId || !sessionToken) return;
         try {
-            await createChat({ sessionToken, participantId: String(targetUserId) });
-            setDmOpen(true);
+            const chatId = await createChat({ sessionToken, participantId: String(targetUserId) });
+            navigation.navigate('Chat', { chatId });
         } catch (e) {
             show('No se pudo abrir el chat', 'error');
         }
@@ -501,7 +501,6 @@ export default function OrderDetailScreen() {
                 </Button>
             </View>
 
-            {dmOpen && <DirectMessages onClose={() => setDmOpen(false)} initialUserId={targetUserId} />}
             <AddReviewModal
                 visible={reviewOpen}
                 onClose={() => setReviewOpen(false)}

@@ -2,6 +2,7 @@
 // they can be unit-tested in isolation and imported by future split files
 // (e.g. `social/feed.ts`, `social/dm.ts`).
 
+import { ConvexError } from "convex/values";
 import { AuthActor, requireActor } from "../authHelpers";
 
 // Re-exports requireActor with a domain-specific name so future blocking
@@ -16,15 +17,48 @@ export const assertSocialActor = async (
     return actor;
 };
 
-// Stub — intentional. Block lists are not part of the v1 social model.
-// The function is exported so call-sites already wire it in; switching
-// from no-op to real check later is an internal change.
+// Bloqueo real (antes era un stub no-op). Dos point-reads sobre `by_pair`:
+// el bloqueo corta en las dos direcciones, así que da igual quién bloqueó a
+// quién — ninguno de los dos puede escribirle al otro.
 export const assertNotBlocked = async (
-    _ctx: any,
-    _byUserId: string,
-    _targetUserId: string,
+    ctx: any,
+    byUserId: string,
+    targetUserId: string,
 ): Promise<void> => {
-    return;
+    if (byUserId === targetUserId) return;
+    const [aToB, bToA] = await Promise.all([
+        ctx.db
+            .query('socialBlocks')
+            .withIndex('by_pair', (q: any) =>
+                q.eq('blockerUserId', byUserId).eq('blockedUserId', targetUserId),
+            )
+            .first(),
+        ctx.db
+            .query('socialBlocks')
+            .withIndex('by_pair', (q: any) =>
+                q.eq('blockerUserId', targetUserId).eq('blockedUserId', byUserId),
+            )
+            .first(),
+    ]);
+    if (aToB || bToA) {
+        throw new ConvexError({
+            code: 'FORBIDDEN',
+            message: 'No es posible enviar mensajes a esta cuenta.',
+        });
+    }
+};
+
+export const isBlockedBetween = async (
+    ctx: any,
+    a: string,
+    b: string,
+): Promise<boolean> => {
+    try {
+        await assertNotBlocked(ctx, a, b);
+        return false;
+    } catch {
+        return true;
+    }
 };
 
 // Cursor-based pagination helper used across feed/comments/messages queries.

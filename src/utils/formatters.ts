@@ -19,6 +19,47 @@ export const formatDateShort = (value: string | number | Date) => {
     });
 };
 
+/**
+ * Hora relativa compacta para listas de chat ("ahora", "5 min", "3 h",
+ * "2 d", "12 mar"). La bandeja mostraba sólo HH:MM, así que un mensaje de
+ * la semana pasada se veía igual que uno de hoy.
+ */
+export const formatRelativeTime = (value: string | number | Date): string => {
+    const date = new Date(value);
+    const diffMs = Date.now() - date.getTime();
+    if (Number.isNaN(diffMs)) return "";
+
+    const minutes = Math.floor(diffMs / 60_000);
+    if (minutes < 1) return "ahora";
+    if (minutes < 60) return `${minutes} min`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} h`;
+
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} d`;
+
+    return formatDateShort(date);
+};
+
+/** "Activo ahora" / "Activo hace 5 min", a partir de un heartbeat epoch ms. */
+export const formatLastSeen = (
+    lastSeenAt: number | null | undefined,
+    onlineWindowMs = 60_000,
+): string | null => {
+    if (!lastSeenAt) return null;
+    const diff = Date.now() - lastSeenAt;
+    if (diff < onlineWindowMs) return "Activo ahora";
+
+    const minutes = Math.floor(diff / 60_000);
+    if (minutes < 60) return `Activo hace ${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Activo hace ${hours} h`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `Activo hace ${days} d`;
+    return null;
+};
+
 export const getCouponStatusStyles = (status: Coupon["status"], isDark: boolean) => {
     const styles: Record<
         Coupon["status"],

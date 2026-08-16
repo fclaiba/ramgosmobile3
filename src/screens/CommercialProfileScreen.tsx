@@ -54,7 +54,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { formatCompactCount } from '../utils/formatCompactCount';
-import { DirectMessages } from '../components/social/DirectMessages';
 import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, interpolate, Extrapolation } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -130,7 +129,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const followMut = useMutation(api.social.follow);
     const unfollowMut = useMutation(api.social.unfollow);
-    const createChatMut = useMutation(api.social.createChat);
+    const createChatMut = useMutation(api.social.dm.getOrCreateDirectChat);
 
     const isFollowingResult = useQuery(api.social.isFollowing, (currentUserId && sellerId) ? { followerUserId: currentUserId, followeeUserId: sellerId, sessionToken: sessionToken || '' } : 'skip');
     const alreadyFollowing = isFollowingResult === true;
@@ -142,7 +141,6 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const [activeTab, setActiveTab] = useState<TabType>('product');
     const [followLoading, setFollowLoading] = useState(false);
-    const [dmOpen, setDmOpen] = useState(false);
     const [contactLoading, setContactLoading] = useState(false);
     const [formOpen, setFormOpen] = useState(false);
 
@@ -236,7 +234,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         setContactLoading(true);
         try {
             const chatId = await createChatMut({ participantId: sellerId, sessionToken: sessionToken || '' });
-            setDmOpen(true);
+            navigation.navigate('Chat', { chatId });
         } catch (err) {
             console.warn('[CommercialProfile] createChat failed', err);
             show('Error al iniciar conversación', 'error');
@@ -652,11 +650,6 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                     </AnimatedButton>
                 </View>
             </View>
-
-            {/* Direct Messages Sheet */}
-            {dmOpen && (
-                <DirectMessages onClose={() => setDmOpen(false)} initialUserId={sellerId} />
-            )}
 
             {/* FormFill Modal */}
             <Modal visible={formOpen} animationType="slide" onRequestClose={() => setFormOpen(false)}>

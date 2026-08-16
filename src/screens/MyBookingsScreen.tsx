@@ -15,7 +15,10 @@ export default function MyBookingsScreen({ navigation }: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     
-    const leads = useQuery(api.businessForms.getMyLeads, { sessionToken: sessionToken || undefined });
+    const leads = useQuery(
+        api.businessForms.getMyLeads,
+        sessionToken ? { sessionToken } : 'skip',
+    );
     const cancelMut = useMutation(api.businessForms.cancelLead);
     const postponeMut = useMutation(api.businessForms.postponeLead);
 

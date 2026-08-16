@@ -46,8 +46,8 @@ const StorySlide = ({
     const { show } = useToast();
     const toggleLike = useMutation(api.social.toggleLike);
     const deleteStory = useMutation(api.social.deleteStory);
-    const sendDirectMessage = useMutation(api.social.sendDirectMessage);
-    const createChat = useMutation(api.social.createChat);
+    const sendDirectMessage = useMutation(api.social.dm.sendMessage);
+    const createChat = useMutation(api.social.dm.getOrCreateDirectChat);
     
     const isMyStory = authUser && author?.userId === (authUser as any).id;
 
@@ -180,7 +180,7 @@ const StorySlide = ({
                                         const chatId = await createChat({ sessionToken, participantId: author.userId });
                                         await sendDirectMessage({
                                             sessionToken,
-                                            chatId,
+                                            chatId: chatId as any,
                                             body: `(Respondiendo a tu historia): ${message}`,
                                         });
                                         show('Mensaje enviado', 'success');

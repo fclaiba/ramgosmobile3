@@ -13,11 +13,20 @@ import { Radius, colors } from '../../theme/tokens';
 
 interface SharePostModalProps {
     postContent: string;
+    /** Id del post: viaja como adjunto tipado y se renderiza como card. */
+    postId?: string;
+    postPreviewImage?: string;
     visible: boolean;
     onClose: () => void;
 }
 
-export const SharePostModal = ({ postContent, visible, onClose }: SharePostModalProps) => {
+export const SharePostModal = ({
+    postContent,
+    postId,
+    postPreviewImage,
+    visible,
+    onClose,
+}: SharePostModalProps) => {
     const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
     const [searchText, setSearchText] = useState('');
@@ -27,22 +36,19 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const sendDm = useMutation(api.social.sendDirectMessage);
+    const sendDm = useMutation(api.social.dm.sendMessage);
 
-    const chatsRows = useQuery(
-        api.social.getMyChats,
-        authUser && sessionToken ? { sessionToken } : 'skip',
+    const chatsPage = useQuery(
+        api.social.dm.listChats,
+        authUser && sessionToken ? { sessionToken, folder: 'inbox', limit: 40 } : 'skip',
     );
 
-    const flat = (chatsRows ?? []).map((c: any) => {
-        const other = c.otherParticipants?.[0];
-        return {
-            id: c._id,
-            name: other?.displayName ?? 'Usuario',
-            username: other?.username ?? 'usuario',
-            avatar: other?.avatar ?? '',
-        };
-    });
+    const flat = (chatsPage?.items ?? []).map((c: any) => ({
+        id: c.chatId,
+        name: c.title ?? 'Usuario',
+        username: c.participants?.[0]?.username ?? 'grupo',
+        avatar: c.avatar ?? '',
+    }));
 
     const filteredChats = flat.filter(
         (c) =>
@@ -56,10 +62,21 @@ export const SharePostModal = ({ postContent, visible, onClose }: SharePostModal
             return;
         }
         try {
+            // Adjunto tipado en vez del viejo string "Shared Post: …":
+            // el receptor ve una card con preview, no texto plano.
             await sendDm({
                 sessionToken,
                 chatId: chatId as any,
-                body: `Shared Post: ${postContent}`,
+                body: '',
+                attachments: postId
+                    ? [{
+                          type: 'post' as const,
+                          url: String(postId),
+                          metadata: { preview: postContent, image: postPreviewImage },
+                      }]
+                    : undefined,
+                ...(postId ? {} : { body: postContent }),
+                clientId: `share-${postId ?? 'text'}-${chatId}`,
             });
             setSentTo((prev) => [...prev, chatId]);
         } catch (e: any) {

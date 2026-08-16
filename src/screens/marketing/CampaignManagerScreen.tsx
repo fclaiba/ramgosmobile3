@@ -23,7 +23,7 @@ import { glassShadow, Radius, colors } from '../../theme/tokens';
  * lands so the UI stays honest about what's wired up.
  */
 function CampaignManagerScreen() {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -37,7 +37,7 @@ function CampaignManagerScreen() {
     const myId = user?.id;
     const campaigns = useQuery(
         api.campaigns.getMyCampaigns,
-        myId ? { influencerId: myId as Id<"users"> } : 'skip',
+        myId && sessionToken ? { influencerId: myId as Id<"users">, sessionToken } : 'skip',
     ) ?? [];
 
     const proposeCampaign = useMutation(api.campaigns.proposeCampaign);

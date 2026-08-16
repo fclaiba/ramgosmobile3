@@ -2,8 +2,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import * as Notifications from 'expo-notifications';
 import { useAuth } from './AuthContext';
 import { useUserPreferences } from '../hooks/useUserPreferences';
+import { usePresenceHeartbeat } from '../hooks/useMessaging';
+import { navigationRef } from '../navigation/navigationRef';
 
 const READ_KEY = '@ramgos_notif_read';
 const DELETED_KEY = '@ramgos_notif_deleted';
@@ -68,6 +71,32 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         notifications: notifPrefs,
         setNotifications: persistNotifPrefs,
     } = useUserPreferences();
+
+    // Presencia: publica el heartbeat mientras la app está en foreground.
+    usePresenceHeartbeat();
+
+    // Tocar un push de DM tiene que abrir la conversación. Antes no había
+    // ningún listener de respuesta, así que el push no llevaba a ningún lado.
+    useEffect(() => {
+        const openFromData = (data: any) => {
+            if (data?.type !== 'dm' || !data?.chatId) return;
+            if (navigationRef.isReady()) {
+                (navigationRef.navigate as any)('Chat', { chatId: String(data.chatId) });
+            }
+        };
+
+        // App abierta desde cero por el push.
+        Notifications.getLastNotificationResponseAsync()
+            .then((response) => {
+                openFromData(response?.notification?.request?.content?.data);
+            })
+            .catch(() => {});
+
+        const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+            openFromData(response?.notification?.request?.content?.data);
+        });
+        return () => sub.remove();
+    }, []);
 
     const remote = useQuery(
         api.notifications.listMyNotifications,

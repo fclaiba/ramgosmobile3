@@ -4,7 +4,7 @@ import { View, StyleSheet, Text } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, DefaultTheme, DarkTheme, createNavigationContainerRef, getStateFromPath as rnGetStateFromPath } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme, getStateFromPath as rnGetStateFromPath } from '@react-navigation/native';
 import { useTheme, ThemeProvider } from './src/contexts/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useBonoDeepLinkHandler } from './src/hooks/useBonoDeepLinkHandler';
@@ -124,14 +124,17 @@ import BusinessQRScannerScreen from './src/screens/business/BusinessQRScannerScr
 import BusinessFormsScreen from './src/screens/BusinessFormsScreen';
 import InfluencerBonusesScreen from './src/screens/InfluencerBonusesScreen';
 import UserListScreen from './src/screens/social/UserListScreen';
+import InboxScreen from './src/screens/social/InboxScreen';
+import ChatScreen from './src/screens/social/ChatScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import MapExplorerScreen from './src/screens/MapExplorerScreen';
 import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
 import { HybridProfileScreen } from './src/screens/HybridProfileScreen';
 import AnalyticsDashboardScreen from './src/screens/AnalyticsDashboardScreen';
+import { navigationRef } from './src/navigation/navigationRef';
+import { SessionGuard } from './src/components/SessionGuard';
 
 const Stack = createNativeStackNavigator();
-const navigationRef = createNavigationContainerRef();
 
 const AppNavigator = () => {
     const { colorScheme } = useTheme();
@@ -182,6 +185,8 @@ const AppNavigator = () => {
                         Home: 'home',
                         SignUp: 'signup',
                         Login: 'login',
+                        Inbox: 'mensajes',
+                        Chat: 'chat/:chatId',
                         ItemDetail: {
                             path: 'item/:itemId',
                             parse: {
@@ -306,6 +311,8 @@ const AppNavigator = () => {
                     <Stack.Screen name="BonusQR" component={BonusQRScreen} />
                     <Stack.Screen name="BusinessScanner" component={BusinessScannerScreen} />
                     <Stack.Screen name="UserList" component={UserListScreen} />
+                    <Stack.Screen name="Inbox" component={InboxScreen} />
+                    <Stack.Screen name="Chat" component={ChatScreen} />
                     <Stack.Screen name="Games" component={GamesScreen} />
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
@@ -342,6 +349,7 @@ function StripeKeyGate() {
                                         <ConfirmProvider>
                                             <CartProvider>
                                                 <AuthProvider>
+                                                    <SessionGuard>
                                                     <I18nProvider>
                                                     <NotificationsProvider>
 
@@ -356,6 +364,7 @@ function StripeKeyGate() {
 
                                                     </NotificationsProvider>
                                                     </I18nProvider>
+                                                    </SessionGuard>
                                                 </AuthProvider>
                                             </CartProvider>
                                         </ConfirmProvider>

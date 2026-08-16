@@ -205,6 +205,7 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
             />
             <SharePostModal
                 postContent={post.content || 'Check out this post!'}
+                postId={String(post._id ?? post.id ?? '')}
                 visible={showShare}
                 onClose={() => setShowShare(false)}
             />

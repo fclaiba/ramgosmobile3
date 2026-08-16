@@ -11,7 +11,10 @@ function BusinessFormsScreen({ navigation }: any) {
     const isDark = colorScheme === 'dark';
     const { session, user } = useAuth();
 
-    const forms = useQuery(api.businessForms.listFormsByBusiness, { sessionToken: session?.sessionToken });
+    const forms = useQuery(
+        api.businessForms.listFormsByBusiness,
+        session?.sessionToken ? { sessionToken: session.sessionToken } : 'skip',
+    );
     const createForm = useMutation(api.businessForms.createForm);
 
     const [isCreating, setIsCreating] = useState(false);

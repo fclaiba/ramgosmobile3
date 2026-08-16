@@ -201,6 +201,7 @@ export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }
 
             <SharePostModal
                 postContent={post.content || 'Check out this post!'}
+                postId={String(post._id ?? post.id ?? '')}
                 visible={showShare}
                 onClose={() => setShowShare(false)}
             />

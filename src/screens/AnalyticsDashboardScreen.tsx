@@ -16,11 +16,14 @@ export default function AnalyticsDashboardScreen() {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const navigation = useNavigation<any>();
 
     // We fetch orders using a standard convex query. Adjust according to your real schema.
-    const orders = useQuery(api.orders?.getOrdersBySeller as any, { sellerId: user?.id }) || [];
+    const orders = useQuery(
+        api.orders.getOrdersBySeller,
+        user?.id && sessionToken ? { sellerId: user.id, sessionToken } : 'skip',
+    ) || [];
     
     const stats = useMemo(() => {
         let totalRevenue = 0;

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Platform, Image, KeyboardAvoidingView, Modal, Pressable } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '../../convex/_generated/api';
@@ -98,7 +99,11 @@ const fmtDate = (iso?: string) => {
     } catch { return iso; }
 };
 
-export default function AdminDashboardScreen({ navigation }: any) {
+export default function AdminDashboardScreen({ navigation: navProp }: any) {
+    // Igual que SocialScreen: en modo tab HomeScreen la monta sin `navigation`.
+    const navFromHook = useNavigation<any>();
+    const navigation = navProp ?? navFromHook;
+
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const { sessionToken, status } = useAuth();

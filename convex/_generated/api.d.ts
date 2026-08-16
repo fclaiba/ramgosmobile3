@@ -62,6 +62,7 @@ import type * as seedUsers from "../seedUsers.js";
 import type * as settings from "../settings.js";
 import type * as social from "../social.js";
 import type * as social__helpers from "../social/_helpers.js";
+import type * as social_dm from "../social/dm.js";
 import type * as stripe from "../stripe.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as userLookup from "../userLookup.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   social: typeof social;
   "social/_helpers": typeof social__helpers;
+  "social/dm": typeof social_dm;
   stripe: typeof stripe;
   subscriptions: typeof subscriptions;
   userLookup: typeof userLookup;

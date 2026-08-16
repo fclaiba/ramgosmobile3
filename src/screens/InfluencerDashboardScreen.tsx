@@ -41,7 +41,12 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const [modalVisible, setModalVisible] = useState(false);
 
     // Queries
-    const convexMetrics = useQuery((api as any).dashboard?.getInfluencerMetrics, user?.id ? { influencerId: user.id } : "skip");
+    const convexMetrics = useQuery(
+        api.dashboard.getInfluencerMetrics,
+        user?.id && sessionToken
+            ? { influencerId: user.id as Id<"users">, sessionToken }
+            : "skip",
+    );
     const campaignRows = useQuery(
         api.campaigns.getMyCampaigns,
         user?.id ? { influencerId: user.id as Id<"users">, sessionToken } : 'skip',

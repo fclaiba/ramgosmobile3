@@ -141,6 +141,41 @@ export function toUserMessage(error: unknown, fallback: string = FALLBACK): stri
     return fallback;
 }
 
+// ---------------------------------------------------------------------------
+// Errores de auth (convex/authHelpers.ts → ConvexError { code, message })
+// ---------------------------------------------------------------------------
+
+export type AuthErrorCode = 'UNAUTHENTICATED' | 'FORBIDDEN';
+
+/**
+ * Devuelve el código de auth del error, o null si no es un error de auth.
+ * Reconoce el payload nuevo (`error.data.code`) y, como red de compatibilidad,
+ * el mensaje viejo en español — durante el rollout conviven bundles y funciones
+ * de ambas versiones.
+ */
+export function getAuthErrorCode(error: unknown): AuthErrorCode | null {
+    const data = (error as { data?: unknown })?.data;
+    const code =
+        data && typeof data === 'object' ? (data as { code?: unknown }).code : undefined;
+    if (code === 'UNAUTHENTICATED' || code === 'FORBIDDEN') return code;
+
+    const raw = `${extractRaw(error)} ${error instanceof Error ? error.message : ''}`;
+    if (/UNAUTHENTICATED/.test(raw) || /sesi[oó]n no v[aá]lida|sesi[oó]n.{0,12}expirada/i.test(raw)) {
+        return 'UNAUTHENTICATED';
+    }
+    // Ojo: no matcheamos "No autorizado" suelto — es demasiado genérico y
+    // desloguear por un 403 ajeno sería peor que el bug original.
+    if (/FORBIDDEN/.test(raw)) return 'FORBIDDEN';
+    return null;
+}
+
+/** Único caso que justifica desloguear: la sesión ya no sirve. */
+export const isSessionExpiredError = (error: unknown): boolean =>
+    getAuthErrorCode(error) === 'UNAUTHENTICATED';
+
+/** ¿Es un error de auth (sesión muerta o permiso denegado)? */
+export const isAuthError = (error: unknown): boolean => getAuthErrorCode(error) !== null;
+
 /** Friendly title for redemption / validation screens. */
 export function toUserErrorTitle(error: unknown, fallback = 'No se pudo canjear'): string {
     const msg = toUserMessage(error, '').toLowerCase();

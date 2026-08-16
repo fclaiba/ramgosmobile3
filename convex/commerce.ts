@@ -219,6 +219,171 @@ export const addPostProductToCart = mutation({
 });
 
 // ---------------------------------------------------------------------------
+// Comercio por DM — mismo modelo que el post, pero el "gancho" es un mensaje
+// ---------------------------------------------------------------------------
+
+/**
+ * Estado vivo de los productos compartidos en un chat. La burbuja pinta el
+ * snapshot congelado al compartir (para que el historial no mienta) y con
+ * esto reconcilia precio/stock actuales. Espejo de `getPostCommerceOffer`.
+ */
+export const getDmListingCardState = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        listingIds: v.array(v.string()),
+    },
+    handler: async (ctx, args) => {
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.sessionToken);
+        } catch {
+            return [];
+        }
+
+        const ids = args.listingIds.slice(0, 20);
+        return await Promise.all(
+            ids.map(async (raw) => {
+                const listingId = ctx.db.normalizeId('listings', raw);
+                const listing = listingId ? await ctx.db.get(listingId) : null;
+                if (!listing) {
+                    return { listingId: raw, available: false, reason: 'listing_not_found' as const };
+                }
+                if (listing.status !== 'active') {
+                    return { listingId: raw, available: false, reason: 'inactive' as const };
+                }
+                const tracksStock = listing.type === 'product' || listing.type === 'bono';
+                if (tracksStock && listing.stock < 1) {
+                    return { listingId: raw, available: false, reason: 'out_of_stock' as const };
+                }
+                if (listing.sellerId === actor.idString) {
+                    return { listingId: raw, available: false, reason: 'own_product' as const };
+                }
+                return {
+                    listingId: raw,
+                    available: true as const,
+                    priceUsd: listing.price,
+                    discountPercent: listing.discountPercent ?? 0,
+                    stock: listing.stock,
+                };
+            }),
+        );
+    },
+});
+
+/**
+ * Atribución de un producto recomendado por DM. El recomendador sale del
+ * propio mensaje (`sharedByUserId`), nunca de los args del cliente — mismo
+ * criterio que `internalGetPostAttribution`.
+ */
+export const internalGetDmListingAttribution = internalQuery({
+    args: { messageId: v.id('socialMessages') },
+    handler: async (ctx, args) => {
+        const message = await ctx.db.get(args.messageId);
+        if (!message || message.deletedAt) return null;
+
+        const attachment = (message.attachments ?? []).find((a: any) => a.type === 'listing');
+        if (!attachment) return null;
+
+        const rawListingId = attachment.metadata?.listingId ?? attachment.url;
+        const listingId = ctx.db.normalizeId('listings', String(rawListingId));
+        const listing = listingId ? await ctx.db.get(listingId) : null;
+        if (!listing) return null;
+
+        const recommenderUserId = String(
+            attachment.metadata?.sharedByUserId ?? message.senderUserId,
+        );
+        const recommenderRef = ctx.db.normalizeId('users', recommenderUserId);
+        const recommender = recommenderRef ? await ctx.db.get(recommenderRef) : null;
+
+        return {
+            listingId: String(listing._id),
+            listingStatus: listing.status,
+            listingType: listing.type,
+            listingStock: listing.stock,
+            sellerId: listing.sellerId,
+            recommenderUserId,
+            recommenderReferralCode: (recommender as any)?.referralCode ?? undefined,
+            chatId: message.chatId,
+        };
+    },
+});
+
+/**
+ * Agrega al carrito el producto recomendado en un DM, con la atribución del
+ * que lo recomendó. Igual que en el feed, acá no se cobra nada: el checkout
+ * sigue siendo el del marketplace.
+ */
+export const addDmProductToCart = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        messageId: v.id('socialMessages'),
+        quantity: v.optional(v.number()),
+        mutationKey: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{
+        success: boolean;
+        listingId: string;
+        quantity: number;
+        recommenderUserId: string;
+    }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+
+        const attribution: any = await ctx.runQuery(
+            internal.commerce.internalGetDmListingAttribution,
+            { messageId: args.messageId },
+        );
+        if (!attribution) throw new Error('Este mensaje no tiene un producto disponible.');
+
+        // Sólo los miembros del chat pueden comprar desde ese mensaje.
+        const chatId = ctx.db.normalizeId('socialChats', attribution.chatId);
+        const membership = chatId
+            ? await ctx.db
+                  .query('socialChatMembers')
+                  .withIndex('by_chat_user', (q: any) =>
+                      q.eq('chatId', chatId).eq('userId', actor.idString),
+                  )
+                  .first()
+            : null;
+        if (!membership || membership.state === 'left') {
+            throw new Error('No tenés acceso a esta conversación.');
+        }
+
+        if (attribution.listingStatus !== 'active') {
+            throw new Error('El producto ya no está disponible.');
+        }
+        if (attribution.sellerId === actor.idString) {
+            throw new Error('No podés comprar tu propio producto.');
+        }
+
+        const quantity = Math.max(1, Math.floor(args.quantity ?? 1));
+        const tracksStock =
+            attribution.listingType === 'product' || attribution.listingType === 'bono';
+        if (tracksStock && attribution.listingStock < quantity) {
+            throw new Error('No hay stock suficiente.');
+        }
+
+        await applyAddToCart(ctx, actor.idString, {
+            listingId: attribution.listingId,
+            quantity,
+            mutationKey: args.mutationKey,
+            attribution: {
+                // Si el que recomienda es el propio vendedor no hay comisión
+                // de creador: el motor de campañas ya lo resuelve así.
+                referralCode: attribution.recommenderReferralCode,
+                sourceMessageId: String(args.messageId),
+            },
+        });
+
+        return {
+            success: true,
+            listingId: attribution.listingId,
+            quantity,
+            recommenderUserId: attribution.recommenderUserId,
+        };
+    },
+});
+
+// ---------------------------------------------------------------------------
 // Attribution recording (called at order creation, from the cart flow)
 // ---------------------------------------------------------------------------
 

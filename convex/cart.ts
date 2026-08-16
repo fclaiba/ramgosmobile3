@@ -35,6 +35,7 @@ export const addToCart = mutation({
             distanceKm: v.optional(v.number()),
             referralCode: v.optional(v.string()),
             sourcePostId: v.optional(v.string()),
+            sourceMessageId: v.optional(v.string()),
         })),
         // Attribution is NOT listing data, so it survives the server-side
         // snapshot rebuild below. Callers that resolve a promoter server-side
@@ -42,6 +43,8 @@ export const addToCart = mutation({
         attribution: v.optional(v.object({
             referralCode: v.optional(v.string()),
             sourcePostId: v.optional(v.string()),
+            // Mensaje de DM cuyo card de producto puso este item en el carrito.
+            sourceMessageId: v.optional(v.string()),
         })),
     },
     handler: async (ctx, args) => {
@@ -64,7 +67,7 @@ export const applyAddToCart = async (
         quantity: number;
         mutationKey?: string;
         snapshot?: any;
-        attribution?: { referralCode?: string; sourcePostId?: string };
+        attribution?: { referralCode?: string; sourcePostId?: string; sourceMessageId?: string };
     },
 ) => {
     {
@@ -120,6 +123,9 @@ export const applyAddToCart = async (
                               sourcePostId:
                                   args.attribution.sourcePostId ??
                                   existing.snapshot.sourcePostId,
+                              sourceMessageId:
+                                  args.attribution.sourceMessageId ??
+                                  existing.snapshot.sourceMessageId,
                           },
                       }
                     : {}),
@@ -180,6 +186,7 @@ export const applyAddToCart = async (
                 // who actually drove this sale.
                 referralCode: args.attribution?.referralCode ?? listing.referralCode,
                 sourcePostId: args.attribution?.sourcePostId,
+                sourceMessageId: args.attribution?.sourceMessageId,
             };
         }
 

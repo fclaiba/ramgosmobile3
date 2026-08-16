@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { assertAdminOrDeveloper, assertSelfOrAdmin, getActorOrNull, requireActor } from "./authHelpers";
 
 const isStorageId = (url?: string | null) =>
     !!url &&
@@ -121,7 +121,9 @@ export const getOrderById = query({
         orderId: v.id("orders"),
     },
     handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
+        // Sin sesión válida devolvemos null (no tiramos): el error en render tumbaba la app.
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (!actor) return null;
         const order = await ctx.db.get(args.orderId);
         if (!order) return null;
         const isBuyer = order.userId === actor.idString;

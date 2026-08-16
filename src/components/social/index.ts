@@ -12,7 +12,7 @@ export * from './CreateInstagramPost';
 export * from './UserProfile';
 export * from './UserListItem';
 export * from './UserSearch';
-export * from './DirectMessages';
+export * from './MessageBubble';
 export * from './LoopFeed';
 export * from './LoopItem';
 export * from './UnifiedFeed';

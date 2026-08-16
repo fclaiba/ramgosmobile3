@@ -1,5 +1,16 @@
+import { ConvexError } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+
+// Errores de auth con código legible por máquina: el cliente distingue
+// "tu sesión murió" (UNAUTHENTICATED → deslogueo) de "no te corresponde"
+// (FORBIDDEN → error a secas, sin tocar la sesión). El texto no cambia,
+// así que cualquier match por string viejo sigue funcionando.
+export type AuthErrorCode = "UNAUTHENTICATED" | "FORBIDDEN";
+export type AuthErrorData = { code: AuthErrorCode; message: string };
+
+export const authError = (code: AuthErrorCode, message: string) =>
+  new ConvexError<AuthErrorData>({ code, message });
 
 export type AuthActor = {
   id: Id<"users">;
@@ -120,12 +131,15 @@ export const requireActor = async (
   const actor = await getActorOrNull(ctx, sessionToken);
   if (actor) return actor;
 
-  throw new Error("Sesión no válida o expirada. Por favor, inicie sesión nuevamente.");
+  throw authError(
+    "UNAUTHENTICATED",
+    "Sesión no válida o expirada. Por favor, inicie sesión nuevamente.",
+  );
 };
 
 export const assertAdminOrDeveloper = (actor: AuthActor) => {
   if (actor.role !== "admin" && actor.role !== "developer") {
-    throw new Error("No autorizado.");
+    throw authError("FORBIDDEN", "No autorizado.");
   }
 };
 
@@ -133,7 +147,7 @@ export const assertSelfOrAdmin = (actor: AuthActor, targetUserId: string) => {
   const isSelf = actor.idString === String(targetUserId);
   const isAdmin = actor.role === "admin" || actor.role === "developer";
   if (!isSelf && !isAdmin) {
-    throw new Error("No autorizado.");
+    throw authError("FORBIDDEN", "No autorizado.");
   }
 };
 

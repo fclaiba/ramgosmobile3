@@ -493,6 +493,9 @@ export default defineSchema({
             // cart. Survives to order creation so the sale can be attributed
             // back to the creator in `socialPostSales`.
             sourcePostId: v.optional(v.string()),
+            // Idem para el card de producto compartido por DM: el mensaje que
+            // originó la compra, para acreditar a quien recomendó.
+            sourceMessageId: v.optional(v.string()),
         }),
     }).index("by_user", ["userId"])
         .index("by_user_listing", ["userId", "listingId"]),
@@ -963,18 +966,25 @@ export default defineSchema({
         .index('by_story', ['storyId'])
         .index('by_story_viewer', ['storyId', 'viewerUserId']),
 
-    // socialChats — 1:1 (or future group) DM threads.
+    // socialChats — DM threads, 1:1 or group.
     socialChats: defineTable({
+        // Absent on legacy rows → tratar como 'direct'.
+        kind: v.optional(v.union(v.literal('direct'), v.literal('group'))),
         participantIds: v.array(v.string()),
         // Sorted participant ids joined by ":" — Convex has no "array
         // contains" index, so this flat key is what makes 1:1 chat lookup
-        // O(log n) instead of a full scan. Optional for rows created before
-        // the key existed; `createChat` backfills them on read.
+        // O(log n) instead of a full scan. Sólo para chats 1:1; en grupos
+        // queda undefined y el listado sale de `socialChatMembers`.
         participantsKey: v.optional(v.string()),
+        // Grupos.
+        title: v.optional(v.string()),
+        avatar: v.optional(v.string()), // "convex-storage:<id>"
+        createdByUserId: v.optional(v.string()),
         lastMessagePreview: v.optional(v.string()),
         lastMessageAt: v.string(),
-        // JSON-ish object (Convex `v.any()`) because the participant set
-        // is dynamic and small.
+        lastMessageSenderId: v.optional(v.string()),
+        // DEPRECADO: el unread por usuario vive en `socialChatMembers.unreadCount`.
+        // Se mantiene para no romper filas viejas hasta terminar el backfill.
         unreadCounts: v.optional(v.any()),
         createdAt: v.string(),
         firstRepliedAt: v.optional(v.string()),
@@ -984,21 +994,117 @@ export default defineSchema({
         .index('by_participant', ['participantIds'])
         .index('by_participants_key', ['participantsKey']),
 
+    // socialChatMembers — una fila por (chat, usuario). Es la tabla que hace
+    // eficiente TODA la bandeja: sin ella hay que escanear `socialChats`
+    // entera para saber en qué chats está un usuario. Además guarda el
+    // estado por-usuario (solicitud, silenciado, archivado) y `lastReadAt`,
+    // que permite calcular el "visto" sin escribir un doc por mensaje.
+    socialChatMembers: defineTable({
+        chatId: v.id('socialChats'),
+        userId: v.string(),
+        // 'request' = primer mensaje de alguien sin relación previa; cae en
+        // la carpeta Solicitudes hasta que el receptor acepta.
+        state: v.union(
+            v.literal('active'),
+            v.literal('request'),
+            v.literal('archived'),
+            v.literal('left'),
+        ),
+        role: v.optional(v.union(v.literal('owner'), v.literal('member'))),
+        unreadCount: v.number(),
+        lastReadAt: v.optional(v.string()),
+        mutedUntil: v.optional(v.string()),
+        // Agrupación de push por chat: `lastNotifiedAt` corta la ráfaga y
+        // `digestScheduledFor` garantiza un único resumen en vuelo.
+        lastNotifiedAt: v.optional(v.string()),
+        digestScheduledFor: v.optional(v.string()),
+        // Denormalizado desde el chat: ordena la bandeja sin leer N chats.
+        lastMessageAt: v.string(),
+        joinedAt: v.string(),
+    })
+        // Bandeja y solicitudes: ordenadas y paginadas en una sola pasada.
+        .index('by_user_state_last', ['userId', 'state', 'lastMessageAt'])
+        // Fan-out al enviar un mensaje.
+        .index('by_chat', ['chatId'])
+        // Chequeo de permiso O(log n) en cada mutation del chat.
+        .index('by_chat_user', ['chatId', 'userId']),
+
     // socialMessages — DM messages within a socialChats thread.
     socialMessages: defineTable({
         chatId: v.string(),
         senderUserId: v.string(),
         body: v.string(),
         attachments: v.optional(v.array(v.object({
-            type: v.union(v.literal('image'), v.literal('video'), v.literal('document'), v.literal('post')),
+            type: v.union(
+                v.literal('image'),
+                v.literal('video'),
+                v.literal('document'),
+                v.literal('post'),
+                // Producto recomendado dentro del chat. Guardamos sólo el
+                // listingId; precio/stock se hidratan en lectura.
+                v.literal('listing'),
+            ),
             url: v.string(),
             metadata: v.optional(v.any()),
         }))),
+        // Mensaje citado (reply estilo IG).
+        replyToId: v.optional(v.string()),
+        // Idempotencia de envío: el cliente genera el id y un reintento por
+        // red no duplica el mensaje.
+        clientId: v.optional(v.string()),
+        // Unsend: soft-delete para no romper los replies que lo citan.
+        deletedAt: v.optional(v.string()),
+        // DEPRECADO: reemplazado por `socialChatMembers.lastReadAt`.
         readBy: v.optional(v.array(v.string())),
         createdAt: v.string(),
     })
         .index('by_chat', ['chatId'])
-        .index('by_chat_created', ['chatId', 'createdAt']),
+        .index('by_chat_created', ['chatId', 'createdAt'])
+        .index('by_chat_client', ['chatId', 'clientId']),
+
+    // socialMessageReactions — una fila por (mensaje, usuario). El emoji se
+    // sobrescribe si el usuario cambia de reacción.
+    socialMessageReactions: defineTable({
+        messageId: v.string(),
+        chatId: v.string(),
+        userId: v.string(),
+        emoji: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_message', ['messageId'])
+        .index('by_message_user', ['messageId', 'userId']),
+
+    // socialChatTyping — estado efímero "escribiendo…". `expiresAt` es epoch
+    // ms; un cron barre lo vencido y las lecturas ignoran lo expirado.
+    socialChatTyping: defineTable({
+        chatId: v.string(),
+        userId: v.string(),
+        expiresAt: v.number(),
+        updatedAt: v.number(),
+    })
+        .index('by_chat', ['chatId'])
+        .index('by_chat_user', ['chatId', 'userId'])
+        .index('by_expires', ['expiresAt']),
+
+    // socialPresence — último heartbeat del usuario (epoch ms). El "activo
+    // ahora" lo decide el CLIENTE comparando contra su reloj: una query de
+    // Convex no se re-ejecuta por el paso del tiempo.
+    socialPresence: defineTable({
+        userId: v.string(),
+        lastSeenAt: v.number(),
+    })
+        .index('by_user', ['userId'])
+        .index('by_lastSeen', ['lastSeenAt']),
+
+    // socialBlocks — bloqueos entre usuarios. Es lo que vuelve real a
+    // `assertNotBlocked`, que hasta ahora era un no-op.
+    socialBlocks: defineTable({
+        blockerUserId: v.string(),
+        blockedUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_pair', ['blockerUserId', 'blockedUserId'])
+        .index('by_blocker', ['blockerUserId']),
 
     socialSavedPosts: defineTable({
         userId: v.string(),

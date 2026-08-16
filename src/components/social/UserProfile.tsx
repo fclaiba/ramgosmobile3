@@ -10,7 +10,7 @@ import { BlurView } from 'expo-blur';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { SocialFollowButton } from './SocialFollowButton';
 
@@ -27,6 +27,17 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
     const navigation = useNavigation<any>();
     const { user: authUser, sessionToken } = useAuth();
     const [activeTab, setActiveTab] = useState<'posts' | 'instagram' | 'commercial'>('posts');
+
+    const getOrCreateChat = useMutation(api.social.dm.getOrCreateDirectChat);
+    const openChat = async () => {
+        if (!userId || !sessionToken) return;
+        try {
+            const chatId = await getOrCreateChat({ participantId: String(userId), sessionToken });
+            navigation.navigate('Chat', { chatId });
+        } catch {
+            navigation.navigate('Chat', { userId: String(userId) });
+        }
+    };
 
     const scrollY = useRef(new Animated.Value(0)).current;
 
@@ -232,7 +243,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                         </View>
                         {!isCurrentUser && (
                             <View style={styles.actionsContainer}>
-                                <TouchableOpacity style={styles.messageButton}>
+                                <TouchableOpacity style={styles.messageButton} onPress={openChat}>
                                     <MessageCircle size={20} color={isDark ? "#D1D5DB" : "#374151"} />
                                 </TouchableOpacity>
                                 <SocialFollowButton targetUserId={String(userId)} />

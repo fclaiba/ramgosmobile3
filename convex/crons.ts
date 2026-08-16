@@ -46,4 +46,14 @@ crons.interval(
     {},
 );
 
+// Barre filas de "escribiendo…" abandonadas (app cerrada de golpe) y
+// presencia muy vieja. El indicador ya desaparece solo en el cliente por
+// TTL; esto es únicamente para que las tablas no acumulen basura.
+crons.interval(
+    "dm-sweep-ephemeral",
+    { minutes: 15 },
+    internal.social.dm.cleanupEphemeral,
+    {},
+);
+
 export default crons;

@@ -48,9 +48,16 @@ function BusinessFormsScreen({ navigation, route }: any) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Convex calls
-    const listForms = useQuery(api.businessForms.listFormsByBusiness, { sessionToken }) || [];
-    const listSubmissions = useQuery(api.businessForms.listLeads, 
-        selectedFormId === 'general' ? { sessionToken } : (selectedFormId ? { formId: selectedFormId, sessionToken } : "skip")
+    const listForms = useQuery(
+        api.businessForms.listFormsByBusiness,
+        sessionToken ? { sessionToken } : 'skip',
+    ) || [];
+    const listSubmissions = useQuery(api.businessForms.listLeads,
+        !sessionToken
+            ? 'skip'
+            : selectedFormId === 'general'
+                ? { sessionToken }
+                : (selectedFormId ? { formId: selectedFormId, sessionToken } : 'skip')
     );
     const createFormMutation = useMutation(api.businessForms.createForm);
 
