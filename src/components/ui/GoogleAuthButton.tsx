@@ -59,19 +59,16 @@ export function GoogleAuthButton({
     );
 }
 
-const getStyles = (isDark: boolean) =>
-    StyleSheet.create({
+const getStyles = (isDark: boolean) => {
+    const c = colors(isDark);
+    return StyleSheet.create({
         button: {
             width: '100%',
             minHeight: 52,
-            borderRadius: Radius.md,
-            backgroundColor: isDark
-                ? 'rgba(255,255,255,0.08)'
-                : 'rgba(255,255,255,0.92)',
-            borderWidth: 1,
-            borderColor: isDark
-                ? 'rgba(255,255,255,0.14)'
-                : 'rgba(15, 23, 42, 0.12)',
+            borderRadius: Radius.lg,
+            backgroundColor: c.surface2,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
             justifyContent: 'center',
             alignItems: 'center',
             paddingHorizontal: 16,
@@ -94,7 +91,8 @@ const getStyles = (isDark: boolean) =>
         label: {
             fontSize: 16,
             fontWeight: '600',
-            color: isDark ? '#F9FAFB' : '#111827',
+            color: c.text,
             letterSpacing: 0.1,
         },
     });
+};

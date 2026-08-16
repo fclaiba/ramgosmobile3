@@ -1,7 +1,7 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
-export const wipeAndSeedBonos = mutation({
+export const wipeAndSeedBonos = internalMutation({
     args: {},
     handler: async (ctx) => {
         // 1. Delete all existing bonos

@@ -1,5 +1,6 @@
+// ponytail: Stripe Connect V2 experimental (comentarios 'for demo'); el flujo real con auth vive en stripe.ts. Todo internal hasta decidir si se borra.
 import { v } from "convex/values";
-import { action, mutation, query, internalMutation } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import Stripe from "stripe";
 
@@ -12,7 +13,7 @@ const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 // Accounts
 // ---------------------------------------------------------------------------
 
-export const createConnectedAccount = action({
+export const createConnectedAccount = internalAction({
     args: {
         userId: v.id("users"), // Assuming we want to map this to a user eventually
         displayName: v.string(),
@@ -61,7 +62,7 @@ export const createConnectedAccount = action({
     },
 });
 
-export const createAccountLink = action({
+export const createAccountLink = internalAction({
     args: {
         accountId: v.string(),
         refreshUrl: v.string(),
@@ -89,7 +90,7 @@ export const createAccountLink = action({
     },
 });
 
-export const getAccountStatus = action({
+export const getAccountStatus = internalAction({
     args: {
         accountId: v.string(),
     },
@@ -121,7 +122,7 @@ export const getAccountStatus = action({
 // Products
 // ---------------------------------------------------------------------------
 
-export const createPlatformProduct = action({
+export const createPlatformProduct = internalAction({
     args: {
         name: v.string(),
         description: v.string(),
@@ -183,7 +184,7 @@ export const storePlatformProduct = internalMutation({
     },
 });
 
-export const getPlatformProducts = query({
+export const getPlatformProducts = internalQuery({
     args: {},
     handler: async (ctx, args) => {
         return await ctx.db.query("platformProducts").order("desc").collect();
@@ -194,7 +195,7 @@ export const getPlatformProducts = query({
 // Checkout
 // ---------------------------------------------------------------------------
 
-export const createCheckoutSession = action({
+export const createCheckoutSession = internalAction({
     args: {
         stripePriceId: v.string(),
         connectedAccountId: v.string(),

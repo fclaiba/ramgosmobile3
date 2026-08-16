@@ -22,7 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useFavorites } from '../../hooks/useFavorites';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
-import { webPath } from '../../config/appOrigin';
+import { webPath, productShareLink } from '../../config/appOrigin';
 
 export default function ProductDetailScreen({ route, navigation }: any) {
     const { colorScheme } = useTheme();
@@ -30,7 +30,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
     const insets = useSafeAreaInsets();
     const styles = getStyles(isDark);
     const { width } = useWindowDimensions();
-    const { productId } = route.params || {};
+    const { productId, slug } = route.params || {};
     const { getProductById } = useMarketplace();
     const { addItem } = useCart();
     const { show } = useToast();
@@ -45,13 +45,17 @@ export default function ProductDetailScreen({ route, navigation }: any) {
         api.listings.getListing,
         listingId ? { id: listingId } : 'skip',
     );
+    const listingBySlug = useQuery(
+        api.listings.getListingBySlug,
+        slug ? { slug } : 'skip',
+    );
     const feedProduct = useMemo(
-        () => (!listingId ? getProductById(productId) : null),
-        [listingId, productId, getProductById],
+        () => (!listingId && !slug ? getProductById(productId) : null),
+        [listingId, slug, productId, getProductById],
     );
 
     const product = useMemo(() => {
-        const raw = listingFromDb || feedProduct;
+        const raw = listingBySlug || listingFromDb || feedProduct;
         if (!raw) return null;
         const images = (raw as any).images?.length
             ? (raw as any).images
@@ -60,6 +64,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                 : [];
         return {
             id: String((raw as any)._id || (raw as any).id),
+            slug: (raw as any).slug,
             title: (raw as any).title || (raw as any).name,
             price: Number((raw as any).price || 0),
             description: (raw as any).description || '',
@@ -82,7 +87,9 @@ export default function ProductDetailScreen({ route, navigation }: any) {
     const handleShare = useCallback(async () => {
         if (!product) return;
         try {
-            const url = webPath(`/p/${encodeURIComponent(String(product.id))}`);
+            const handle = (product.seller as any)?.username || (product.seller as any)?.name || product.seller?.id || '';
+            const pathKey = (product as any)?.slug || product.id || '';
+            const url = productShareLink(handle, String(pathKey));
             await Share.share({
                 title: product.title,
                 message: `Mirá esto: ${product.title} - $${product.price}\n${url}`,
@@ -167,7 +174,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Image Carousel */}
                 <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carousel}>
-                    {product.images?.map((img) => (
+                    {product.images?.map((img: any) => (
                         <Image key={img.id} source={{ uri: img.url }} style={[styles.productImage, { width }]} />
                     ))}
                 </ScrollView>
@@ -374,16 +381,14 @@ const getStyles = (isDark: any) => StyleSheet.create({
             bottom: 0,
             left: 0,
             right: 0,
-            zIndex: 100,
-            elevation: 20,
         flexDirection: 'row',
         padding: 16,
         backgroundColor: colors(isDark).glass,
         borderTopWidth: 1,
         borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
         gap: 12,
-        zIndex: 50,
-        elevation: 12,
+        zIndex: 100,
+        elevation: 20,
     },
     cartBtn: {
         flex: 1,

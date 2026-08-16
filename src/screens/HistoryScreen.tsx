@@ -248,7 +248,7 @@ export default function HistoryScreen({ navigation, route }: any) {
         return 'pending';
     };
 
-    const getListingImage = (listingId?: string, itemImage?: string, fallback?: string) => {
+    const getListingImage = (listingId?: string, itemImage?: string) => {
         if (itemImage && String(itemImage).startsWith('http')) return itemImage;
         const listing = findListing(listingId);
         return (
@@ -256,12 +256,11 @@ export default function HistoryScreen({ navigation, route }: any) {
             listing?.images?.[0]?.url ||
             (typeof listing?.gallery?.[0] === 'string' ? listing.gallery[0] : undefined) ||
             (itemImage && String(itemImage).length > 0 ? itemImage : undefined) ||
-            fallback
+            ''
         );
     };
 
     const purchaseOrderItems: HistoryItem[] = useMemo(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
         return (orders as any[]).map((order: any) => {
             const firstItem = order.items?.[0];
             const listing = findListing(firstItem?.listingId);
@@ -274,7 +273,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 title: firstItem?.title ?? 'Compra Marketplace',
                 business: listing?.seller?.name || `Vendedor ${String(order.sellerId).slice(-6).toUpperCase()}`,
                 businessId: order.sellerId,
-                image: getListingImage(firstItem?.listingId, firstItem?.image, fallbackImage),
+                image: getListingImage(firstItem?.listingId, firstItem?.image),
                 price: order.total || 0,
                 location: order.shipping?.address?.city ?? order.shipping?.address?.country ?? 'A coordinar',
                 date: order.createdAt,
@@ -290,7 +289,6 @@ export default function HistoryScreen({ navigation, route }: any) {
     }, [orders, findListing]);
 
     const salesOrderItems: HistoryItem[] = useMemo(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
         return (mySellerOrders as any[])
             .filter((order: any) => {
                 if (!user) return false;
@@ -312,7 +310,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                     title: firstItem?.title ?? 'Venta Marketplace',
                     business: `Cliente ${String(order.userId).slice(-6).toUpperCase()}`,
                     businessId: order.userId,
-                    image: getListingImage(firstItem?.listingId, firstItem?.image, fallbackImage),
+                    image: getListingImage(firstItem?.listingId, firstItem?.image),
                     price: order.total || 0,
                     location: order.shipping?.address?.city ?? order.shipping?.address?.country ?? 'A coordinar',
                     date: order.createdAt,
@@ -328,7 +326,6 @@ export default function HistoryScreen({ navigation, route }: any) {
     }, [mySellerOrders, findListing, user]);
 
     const fintechItems: HistoryItem[] = useMemo(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop';
         return (payments as any[]).map((payment: any) => {
             const status: HistoryStatus =
                 payment.status === 'succeeded' ? 'completed' :
@@ -339,7 +336,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 kind: 'products',
                 title: payment.description ?? 'Compra Ramgos',
                 business: payment.split?.sellerId ?? 'Ramgos',
-                image: payment.metadata?.image || fallbackImage,
+                image: payment.metadata?.image || '',
                 price: payment.amount,
                 location: payment.metadata?.location || 'Online',
                 date: payment.createdAt,
@@ -355,7 +352,6 @@ export default function HistoryScreen({ navigation, route }: any) {
     }, [payments]);
 
     const bonoPurchaseItems: HistoryItem[] = useMemo(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
         return (myBonos as any[]).map((bono: any) => {
             const isRedeemed = bono.status === 'redeemed';
             const isExpired = bono.status === 'expired';
@@ -377,7 +373,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 title: bono.listing?.title || 'Bono Digital',
                 business: businessName,
                 businessId: bono.sellerId,
-                image: bono.listing?.image || fallbackImage,
+                image: bono.listing?.image || '',
                 price: paidAmount,
                 location: 'Bono Digital',
                 date: bono.createdAt,
@@ -398,7 +394,6 @@ export default function HistoryScreen({ navigation, route }: any) {
     }, [myBonos]);
 
     const bonoSaleItems: HistoryItem[] = useMemo(() => {
-        const fallbackImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop';
         return (mySellerBonos as any[]).map((bono: any) => {
             const isRedeemed = bono.status === 'redeemed';
             const isExpired = bono.status === 'expired';
@@ -411,7 +406,7 @@ export default function HistoryScreen({ navigation, route }: any) {
                 title: bono.listing?.title || 'Bono Digital',
                 business: `Canjea: ${buyerName} • Cod: ${bono.bonoCode}`,
                 businessId: bono.buyerId,
-                image: bono.listing?.image || fallbackImage,
+                image: bono.listing?.image || '',
                 price: bono.listing?.price ?? 0,
                 location: 'Digital',
                 date: bono.createdAt,
@@ -452,15 +447,36 @@ export default function HistoryScreen({ navigation, route }: any) {
         datePreset !== 'all' &&
         (datePreset !== 'custom' || !!parseDateInput(dateFrom) || !!parseDateInput(dateTo));
 
+    // A bono purchase creates BOTH an order row and a bonoRedemptions row
+    // (issued by internalIssueBonosForOrder with the same orderId). We keep
+    // the dedicated bono card (code + credit + QR) and exclude the plain
+    // order row to avoid duplicates. Same for sales on the seller side.
+    const purchaseItemsDeduped: HistoryItem[] = useMemo(() => {
+        const bonoOrderIds = new Set(
+            (myBonos as any[]).map((b) => b.orderId).filter(Boolean),
+        );
+        const orderIds = new Set(purchaseOrderItems.map((o) => o.orderId));
+        const standalonePayments = fintechItems.filter((f) => !orderIds.has(f.orderId));
+        const purchasesWithoutBonoDupes = purchaseOrderItems.filter(
+            (o) => !bonoOrderIds.has(String(o.orderId)),
+        );
+        return [...purchasesWithoutBonoDupes, ...standalonePayments, ...bonoPurchaseItems];
+    }, [purchaseOrderItems, fintechItems, bonoPurchaseItems, myBonos]);
+
+    const saleItemsDeduped: HistoryItem[] = useMemo(() => {
+        const bonoOrderIds = new Set(
+            (mySellerBonos as any[]).map((b) => b.orderId).filter(Boolean),
+        );
+        const salesWithoutBonoDupes = salesOrderItems.filter(
+            (o) => !bonoOrderIds.has(String(o.orderId)),
+        );
+        return [...salesWithoutBonoDupes, ...bonoSaleItems];
+    }, [salesOrderItems, bonoSaleItems, mySellerBonos]);
+
     const allItems = useMemo(() => {
-        // ponytail: skip fintech payments that belong to a marketplace order (prevents duplicates)
-        const orderIds = new Set(purchaseOrderItems.map(o => o.orderId));
-        const standalonePayments = fintechItems.filter(f => !orderIds.has(f.orderId));
-        const purchases = [...purchaseOrderItems, ...standalonePayments, ...bonoPurchaseItems];
-        const sales = [...salesOrderItems, ...bonoSaleItems];
-        const combined = activeTab === 'sales' ? sales : purchases;
+        const combined = activeTab === 'sales' ? saleItemsDeduped : purchaseItemsDeduped;
         return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [activeTab, purchaseOrderItems, salesOrderItems, fintechItems, bonoPurchaseItems, bonoSaleItems]);
+    }, [activeTab, purchaseItemsDeduped, saleItemsDeduped]);
 
     const filteredItems = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
@@ -482,7 +498,7 @@ export default function HistoryScreen({ navigation, route }: any) {
     }, [allItems, searchQuery, activeTab, purchaseKindFilter, activeDateFilter, dateRange]);
 
     const stats = useMemo(() => {
-        const relevant = activeTab === 'sales' ? salesOrderItems : [...purchaseOrderItems, ...fintechItems, ...bonoPurchaseItems];
+        const relevant = activeTab === 'sales' ? saleItemsDeduped : purchaseItemsDeduped;
         const completed = relevant.filter((i) => i.status === 'completed');
         const total = completed.reduce((sum, i) => sum + (i.price || 0), 0);
         const pendingCount = relevant.filter((i) => i.status === 'pending').length;
@@ -491,7 +507,7 @@ export default function HistoryScreen({ navigation, route }: any) {
             total,
             pendingCount,
         };
-    }, [activeTab, purchaseOrderItems, salesOrderItems, fintechItems, bonoPurchaseItems]);
+    }, [activeTab, purchaseItemsDeduped, saleItemsDeduped]);
 
     const handleReleaseEscrow = async (orderId: string) => {
         if (!user?.id) {

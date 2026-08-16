@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { Id } from '../../../convex/_generated/dataModel';
 import { useTheme } from '../../contexts/ThemeContext';
 import { glassShadow, colors, Radius } from '../../theme/tokens';
+import { CommerceTag } from './CommerceTag';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,7 +28,9 @@ export interface PostCardProps {
             listingId?: string;
             name: string;
             price?: number;
-            imageUrl?: string;
+            /** Backend field name (`socialPosts.commercialProduct.image`). */
+            image?: string;
+            discountPercent?: number;
         };
         likesCount: number;
         commentsCount: number;
@@ -39,7 +42,7 @@ export interface PostCardProps {
         role?: string;
     } | null;
     onLike: () => void;
-    onComment: () => void;
+    onComment: (postId?: any) => void;
     onCommercePress: (listingId: string) => void;
     isFocused?: boolean; // Para pausar/reproducir videos automáticamente
 }
@@ -80,20 +83,18 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
         if (post.type === 'video' && post.videoUrl) {
             return (
                 <View style={StyleSheet.absoluteFill}>
-                    <VideoView 
-                        style={StyleSheet.absoluteFill} 
-                        player={player} 
-                        allowsFullscreen={false} 
-                        allowsPictureInPicture={false}
+                    <VideoView
+                        style={StyleSheet.absoluteFill}
+                        player={player}
                         contentFit="cover"
-                        nativeControls={false}
                     />
                 </View>
             );
         }
-        
+
+
         if (post.type === 'image' || post.type === 'commercial') {
-            const displayImage = post.commercialProduct?.imageUrl || (post.images && post.images.length > 0 ? post.images[0] : null);
+            const displayImage = post.commercialProduct?.image || (post.images && post.images.length > 0 ? post.images[0] : null);
             if (displayImage) {
                 return <Image source={{ uri: displayImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
             }
@@ -146,26 +147,10 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
 
                 {/* Commerce Tag (Liquid Glass) */}
                 {post.commercialProduct && (
-                    <TouchableOpacity 
-                        style={styles.commerceTagWrapper} 
-                        onPress={handleCommercePress}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Ver producto ${post.commercialProduct.name}`}
-                    >
-                        <BlurView intensity={isDark ? 60 : 40} tint={isDark ? 'dark' : 'light'} style={styles.commerceTag}>
-                            <ShoppingCart size={16} color={isDark ? '#FCD34D' : '#D97706'} />
-                            <View style={styles.commerceInfo}>
-                                <Text style={styles.commerceName} numberOfLines={1}>{post.commercialProduct.name}</Text>
-                                {post.commercialProduct.price !== undefined && (
-                                    <Text style={styles.commercePrice}>${post.commercialProduct.price}</Text>
-                                )}
-                            </View>
-                            <View style={styles.buyBtn}>
-                                <Text style={styles.buyBtnText}>Comprar</Text>
-                            </View>
-                        </BlurView>
-                    </TouchableOpacity>
+                    <CommerceTag
+                        product={post.commercialProduct}
+                        onPress={onCommercePress}
+                    />
                 )}
             </View>
 

@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     dim: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: "transparent",
     },
     sheet: {

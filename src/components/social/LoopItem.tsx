@@ -3,13 +3,17 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Platfor
 import { Heart, MessageCircle, Share2, Music2, ShoppingBag } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Radius, colors } from '../../theme/tokens';
 import { glassSurface } from '../../utils/glass';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
+import { SocialFollowButton } from './SocialFollowButton';
 
 const { height, width } = Dimensions.get('window');
 
@@ -23,13 +27,26 @@ interface LoopItemProps {
 export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopItemProps) => {
     const videoRef = useRef<Video>(null);
     const isDark = useTheme().colorScheme === 'dark';
-    
+    const { sessionToken } = useAuth();
+
+    const postId = post._id || post.id;
+
     const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
-    const [liked, setLiked] = useState(post.likedByUser || false);
+    const [liked, setLiked] = useState(Boolean(post.isLikedByMe ?? post.likedByUser));
     const [likes, setLikes] = useState(post.likeCount || 0);
     const [showComments, setShowComments] = useState(false);
     const [showShare, setShowShare] = useState(false);
     const spinValue = new Animated.Value(0);
+
+    const toggleLike = useMutation(api.social.toggleLike);
+    const addView = useMutation(api.social.addView);
+    const viewCounted = useRef(false);
+
+    // Server state wins when the feed refetches (another device, cache hydrate).
+    useEffect(() => {
+        setLiked(Boolean(post.isLikedByMe ?? post.likedByUser));
+        setLikes(post.likeCount || 0);
+    }, [post.isLikedByMe, post.likedByUser, post.likeCount]);
 
     useEffect(() => {
         if (!videoRef.current) return;
@@ -39,6 +56,17 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
             videoRef.current.pauseAsync().catch(() => {});
         }
     }, [isActive]);
+
+    // Impressions are what pay creators for reach, so count one the first time
+    // this loop actually becomes the active item. The mutation is idempotent
+    // per (post, viewer), so a re-scroll is silently free.
+    useEffect(() => {
+        if (!isActive || viewCounted.current || !sessionToken || !postId) return;
+        viewCounted.current = true;
+        addView({ sessionToken, postIds: [postId] }).catch(() => {
+            viewCounted.current = false;
+        });
+    }, [isActive, sessionToken, postId, addView]);
 
     useEffect(() => {
         Animated.loop(
@@ -55,10 +83,18 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
         outputRange: ['0deg', '360deg']
     });
 
-    const handleLike = () => {
-        setLiked(!liked);
-        setLikes((prev: number) => liked ? prev - 1 : prev + 1);
-        // toggleLike({ targetType: 'post', targetId: post._id || post.id });
+    const handleLike = async () => {
+        if (!sessionToken || !postId) return;
+        // Optimistic: the heart must answer the tap instantly in a video feed.
+        const next = !liked;
+        setLiked(next);
+        setLikes((prev: number) => (next ? prev + 1 : Math.max(0, prev - 1)));
+        try {
+            await toggleLike({ sessionToken, targetType: 'post', targetId: postId });
+        } catch {
+            setLiked(!next);
+            setLikes((prev: number) => (next ? Math.max(0, prev - 1) : prev + 1));
+        }
     };
 
     const hasVideo = !!post.videoUrl;
@@ -86,16 +122,23 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
 
             <View style={styles.bottomSection}>
                 <View style={styles.infoSection}>
-                    <TouchableOpacity style={styles.userRow} onPress={() => onUserClick(post.author?.userId)}>
-                        <Avatar style={styles.avatar}>
-                            <AvatarImage src={post.author?.avatar} />
-                            <AvatarFallback>{post.author?.displayName?.[0]}</AvatarFallback>
-                        </Avatar>
-                        <Text style={styles.username}>@{post.author?.username}</Text>
-                        <TouchableOpacity style={styles.followBtn}>
-                            <Text style={styles.followText}>Seguir</Text>
+                    <View style={styles.userRow}>
+                        <TouchableOpacity
+                            style={styles.userTap}
+                            onPress={() => onUserClick(post.author?.userId)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Ver perfil de ${post.author?.username ?? 'usuario'}`}
+                        >
+                            <Avatar style={styles.avatar}>
+                                <AvatarImage src={post.author?.avatar} />
+                                <AvatarFallback>{post.author?.displayName?.[0]}</AvatarFallback>
+                            </Avatar>
+                            <Text style={styles.username}>@{post.author?.username}</Text>
                         </TouchableOpacity>
-                    </TouchableOpacity>
+                        {post.author?.userId ? (
+                            <SocialFollowButton targetUserId={String(post.author.userId)} compact />
+                        ) : null}
+                    </View>
                     
                     <Text style={styles.content} numberOfLines={3}>{post.content}</Text>
                     
@@ -113,7 +156,7 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                         <Text style={styles.actionText}>{likes}</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(true)}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(true)} accessibilityRole="button" accessibilityLabel="Comentar">
                         <View style={styles.iconWrapper}>
                             <MessageCircle size={28} color="#fff" />
                         </View>
@@ -128,14 +171,24 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                     </TouchableOpacity>
 
                     {post.commercialProduct?.listingId && (
-                        <TouchableOpacity 
-                            style={[styles.actionBtn, { marginTop: 8 }]} 
-                            onPress={() => onCommercePress && onCommercePress(post.commercialProduct!.listingId!, post._id || post.id)}
+                        <TouchableOpacity
+                            style={[styles.actionBtn, { marginTop: 8 }]}
+                            onPress={() => onCommercePress?.(post.commercialProduct.listingId, postId)}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                                post.commercialProduct.discountPercent
+                                    ? `Obtener ${Math.round(post.commercialProduct.discountPercent)}% OFF en ${post.commercialProduct.name}`
+                                    : `Comprar ${post.commercialProduct.name}`
+                            }
                         >
                             <View style={[styles.iconWrapper, { backgroundColor: '#2563EB' }]}>
                                 <ShoppingBag size={26} color="#fff" />
                             </View>
-                            <Text style={styles.actionText}>Comprar</Text>
+                            <Text style={styles.actionText}>
+                                {post.commercialProduct.discountPercent
+                                    ? `${Math.round(post.commercialProduct.discountPercent)}% OFF`
+                                    : 'Comprar'}
+                            </Text>
                         </TouchableOpacity>
                     )}
 
@@ -194,6 +247,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
+        gap: 8,
+    },
+    userTap: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: 8,
     },
     avatar: {

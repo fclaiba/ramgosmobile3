@@ -4,7 +4,6 @@ import { X, Image as ImageIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useSocial } from '../../contexts/SocialContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -15,23 +14,24 @@ import { Radius, colors } from '../../theme/tokens';
 
 
 export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
-    const { currentUser, createInstagramPost } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
     const [imageUrl, setImageUrl] = useState('');
     const [caption, setCaption] = useState('');
     const [uploading, setUploading] = useState(false);
+    const [posting, setPosting] = useState(false);
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+    const createPost = useMutation(api.social.createPost);
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const canPost = imageUrl.trim().length > 0 && !uploading;
+    const canPost = imageUrl.trim().length > 0 && !uploading && !posting;
 
     const handlePickImage = async () => {
-        if (!authUser) { show('Debes iniciar sesión', 'error'); return; }
+        if (!authUser || !sessionToken) { show('Debes iniciar sesión', 'error'); return; }
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
 
@@ -45,7 +45,7 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
 
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({});
+            const uploadUrl = await generateUploadUrl({ sessionToken });
             const asset = result.assets[0];
             let blob: Blob;
             try {
@@ -76,10 +76,24 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
         }
     };
 
-    const handlePost = () => {
-        if (!canPost) return;
-        createInstagramPost(imageUrl, caption);
-        onClose();
+    const handlePost = async () => {
+        if (!canPost || !sessionToken) return;
+        setPosting(true);
+        try {
+            // Square photo posts are ordinary image posts server-side; the
+            // "instagram" framing is purely a presentation choice.
+            await createPost({
+                sessionToken,
+                type: 'image',
+                content: caption.trim(),
+                images: [imageUrl],
+            });
+            onClose();
+        } catch (e: any) {
+            show(e?.message || 'No se pudo publicar', 'error');
+        } finally {
+            setPosting(false);
+        }
     };
 
     return (
@@ -101,8 +115,8 @@ export const CreateInstagramPost = ({ onClose }: { onClose: () => void }) => {
                         <View style={styles.content}>
                             <View style={styles.userRow}>
                                 <Avatar style={styles.avatar}>
-                                    <AvatarImage src={currentUser.avatar} />
-                                    <AvatarFallback>{currentUser.name[0]}</AvatarFallback>
+                                    <AvatarImage src={authUser?.avatar} />
+                                    <AvatarFallback>{authUser?.name?.[0] || 'U'}</AvatarFallback>
                                 </Avatar>
                                 <TextInput
                                     placeholder="Escribe un pie de foto..."

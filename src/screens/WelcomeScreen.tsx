@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,28 +7,37 @@ import { UserPlus, LogIn, UserCircle, Sparkles } from 'lucide-react-native';
 import { AuthBackground } from '../components/auth/AuthBackground';
 import { useAuth, getAuthDestination } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { glassShadow, Radius, colors } from '../theme/tokens';
+import { Radius, colors, Type, Space, Elevation } from '../theme/tokens';
+import { Brand } from '../theme/brand';
 import { useTranslation } from 'react-i18next';
 
 export default function WelcomeScreen({ navigation }: any) {
     const { status, user } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const c = colors(isDark);
+    const styles = getStyles(isDark, c);
     const { t } = useTranslation(['auth', 'common']);
 
-    useEffect(() => {
-        if (status === 'authenticated' && user) {
-            const destination = getAuthDestination(user) ?? { screen: 'Home' as const };
-            const timer = setTimeout(() => {
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: destination.screen, params: destination.params }],
-                });
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [status, user, navigation]);
+    useFocusEffect(
+        React.useCallback(() => {
+            if (status === 'authenticated' && user) {
+                const state = navigation.getState();
+                if (state && state.routes.length > 1) {
+                    return;
+                }
+
+                const destination = getAuthDestination(user) ?? { screen: 'Home' as const };
+                const timer = setTimeout(() => {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: destination.screen, params: destination.params }],
+                    });
+                }, 100);
+                return () => clearTimeout(timer);
+            }
+        }, [status, user, navigation])
+    );
 
     // Animations
     const iconScale = useRef(new Animated.Value(0)).current;
@@ -83,8 +93,16 @@ export default function WelcomeScreen({ navigation }: any) {
                 <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
                     <View style={styles.content}>
 
-                        {/* Card Container */}
+                        {/* Glass Card Container */}
                         <View style={styles.card}>
+                            {/* Specular rim */}
+                            <LinearGradient
+                                colors={[c.specularStrong, 'transparent']}
+                                start={{ x: 0.5, y: 0 }}
+                                end={{ x: 0.5, y: 1 }}
+                                style={styles.specularRim}
+                            />
+
                             {/* Logo Section */}
                             <Animated.View style={[styles.iconContainer, { transform: [{ scale: iconScale }] }]}>
                                 <Image
@@ -94,7 +112,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                 />
                             </Animated.View>
 
-                            {/* Title & Subtitle */}
+                            {/* Subtitle */}
                             <Animated.View style={{ opacity: titleOpacity, width: '100%', alignItems: 'center', marginBottom: 32 }}>
                                 <Text style={styles.subtitle}>
                                     {t('auth:welcome.subtitle')}
@@ -110,10 +128,17 @@ export default function WelcomeScreen({ navigation }: any) {
                                         activeOpacity={0.9}
                                     >
                                         <LinearGradient
-                                            colors={['#2196F3', '#29B6F6']}
+                                            colors={Brand.gradient}
                                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                             style={styles.gradientBtn}
                                         >
+                                            {/* Specular rim on button */}
+                                            <LinearGradient
+                                                colors={['rgba(255,255,255,0.25)', 'transparent']}
+                                                start={{ x: 0.5, y: 0 }}
+                                                end={{ x: 0.5, y: 1 }}
+                                                style={styles.btnSpecular}
+                                            />
                                             <UserPlus size={20} color="#fff" style={{ marginRight: 12 }} />
                                             <Text style={styles.primaryBtnText}>{t('auth:welcome.createAccount')}</Text>
                                         </LinearGradient>
@@ -126,7 +151,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                         onPress={() => navigation.navigate('Login')}
                                         activeOpacity={0.8}
                                     >
-                                        <LogIn size={20} color="#111827" style={{ marginRight: 12 }} />
+                                        <LogIn size={20} color={c.text} style={{ marginRight: 12 }} />
                                         <Text style={styles.secondaryBtnText}>{t('auth:welcome.signIn')}</Text>
                                     </TouchableOpacity>
                                 </Animated.View>
@@ -136,7 +161,7 @@ export default function WelcomeScreen({ navigation }: any) {
                                         style={styles.ghostBtn}
                                         onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
                                     >
-                                        <UserCircle size={20} color="#6B7280" style={{ marginRight: 12 }} />
+                                        <UserCircle size={20} color={c.textMuted} style={{ marginRight: 12 }} />
                                         <Text style={styles.ghostBtnText}>{t('auth:welcome.continueGuest')}</Text>
                                     </TouchableOpacity>
                                 </Animated.View>
@@ -155,9 +180,9 @@ export default function WelcomeScreen({ navigation }: any) {
 
                         {/* Bottom Decoration */}
                         <Animated.View style={[styles.bottomDeco, { opacity: bottomDecoOpacity }]}>
-                            <Sparkles size={16} color="#4FC3F7" style={{ marginRight: 8 }} />
+                            <Sparkles size={16} color={Brand.primaryLight} style={{ marginRight: 8 }} />
                             <Text style={styles.bottomDecoText}>{t('auth:welcome.bottomDeco')}</Text>
-                            <Sparkles size={16} color="#4FC3F7" style={{ marginLeft: 8 }} />
+                            <Sparkles size={16} color={Brand.primaryLight} style={{ marginLeft: 8 }} />
                         </Animated.View>
 
                     </View>
@@ -167,63 +192,105 @@ export default function WelcomeScreen({ navigation }: any) {
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
+const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) => StyleSheet.create({
     container: { flex: 1 },
-    scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: 16 },
+    scrollContainer: { flexGrow: 1, justifyContent: 'center', padding: Space[4] },
     content: { alignItems: 'center', justifyContent: 'center' },
 
-    // Card Glass Effect
+    // Glass card
     card: {
         width: '100%',
         maxWidth: 400,
-        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.8)',
-        borderRadius: Radius.xl,
+        backgroundColor: isDark ? 'rgba(12,12,14,0.85)' : 'rgba(255, 255, 255, 0.82)',
+        borderRadius: Radius['2xl'],
         padding: 32,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: isDark ? 'rgba(79, 195, 247, 0.3)' : 'rgba(79, 195, 247, 0.2)',
-        ...Platform.select({
-            web: {
-                boxShadow: isDark ? '0px 10px 20px rgba(0, 0, 0, 0.4)' : '0px 10px 20px rgba(79, 195, 247, 0.1)',
-            },
-            default: {
-                ...glassShadow(isDark),
-            },
-        }),
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.glassBorder,
+        overflow: 'hidden',
+        ...Elevation[3](isDark),
+        ...(Platform.OS === 'web'
+            ? ({
+                  backdropFilter: 'blur(24px) saturate(1.35)',
+                  WebkitBackdropFilter: 'blur(24px) saturate(1.35)',
+              } as any)
+            : {}),
+    },
+    specularRim: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 8,
+        zIndex: 0,
     },
 
-    // Icon
+    // Logo
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center', width: '100%' },
     logoImage: { width: '100%', maxWidth: 280, height: 96 },
 
     // Text
-    title: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },
-    subtitle: { fontSize: 16, color: colors(isDark).textMuted, textAlign: 'center', paddingHorizontal: 4, lineHeight: 22 },
+    subtitle: { ...Type.body, color: c.textMuted, textAlign: 'center', paddingHorizontal: 4 },
 
     // Buttons
     buttonGroup: { width: '100%', gap: 12, marginBottom: 24 },
     primaryBtn: {
         borderRadius: Radius.lg,
-        ...Platform.select({
-            web: { boxShadow: '0px 8px 16px rgba(33, 150, 243, 0.25)' },
-            default: {
-                ...glassShadow(isDark),
-            },
-        }),
+        overflow: 'hidden',
+        shadowColor: Brand.primary,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.30,
+        shadowRadius: 14,
+        elevation: 6,
     },
-    gradientBtn: { flexDirection: 'row', height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.lg },
-    primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    gradientBtn: {
+        flexDirection: 'row',
+        height: 56,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: Radius.lg,
+        overflow: 'hidden',
+    },
+    btnSpecular: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 6,
+    },
+    primaryBtnText: { color: '#fff', ...Type.body, fontWeight: '700' },
 
-    secondaryBtn: { flexDirection: 'row', height: 56, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: isDark ? '#1565C0' : '#DDD6FE' },
-    secondaryBtnText: { color: colors(isDark).text, fontSize: 16, fontWeight: '600' },
+    secondaryBtn: {
+        flexDirection: 'row',
+        height: 56,
+        backgroundColor: c.surface2,
+        borderRadius: Radius.lg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: isDark ? 'rgba(33,150,243,0.25)' : 'rgba(33,150,243,0.15)',
+        ...(Platform.OS === 'web'
+            ? ({
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+              } as any)
+            : {}),
+    },
+    secondaryBtnText: { color: c.text, ...Type.body, fontWeight: '600' },
 
-    ghostBtn: { flexDirection: 'row', height: 56, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
-    ghostBtnText: { color: colors(isDark).textMuted, fontSize: 16, fontWeight: '500' },
+    ghostBtn: {
+        flexDirection: 'row',
+        height: 56,
+        borderRadius: Radius.lg,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    ghostBtnText: { color: c.textMuted, ...Type.body, fontWeight: '500' },
 
-    footerText: { fontSize: 12, color: isDark ? '#9CA3AF' : '#9CA3AF', textAlign: 'center' },
-    link: { color: '#2196F3', fontWeight: '500' },
+    footerText: { ...Type.caption, color: c.textSubtle, textAlign: 'center' },
+    link: { color: Brand.primary, fontWeight: '600' },
 
     // Bottom Deco
     bottomDeco: { flexDirection: 'row', alignItems: 'center', marginTop: 24 },
-    bottomDecoText: { fontSize: 14, color: colors(isDark).textMuted, fontWeight: '500' },
+    bottomDecoText: { ...Type.bodySm, color: c.textMuted, fontWeight: '500' },
 });

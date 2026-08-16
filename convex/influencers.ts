@@ -22,7 +22,7 @@ export const addToWhitelist = mutation({
 
         const influencerNorm = ctx.db.normalizeId("users", args.influencerId);
         const influencer = influencerNorm ? await ctx.db.get(influencerNorm) : null;
-        if (!isInfluencer(influencer)) {
+        if (!influencer || !isInfluencer(influencer)) {
             throw new Error("El usuario indicado no es un influencer.");
         }
 

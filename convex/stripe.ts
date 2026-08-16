@@ -270,22 +270,35 @@ export const listPaymentMethods = action({
     },
     handler: async (ctx, args) => {
         await requireActor(ctx, (args as any).sessionToken);
-        const stripeClient = getStripeClient(args.mode ?? "test");
+        const mode = args.mode ?? "test";
+        const stripeClient = getStripeClient(mode);
         
         // Obtener el usuario mediante internalQuery para acceder al stripeCustomerId
         const user = await ctx.runQuery(internal.users.internalGetUserById, { id: args.userId });
         
-        if (!user || !user.stripeCustomerId) {
+        let customerId =
+            mode === "live"
+                ? user?.stripeCustomerIdLive
+                : user?.stripeCustomerIdTest;
+        if (!customerId) {
+            customerId = user?.stripeCustomerId;
+        }
+
+        if (!user || !customerId) {
             return [];
         }
 
         try {
             const paymentMethods = await stripeClient.paymentMethods.list({
-                customer: user.stripeCustomerId,
+                customer: customerId,
                 type: 'card',
             });
             return paymentMethods.data;
         } catch (error: any) {
+            if (error.message?.includes('similar object exists in') || error.message?.includes('No such customer')) {
+                console.warn("[Stripe] Mismatch de customer ID (test/live) en listPaymentMethods. Devolviendo lista vacía.");
+                return [];
+            }
             console.error("[Stripe] Error al listar métodos de pago:", error);
             throw new Error(`Error al listar métodos de pago: ${error.message}`);
         }
@@ -340,8 +353,12 @@ export const createSetupIntent = action({
                 isMock: !process.env.STRIPE_SECRET_KEY,
             };
         } catch (error: any) {
+            if (error.message?.includes('similar object exists in') || error.message?.includes('No such customer')) {
+                console.warn("[Stripe] Mismatch de customer ID (test/live) en createSetupIntent. Limpiando ID problemático.");
+                throw new Error("El perfil de pagos parece estar en otro entorno (Live/Test). Por favor, intenta de nuevo o contacta soporte.");
+            }
             console.error("[Stripe] Error al crear SetupIntent:", error);
-            throw new Error(`Error al iniciar el alta de tarjeta: ${error.message}`);
+            throw new Error(`Error al configurar método de pago: ${error.message}`);
         }
     },
 });
@@ -835,6 +852,9 @@ export const internalProcessMultiVendorCart = internalAction({
                     quantity: i.quantity,
                     price: i.snapshot?.price || 0,
                     image: i.snapshot?.image,
+                    // Rides along so the order can be attributed back to the
+                    // post whose CommerceTag put this item in the cart.
+                    sourcePostId: i.snapshot?.sourcePostId,
                 })),
                 total: subtotal,
                 netAmountCents: sellerNet,
@@ -880,6 +900,7 @@ export const internalCreateSubOrder = internalMutation({
             quantity: v.number(),
             price: v.number(),
             image: v.optional(v.string()),
+            sourcePostId: v.optional(v.string()),
         })),
         total: v.number(),
         netAmountCents: v.number(),
@@ -926,10 +947,14 @@ export const internalCreateSubOrder = internalMutation({
             }),
         );
 
+        // `orders.items` has no `sourcePostId` field; attribution lives in
+        // `socialPostSales`, recorded right after the insert below.
+        const orderItems = items.map(({ sourcePostId, ...rest }) => rest);
+
         const orderId = await ctx.db.insert("orders", {
             userId: args.userId,
             sellerId: args.sellerId,
-            items,
+            items: orderItems,
             total: args.total,
             currency: "USD",
             status: "paid_escrow", // Delayed payout
@@ -941,6 +966,25 @@ export const internalCreateSubOrder = internalMutation({
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
+
+        // Social commerce: credit the posts that drove any of these items.
+        const socialItems = items
+            .filter((i: any) => i.sourcePostId)
+            .map((i: any) => ({
+                listingId: i.listingId,
+                sourcePostId: String(i.sourcePostId),
+                quantity: i.quantity,
+                grossCents: Math.round((i.price || 0) * i.quantity * 100),
+            }));
+        if (socialItems.length > 0) {
+            await ctx.runMutation(internal.commerce.internalRecordSocialSalesForOrder, {
+                orderId: String(orderId),
+                buyerUserId: args.userId,
+                sellerId: args.sellerId,
+                stripePaymentIntentId: args.stripePaymentIntentId,
+                items: socialItems,
+            });
+        }
 
         // Ponytail: Create booking if this is a rental
         if (args.checkInDate && args.checkOutDate && items.length > 0) {

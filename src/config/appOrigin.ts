@@ -26,3 +26,21 @@ export function referralWebLink(code: string): string {
     if (!cleaned) return '';
     return webPath(`/ref/${encodeURIComponent(cleaned)}`);
 }
+
+/** Preferred share URL for a product (ramgos.app/{handle}/{slug}). */
+export function productShareLink(handle: string, slug: string): string {
+    const cleanedHandle = String(handle || '').trim().replace(/^@+/, '');
+    const cleanedSlug = String(slug || '').trim();
+    if (!cleanedHandle || !cleanedSlug) {
+        // Fallback if missing data
+        return webPath(`/p/${encodeURIComponent(cleanedSlug || cleanedHandle)}`);
+    }
+    return webPath(`/${encodeURIComponent(cleanedHandle)}/${encodeURIComponent(cleanedSlug)}`);
+}
+
+/** Preferred share URL for a commercial profile (ramgos.app/{handle}). */
+export function userProfileLink(handle: string): string {
+    const cleaned = String(handle || '').trim().replace(/^@+/, '');
+    if (!cleaned) return '';
+    return webPath(`/${encodeURIComponent(cleaned)}`);
+}

@@ -1,10 +1,21 @@
 {
+  "home": {
+    "title": "Discover",
+    "subtitle": "Discover opportunities"
+  },
   "buttons": {
     "back": "Back",
     "cancel": "Cancel",
     "close": "Close",
     "continue": "Continue",
     "acceptAndContinue": "Accept and continue",
+    "save": "Save"
+  },
+  "actions": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "continue": "Continue",
     "save": "Save"
   },
   "security": {

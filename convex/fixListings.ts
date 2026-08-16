@@ -1,6 +1,6 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 
-export const fixSellerIds = mutation({
+export const fixSellerIds = internalMutation({
     args: {},
     handler: async (ctx) => {
         // 1. Get first valid user

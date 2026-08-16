@@ -42,7 +42,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useEscrow } from '../../contexts/EscrowContext';
 import { usePoints } from '../../contexts/PointsContext';
-import { useSocial } from '../../contexts/SocialContext';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -124,7 +123,7 @@ export default function OrderDetailScreen() {
     const { show } = useToast();
     const { openEscrow } = useEscrow();
     const { currentTier } = usePoints();
-    const { createChat } = useSocial();
+    const createChat = useMutation(api.social.createChat);
 
     const [dmOpen, setDmOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState(false);
@@ -214,9 +213,9 @@ export default function OrderDetailScreen() {
     };
 
     const handleContact = async () => {
-        if (!targetUserId) return;
+        if (!targetUserId || !sessionToken) return;
         try {
-            await createChat(targetUserId);
+            await createChat({ sessionToken, participantId: String(targetUserId) });
             setDmOpen(true);
         } catch (e) {
             show('No se pudo abrir el chat', 'error');

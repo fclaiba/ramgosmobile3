@@ -1775,9 +1775,96 @@ export const updateUserStripeCustomerId = internalMutation({
 });
 
 export const getUserActivityStats = query({
-    args: {},
-    handler: async (ctx) => {
-        // ponytail: avoid heavy scans, returning minimal integration skeleton for now
-        return { purchases: 0, bonuses: 0, events: 0, savings: 0 };
+    args: {
+        sessionToken: v.optional(v.string()),
+        userId: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const empty = {
+            purchases: 0,
+            sales: 0,
+            bonuses: 0,
+            events: 0,
+            savings: 0,
+            pointsEarned: 0,
+            pointsSpent: 0,
+        };
+        const actor = await getActorOrNull(ctx, (args as any).sessionToken);
+        if (!actor) return empty;
+        const targetUserId = (args as any).userId ?? actor.idString;
+        if (targetUserId !== actor.idString && actor.role !== "admin") return empty;
+
+        const [purchaseOrders, saleOrders, bonuses, reservations, ledger] =
+            await Promise.all([
+                ctx.db
+                    .query("orders")
+                    .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+                    .collect(),
+                ctx.db
+                    .query("orders")
+                    .withIndex("by_seller", (q) => q.eq("sellerId", targetUserId))
+                    .collect(),
+                ctx.db
+                    .query("bonoRedemptions")
+                    .withIndex("by_owner", (q) => q.eq("ownerUserId", targetUserId))
+                    .collect(),
+                ctx.db
+                    .query("eventReservations")
+                    .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+                    .collect(),
+                ctx.db
+                    .query("pointsLedger")
+                    .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+                    .collect(),
+            ]);
+
+        const isCounted = (status?: string) =>
+            !!status && !["cancelled", "refunded"].includes(status);
+        const purchases = purchaseOrders.filter((o: any) => isCounted(o.status)).length;
+        const sales = saleOrders.filter((o: any) => isCounted(o.status)).length;
+        const bonusesCount = bonuses.filter((b: any) => isCounted(b.status)).length;
+        const events = reservations.filter((r: any) => isCounted(r.status)).length;
+        const savings = bonuses.reduce(
+            (sum, b: any) =>
+                sum + Math.max(0, Number(b.creditTotal ?? 0) - Number(b.paidAmount ?? 0)),
+            0,
+        );
+        const pointsEarned = ledger
+            .filter((e: any) => (e.amount ?? 0) > 0)
+            .reduce((sum: number, e: any) => sum + e.amount, 0);
+        const pointsSpent = Math.abs(
+            ledger
+                .filter((e: any) => (e.amount ?? 0) < 0)
+                .reduce((sum: number, e: any) => sum + e.amount, 0),
+        );
+
+        return {
+            purchases,
+            sales,
+            bonuses: bonusesCount,
+            events,
+            savings,
+            pointsEarned,
+            pointsSpent,
+        };
+    }
+});
+
+export const getUserByHandle = query({
+    args: { handle: v.string() },
+    handler: async (ctx, args) => {
+        // Try username first
+        const users = await ctx.db
+            .query("users")
+            .filter((q) => q.eq(q.field("username"), args.handle))
+            .take(1);
+        if (users.length > 0) return await sanitizeUser(ctx, users[0]);
+
+        // Try nickname as fallback
+        const byNickname = await ctx.db
+            .query("users")
+            .filter((q) => q.eq(q.field("nickname"), args.handle))
+            .take(1);
+        return byNickname.length > 0 ? await sanitizeUser(ctx, byNickname[0]) : null;
     }
 });

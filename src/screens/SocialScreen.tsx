@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Search, Plus as PlusIcon, Send, Film, List } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 import { MobileHeader } from '../components/MobileHeader';
@@ -19,6 +19,7 @@ import { MobileNav } from '../components/MobileNav';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import {
     Post,
     LoopFeed,
@@ -27,7 +28,6 @@ import {
     CreateStory,
     UserSearch,
     DirectMessages,
-    OneClickCheckoutSheet,
 } from '../components/social';
 import { CreatorStudioModal } from '../components/social/CreatorStudioModal';
 
@@ -52,9 +52,9 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
     const [showSearch, setShowSearch] = useState(false);
     const [showMessages, setShowMessages] = useState(false);
 
-    const [checkoutListingId, setCheckoutListingId] = useState<string | null>(null);
-    const [checkoutPostId, setCheckoutPostId] = useState<string | null>(null);
-    const [checkoutVisible, setCheckoutVisible] = useState(false);
+    const { show } = useToast();
+    const addPostProductToCart = useMutation(api.commerce.addPostProductToCart);
+    const [addingToCart, setAddingToCart] = useState(false);
 
     const [feedCursor, setFeedCursor] = useState<string | null>(null);
     const [accumulatedPosts, setAccumulatedPosts] = useState<any[]>([]);
@@ -92,10 +92,16 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
         () => posts.filter((p: any) => p.type !== 'video'),
         [posts],
     );
-    const reelPosts = useMemo(
-        () => posts.filter((p: any) => p.type === 'video'),
-        [posts],
+
+    // Los loops NO se derivan del feed general: el ranking "forYou" puede no
+    // traer ningún video en las primeras páginas y la pestaña quedaba vacía
+    // aunque el video existiera. `mode: 'videos'` va directo al índice
+    // by_type_created y devuelve todos los videos, del más nuevo al más viejo.
+    const reelsResult = useQuery(
+        api.social.getFeed,
+        sessionToken ? { sessionToken, limit: 20, mode: 'videos' as const } : 'skip',
     );
+    const reelPosts = reelsResult?.items ?? [];
 
     const handleUserClick = useCallback(
         (userId: string) => {
@@ -106,11 +112,35 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
         [navigation],
     );
 
-    const handleCommercePress = (listingId: string, postId: string) => {
-        setCheckoutListingId(listingId);
-        setCheckoutPostId(postId);
-        setCheckoutVisible(true);
-    };
+    /**
+     * El feed no cobra: agrega el producto real al carrito del marketplace
+     * (con la atribución del creador) y lleva al carrito para que la compra
+     * siga por el checkout normal.
+     */
+    const handleCommercePress = useCallback(
+        async (_listingId: string, postId: string) => {
+            if (!sessionToken) {
+                show('Iniciá sesión para comprar', 'warning');
+                return;
+            }
+            if (addingToCart) return;
+            setAddingToCart(true);
+            try {
+                await addPostProductToCart({
+                    sessionToken,
+                    postId: postId as any,
+                    quantity: 1,
+                });
+                show('Agregado al carrito', 'success');
+                navigation.navigate('Cart');
+            } catch (e: any) {
+                show(e?.message || 'No se pudo agregar al carrito', 'error');
+            } finally {
+                setAddingToCart(false);
+            }
+        },
+        [sessionToken, addingToCart, addPostProductToCart, navigation, show],
+    );
 
     const loadMore = () => {
         if (!nextCursor || loadingMore || postsResult === undefined) return;
@@ -262,7 +292,11 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                 />
             ) : (
                 <View style={styles.reelsContainer}>
-                    {reelPosts.length > 0 ? (
+                    {reelsResult === undefined ? (
+                        <View style={styles.emptyReels}>
+                            <ActivityIndicator color={colors(isDark).primary} />
+                        </View>
+                    ) : reelPosts.length > 0 ? (
                         <LoopFeed
                             posts={reelPosts}
                             onUserClick={handleUserClick}
@@ -299,13 +333,6 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
                 />
             )}
 
-            <OneClickCheckoutSheet
-                visible={checkoutVisible}
-                postId={checkoutPostId}
-                listingId={checkoutListingId}
-                onClose={() => setCheckoutVisible(false)}
-            />
-
             {!isTabMode && !isDesktop && (
                 <MobileNav
                     activeSection="social"
@@ -339,16 +366,17 @@ export default function SocialScreen({ navigation, onMenuPress, isTabMode }: any
     );
 }
 
-const getStyles = (isDark: boolean) =>
-    StyleSheet.create({
+const getStyles = (isDark: boolean) => {
+    const c = colors(isDark);
+    return StyleSheet.create({
         container: { flex: 1 },
         headerActions: { flexDirection: 'row', gap: 12 },
         iconBtn: {
             padding: 8,
-            backgroundColor: colors(isDark).glass,
+            backgroundColor: c.surface2,
             borderRadius: Radius.full,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
         },
 
         tabContainer: {
@@ -373,59 +401,59 @@ const getStyles = (isDark: boolean) =>
             gap: 6,
         },
         tabButtonActive: {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : '#fff',
+            backgroundColor: c.surface3,
             ...glassShadow(isDark),
         },
         tabText: {
             fontSize: 14,
             fontWeight: '600',
-            color: '#6B7280',
+            color: c.textMuted,
         },
         tabTextActive: {
-            color: isDark ? '#fff' : '#000',
+            color: c.text,
+            fontWeight: '700',
         },
 
         createPostBar: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: colors(isDark).glass,
+            backgroundColor: c.surface1,
             padding: 12,
             borderRadius: Radius.xl,
             marginBottom: 16,
             gap: 12,
-            borderWidth: 1,
-            borderColor: isDark
-                ? 'rgba(255,255,255,0.12)'
-                : 'rgba(33, 150, 243,0.14)',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
+            ...glassShadow(isDark),
         },
         avatarPlaceholder: {
             width: 40,
             height: 40,
             borderRadius: Radius.full,
-            backgroundColor: isDark ? '#374151' : '#E5E5E5',
+            backgroundColor: c.surface2,
             justifyContent: 'center',
             alignItems: 'center',
         },
         avatarLetter: {
             fontSize: 16,
             fontWeight: 'bold',
-            color: isDark ? '#9CA3AF' : '#666',
+            color: c.textMuted,
         },
         cpInput: {
             flex: 1,
-            backgroundColor: colors(isDark).glass,
+            backgroundColor: c.surface2,
             height: 36,
             borderRadius: Radius.full,
             justifyContent: 'center',
             paddingHorizontal: 16,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'transparent',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
         },
-        cpText: { color: isDark ? '#9CA3AF' : '#9CA3AF', fontSize: 13 },
+        cpText: { color: c.textMuted, fontSize: 13 },
 
         reelsContainer: {
             flex: 1,
-            backgroundColor: '#000',
+            backgroundColor: c.surface1,
             borderRadius: isDark ? Radius.xl : 0,
             overflow: 'hidden',
         },
@@ -436,7 +464,7 @@ const getStyles = (isDark: boolean) =>
             gap: 12,
         },
         emptyReelsText: {
-            color: isDark ? '#9CA3AF' : '#6B7280',
+            color: c.textMuted,
             fontSize: 16,
         },
 
@@ -454,3 +482,4 @@ const getStyles = (isDark: boolean) =>
             alignItems: 'center',
         },
     });
+};

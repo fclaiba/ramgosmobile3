@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { Menu, ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, Radius, Type, Touch } from '../theme/tokens';
+import { colors, Radius, Type, Touch, Elevation } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
 
 export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack, logo }: any) => {
@@ -27,7 +27,7 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                             accessibilityRole="button"
                             accessibilityLabel="Volver"
                         >
-                            <ChevronLeft color={c.text} size={22} />
+                            <ChevronLeft color={c.text} size={20} strokeWidth={2.5} />
                         </TouchableOpacity>
                     ) : onMenuPress ? (
                         <TouchableOpacity
@@ -38,7 +38,7 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                             accessibilityRole="button"
                             accessibilityLabel="Abrir menú"
                         >
-                            <Menu color={c.text} size={22} />
+                            <Menu color={c.text} size={20} strokeWidth={2} />
                         </TouchableOpacity>
                     ) : null}
                     <View style={styles.titles}>
@@ -101,10 +101,22 @@ const getStyles = (isDark: boolean, insets: any, c: ReturnType<typeof colors>) =
             borderRadius: Radius.full,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.55)',
+            // Glass pill background
+            backgroundColor: c.surface1,
             borderWidth: StyleSheet.hairlineWidth,
-            borderColor: c.chromeBorder,
+            borderColor: c.glassBorder,
+            ...Elevation[1](isDark),
         },
-        title: { ...Type.title, color: c.text },
-        subtitle: { ...Type.caption, color: c.textMuted, marginTop: 2, fontWeight: '500' },
+        title: {
+            ...Type.title,
+            color: c.text,
+            fontWeight: '800',
+            letterSpacing: -0.3,
+        },
+        subtitle: {
+            ...Type.caption,
+            color: c.textMuted,
+            marginTop: 2,
+            fontWeight: '500',
+        },
     });

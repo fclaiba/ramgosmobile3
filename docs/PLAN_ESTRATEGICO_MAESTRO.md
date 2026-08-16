@@ -1,7 +1,8 @@
 # Plan Estratégico Integral Maestro — Ramgos Mobile
 
-> **Versión:** 1.5 · **Última actualización plan:** 2026-07-13 · **Commit base grafo:** post-Fase-6-código  
-> **Fase activa:** Fase 7 — **Fases 1–2 y 6 cerradas** · **Fases 3–5 código listo, QA manual + push Convex diferidos (§12.4 / tarea final Fase 5)**  
+> **Versión:** 1.6 · **Última actualización plan:** 2026-08-15 · **Grafo:** 4374 nodos · 8298 edges · 438 comunidades  
+> **Fase activa:** RS-1 (red social + social commerce) — código listo, **bloqueada por deploy a Convex** (§15.1)  
+> **Estado general:** Fases 1–2, 6–8 y SEC-1 cerradas · Fases 3–5 código listo (QA manual §12.4 + tarea final Fase 5 pendientes)  
 > **Objetivo:** Llevar Ramgos de MVP con deuda de seguridad → **production-ready** → pentest → launch NY (pagos live).
 
 ---
@@ -60,14 +61,19 @@
 **Comandos Graphify instalados (Windows):**
 
 ```powershell
-py --version                    # Python 3.11.9
-py -m graphify --version        # graphify 0.9.13
-py -m graphify update .         # actualizar grafo (sin costo API)
-py -m graphify query "..."      # consultar
-start graphify-out\graph.html   # visualizar
+py -3.11 --version                   # Python 3.11.9
+py -3.11 -m graphify --version       # graphify 0.9.11
+py -3.11 -m graphify update .        # actualizar grafo (sin costo API)
+py -3.11 -m graphify query "..."     # consultar
+start graphify-out\graph.html        # visualizar
 ```
 
 > **Nota:** Usar `py`, no `python` (alias de Microsoft Store roto en Windows).
+>
+> **Importante (2026-08-15, E-060):** el `py` por defecto pasó a ser **Python
+> 3.13**, donde graphify **no** está instalado — `py -m graphify` falla con
+> "No module named graphify". Usar **`py -3.11`** (o el ejecutable `graphify`
+> en el PATH, que resuelve al 3.11).
 
 ### 2.2 Notas de arquitectura (pre-plan)
 
@@ -1065,6 +1071,42 @@ Reglas:
 - [ ] Fase 6 — Contextos stub: 1) login → Wallet/Fintech muestran balance real (no hardcode); 2) Marketplace lista productos del feed Convex; 3) Referrals muestra código/link del dashboard; 4) Points reflejan `economy.getEconomyState`; 5) BusinessProfile agregar/pausar producto persiste vía listings.
 - [ ] Fase 7 — App.tsx cleanup: *(pendiente)*
 - [ ] Fase 8 — Admin ops: *(pendiente)*
+- [ ] **RS-1 — Red social y social commerce** *(ver §15.1)*
+
+  **Precondición dura:** `npx convex dev` corriendo con el código nuevo
+  deployado. Verificar con
+  `npx convex function-spec | grep commerce` — si no aparece, nada de esto
+  funciona todavía.
+
+  1. **Publicar** — Creator Studio → subir foto/video, escribir texto,
+     adjuntar un producto con el botón de etiqueta → publicar.
+     Esperado: aparece en el feed con su `CommerceTag`.
+  2. **Video** — un post de tipo video debe **reproducirse** en el feed
+     (regresión E-052: antes salía el gradiente de fallback).
+  3. **Contadores** — dar like: el corazón queda marcado y el número sube;
+     recargar la app y confirmar que persiste (regresión E-053/E-059).
+  4. **Paginación** — scrollear más de 10 posts: debe cargar la página
+     siguiente, no cortarse (regresión E-058).
+  5. **Perfil** — abrir el perfil de otro usuario: el tab Feed debe mostrar
+     **solo sus posts**, no el feed global (regresión E-057).
+  6. **Comprar desde el feed** — tocar el `CommerceTag` → hoja de checkout:
+     precio, creador y puntos vienen del servidor. Activar el switch de
+     puntos y ver el descuento recalculado.
+  7. **Pagar** (modo test) → verificar en el dashboard de Convex:
+     fila en `payments`, fila en `socialPostSales` con `status: "paid"`,
+     orden en `orders` con `escrowState: "held"`, y `stock` del listing
+     decrementado.
+  8. **Comisión** — si el post lo publicó un influencer con campaña activa
+     (o listing con `openPromotion`), `socialPostSales.creatorCommissionCents`
+     debe ser > 0 y el creador recibe notificación.
+  9. **Ingresos** — en el perfil propio, tab **Ingresos**: la venta aparece
+     con views, ventas y ganancia.
+  10. **Idempotencia** — reenviar el mismo evento webhook: no debe crear una
+      segunda orden (`internalFulfillSocialSale` corta en `already_settled`).
+  11. **Composers** — `CreatePost` y `CreateInstagramPost`: subir imagen debe
+      funcionar (regresión E-056) y el post debe aparecer (regresión E-054).
+  12. **Contactar vendedor** — en el detalle de una orden, el botón de
+      contacto debe abrir el chat de verdad (regresión E-054).
 
 ---
 
@@ -1201,8 +1243,69 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **S2** | Sprint 2 (Módulo de Negocios) | ✅ Cerrada | 100% | — | 2026-07-23 |
 | **S3** | Sprint 3 (Módulo de Influencers) | ✅ Cerrada | 100% | — | 2026-07-23 |
 | **S4** | Sprint 4 (Gamificación y Dashboard) | ✅ Cerrada | 100% | — | 2026-07-23 |
+| **S5** | Sprint 5 (Correcciones UI/Lógica) | ✅ Cerrada | 100% | — | 2026-08-12 |
+| **SEC-1** | Hardening: funciones dev/seed públicas → internal + IDOR dashboard | ✅ Cerrada | 100% | — | 2026-08-15 |
+| **RS-1** | Red social + social commerce (integración completa) | 🟡 Código listo | 90% | Deploy Convex (`commerce.js` no está en el deployment) + QA runtime §12.4 | 2026-08-15 |
 
 **Leyenda:** ✅ Cerrada · 🟡 En curso · 🔴 Bloqueada · ⚪ Pendiente
+
+### 15.1 Fase RS-1 — Red social y social commerce (2026-08-15)
+
+Implementa `docs/DISEÑO_RED_SOCIAL_COMMERCE.md`. El backend social ya existía
+(41 funciones en `convex/social.ts`: feed rankeado con cursor, stories, DMs,
+follows, likes); lo que faltaba era **el commerce real** y **el cableado del
+frontend**.
+
+**Backend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RS.1 | `convex/commerce.ts` nuevo: `claimFromPost`, `getPostCommerceOffer`, `getPostAnalytics`, `getCreatorCommerceDashboard`, `getMySocialPurchases` + internals | Archivo creado, typecheck 0 errores |
+| RS.2 | Tabla `socialPostSales` (atribución/analytics por post) + 5 índices | `convex/schema.ts` |
+| RS.3 | `socialPosts.commercialProduct.discountPercent` para el "% OFF" del CommerceTag | `convex/schema.ts`, `social.createPost` |
+| RS.4 | Webhook Stripe enruta `metadata.socialPostId` → `internalFulfillSocialSale` (orden + escrow `held`); `payment_failed` devuelve puntos | `convex/http.ts` |
+| RS.5 | `social.simulateSocialCommercePayment` desactivado (lanza error) — movía plata parcheando `users.balance`, sin Stripe/orden/escrow, y leía el campo de puntos equivocado | `convex/social.ts` |
+| RS.6 | Comisión del creador **no se inventa**: se resuelve con el motor existente `campaigns.internalResolveCartAttribution` vía `referralCode` (campaña activa → openPromotion → whitelist) | `commerce.claimFromPost` |
+| RS.7 | Un solo camino de pago (regla Fase 5): `claimFromPost` reusa `stripe.createPaymentIntent` | `convex/commerce.ts` |
+
+**Frontend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RS.8 | `OneClickCheckoutSheet` paga de verdad (`claimFromPost` + confirm Stripe). Antes decía literal "Simular Pago" | `src/components/social/OneClickCheckoutSheet.tsx` |
+| RS.9 | `CommerceTag` extraído (variantes `full`/`compact`, lidera con "% OFF") — el diseño lo pedía y no existía | `src/components/social/CommerceTag.tsx` |
+| RS.10 | Bug: `PostCard` construía el `<VideoView>` sin `return` → **los videos nunca renderizaban** | `PostCard.tsx` |
+| RS.11 | Bug: `PostCard` leía `commercialProduct.imageUrl`, el backend guarda `image` | `PostCard.tsx` |
+| RS.12 | Bug: `UnifiedFeed` leía `likesCount`/`commentsCount`, el backend devuelve `likeCount`/`commentCount` → contadores siempre en 0 | `UnifiedFeed.tsx` |
+| RS.13 | `UnifiedFeed` reescrito: paginación por cursor real, refresh real, prop `authorUserId`, modal de comentarios, impresiones (`addView`) | `UnifiedFeed.tsx` |
+| RS.14 | `HybridProfileScreen` pasaba `<UnifiedFeed />` sin props → todo perfil mostraba el feed global | `HybridProfileScreen.tsx` |
+| RS.15 | `LoopItem`: like era `useState` local (llamada comentada), "Seguir" no tenía `onPress`. Ahora `toggleLike` optimista + `SocialFollowButton` + `addView` | `LoopItem.tsx` |
+| RS.16 | `SocialContext` **eliminado**: era 100% no-op y `SocialProvider` nunca se montó en `App.tsx`. Sus 5 consumidores rewireados a Convex | `CreatePost`, `CreateInstagramPost`, `InstagramPost`, `UserProfile`, `OrderDetailScreen` |
+| RS.17 | `UserProfile`: siempre renderizaba "Usuario no encontrado" y violaba Rules of Hooks (`useQuery` tras un `return` condicional) | `UserProfile.tsx` |
+| RS.18 | `generateUploadUrl({})` sin `sessionToken` en `CreatePost`/`CreateInstagramPost` → subida de imagen rota antes incluso del stub | ambos archivos |
+| RS.19 | `CreatorEarningsPanel` — "cuánta plata me dio cada post" (§4.3 del diseño), montado como tab **Ingresos** del perfil propio | `CreatorEarningsPanel.tsx`, `HybridProfileScreen.tsx` |
+| RS.20 | `types.ts` con las formas reales del feed (antes `Post = any`, por eso los renames fallaban en silencio) | `src/components/social/types.ts` |
+
+**Verificación corrida ✅**
+
+- `npx.cmd tsc --noEmit -p tsconfig.check.json` → **0 errores**
+- `npm.cmd run test:constitution` → **5 suites, 33 tests, todos verdes**
+- `npx.cmd convex codegen` → OK (`commerce` registrado en `api.d.ts`)
+- `py -3.11 -m graphify update .` → 4374 nodos, 8298 edges, 438 comunidades
+
+**Pendiente ❌ (bloquea el cierre de RS-1)**
+
+- [ ] **Deploy a Convex.** `npx convex function-spec` confirma que el deployment
+      `academic-lapwing-311` **no tiene `commerce.js`** (y todavía tiene los
+      archivos borrados en SEC-1: `clearDatabase`, `debug`, `temp`, `testMock*`,
+      `testQuery`). `convex codegen` genera tipos locales, **no deploya**.
+      → Correr `npx convex dev` (o `deploy`) para publicar `commerce.ts`, la
+      tabla `socialPostSales` y el nuevo `http.ts`.
+- [ ] **QA runtime** — ver [§12.4 RS-1](#124-checklist-final--validación-manual-en-runtime-post-desarrollo).
+- [ ] **E2E de pago real** — depende además de la
+      [Tarea final Fase 5](#tarea-final-fase-5--push-convex-y-secrets-test)
+      (`sk_test_`, `whsec_`, webhook → `/stripe-webhook`). Sin eso
+      `claimFromPost` solo corre en modo mock.
 
 ---
 
@@ -1213,6 +1316,7 @@ Solo cuando tengas **usuarios y métricas reales**:
 | ID | Fecha | Fase | Error / síntoma | Causa raíz | Solución aplicada | Estado | Referencia |
 |---|---|---|---|---|---|---|---|
 | E-001 | 2026-07-13 | 1 | Expo web: `Unable to resolve "fbjs/lib/invariant"` | `node_modules/fbjs` corrupto/vacío | `npm.cmd install fbjs@3.0.5` | ✅ Resuelto | `react-native-web` → AppRegistry |
+| E-002 | 2026-08-12 | S5 | Errores de TypeScript: `absoluteFillObject`, tipos `any` implícitos | Código no compilaba tras reestructuraciones y migraciones parciales | Reemplazo `absoluteFillObject` por `absoluteFill`, refactor tipos en `ProductDetailScreen` y `PostCard` | ✅ Resuelto | Typecheck finalizado sin errores |
 | E-002 | 2026-07-13 | 1 | Expo start: `lightningcss.win32-x64-msvc` not found | Binario nativo faltante en Windows | Instalación manual `lightningcss-win32-x64-msvc@1.27.0` | ✅ Resuelto | metro / nativewind |
 | E-003 | 2026-07-13 | 1 | `typecheck`: miles de `TS1127 Invalid character` | Archivos con bytes nulos (corrupción disco/npm) | `git checkout` de `AddReviewModal.tsx`, `EscrowSheet.tsx`; reinstall `@react-native-async-storage` | ✅ Resuelto | src + node_modules |
 | E-004 | 2026-07-13 | 1 | `test:constitution`: 2 suites fallan (Babel transform) | Jest/Babel no parseaba imports | Tras recuperar archivos, Jest parsea y ejecuta los tests; fallos semánticos separados en E-014 | ✅ Resuelto | `constitution.test.tsx` |
@@ -1256,8 +1360,23 @@ Solo cuando tengas **usuarios y métricas reales**:
 | E-042 | 2026-07-23 | UI | Error de compilación TS17008: JSX element 'ScrollView' has no corresponding closing tag | Un reemplazo de código dejó etiquetas `</View>` desbalanceadas al inyectar la UI de Rewards | Se corrigió el balanceado de etiquetas JSX eliminando los `</View>` huérfanos | ✅ Resuelto | ProfileScreen.tsx |
 | E-043 | 2026-07-29 | Auth | Falta Autenticación 2FA (Email OTP) en Login | Requerimiento de seguridad para envío de email con código al loguearse | Se interceptó la mutación `login` (no emite token), se envía OTP y se verifica en `verifyEmailCode` que ahora acepta email para emitir la sesión final. | ✅ Resuelto | AuthContext.tsx, users.ts, auth.ts |
 | E-044 | 2026-07-29 | UI/UX | Solapamiento CSS en validadores de contraseñas en móvil | `col` tenía `flex: 1` forzando altura igual en cajas bajo flex column | Se quitó `flex: 1` en pantallas compactas y se añadió validación a 'confirmar contraseña' | ✅ Resuelto | RegisterScreen.tsx |
-| E-045 | 2026-07-29 | UI/UX | Formulario KYC demasiado largo en móvil | Faltaba experiencia en wizard para consumidores e influencers | Refactor a wizard progresivo (2 o 3 pasos) idéntico a Business KYC | ✅ Resuelto | KYCScreen.tsx |
+| E-045 | 2026-07-29 | Auth | Formulario KYC demasiado largo en móvil | Faltaba experiencia en wizard para consumidores e influencers | Refactor a wizard progresivo (2 o 3 pasos) idéntico a Business KYC | ✅ Resuelto | KYCScreen.tsx |
 | E-046 | 2026-07-29 | Auth | Creación de cuenta exitosa con un 'username' ya existente | `signUpWithEmail` descartaba silenciosamente el `username` antes de enviarlo al backend, provocando que se auto-genere uno aleatorio único | Se corrigió el payload pasándole `username` a la mutación `register` de Convex | ✅ Resuelto | AuthContext.tsx |
+| E-047 | 2026-08-12 | Config | Advertencias de esquema en `app.json` (`newArchEnabled`, `splash`, `edgeToEdgeEnabled` no permitidas) | Expo SDK 56 desestimó propiedades raíz como `newArchEnabled` y `edgeToEdgeEnabled` (activadas por defecto) y trasladó `splash` al plugin `expo-splash-screen` | Se removieron `newArchEnabled` y `edgeToEdgeEnabled`, y se eliminó el bloque raíz `splash` | ✅ Resuelto | app.json |
+| E-048 | 2026-08-15 | Seguridad | 18 funciones Convex de dev/seed/admin expuestas como `mutation`/`query`/`action` públicas: cualquier cliente podía invocar `clearDatabase.wipe`, `temp.makeAdmin`, `createAdmin`, seeds, `testQuery` (dump usuarios), `debug` (dump payments) | Scripts de dev deployados como funciones públicas, sin `requireActor` (detectado por auditoría graphify) | 6 borradas (backdoors/scratch huérfanos: temp, clearDatabase, debug, testMock, testMock2, testQuery); 12 convertidas a `internal*` (siguen corriéndose con `npx convex run`) | ✅ Resuelto | convex/{createAdmin,admin,approveAll,fixKyc,fixListings,cleanAvatars,migrateUsernames,seed*,connectV2}.ts + api.d.ts |
+| E-049 | 2026-08-15 | Seguridad | IDOR en `dashboard.getBusinessMetrics`/`getInfluencerMetrics`: pasando cualquier `businessId`/`influencerId` se leía revenue/balance ajenos | Query pública sin auth; el id venía del cliente | `requireActor` + `assertSelfOrAdmin(actor, id)` en ambas; call sites ahora pasan `sessionToken` | ✅ Resuelto | convex/dashboard.ts, src/contexts/BusinessContext.tsx, src/hooks/useBusiness.ts |
+| E-050 | 2026-08-15 | RS-1 | `simulateSocialCommercePayment` "cobraba" sin cobrar: parcheaba `users.balance` (80/10, el 10% de plataforma no se acreditaba a nadie), sin Stripe, sin `orders`, sin escrow y sin webhook | Prototipo de social commerce nunca conectado al camino de pagos de Fase 5 | `convex/commerce.ts` con `claimFromPost` → `stripe.createPaymentIntent` → webhook → orden con escrow `held`; el simulador queda lanzando error | ✅ Resuelto | convex/commerce.ts, convex/http.ts, convex/social.ts |
+| E-051 | 2026-08-15 | RS-1 | El simulador descontaba puntos del campo equivocado (`pointsState.pointsBalance`); el balance canónico es `rewardsState.points` (`economy.redeemPoints`) | Dos representaciones de puntos conviviendo en `economyState` | `commerce` canjea vía `internal.economy.applyPointsEventInternal` (idempotente por `eventKey`, con devolución si el pago falla) | ✅ Resuelto | convex/commerce.ts |
+| E-052 | 2026-08-15 | RS-1 | Los videos del feed nunca se renderizaban | `PostCard.renderMedia` construía el `<VideoView>` pero **faltaba el `return`**, así que caía al fallback de gradiente | Agregado el `return` | ✅ Resuelto | src/components/social/PostCard.tsx |
+| E-053 | 2026-08-15 | RS-1 | Likes y comentarios del feed siempre mostraban 0; las fotos de posts comerciales no cargaban | Desalineación de nombres frontend↔backend: `likesCount`/`commentsCount` vs `likeCount`/`commentCount`, y `commercialProduct.imageUrl` vs `image`. `Post = any` en SocialContext ocultaba el error en compilación | Nombres alineados con `decoratePosts` + `src/components/social/types.ts` tipado | ✅ Resuelto | UnifiedFeed.tsx, PostCard.tsx, types.ts |
+| E-054 | 2026-08-15 | RS-1 | `SocialContext` era un shim 100% no-op (todo `[]` / `() => {}`) y `SocialProvider` nunca se montó en `App.tsx`: `CreatePost`, `CreateInstagramPost`, `InstagramPost`, `UserProfile` y el botón "contactar vendedor" de `OrderDetailScreen` no hacían nada | Contexto mockeado sobreviviente de la migración a Convex (mismo patrón que E-040) | Los 5 consumidores rewireados a `useMutation`/`useQuery` directos; `SocialContext.tsx` **eliminado** | ✅ Resuelto | 5 componentes + archivo borrado |
+| E-055 | 2026-08-15 | RS-1 | `UserProfile` siempre mostraba "Usuario no encontrado" y violaba las Rules of Hooks | `getUserById()` del stub devolvía `undefined` → `return` temprano, y había un `useQuery` **después** de ese return | Reescrito con `lookupUserSocial`/`getPostsByUser`/`getHighlights`/`getPublicListingsBySeller`; todos los hooks antes de cualquier return | ✅ Resuelto | src/components/social/UserProfile.tsx |
+| E-056 | 2026-08-15 | RS-1 | Subida de imagen rota en los composers | `generateUploadUrl({})` sin `sessionToken`; `convex/files.ts` hace `requireActor` y tira "Sesión no válida" | Token pasado en ambos composers | ✅ Resuelto | CreatePost.tsx, CreateInstagramPost.tsx |
+| E-057 | 2026-08-15 | RS-1 | El feed de un perfil mostraba el feed global de la app | `HybridProfileScreen` renderizaba `<UnifiedFeed />` sin props y el componente no aceptaba filtro de autor | `UnifiedFeed` acepta `authorUserId`/`mode`; el perfil pasa `profileId` | ✅ Resuelto | UnifiedFeed.tsx, HybridProfileScreen.tsx |
+| E-058 | 2026-08-15 | RS-1 | Feed sin paginación (`handleEndReached` vacío) y pull-to-refresh cosmético (`setTimeout` que no refetcheaba) | Paginación diferida ("Ponytail: Pagination is deferred") | Paginación por cursor acumulando páginas + refresh que resetea el cursor | ✅ Resuelto | UnifiedFeed.tsx |
+| E-059 | 2026-08-15 | RS-1 | En el feed vertical de videos el corazón no persistía y "Seguir" era decorativo | `LoopItem.handleLike` sólo movía `useState` (el `toggleLike` estaba comentado) y el botón de seguir no tenía `onPress` | `toggleLike` optimista con rollback + `SocialFollowButton` + `addView` para impresiones | ✅ Resuelto | LoopItem.tsx |
+| E-060 | 2026-08-15 | Entorno | `py -m graphify update .` falla con "No module named graphify" | El `py` por defecto pasó a ser Python 3.13; graphify está instalado en 3.11 | Usar **`py -3.11 -m graphify update .`** (o el ejecutable `graphify` directo). Actualizar §3.1/Apéndice A si se reinstala | 🟡 Workaround | Entorno Windows |
+| E-061 | 2026-08-15 | RS-1 | El deployment Convex no tiene el código nuevo | `npx convex codegen` **genera tipos locales, no deploya**; se asumió que sí | `npx convex function-spec` confirma que falta `commerce.js` y sobran los módulos borrados en SEC-1. Pendiente `npx convex dev`/`deploy` | 🟡 Abierto | §15.1 RS-1 |
 **Plantilla para nuevas entradas:**
 
 ```markdown
@@ -1342,9 +1461,9 @@ Al **final de cada fase** o cuando el usuario lo pida, el agente debe:
 ## Apéndice A — Comandos rápidos
 
 ```powershell
-# Graphify
-py -m graphify update .
-py -m graphify query "tu pregunta"
+# Graphify  (py -3.11: el py por defecto es 3.13 y no lo tiene — E-060)
+py -3.11 -m graphify update .
+py -3.11 -m graphify query "tu pregunta"
 start graphify-out\GRAPH_REPORT.md
 start graphify-out\graph.html
 
@@ -1354,8 +1473,10 @@ npm run test:constitution
 npm audit
 
 # Convex
-npx convex dev
+npx convex codegen            # SOLO genera tipos locales — NO deploya (E-061)
+npx convex dev                # deploya y queda escuchando
 npx convex deploy
+npx convex function-spec      # qué hay realmente publicado en el deployment
 
 # Freshness
 git rev-parse HEAD
@@ -1375,4 +1496,4 @@ git rev-parse HEAD
 
 ---
 
-*Documento vivo — versión 1.2. Mantener §15–§17 actualizados. Ver §17 para protocolo de reanálisis.*
+*Documento vivo — versión 1.6. Mantener §15–§17 actualizados. Ver §17 para protocolo de reanálisis.*

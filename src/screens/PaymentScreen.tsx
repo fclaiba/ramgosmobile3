@@ -261,14 +261,13 @@ const st = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 7,
         borderRadius: Radius.full,
-        borderWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
     },
     modeChipText: { fontSize: 11, fontWeight: '800' },
     scroll: { flex: 1 },
     scrollContent: { padding: 20, gap: 18 },
     hero: {
         borderRadius: Radius['2xl'],
-        borderWidth: 1,
         paddingVertical: 22,
         paddingHorizontal: 22,
         alignItems: 'flex-start',
@@ -286,7 +285,6 @@ const st = StyleSheet.create({
     heroMetaText: { ...Type.bodySm },
     linesCard: {
         borderRadius: Radius.xl,
-        borderWidth: 1,
         padding: 16,
         gap: 8,
     },
@@ -306,7 +304,7 @@ const st = StyleSheet.create({
     linePrice: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
     moreLines: { ...Type.bodySm, marginTop: 2 },
     errorBanner: {
-        borderWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
         borderRadius: Radius.lg,
         padding: 14,
     },

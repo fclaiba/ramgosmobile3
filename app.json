@@ -6,12 +6,6 @@
     "orientation": "portrait",
     "icon": "./logo.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fclaiba.ramgosmobile",
@@ -24,7 +18,6 @@
         "foregroundImage": "./logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
       "versionCode": 1,
       "package": "com.fclaiba.ramgosmobile",
       "config": {

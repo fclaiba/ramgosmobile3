@@ -52,7 +52,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { Radius, colors } from '../theme/tokens';
-import { webPath } from '../config/appOrigin';
+import { webPath, productShareLink } from '../config/appOrigin';
 
 
 const { width } = Dimensions.get('window');
@@ -256,8 +256,9 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const handleShare = useCallback(async () => {
         if (!item) return;
         try {
-            const pathKey = item.slug || item.id;
-            const url = pathKey ? webPath(`/p/${encodeURIComponent(String(pathKey))}`) : '';
+            const handle = (item.seller as any)?.username || item.sellerUsername || item.sellerId || '';
+            const pathKey = item.slug || item.id || '';
+            const url = productShareLink(handle, String(pathKey));
             const message = url
                 ? `Mirá esto: ${item.name} - $${item.price}\n${url}`
                 : `Mirá esto: ${item.name} - $${item.price}`;

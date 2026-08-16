@@ -257,7 +257,6 @@ export default function WebBonoQrScanner({
 
     return (
         <View style={styles.wrap}>
-            {/* @ts-expect-error web DOM video */}
             <video
                 ref={(el: HTMLVideoElement | null) => {
                     videoRef.current = el;
@@ -326,12 +325,12 @@ const videoStyle = {
 
 const styles = StyleSheet.create({
     wrap: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: '#000',
         overflow: 'hidden',
     },
     overlayCenter: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         alignItems: 'center',
         justifyContent: 'center',
         padding: Space[5],

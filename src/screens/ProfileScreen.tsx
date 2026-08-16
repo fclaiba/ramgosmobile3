@@ -90,12 +90,15 @@ function ProfileScreen({ navigation }: any) {
     const updateProfileMutation = useMutation(api.users.updateProfile);
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
-    const rawStats = useQuery(api.users.getUserActivityStats, user?.id ? {} : "skip");
+    const rawStats = useQuery(api.users.getUserActivityStats, user?.id ? { sessionToken: sessionToken || '' } : "skip");
     const stats = rawStats || {
         purchases: 0,
+        sales: 0,
         bonuses: 0,
         events: 0,
         savings: 0,
+        pointsEarned: 0,
+        pointsSpent: 0,
     };
 
     const [editedProfile, setEditedProfile] = useState(profile);
@@ -194,6 +197,7 @@ function ProfileScreen({ navigation }: any) {
     const quickActions = [
         { icon: Calendar, label: 'Mis Turnos', value: null, color: '#3B82F6', action: () => navigation.navigate('MyBookings') },
         { icon: ShoppingBag, label: 'Mis Compras', value: stats.purchases, color: '#06b6d4', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'products' }) },
+        { icon: TrendingUp, label: 'Mis Ventas', value: stats.sales, color: '#16A34A', action: () => navigation.navigate('History', { tab: 'sales', filter: 'products' }) },
         { icon: Ticket, label: 'Mis Bonos', value: stats.bonuses, color: '#a855f7', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'bonos' }) },
         { icon: PartyPopper, label: 'Eventos', value: stats.events, color: '#ec4899', action: () => navigation.navigate('History', { tab: 'purchases', filter: 'events' }) },
     ];
@@ -286,7 +290,7 @@ function ProfileScreen({ navigation }: any) {
                         >
                             <Avatar style={styles.avatar}>
                                 <AvatarImage src={isEditing ? editedProfile.avatarUrl : profile.avatarUrl} />
-                                <AvatarFallback style={isDark ? { backgroundColor: '#374151' } : {}} textStyle={isDark ? { color: '#F9FAFB' } : {}}>{(isEditing ? editedProfile.name : profile.name)[0]}</AvatarFallback>
+                                <AvatarFallback>{(isEditing ? editedProfile.name : profile.name)[0]}</AvatarFallback>
                             </Avatar>
                             {isEditing && (
                                 <BlurView intensity={60} tint="light" style={styles.cameraBtnGlass}>
@@ -815,34 +819,36 @@ function ProfileScreen({ navigation }: any) {
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors(isDark).bg },
+const getStyles = (isDark: boolean) => {
+    const c = colors(isDark);
+    return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bg },
 
     // Header
-    headerContainer: { paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 40, alignItems: 'center', backgroundColor: '#2196F3', borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+    headerContainer: { paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 40, alignItems: 'center', backgroundColor: c.primary, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
     topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 24, marginBottom: 24 },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     screenTitle: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
-    editBtn: { backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderRadius: Radius.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    editBtn: { backgroundColor: 'rgba(255,255,255,0.20)', padding: 10, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.4)' },
 
     profileHeader: { alignItems: 'center', width: '100%' },
     avatarWrapper: { marginBottom: 12, position: 'relative' },
-    avatar: { width: 100, height: 100, borderRadius: Radius.full, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
-    cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.62)', padding: 8, borderRadius: Radius.xl },
+    avatar: { width: 100, height: 100, borderRadius: Radius.full, borderWidth: 4, borderColor: 'rgba(255,255,255,0.35)' },
+    cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.72)', padding: 8, borderRadius: Radius.xl },
     cameraBtnGlass: {
-        position: 'absolute', bottom: -4, right: -4, borderRadius: Radius.full, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+        position: 'absolute', bottom: -4, right: -4, borderRadius: Radius.full, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.5)',
     },
     cameraBtnInner: {
-        backgroundColor: 'rgba(255,255,255,0.5)', padding: 10, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center'
+        backgroundColor: 'rgba(255,255,255,0.60)', padding: 10, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center'
     },
     glassInputWrapper: {
         width: '100%',
         maxWidth: 280,
         borderRadius: 24,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(255,255,255,0.40)',
+        backgroundColor: 'rgba(255,255,255,0.15)',
         paddingHorizontal: 16,
         paddingVertical: 8,
     },
@@ -853,98 +859,98 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         margin: 0,
     },
 
-    name: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 4 },
-    email: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginBottom: 16 },
+    name: { fontSize: 24, fontWeight: '800', color: '#fff', marginBottom: 4, letterSpacing: -0.5 },
+    email: { fontSize: 14, color: 'rgba(255,255,255,0.95)', marginBottom: 16 },
 
     badgesRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 24 },
-    badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.md, gap: 4 },
-    badgeText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+    badge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.20)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.md, gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.30)' },
+    badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
     levelProgressContainer: { width: '80%', alignItems: 'center' },
-    progressBarBg: { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: Radius.sm, overflow: 'hidden' },
-    progressBarFill: { height: '100%', backgroundColor: 'rgba(255,255,255,0.62)', borderRadius: Radius.sm },
+    progressBarBg: { width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: Radius.sm, overflow: 'hidden' },
+    progressBarFill: { height: '100%', backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: Radius.sm },
 
     // Body
     bodyContainer: { paddingHorizontal: 20, marginTop: -30 },
 
     // Stats Grid
     statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    statCard: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: Radius.xl, gap: 12, borderWidth: 1, ...glassShadow(isDark),},
-    statIconCircle: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: isDark ? '#065F46' : '#DCFCE7', alignItems: 'center', justifyContent: 'center' },
-    statLabel: { fontSize: 12, color: colors(isDark).textMuted, marginBottom: 2 },
-    statValue: { fontSize: 18, fontWeight: 'bold' },
+    statCard: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: Radius.xl, gap: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, backgroundColor: c.surface1, ...glassShadow(isDark) },
+    statIconCircle: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: c.surface3, alignItems: 'center', justifyContent: 'center' },
+    statLabel: { fontSize: 12, color: c.textMuted, marginBottom: 2, fontWeight: '500' },
+    statValue: { fontSize: 18, fontWeight: '800', color: c.text },
 
     // Quick Actions
-    sectionHeader: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 12, marginLeft: 4 },
-    quickActionsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    actionCard: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 16, alignItems: 'center', ...glassShadow(isDark),},
+    sectionHeader: { fontSize: 18, fontWeight: '800', color: c.text, letterSpacing: -0.3, marginBottom: 12, marginLeft: 4 },
+    quickActionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
+    actionCard: { minWidth: 140, flex: 1, backgroundColor: c.surface1, borderRadius: Radius.lg, padding: 16, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark) },
     actionIconBox: { width: 44, height: 44, borderRadius: Radius.xl, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-    actionValue: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 2 },
-    actionLabel: { fontSize: 11, color: colors(isDark).textMuted, fontWeight: '500', textAlign: 'center' },
-    inviteCard: { flexDirection: 'row', backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 16, alignItems: 'center', justifyContent: 'space-between', ...glassShadow(isDark), marginBottom: 24 },
-    inviteValue: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text, marginBottom: 2 },
-    inviteLabel: { fontSize: 13, color: colors(isDark).textMuted, fontWeight: '500' },
+    actionValue: { fontSize: 18, fontWeight: '800', color: c.text, marginBottom: 2 },
+    actionLabel: { fontSize: 11, color: c.textMuted, fontWeight: '600', textAlign: 'center' },
+    inviteCard: { flexDirection: 'row', backgroundColor: c.surface1, borderRadius: Radius.lg, padding: 16, alignItems: 'center', justifyContent: 'space-between', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark), marginBottom: 24 },
+    inviteValue: { fontSize: 18, fontWeight: '800', color: c.text, marginBottom: 2 },
+    inviteLabel: { fontSize: 13, color: c.textMuted, fontWeight: '600' },
 
     // Forms & Settings
-    card: { backgroundColor: colors(isDark).glass, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 24, padding: 4, ...glassShadow(isDark),},
+    card: { backgroundColor: c.surface1, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 24, padding: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark) },
     formRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-    formIcon: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: colors(isDark).glass, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    formIcon: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
     formContent: { flex: 1 },
-    formLabel: { fontSize: 12, color: colors(isDark).textMuted, marginBottom: 2 },
-    formValue: { fontSize: 15, color: colors(isDark).text, fontWeight: '500' },
-    inputObj: { fontSize: 15, color: colors(isDark).text, borderBottomWidth: 1, borderBottomColor: '#2196F3', paddingVertical: 2 },
-    editInput: { color: '#fff', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.5)', paddingVertical: 4 },
-    divider: { height: 1, backgroundColor: colors(isDark).glass, marginLeft: 68 },
+    formLabel: { fontSize: 12, color: c.textMuted, marginBottom: 2 },
+    formValue: { fontSize: 15, color: c.text, fontWeight: '600' },
+    inputObj: { fontSize: 15, color: c.text, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.primary, paddingVertical: 2 },
+    editInput: { color: '#fff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.6)', paddingVertical: 4 },
+    divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.glassBorder, marginLeft: 68 },
 
     // KYC Status
     kycRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16 },
-    kycIconWrapper: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' },
+    kycIconWrapper: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' },
     kycContent: { flex: 1 },
-    kycTitle: { fontSize: 15, fontWeight: '700', color: colors(isDark).text, marginBottom: 2 },
-    kycSubtitle: { fontSize: 12, color: colors(isDark).textMuted, lineHeight: 16 },
-    kycButton: { backgroundColor: '#2196F3', marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, borderRadius: Radius.lg, alignItems: 'center' },
-    kycButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    kycTitle: { fontSize: 15, fontWeight: '700', color: c.text, marginBottom: 2 },
+    kycSubtitle: { fontSize: 12, color: c.textMuted, lineHeight: 16 },
+    kycButton: { backgroundColor: c.primary, marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, borderRadius: Radius.lg, alignItems: 'center' },
+    kycButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
     // Points & referrals
     pointsTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-    pointsTitle: { fontSize: 15, fontWeight: '700', color: colors(isDark).text },
-    pointsSubtitle: { fontSize: 12, color: colors(isDark).textMuted, marginTop: 2 },
+    pointsTitle: { fontSize: 15, fontWeight: '800', color: c.text },
+    pointsSubtitle: { fontSize: 12, color: c.textMuted, marginTop: 2 },
     pointsSummaryRow: { flexDirection: 'row', gap: 10, padding: 16 },
-    pointsSummaryCard: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.md, padding: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
-    pointsSummaryLabel: { fontSize: 11, color: colors(isDark).textMuted, marginBottom: 4 },
-    pointsSummaryValue: { fontSize: 16, fontWeight: '800' },
+    pointsSummaryCard: { flex: 1, backgroundColor: c.surface2, borderRadius: Radius.md, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
+    pointsSummaryLabel: { fontSize: 11, color: c.textMuted, marginBottom: 4 },
+    pointsSummaryValue: { fontSize: 16, fontWeight: '800', color: c.text },
     referralRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 16 },
 
-    txRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: Radius.md, backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    txRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: Radius.md, backgroundColor: c.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     txDot: { width: 10, height: 10, borderRadius: Radius.sm, marginTop: 4 },
-    txTitle: { fontSize: 13, fontWeight: '700', color: colors(isDark).text },
-    txMeta: { fontSize: 11, color: colors(isDark).textMuted, marginTop: 2 },
+    txTitle: { fontSize: 13, fontWeight: '700', color: c.text },
+    txMeta: { fontSize: 11, color: c.textMuted, marginTop: 2 },
     txAmount: { fontSize: 13, fontWeight: '800' },
 
     settingsItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
     settingsLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
     settingsIcon: { width: 32, alignItems: 'center' },
-    settingsLabel: { fontSize: 15, color: isDark ? '#D1D5DB' : '#374151', fontWeight: '500' },
+    settingsLabel: { fontSize: 15, color: c.text, fontWeight: '600' },
     settingsBadge: {
         minWidth: 22,
         height: 22,
         paddingHorizontal: 6,
         borderRadius: Radius.md,
-        backgroundColor: '#2196F3',
+        backgroundColor: c.primary,
         alignItems: 'center',
         justifyContent: 'center',
     },
     settingsBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-    borderBottom: { borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
+    borderBottom: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.glassBorder },
 
-    logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? '#3B1010' : '#FEF2F2', paddingVertical: 16, borderRadius: Radius.lg, gap: 8, marginBottom: 12 },
-    logoutText: { color: '#EF4444', fontWeight: 'bold', fontSize: 15 },
+    logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.10)', paddingVertical: 16, borderRadius: Radius.lg, gap: 8, marginBottom: 12 },
+    logoutText: { color: '#EF4444', fontWeight: '800', fontSize: 15 },
     deleteBtn: { alignItems: 'center', paddingVertical: 12 },
-    deleteText: { color: '#9CA3AF', fontSize: 13, textDecorationLine: 'underline' },
+    deleteText: { color: c.textSubtle, fontSize: 13, textDecorationLine: 'underline' },
 
     // Sheet Styles
     sheetContent: {
-        backgroundColor: colors(isDark).glass,
+        backgroundColor: c.surface1,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     },
@@ -964,7 +970,7 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     },
     sheetText: {
         fontSize: 16,
-        color: colors(isDark).textMuted,
+        color: c.textMuted,
         textAlign: 'center',
         marginBottom: 16
     },
@@ -979,9 +985,10 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         marginBottom: 24,
         borderRadius: Radius.xl,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.4)',
-        ...glassShadow,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.glassBorder,
+        backgroundColor: c.surface1,
+        ...glassShadow(isDark),
     },
     rewardsHeader: {
         flexDirection: 'row',
@@ -994,13 +1001,13 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: isDark ? 'rgba(217, 119, 6, 0.2)' : 'rgba(252, 211, 77, 0.5)',
+        backgroundColor: c.surface2,
         justifyContent: 'center',
         alignItems: 'center',
     },
     rewardsTitle: {
         fontSize: 16,
-        fontWeight: '700',
+        fontWeight: '800',
         color: isDark ? '#FCD34D' : '#B45309',
         letterSpacing: 0.5,
     },
@@ -1011,11 +1018,11 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     rewardsPoints: {
         fontSize: 36,
         fontWeight: '900',
-        color: isDark ? '#FFF' : '#111827',
+        color: c.text,
     },
     rewardsLabel: {
         fontSize: 13,
-        color: isDark ? '#9CA3AF' : '#6B7280',
+        color: c.textMuted,
         marginTop: 2,
     },
     rewardsFooter: {
@@ -1024,22 +1031,23 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingBottom: 16,
-        borderTopWidth: 1,
-        borderTopColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: c.glassBorder,
         paddingTop: 12,
         marginTop: 4,
     },
     rewardsSubText: {
         fontSize: 12,
-        color: isDark ? '#D1D5DB' : '#4B5563',
-        fontWeight: '500',
+        color: c.textMuted,
+        fontWeight: '600',
     },
     rewardsActionText: {
         fontSize: 12,
-        fontWeight: '600',
-        color: '#D97706',
+        fontWeight: '700',
+        color: c.primary,
     },
 });
+};
 
 // HOC inyectado automáticamente para soporte de teclado
 const HOC_KeyboardAvoidingView_ProfileScreen = (props: any) => (

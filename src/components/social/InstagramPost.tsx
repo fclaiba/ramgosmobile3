@@ -6,19 +6,32 @@ const { width } = Dimensions.get('window');
 const itemSize = (width - 4) / 3;
 
 import { X, Heart, MessageCircle, Share2 } from 'lucide-react-native';
-import { InstagramPost as IGPostType, useSocial } from '../../contexts/SocialContext';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Sheet, SheetContent, SheetHeader } from '../ui/sheet';
 import { Radius, colors } from '../../theme/tokens';
 
+/** Grid-tile view of an image post. Same `socialPosts` row as the feed. */
+export interface InstagramPostItem {
+    _id?: string;
+    id?: string;
+    image: string;
+    caption?: string;
+    likes: number;
+    likedByUser?: boolean;
+    [key: string]: any;
+}
 
-export const InstagramPost = ({ post }: { post: IGPostType }) => {
+export const InstagramPost = ({ post }: { post: InstagramPostItem }) => {
     const [showDetail, setShowDetail] = React.useState(false);
     const [showComments, setShowComments] = React.useState(false);
     const [showShare, setShowShare] = React.useState(false);
-    const { likeInstagramPost } = useSocial();
+    const { sessionToken } = useAuth();
+    const toggleLike = useMutation(api.social.toggleLike);
     const [liked, setLiked] = React.useState(post.likedByUser || false);
     const [likes, setLikes] = React.useState(post.likes);
 
@@ -26,10 +39,19 @@ export const InstagramPost = ({ post }: { post: IGPostType }) => {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    const handleLike = () => {
-        likeInstagramPost(post._id || post.id);
-        setLiked(!liked);
-        setLikes((prev: number) => liked ? prev - 1 : prev + 1);
+    const postId = post._id || post.id;
+
+    const handleLike = async () => {
+        if (!sessionToken || !postId) return;
+        const next = !liked;
+        setLiked(next);
+        setLikes((prev: number) => (next ? prev + 1 : Math.max(0, prev - 1)));
+        try {
+            await toggleLike({ sessionToken, targetType: 'post', targetId: postId as any });
+        } catch {
+            setLiked(!next);
+            setLikes((prev: number) => (next ? Math.max(0, prev - 1) : prev + 1));
+        }
     };
 
     return (
@@ -70,7 +92,7 @@ export const InstagramPost = ({ post }: { post: IGPostType }) => {
             </Sheet>
 
             <PostCommentsModal
-                postId={post._id || post.id}
+                postId={String(postId)}
                 visible={showComments}
                 onClose={() => setShowComments(false)}
                 isInstagram={true}

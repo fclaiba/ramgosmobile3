@@ -59,7 +59,7 @@ function useBusinessState() {
 
     const metricsData = useQuery(
         api.dashboard.getBusinessMetrics,
-        userId ? ({ businessId: userId as Id<'users'> }) : 'skip',
+        userId && sessionToken ? ({ businessId: userId as Id<'users'>, sessionToken }) : 'skip',
     );
 
     const listings = useQuery(

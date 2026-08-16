@@ -63,13 +63,21 @@ const featuredOffers = [
     { id: 3, title: 'Bonos Exclusivos', subtitle: 'Negocios locales', image: 'https://images.unsplash.com/photo-1671749999622-4087a86868cc?w=1080', badge: 'Popular', badgeColor: '#4FC3F7', gradient: ['rgba(33, 150, 243,0.9)', 'rgba(41, 182, 246,0.9)'], icon: Tag, filter: 'bonos' },
 ];
 
-const categoryCards = [
-    { id: 1, title: 'Moda', image: 'https://images.unsplash.com/photo-1733564377865-997953d57fd4?w=1080', badge: 'Marketplace', badgeColor: '#3B82F6', filter: 'products', gradient: ['rgba(17,24,39,0.4)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 2, title: 'Beauty & Care', image: 'https://images.unsplash.com/photo-1643379855122-3d3162b56a99?w=1080', badge: 'Marketplace', badgeColor: '#3B82F6', filter: 'products', gradient: ['rgba(17,24,39,0.4)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 3, title: 'Discotecas y Bares', image: 'https://images.unsplash.com/photo-1744313930610-1649242d1fcd?w=1080', badge: 'Eventos', badgeColor: '#F97316', filter: 'events', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 4, title: 'Restaurantes', image: 'https://images.unsplash.com/photo-1676471932681-45fa972d848a?w=1080', badge: 'Marketplace', badgeColor: '#3B82F6', filter: 'products', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.25)', 'transparent'] },
-    { id: 5, title: 'Restaurantes', image: 'https://images.unsplash.com/photo-1656439659132-24c68e36b553?w=1080', badge: 'Cupones', badgeColor: '#22C55E', filter: 'bonos', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 6, title: 'Influencers', image: 'https://images.unsplash.com/photo-1613053341193-2b7f654c155f?w=1080', badge: 'Red Social', badgeColor: '#EC4899', filter: 'all', action: 'social', gradient: ['rgba(17,24,39,0.4)', 'rgba(17,24,39,0.2)', 'transparent'] },
+const discoverCards = [
+    { id: 'groceries', title: 'Groceries', image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1080', badge: '🥗 Descubre', badgeColor: '#22C55E', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'restaurants', title: 'Restaurantes', image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1080', badge: '🍔 Descubre', badgeColor: '#3B82F6', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.25)', 'transparent'] },
+    { id: 'iglesias', title: 'Iglesias', image: 'https://images.unsplash.com/photo-1548614606-52b4451f994b?w=1080', badge: '⛪ Descubre', badgeColor: '#F59E0B', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
+    { id: 'shopping', title: 'Shopping', image: 'https://images.unsplash.com/photo-1481437156560-3205f6a55735?w=1080', badge: '🛍️ Descubre', badgeColor: '#EC4899', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'belleza', title: 'Belleza', image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1080', badge: '💇‍♀️ Descubre', badgeColor: '#8B5CF6', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'hoteles', title: 'Hoteles', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1080', badge: '🏨 Descubre', badgeColor: '#3B82F6', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
+    { id: 'eventos', title: 'Eventos', image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1080', badge: '🎉 Descubre', badgeColor: '#F97316', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
+    { id: 'servicios', title: 'Servicios', image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1080', badge: '🏥 Descubre', badgeColor: '#10B981', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'supermercados', title: 'Supermercados', image: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=1080', badge: '🥫 Descubre', badgeColor: '#EAB308', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'lugares', title: 'Lugares', image: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1080', badge: '📍 Descubre', badgeColor: '#EF4444', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'realestate', title: 'Real Estate', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1080', badge: '🏘️ Descubre', badgeColor: '#3B82F6', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
+    { id: 'autos', title: 'Automóviles', image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=1080', badge: '🚗 Descubre', badgeColor: '#6366F1', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+    { id: 'negocios', title: 'Negocios', image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080', badge: '💼 Descubre', badgeColor: '#6B7280', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
+    { id: 'mascotas', title: 'Mascotas', image: 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=1080', badge: '🐾 Descubre', badgeColor: '#F43F5E', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
 ];
 
 const quickActions = [
@@ -240,7 +248,7 @@ export default function HomeScreen({ navigation, route }: any) {
                     <>
                         <MobileHeader
                             logo={Platform.OS !== 'web'}
-                            title={t('home.title', { defaultValue: 'Inicio' })}
+                            title={t('home.title', { defaultValue: 'Descubre' })}
                             subtitle={t('home.subtitle', { defaultValue: 'Descubre oportunidades' })}
                             onMenuPress={() => setIsSidebarOpen(true)}
                             actions={
@@ -358,23 +366,17 @@ export default function HomeScreen({ navigation, route }: any) {
                                         })}
                                     </View>
 
-                                    {/* Categories */}
-                                    <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-                                        <Text style={styles.sectionTitle}>Categorías</Text>
+                                    {/* Discover Submenu Grid */}
+                                    <View style={[styles.sectionHeader, { marginTop: 24, marginBottom: 12 }]}>
+                                        <Text style={styles.sectionTitle}>Descubre oportunidades</Text>
                                     </View>
 
                                     <View style={styles.grid2}>
-                                        {categoryCards.map((card) => (
+                                        {discoverCards.map((card) => (
                                             <TouchableOpacity
                                                 key={card.id}
                                                 style={[styles.catCard, { width: '48%' }]}
-                                                onPress={() => {
-                                                    if (card.action === 'social') {
-                                                        handleNavigate('Social');
-                                                    } else {
-                                                        handleNavigate('Marketplace', { filter: card.filter });
-                                                    }
-                                                }}
+                                                onPress={() => handleNavigate('Marketplace', { category: card.id })}
                                             >
                                                 <ImageWithFallback src={card.image} style={styles.catImg} />
                                                 <LinearGradient colors={card.gradient as [string, string, ...string[]]} style={StyleSheet.absoluteFill} />
@@ -511,93 +513,99 @@ export default function HomeScreen({ navigation, route }: any) {
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
+const getStyles = (isDark: boolean) => {
+    const c = colors(isDark);
+    return StyleSheet.create({
     container: { flex: 1 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    headerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors(isDark).glass, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.xl },
-    headerBtnActive: { backgroundColor: isDark ? '#4B5563' : '#111827' },
-    headerBtnText: { fontSize: 13, fontWeight: '600', color: isDark ? '#9CA3AF' : '#374151', marginLeft: 6 },
-    headerIconBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center' },
+    headerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.surface1, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
+    headerBtnActive: { backgroundColor: c.surface3 },
+    headerBtnText: { fontSize: 13, fontWeight: '600', color: c.textMuted, marginLeft: 6 },
+    headerIconBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: c.surface1, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     badge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
 
-    viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg },
+    viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: c.surface1, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     viewTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.md },
-    viewTabActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', ...glassShadow(isDark),},
-    viewTabText: { fontSize: 13, fontWeight: '600', color: colors(isDark).textMuted, marginLeft: 6 },
-    viewTabTextActive: { color: colors(isDark).text },
+    viewTabActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)', ...glassShadow(isDark) },
+    viewTabText: { fontSize: 13, fontWeight: '600', color: c.textMuted, marginLeft: 6 },
+    viewTabTextActive: { color: c.text, fontWeight: '700' },
 
     contentContainer: { paddingHorizontal: 16 },
-    heroContainer: { height: 380, borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 20, backgroundColor: colors(isDark).glass },
+    heroContainer: { height: 380, borderRadius: Radius['2xl'], overflow: 'hidden', marginBottom: 20, backgroundColor: c.surface1, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     heroImage: { width: '100%', height: '100%', justifyContent: 'flex-end' },
     heroContent: { padding: 24 },
-    heroTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+    heroTitle: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 8, letterSpacing: -0.4 },
     heroSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 14, marginBottom: 16 },
-    heroBtn: { backgroundColor: 'rgba(255,255,255,0.62)', paddingHorizontal: 24, paddingVertical: 10, borderRadius: Radius.xl, alignSelf: 'flex-start' },
-    heroBtnText: { fontWeight: 'bold', color: '#000' },
+    heroBtn: { backgroundColor: 'rgba(255,255,255,0.72)', paddingHorizontal: 24, paddingVertical: 10, borderRadius: Radius.xl, alignSelf: 'flex-start', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.35)' },
+    heroBtnText: { fontWeight: '700', color: '#000' },
     indicators: { position: 'absolute', bottom: 16, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 8 },
-    indicatorDot: { width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: 'rgba(255,255,255,0.5)' },
-    indicatorDotActive: { width: 32, backgroundColor: 'rgba(255,255,255,0.62)' },
+    indicatorDot: { width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: 'rgba(255,255,255,0.40)' },
+    indicatorDotActive: { width: 32, backgroundColor: 'rgba(255,255,255,0.80)' },
 
     quickActionsGrid: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-    actionBtn: { flex: 1, alignItems: 'center', padding: 16, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, elevation: 1, ...glassShadow(isDark),shadowOpacity: 0.05 },
+    actionBtn: { flex: 1, alignItems: 'center', padding: 16, backgroundColor: c.surface2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark) },
     actionIcon: { width: 48, height: 48, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    actionTitle: { fontSize: 12, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151' },
+    actionTitle: { fontSize: 12, fontWeight: '600', color: c.textSecondary },
 
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: colors(isDark).text },
-    seeAll: { fontSize: 13, color: '#4F46E5', fontWeight: '600' },
+    sectionTitle: { fontSize: 18, fontWeight: '800', color: c.text, letterSpacing: -0.3 },
+    seeAll: { fontSize: 13, color: c.primary, fontWeight: '600' },
 
     grid3: { flexDirection: 'row', gap: 10 },
-    featuredRef: { flex: 1, height: 128, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors(isDark).glass },
+    featuredRef: { flex: 1, height: 128, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: c.surface1, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     featuredImg: { width: '100%', height: '100%' },
     featuredOverlay: { position: 'absolute', inset: 0, padding: 12, justifyContent: 'space-between' },
-    featuredTitle: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+    featuredTitle: { color: '#fff', fontSize: 11, fontWeight: '700' },
     featuredSub: { color: 'rgba(255,255,255,0.9)', fontSize: 9 },
 
     grid2: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-    catCard: { height: 180, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors(isDark).glass },
+    catCard: { height: 180, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: c.surface1, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     catImg: { width: '100%', height: '100%' },
     catOverlay: { position: 'absolute', inset: 0, padding: 16, justifyContent: 'space-between' },
-    catTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    catTitle: { color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
 
-    miniBadge: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm },
-    miniBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+    miniBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full },
+    miniBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+    discoverPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, backgroundColor: c.surface1 },
+    discoverPillText: { fontSize: 14, fontWeight: '600', marginLeft: 8, color: c.text },
 
     exploreCard: { height: 128, marginTop: 20, borderRadius: Radius.lg, overflow: 'hidden' },
     exploreContent: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
-    exploreTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 2 },
+    exploreTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 2, letterSpacing: -0.3 },
     exploreSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13 },
-    arrowCircle: { width: 40, height: 40, borderRadius: Radius.xl, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    arrowCircle: { width: 40, height: 40, borderRadius: Radius.xl, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.25)' },
 
     // Consumos Styles
-    summaryCard: { borderRadius: Radius.xl, overflow: 'hidden', marginBottom: 16, elevation: 4 },
+    summaryCard: { borderRadius: Radius['2xl'], overflow: 'hidden', marginBottom: 16, ...glassShadow(isDark) },
     summaryGradient: { padding: 24 },
     summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
     summaryLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginBottom: 2 },
-    summaryMonth: { color: '#fff', fontSize: 28, fontWeight: 'bold' },
-    summaryIcon: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    summaryMonth: { color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+    summaryIcon: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.20)' },
     summaryGrid: { flexDirection: 'row', gap: 12 },
-    summaryStat: { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: Radius.lg, padding: 12 },
+    summaryStat: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: Radius.lg, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.10)' },
     statLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginBottom: 2 },
-    statValue: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+    statValue: { color: '#fff', fontSize: 20, fontWeight: '800' },
     statSub: { color: 'rgba(255,255,255,0.8)', fontSize: 10, marginTop: 2 },
 
-    statCard: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 12, elevation: 1 },
+    statCard: { flex: 1, backgroundColor: c.surface2, borderRadius: Radius.lg, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     statIcon: { width: 40, height: 40, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    catLabel: { fontSize: 11, color: colors(isDark).textMuted, marginBottom: 2 },
-    catValue: { fontSize: 14, fontWeight: 'bold', color: colors(isDark).text },
-    catCount: { fontSize: 10, color: '#9CA3AF' },
+    catLabel: { fontSize: 11, color: c.textMuted, marginBottom: 2 },
+    catValue: { fontSize: 14, fontWeight: '700', color: c.text },
+    catCount: { fontSize: 10, color: c.textSubtle },
 
-    pillBadge: { borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', borderRadius: Radius.xl, paddingHorizontal: 10, paddingVertical: 4 },
-    pillText: { fontSize: 11, color: isDark ? '#D1D5DB' : '#374151' },
+    pillBadge: { borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: c.surface1 },
+    pillText: { fontSize: 11, color: c.textMuted, fontWeight: '600' },
 
-    historyItem: { flexDirection: 'row', backgroundColor: colors(isDark).glass, padding: 10, borderRadius: Radius.lg, gap: 12 },
-    historyImg: { width: 64, height: 64, borderRadius: Radius.md, backgroundColor: colors(isDark).glass },
+    historyItem: { flexDirection: 'row', backgroundColor: c.surface2, padding: 12, borderRadius: Radius.lg, gap: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
+    historyImg: { width: 64, height: 64, borderRadius: Radius.md, backgroundColor: c.surface1 },
     historyInfo: { flex: 1, justifyContent: 'center' },
-    historyName: { fontSize: 13, fontWeight: '600', color: colors(isDark).text },
-    historyDesc: { fontSize: 11, color: colors(isDark).textMuted, marginVertical: 2 },
-    historyDate: { fontSize: 11, color: '#9CA3AF' },
-    historyAmount: { fontSize: 13, fontWeight: '600', color: colors(isDark).text },
-    statusBadge: { borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: 4, paddingVertical: 1 },
-    statusText: { fontSize: 9, fontWeight: 'bold' }
+    historyName: { fontSize: 13, fontWeight: '700', color: c.text },
+    historyDesc: { fontSize: 11, color: c.textMuted, marginVertical: 2 },
+    historyDate: { fontSize: 11, color: c.textSubtle },
+    historyAmount: { fontSize: 13, fontWeight: '700', color: c.text },
+    statusBadge: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.full, paddingHorizontal: 6, paddingVertical: 2 },
+    statusText: { fontSize: 9, fontWeight: '700' },
 });
+};

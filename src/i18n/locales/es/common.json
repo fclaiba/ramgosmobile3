@@ -1,10 +1,21 @@
 {
+  "home": {
+    "title": "Descubre",
+    "subtitle": "Descubre oportunidades"
+  },
   "buttons": {
     "back": "Volver",
     "cancel": "Cancelar",
     "close": "Cerrar",
     "continue": "Continuar",
     "acceptAndContinue": "Aceptar y continuar",
+    "save": "Guardar"
+  },
+  "actions": {
+    "back": "Volver",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "continue": "Continuar",
     "save": "Guardar"
   },
   "security": {

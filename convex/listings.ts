@@ -79,6 +79,7 @@ export const getFeed = query({
                         ? {
                             id: String(seller._id),
                             name: seller.name || seller.nickname || 'Vendedor',
+                            username: seller.username || seller.nickname,
                             avatar: seller.avatar,
                             type: seller.role || 'individual',
                             sellerRating: seller.sellerRating || 0,
@@ -133,7 +134,25 @@ export const getListing = query({
     args: { id: v.id("listings") },
     handler: async (ctx, args) => {
         const listing = await ctx.db.get(args.id);
-        return await resolveListingUrls(ctx, listing);
+        const resolved = await resolveListingUrls(ctx, listing);
+        if (!resolved) return null;
+        
+        const sellerId = ctx.db.normalizeId("users", listing?.sellerId as any);
+        const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
+        
+        return {
+            ...resolved,
+            seller: seller
+                ? {
+                    id: String(seller._id),
+                    name: seller.name || seller.nickname || 'Vendedor',
+                    username: seller.username || seller.nickname,
+                    avatar: seller.avatar,
+                    type: seller.role || 'individual',
+                    sellerRating: seller.sellerRating || 0,
+                }
+                : undefined,
+        };
     },
 });
 
@@ -167,6 +186,7 @@ export const getPublicListingsBySeller = query({
                     seller: {
                         id: sellerId,
                         name: sellerName,
+                        username: sellerDoc?.username || sellerDoc?.nickname,
                         avatar: sellerDoc?.avatar,
                         type: sellerDoc?.role || "individual",
                     },
@@ -689,7 +709,24 @@ export const getListingBySlug = query({
             .query("listings")
             .withIndex("by_slug", (q) => q.eq("slug", args.slug))
             .first();
-        return await resolveListingUrls(ctx, listing);
+        const resolved = await resolveListingUrls(ctx, listing);
+        if (!resolved) return null;
+        
+        const sellerId = ctx.db.normalizeId("users", listing?.sellerId as any);
+        const seller: any = sellerId ? await ctx.db.get(sellerId) : null;
+        return {
+            ...resolved,
+            seller: seller
+                ? {
+                    id: String(seller._id),
+                    name: seller.name || seller.nickname || 'Vendedor',
+                    username: seller.username || seller.nickname,
+                    avatar: seller.avatar,
+                    type: seller.role || 'individual',
+                    sellerRating: seller.sellerRating || 0,
+                }
+                : undefined,
+        };
     },
 });
 

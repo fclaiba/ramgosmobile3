@@ -12,7 +12,8 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Grid, ShoppingBag, Ticket, Star, ChevronLeft, Share2 } from 'lucide-react-native';
+import { Grid, ShoppingBag, Ticket, Star, ChevronLeft, Share2, Copy, SearchX, TrendingUp } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
@@ -20,31 +21,38 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Radius } from '../theme/tokens';
+import { userProfileLink } from '../config/appOrigin';
 import { UnifiedFeed } from '../components/social/UnifiedFeed';
+import { CreatorEarningsPanel } from '../components/social/CreatorEarningsPanel';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { formatCompactCount } from '../utils/formatCompactCount';
 
 const { width } = Dimensions.get('window');
 
-type TabType = 'feed' | 'catalogo' | 'bonos';
+type TabType = 'feed' | 'catalogo' | 'bonos' | 'ingresos';
 
 export function HybridProfileScreen({ route, navigation }: any) {
-    const { userId } = route?.params || {};
+    const { userId: routeUserId, handle } = route?.params || {};
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
     const [activeTab, setActiveTab] = useState<TabType>('feed');
+    const isOwnProfile =
+        !!authUser?.id && String(authUser.id) === String(routeUserId ?? '');
+
+    const userByHandle = useQuery(api.users.getUserByHandle, !routeUserId && handle ? { handle } : "skip");
+    const profileById = useQuery(api.users.getUser, routeUserId ? { id: routeUserId as Id<'users'> } : "skip");
+    const profile = handle ? userByHandle : profileById;
+
+    const resolvedUserId = profile?._id;
 
     const profileId =
-        typeof userId === 'string' && userId.length > 10
-            ? (userId as Id<'users'>)
+        typeof resolvedUserId === 'string' && resolvedUserId.length > 10
+            ? (resolvedUserId as Id<'users'>)
             : null;
 
-    const profile = useQuery(
-        api.users.getUser,
-        profileId ? { id: profileId } : 'skip',
-    );
+
     const socialStats = useQuery(
         api.social.getPublicSocialStats,
         profileId ? { userId: String(profileId) } : 'skip',
@@ -53,6 +61,8 @@ export function HybridProfileScreen({ route, navigation }: any) {
         api.listings.getPublicListingsBySeller,
         profileId ? { sellerId: String(profileId) } : 'skip',
     );
+
+
 
     const catalogItems = useMemo(() => {
         const rows = listings || [];
@@ -66,10 +76,12 @@ export function HybridProfileScreen({ route, navigation }: any) {
 
     const handleShare = async () => {
         const name = profile?.name || 'Perfil';
+        const url = userProfileLink(profile?.username || '');
         try {
             await Share.share({
                 title: name,
-                message: `Mirá el perfil de ${name} en Ramgos`,
+                message: url ? `Mirá el perfil de ${name} en Ramgos\n${url}` : `Mirá el perfil de ${name} en Ramgos`,
+                url: url || undefined,
             });
         } catch {
             /* cancelled */
@@ -138,7 +150,13 @@ export function HybridProfileScreen({ route, navigation }: any) {
             />
 
             <View style={styles.topNav}>
-                <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+                <TouchableOpacity style={styles.iconBtn} onPress={() => {
+                    if (navigation.canGoBack()) {
+                        navigation.goBack();
+                    } else {
+                        navigation.replace('Home');
+                    }
+                }}>
                     <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.iconBtn} onPress={handleShare}>
@@ -158,6 +176,20 @@ export function HybridProfileScreen({ route, navigation }: any) {
                     )}
                 </View>
                 <Text style={[styles.username, !isDark && { color: '#6B7280' }]}>@{username}</Text>
+
+                <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, marginBottom: 8, gap: 6 }}
+                    onPress={async () => {
+                        const url = userProfileLink(profile?.username || '');
+                        await Clipboard.setStringAsync(url);
+                        show('Enlace copiado al portapapeles', 'success');
+                    }}
+                >
+                    <Text style={{ fontSize: 12, color: isDark ? '#60A5FA' : '#2563EB', textDecorationLine: 'underline' }}>
+                        {userProfileLink(profile?.username || '').replace(/^https?:\/\//, '')}
+                    </Text>
+                    <Copy size={12} color={isDark ? '#60A5FA' : '#2563EB'} />
+                </TouchableOpacity>
 
                 {bio ? (
                     <Text style={[styles.bio, !isDark && { color: '#374151' }]}>{bio}</Text>
@@ -213,16 +245,45 @@ export function HybridProfileScreen({ route, navigation }: any) {
                     <Ticket size={20} color={activeTab === 'bonos' ? (isDark ? '#FFF' : '#000') : '#9CA3AF'} />
                     <Text style={[styles.tabText, activeTab === 'bonos' && styles.tabTextActive]}>Bonos</Text>
                 </TouchableOpacity>
+                {isOwnProfile && (
+                    <TouchableOpacity
+                        style={[styles.tabBtn, activeTab === 'ingresos' && styles.tabBtnActive]}
+                        onPress={() => setActiveTab('ingresos')}
+                    >
+                        <TrendingUp size={20} color={activeTab === 'ingresos' ? (isDark ? '#FFF' : '#000') : '#9CA3AF'} />
+                        <Text style={[styles.tabText, activeTab === 'ingresos' && styles.tabTextActive]}>Ingresos</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
     );
 
     if (!profileId) {
         return (
-            <View style={[styles.container, styles.center, { backgroundColor: isDark ? '#000' : '#F9FAFB' }]}>
-                <Text style={{ color: isDark ? '#FFF' : '#111', marginBottom: 12 }}>Perfil no disponible</Text>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Text style={{ color: '#4F46E5', fontWeight: '700' }}>Volver</Text>
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, backgroundColor: isDark ? '#000' : '#F9FAFB' }]}>
+                <View style={{
+                    width: 120, height: 120, borderRadius: 60,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    justifyContent: 'center', alignItems: 'center', marginBottom: 24,
+                    borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                }}>
+                    <SearchX size={56} color={isDark ? '#4B5563' : '#9CA3AF'} strokeWidth={1.5} />
+                </View>
+                <Text style={{ fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', textAlign: 'center', marginBottom: 12 }}>Perfil no encontrado</Text>
+                <Text style={{ fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>El creador o negocio que buscas no existe, o el enlace es incorrecto.</Text>
+                
+                <TouchableOpacity 
+                    style={[{ width: '100%', paddingVertical: 16, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 12 }]} 
+                    onPress={() => {
+                        if (navigation.canGoBack()) {
+                            navigation.goBack();
+                        } else {
+                            navigation.replace('Home');
+                        }
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <Text style={{ color: isDark ? '#FFF' : '#111827', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>Volver al Inicio</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -233,7 +294,11 @@ export function HybridProfileScreen({ route, navigation }: any) {
             {renderHeader()}
 
             <View style={styles.contentContainer}>
-                {activeTab === 'feed' && <UnifiedFeed />}
+                {activeTab === 'feed' && profileId && (
+                    <UnifiedFeed authorUserId={String(profileId)} />
+                )}
+
+                {activeTab === 'ingresos' && <CreatorEarningsPanel />}
 
                 {activeTab === 'catalogo' && (
                     listings === undefined ? (

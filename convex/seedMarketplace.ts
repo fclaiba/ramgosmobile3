@@ -1,6 +1,6 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 
-export const seed = mutation({
+export const seed = internalMutation({
     args: {},
     handler: async (ctx) => {
         // 1. Get business user

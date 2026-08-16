@@ -1,33 +1,15 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { QrCode, Tag, Users, MoreHorizontal } from "lucide-react-native";
+import { Tag, Users, MoreHorizontal } from "lucide-react-native";
 import { formatCurrency } from "../../utils/formatters";
 
 export function InventoryManager({
     styles,
     convexListings,
-    navigation,
     isDark
 }: any) {
     return (
         <View style={styles.sectionGap}>
-            <TouchableOpacity
-                style={styles.bigCreateBtn}
-                onPress={() => navigation.navigate("BusinessScanner")}
-            >
-                <LinearGradient
-                    colors={["#3B82F6", "#2563EB"]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                />
-                <QrCode size={24} color="#fff" />
-                <Text style={styles.bigCreateText}>
-                    Escanear y Validar Bono
-                </Text>
-            </TouchableOpacity>
-
             <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Tus publicaciones de Bonos</Text>
             </View>

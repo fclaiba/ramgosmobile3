@@ -1,10 +1,10 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 
 // ponytail: bcryptjs doesn't run in Convex runtime, use legacy hash for dev seeds
 const DEMO_PASSWORD = "RamgosDemo1!";
 const legacyHash = (pw: string) => `hashed_${pw.split("").reverse().join("")}`;
 
-export const createTests = mutation({
+export const createTests = internalMutation({
     args: {},
     handler: async (ctx) => {
         const roles = ['consumer', 'influencer', 'admin', 'business'] as const;

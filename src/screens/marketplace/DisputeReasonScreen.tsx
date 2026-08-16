@@ -51,7 +51,7 @@ export default function DisputeReasonScreen({ route, navigation }: any) {
     const isDark = colorScheme === 'dark';
     const insets = useSafeAreaInsets();
     const styles = getStyles(isDark, insets);
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
 
     const [reason, setReason] = useState<string | null>(null);
     const [description, setDescription] = useState('');

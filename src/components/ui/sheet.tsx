@@ -1,12 +1,13 @@
 import * as React from "react"
-import { View, Text, Modal, TouchableOpacity, StyleSheet, Dimensions, Platform } from "react-native"
-import { X } from "lucide-react-native"
+import { View, Text, Modal, TouchableOpacity, StyleSheet, Platform } from "react-native"
+import { LinearGradient } from "expo-linear-gradient"
 import { useTheme } from "../../contexts/ThemeContext"
+import { colors, Radius, Type, Space, Elevation } from "../../theme/tokens"
+import { glassSheet } from "../../utils/glass"
 
 const Sheet = ({ open, onOpenChange, children, animationType = 'slide' }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
 
     React.useEffect(() => {
         if (!open || Platform.OS !== 'web') return;
@@ -35,28 +36,42 @@ const Sheet = ({ open, onOpenChange, children, animationType = 'slide' }: any) =
 const SheetContent = ({ children, side = "right", className, style }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const c = colors(isDark);
+    const gs = glassSheet(isDark);
+    const s = getStyles(isDark, c, gs);
+
     const contentStyle = [
-        styles.content,
-        side === "left" && styles.left,
-        side === "right" && styles.right,
-        side === "top" && styles.top,
-        side === "bottom" && styles.bottom,
+        s.content,
+        side === "left" && s.left,
+        side === "right" && s.right,
+        side === "top" && s.top,
+        side === "bottom" && s.bottom,
         style
     ];
 
     return (
         <View style={contentStyle}>
+            {/* Handle bar for bottom sheets */}
+            {side === "bottom" && (
+                <View style={s.handleWrap}>
+                    <View style={[s.handle, { backgroundColor: gs.handleColor }]} />
+                </View>
+            )}
+            {/* Specular rim */}
+            {(side === "bottom" || side === "top") && (
+                <LinearGradient
+                    colors={[gs.specular, 'transparent']}
+                    start={{ x: 0.5, y: 0 }}
+                    end={{ x: 0.5, y: 1 }}
+                    style={s.specular}
+                />
+            )}
             {children}
-            {/* Close button can be added here if needed, but usually in Header */}
         </View>
     )
 }
 
 const SheetHeader = ({ className, children, ...props }: any) => {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
     return (
         <View style={[styles.header, props.style]} {...props}>
             {children}
@@ -65,9 +80,6 @@ const SheetHeader = ({ className, children, ...props }: any) => {
 }
 
 const SheetFooter = ({ className, children, ...props }: any) => {
-    const { colorScheme } = useTheme();
-    const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
     return (
         <View style={[styles.footer, props.style]} {...props}>
             {children}
@@ -78,9 +90,9 @@ const SheetFooter = ({ className, children, ...props }: any) => {
 const SheetTitle = ({ className, children, ...props }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const c = colors(isDark);
     return (
-        <Text style={[styles.title, props.style]} {...props}>
+        <Text style={[styles.title, { color: c.text }, props.style]} {...props}>
             {children}
         </Text>
     )
@@ -89,15 +101,100 @@ const SheetTitle = ({ className, children, ...props }: any) => {
 const SheetDescription = ({ className, children, ...props }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
-    const styles = getStyles(isDark);
+    const c = colors(isDark);
     return (
-        <Text style={[styles.description, props.style]} {...props}>
+        <Text style={[styles.description, { color: c.textMuted }, props.style]} {...props}>
             {children}
         </Text>
     )
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
+/* ─── Dynamic styles (depend on theme/tokens) ────────────────────── */
+
+const getStyles = (isDark: boolean, c: ReturnType<typeof colors>, gs: ReturnType<typeof glassSheet>) =>
+    StyleSheet.create({
+        content: {
+            backgroundColor: isDark ? 'rgba(12,12,14,0.92)' : 'rgba(255,255,255,0.92)',
+            padding: 0,
+            position: 'absolute',
+            overflow: 'hidden',
+            ...gs.shadow,
+            ...(Platform.OS === 'web'
+                ? ({
+                      backdropFilter: `blur(${gs.blurWeb}px) saturate(1.35)`,
+                      WebkitBackdropFilter: `blur(${gs.blurWeb}px) saturate(1.35)`,
+                  } as any)
+                : {}),
+        },
+        left: {
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: "75%",
+            maxWidth: 400,
+            borderRightWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
+        },
+        right: {
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: "75%",
+            maxWidth: 400,
+            borderLeftWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
+        },
+        top: {
+            top: 0,
+            left: 0,
+            right: 0,
+            marginHorizontal: 'auto',
+            width: '100%',
+            maxWidth: 600,
+            height: '85%',
+            maxHeight: '90%',
+            borderBottomLeftRadius: gs.radius,
+            borderBottomRightRadius: gs.radius,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
+        },
+        bottom: {
+            bottom: 0,
+            left: 0,
+            right: 0,
+            marginHorizontal: 'auto',
+            width: '100%',
+            maxWidth: 600,
+            height: '85%',
+            maxHeight: '90%',
+            borderTopLeftRadius: gs.radius,
+            borderTopRightRadius: gs.radius,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
+        },
+        handleWrap: {
+            alignItems: 'center',
+            paddingTop: 10,
+            paddingBottom: 4,
+        },
+        handle: {
+            width: 40,
+            height: 4,
+            borderRadius: 2,
+        },
+        specular: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 8,
+            zIndex: 0,
+        },
+    });
+
+/* ─── Static styles ──────────────────────────────────────────────── */
+
+const styles = StyleSheet.create({
     overlay: {
         flex: 1,
         backgroundColor: 'transparent',
@@ -105,103 +202,32 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     backdrop: {
         position: 'absolute',
         top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(15,10,30,0.4)',
-    },
-    content: {
-        // Liquid glass sheet chrome — brand-soft, not flat gray
-        backgroundColor: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.92)',
-        padding: 0,
-        ...Platform.select({
-            web: {
-                boxShadow: isDark
-                    ? '0 -8px 40px rgba(0,0,0,0.45)'
-                    : '0 -8px 40px rgba(33, 150, 243,0.12)',
-                backdropFilter: 'blur(18px)',
-                WebkitBackdropFilter: 'blur(18px)',
-            } as any,
-            default: {
-                shadowColor: isDark ? '#000' : '#2196F3',
-                shadowOffset: { width: 0, height: -4 },
-                shadowOpacity: isDark ? 0.35 : 0.14,
-                shadowRadius: 20,
-            },
-        }),
-        elevation: 8,
-        position: 'absolute',
-    },
-    left: {
-        left: 0,
-        top: 0,
-        bottom: 0,
-        width: "75%",
-        maxWidth: 400,
-        borderRightWidth: StyleSheet.hairlineWidth,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
-    },
-    right: {
-        right: 0,
-        top: 0,
-        bottom: 0,
-        width: "75%",
-        maxWidth: 400,
-        borderLeftWidth: StyleSheet.hairlineWidth,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
-    },
-    top: {
-        top: 0,
-        left: 0,
-        right: 0,
-        marginHorizontal: 'auto',
-        width: '100%',
-        maxWidth: 600,
-        height: '85%',
-        maxHeight: '90%',
-        borderBottomLeftRadius: 28,
-        borderBottomRightRadius: 28,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.9)',
-    },
-    bottom: {
-        bottom: 0,
-        left: 0,
-        right: 0,
-        marginHorizontal: 'auto',
-        width: '100%',
-        maxWidth: 600,
-        height: '85%',
-        maxHeight: '90%',
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.9)',
+        backgroundColor: 'rgba(0,0,0,0.50)',
     },
     header: {
         flexDirection: "column",
         gap: 4,
-        padding: 24,
-        paddingBottom: 16,
+        padding: Space[6],
+        paddingBottom: Space[4],
     },
     footer: {
         flexDirection: "column-reverse",
-        gap: 12,
-        padding: 24,
+        gap: Space[3],
+        padding: Space[6],
         paddingTop: 0,
     },
     title: {
-        fontSize: 20,
-        fontWeight: "bold",
-        color: isDark ? "#F9FAFB" : "#111827",
+        ...Type.heading,
     },
     description: {
-        fontSize: 14,
-        color: isDark ? "#9CA3AF" : "#6B7280",
+        ...Type.body,
     },
     close: {
         position: "absolute",
         right: 16,
         top: 16,
-    }
-})
+    },
+});
 
 export {
     Sheet,
@@ -211,5 +237,3 @@ export {
     SheetTitle,
     SheetDescription,
 }
-
-

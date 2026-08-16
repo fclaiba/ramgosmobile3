@@ -27,6 +27,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { userProfileLink } from '../config/appOrigin';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
@@ -120,9 +121,11 @@ export default function BusinessProfileScreen() {
 
     const handleShare = async () => {
         try {
+            const url = userProfileLink(profile?.username || data.id || '');
             await Share.share({
                 title: data.name,
-                message: `Mirá ${data.name} en Ramgos`,
+                message: url ? `Mirá ${data.name} en Ramgos\n${url}` : `Mirá ${data.name} en Ramgos`,
+                url: url || undefined,
             });
         } catch {
             /* cancelled */

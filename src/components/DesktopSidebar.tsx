@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react
 import { Home, ShoppingBag, Users, LayoutDashboard, Settings, LogOut, MapPin } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Radius, colors } from '../theme/tokens';
 
@@ -23,6 +24,7 @@ const navItems: { id: NavSection; icon: any; label: string }[] = [
 export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSidebarProps) {
     const { user, isAuthenticated, logout } = useAuth();
     const { colorScheme } = useTheme();
+    const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
@@ -77,7 +79,7 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
                 {isAuthenticated ? (
                     <TouchableOpacity style={styles.actionItem} onPress={async () => {
                         await logout();
-                        navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+                        navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Welcome' }] }));
                     }}>
                         <LogOut size={20} color={isDark ? '#EF4444' : '#DC2626'} />
                         <Text style={[styles.actionLabel, { color: isDark ? '#EF4444' : '#DC2626' }]}>Cerrar Sesión</Text>

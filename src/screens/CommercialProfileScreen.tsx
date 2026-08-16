@@ -12,6 +12,7 @@ import {
     ActivityIndicator,
     Share,
     Modal,
+    Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -37,12 +38,17 @@ import {
     Wrench,
     Tag,
     Mail,
+    Copy,
+    SearchX,
 } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useFavorites } from '../hooks/useFavorites';
+import { useMarketplace } from '../contexts/MarketplaceContext';
+import { userProfileLink } from '../config/appOrigin';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -102,7 +108,14 @@ const AnimatedButton = ({ onPress, style, children, isDark, active = true }: any
 };
 
 export default function CommercialProfileScreen({ navigation, route }: any) {
-    const sellerId = route?.params?.sellerId;
+    const routeSellerId = route?.params?.sellerId;
+    const handle = route?.params?.handle;
+    
+    const userByHandle = useQuery(api.users.getUserByHandle, !routeSellerId && handle ? { handle } : "skip");
+    const profileById = useQuery(api.users.getUser, routeSellerId ? { id: routeSellerId as any } : "skip");
+    const profile = handle ? userByHandle : profileById;
+    const sellerId = profile?._id;
+
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
@@ -133,7 +146,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     const [contactLoading, setContactLoading] = useState(false);
     const [formOpen, setFormOpen] = useState(false);
 
-    const profile = useQuery(api.users.getUser, sellerId ? { id: sellerId as any } : "skip");
+
     const listingsRaw = useQuery(
         api.listings.getPublicListingsBySeller,
         sellerId ? { sellerId: String(sellerId) } : "skip",
@@ -234,9 +247,12 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const handleShare = async () => {
         try {
+            const url = userProfileLink(profile?.username || socialStats?.username || profile?._id || '');
+            const name = profile?.name || 'Perfil comercial';
             await Share.share({
-                title: profile?.name || 'Perfil comercial',
-                message: `Mirá el perfil de ${profile?.name || 'este vendedor'} en Ramgos`,
+                title: name,
+                message: url ? `Mirá el perfil de ${name} en Ramgos\n${url}` : `Mirá el perfil de ${name} en Ramgos`,
+                url: url || undefined,
             });
         } catch (e) { /* ignore */ }
     };
@@ -328,7 +344,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                     ) : (
                         <View style={[styles.avatar, styles.avatarPlaceholder]}>
                             {isBusiness ? (
-                                <Building2 size={36} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                <Image source={require('../../logo.png')} style={{width: 48, height: 48, opacity: 0.8}} resizeMode="contain" />
                             ) : (
                                 <UserCircle size={36} color={isDark ? '#9CA3AF' : '#6B7280'} />
                             )}
@@ -358,6 +374,20 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                         </Text>
                     </View>
                 </View>
+                
+                <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, gap: 6 }}
+                    onPress={async () => {
+                        const url = userProfileLink(profile?.username || socialStats?.username || profile?._id || '');
+                        await Clipboard.setStringAsync(url);
+                        show('Enlace copiado al portapapeles', 'success');
+                    }}
+                >
+                    <Text style={{ fontSize: 12, color: isDark ? '#60A5FA' : '#2563EB', textDecorationLine: 'underline' }}>
+                        {userProfileLink(profile?.username || socialStats?.username || profile?._id || '').replace(/^https?:\/\//, '')}
+                    </Text>
+                    <Copy size={12} color={isDark ? '#60A5FA' : '#2563EB'} />
+                </TouchableOpacity>
 
                 {profile?.bio ? (
                     <Text style={styles.bio}>{profile.bio}</Text>
@@ -522,6 +552,37 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         </View>
     );
 
+    if ((handle && userByHandle === null) || profile === null) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
+                <View style={{
+                    width: 120, height: 120, borderRadius: 60,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    justifyContent: 'center', alignItems: 'center', marginBottom: 24,
+                    borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+                }}>
+                    <SearchX size={56} color={isDark ? '#4B5563' : '#9CA3AF'} strokeWidth={1.5} />
+                </View>
+                <Text style={{ fontSize: 24, fontWeight: '800', color: isDark ? '#F9FAFB' : '#111827', textAlign: 'center', marginBottom: 12 }}>Perfil no encontrado</Text>
+                <Text style={{ fontSize: 16, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', lineHeight: 24, marginBottom: 32 }}>El creador o negocio que buscas no existe, o el enlace es incorrecto.</Text>
+                
+                <TouchableOpacity 
+                    style={[styles.glassBtn, { width: '100%', paddingVertical: 16, backgroundColor: isDark ? '#374151' : '#E5E7EB', borderRadius: 12 }]} 
+                    onPress={() => {
+                        if (navigation.canGoBack()) {
+                            navigation.goBack();
+                        } else {
+                            navigation.replace('Home');
+                        }
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <Text style={{ color: isDark ? '#FFF' : '#111827', fontWeight: '700', fontSize: 16, textAlign: 'center' }}>Volver al Inicio</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -576,7 +637,13 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 pointerEvents="box-none"
                 style={[styles.topBar, { top: insets.top + 8 }]}
             >
-                <AnimatedButton style={styles.glassBtn} onPress={() => navigation.goBack()} isDark={isDark}>
+                <AnimatedButton style={styles.glassBtn} onPress={() => {
+                    if (navigation.canGoBack()) {
+                        navigation.goBack();
+                    } else {
+                        navigation.replace('Home');
+                    }
+                }} isDark={isDark}>
                     <ChevronLeft size={24} color={isDark ? '#FFF' : '#000'} />
                 </AnimatedButton>
                 <View style={styles.topBarActions} pointerEvents="box-none">

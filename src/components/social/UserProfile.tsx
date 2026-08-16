@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Dimensions, Animated, StatusBar, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useSocial, CommercialProduct, Post as PostType } from '../../contexts/SocialContext';
 import { ArrowLeft, MapPin, ShoppingBag, Heart, MessageCircle, CheckCircle2, MoreHorizontal, Grid, List, ShoppingCart } from 'lucide-react-native';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Post } from './Post';
@@ -9,7 +8,11 @@ import { InstagramPost } from './InstagramPost';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { SocialFollowButton } from './SocialFollowButton';
 
 
 const { width } = Dimensions.get('window');
@@ -22,13 +25,7 @@ interface UserProfileProps {
 
 export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
     const navigation = useNavigation<any>();
-    const { getUserById, getPostsByUser, getInstagramPostsByUser, getHighlightsByUser, getCommercialItemsByUser, currentUser, isFollowing, followUser, unfollowUser } = useSocial();
-    const user = getUserById(userId);
-    const userPosts = getPostsByUser(userId);
-    const instagramPosts = getInstagramPostsByUser(userId);
-    const highlights = getHighlightsByUser(userId);
-    const commercialItems = getCommercialItemsByUser(userId);
-    const [isUserFollowing, setIsUserFollowing] = useState(() => isFollowing(userId));
+    const { user: authUser, sessionToken } = useAuth();
     const [activeTab, setActiveTab] = useState<'posts' | 'instagram' | 'commercial'>('posts');
 
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -37,7 +34,60 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    if (!user) {
+    // Every hook runs unconditionally — the old version returned early on a
+    // missing user and then called useQuery, breaking the Rules of Hooks.
+    const profile = useQuery(
+        api.social.lookupUserSocial,
+        userId ? { userId, ...(sessionToken ? { sessionToken } : {}) } : 'skip',
+    );
+    const socialStats = useQuery(
+        api.social.getPublicSocialStats,
+        userId ? { userId } : 'skip',
+    );
+    const postsResult = useQuery(
+        api.social.getPostsByUser,
+        userId && sessionToken ? { sessionToken, userId, limit: 30 } : 'skip',
+    );
+    const highlightsResult = useQuery(
+        api.social.getHighlights,
+        userId && sessionToken ? { sessionToken, userId } : 'skip',
+    );
+    const sellerListings = useQuery(
+        api.listings.getPublicListingsBySeller,
+        userId ? { sellerId: userId } : 'skip',
+    );
+
+    const userPosts: any[] = (postsResult as any)?.items ?? [];
+    const highlights: any[] = (highlightsResult as any) ?? [];
+    // The "gallery" tab is the image subset of the same posts.
+    const instagramPosts = userPosts
+        .filter((p: any) => p.type === 'image' && p.images?.length)
+        .map((p: any) => ({
+            _id: p._id,
+            image: p.images[0],
+            caption: p.content,
+            likes: p.likeCount ?? 0,
+            likedByUser: p.isLikedByMe ?? false,
+        }));
+    const commercialItems: any[] = ((sellerListings as any) ?? []).map((l: any) => ({
+        id: l._id,
+        name: l.title,
+        price: l.price,
+        image: l.images?.[0]?.url ?? l.image ?? l.gallery?.[0],
+    }));
+
+    const followersCount = socialStats?.followerCount ?? 0;
+    const followingCount = socialStats?.followingCount ?? 0;
+
+    if (profile === undefined) {
+        return (
+            <View style={styles.centerContainer}>
+                <Text style={styles.errorText}>Cargando…</Text>
+            </View>
+        );
+    }
+
+    if (!profile) {
         return (
             <View style={styles.centerContainer}>
                 <Text style={styles.errorText}>Usuario no encontrado</Text>
@@ -45,17 +95,16 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
         );
     }
 
-    const isCurrentUser = user.id === currentUser.id;
-
-    const handleFollow = () => {
-        if (isUserFollowing) {
-            unfollowUser(user.id);
-            setIsUserFollowing(false);
-        } else {
-            followUser(user.id);
-            setIsUserFollowing(true);
-        }
+    const user = {
+        id: userId,
+        name: (profile as any).displayName || (profile as any).username || 'Usuario',
+        username: (profile as any).username,
+        avatar: (profile as any).avatar,
+        bio: (profile as any).bio,
+        verified: (profile as any).verified,
+        isInfluencer: (profile as any).isInfluencer === true,
     };
+    const isCurrentUser = String(authUser?.id ?? '') === String(userId);
 
     // Header Animation
     const headerOpacity = scrollY.interpolate({
@@ -91,7 +140,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                             </View>
                         ) : (
                             instagramPosts.map((post) => (
-                                <View key={post._id || post.id} style={styles.gridItemWrapper}>
+                                <View key={String(post._id)} style={styles.gridItemWrapper}>
                                     <InstagramPost post={post} />
                                 </View>
                             ))
@@ -186,14 +235,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                                 <TouchableOpacity style={styles.messageButton}>
                                     <MessageCircle size={20} color={isDark ? "#D1D5DB" : "#374151"} />
                                 </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.followButton, isUserFollowing && styles.followingButton]}
-                                    onPress={handleFollow}
-                                >
-                                    <Text style={[styles.followButtonText, isUserFollowing && styles.followingButtonText]}>
-                                        {isUserFollowing ? 'Siguiendo' : 'Seguir'}
-                                    </Text>
-                                </TouchableOpacity>
+                                <SocialFollowButton targetUserId={String(userId)} />
                             </View>
                         )}
                     </View>
@@ -213,7 +255,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                                 style={styles.statItem}
                                 onPress={() => navigation.navigate('UserList', { type: 'following', userId: user.id })}
                             >
-                                <Text style={styles.statValue}>{user.following}</Text>
+                                <Text style={styles.statValue}>{followingCount}</Text>
                                 <Text style={styles.statLabel}>Siguiendo</Text>
                             </TouchableOpacity>
                             <View style={styles.statDivider} />
@@ -221,7 +263,7 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                                 style={styles.statItem}
                                 onPress={() => navigation.navigate('UserList', { type: 'followers', userId: user.id })}
                             >
-                                <Text style={styles.statValue}>{user.followers}</Text>
+                                <Text style={styles.statValue}>{followersCount}</Text>
                                 <Text style={styles.statLabel}>Seguidores</Text>
                             </TouchableOpacity>
                         </View>

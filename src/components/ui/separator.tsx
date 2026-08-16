@@ -1,31 +1,39 @@
 import * as React from "react"
 import { View, StyleSheet } from "react-native"
 import { useTheme } from '../../contexts/ThemeContext';
-// import { cn } from "nativewind"
-// I'll assume cn utility might not exist or be different. I'll implement a simple one if needed or just use array styles.
-// For now, standard RN implementation.
+import { colors } from '../../theme/tokens';
+
+type SeparatorVariant = 'default' | 'subtle' | 'strong';
 
 const Separator = React.forwardRef<
     React.ElementRef<typeof View>,
     React.ComponentPropsWithoutRef<typeof View> & {
         orientation?: "horizontal" | "vertical"
         decorative?: boolean
+        variant?: SeparatorVariant
     }
 >(
     (
-        { orientation = "horizontal", decorative = true, ...props },
+        { orientation = "horizontal", decorative = true, variant = 'default', ...props },
         ref
     ) => {
         const { colorScheme } = useTheme();
         const isDark = colorScheme === 'dark';
-        const styles = getStyles(isDark);
+        const c = colors(isDark);
+
+        const color =
+            variant === 'subtle' ? c.divider
+            : variant === 'strong' ? c.border
+            : c.divider; // default uses divider token
 
         return (
             <View
                 ref={ref}
                 style={[
-                    orientation === "horizontal" ? styles.horizontal : styles.vertical,
-                    props.style
+                    orientation === "horizontal"
+                        ? [styles.horizontal, { backgroundColor: color }]
+                        : [styles.vertical, { backgroundColor: color }],
+                    props.style,
                 ]}
                 {...props}
             />
@@ -34,17 +42,15 @@ const Separator = React.forwardRef<
 )
 Separator.displayName = "Separator"
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
+const styles = StyleSheet.create({
     horizontal: {
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         width: "100%",
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)' // border-border
     },
     vertical: {
         height: "100%",
-        width: 1,
-        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.78)'
-    }
+        width: StyleSheet.hairlineWidth,
+    },
 })
 
 export { Separator }

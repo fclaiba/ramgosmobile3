@@ -104,6 +104,12 @@ http.route({
                         const cartId = pi.metadata?.cartId;
                         const userId = pi.metadata?.userId;
 
+                        // Nota: las compras que arrancan en la red social NO
+                        // tienen rama propia acá. El CommerceTag de un post
+                        // agrega el listing al carrito con la atribución del
+                        // creador (convex/commerce.ts) y la compra sigue por
+                        // este mismo camino multi-vendor. La venta se atribuye
+                        // al post en `internalCreateSubOrder`.
                         if (cartId && userId) {
                             console.log(`[Webhook] Processing multi-vendor cart ${cartId} for user ${userId}`);
                             await ctx.runAction(internal.stripe.internalProcessMultiVendorCart, {

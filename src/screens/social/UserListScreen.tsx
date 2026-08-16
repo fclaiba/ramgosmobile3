@@ -24,40 +24,26 @@ export default function UserListScreen() {
     const authArgs =
         authUser && sessionToken ? { sessionToken, userId: String(userId) } : 'skip';
 
-    const followersRows = useQuery(
+    const followersPage = useQuery(
         api.social.getFollowers,
         type === 'followers' ? (authArgs as any) : 'skip',
     );
-    const followingRows = useQuery(
+    const followingPage = useQuery(
         api.social.getFollowing,
         type === 'following' ? (authArgs as any) : 'skip',
     );
 
-    const otherIds = useMemo(() => {
-        if (type === 'followers')
-            return (followersRows ?? []).map((r: any) => r.followerUserId);
-        if (type === 'following')
-            return (followingRows ?? []).map((r: any) => r.followeeUserId);
-        return [];
-    }, [type, followersRows, followingRows]);
-
-    const fetchedUsers = useQuery(
-        api.social.getUsersByIds,
-        authUser && sessionToken && otherIds.length > 0
-            ? { userIds: otherIds, sessionToken }
-            : 'skip',
-    );
-
+    // Both queries now return hydrated profiles, so no second round-trip.
     const users = useMemo(() => {
-        if (!fetchedUsers) return [];
-        return fetchedUsers.map((u: any) => ({
+        const page = type === 'followers' ? followersPage : followingPage;
+        return ((page as any)?.items ?? []).map((u: any) => ({
             id: u.userId,
             name: u.displayName ?? 'Usuario',
             username: u.username ?? 'usuario',
             avatar: u.avatar ?? '',
             verified: u.verified ?? false,
         }));
-    }, [fetchedUsers]);
+    }, [type, followersPage, followingPage]);
 
     return (
         <View style={styles.container}>

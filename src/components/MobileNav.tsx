@@ -6,9 +6,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brand } from '../theme/brand';
-import { colors, Radius, Touch } from '../theme/tokens';
+import { colors, Radius, Touch, Motion, Elevation } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
-import { glassShadow } from '../theme/tokens';
 
 
 export type NavSection = 'home' | 'marketplace' | 'social' | 'dashboard';
@@ -32,12 +31,14 @@ const NavItem = ({
     onPress,
     c,
     styles,
+    isDark,
 }: {
     item: any;
     isActive: boolean;
     onPress: () => void;
     c: ReturnType<typeof colors>;
     styles: any;
+    isDark: boolean;
 }) => {
     const activeColor = Brand.primary;
     const inactiveColor = c.textMuted;
@@ -58,8 +59,12 @@ const NavItem = ({
             accessibilityState={{ selected: isActive }}
             accessibilityLabel={item.label}
         >
-            <Animated.View style={[styles.iconWrapper, isActive && styles.iconWrapperActive, iconWrapperStyle]}>
-                <Icon size={22} color={isActive ? activeColor : inactiveColor} strokeWidth={isActive ? 2.5 : 2} />
+            <Animated.View style={[
+                styles.iconWrapper,
+                isActive && styles.iconWrapperActive,
+                iconWrapperStyle,
+            ]}>
+                <Icon size={21} color={isActive ? activeColor : inactiveColor} strokeWidth={isActive ? 2.5 : 1.8} />
             </Animated.View>
             <Text
                 style={[
@@ -70,6 +75,10 @@ const NavItem = ({
             >
                 {item.label}
             </Text>
+            {/* Active dot indicator */}
+            {isActive && (
+                <View style={[styles.activeDot, { backgroundColor: activeColor }]} />
+            )}
         </TouchableOpacity>
     );
 };
@@ -114,6 +123,7 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
                         onPress={() => onSectionChange(item.id as NavSection)}
                         c={c}
                         styles={styles}
+                        isDark={isDark}
                     />
                 ))}
             </View>
@@ -136,9 +146,9 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
             backgroundColor: 'transparent',
             zIndex: 1000,
             ...Platform.select({
-                web: { boxShadow: isDark ? '0 -10px 32px rgba(0,0,0,0.45)' : '0 -10px 32px rgba(24,24,27,0.10)' } as any,
+                web: { boxShadow: isDark ? '0 -10px 32px rgba(0,0,0,0.45)' : '0 -10px 32px rgba(5,5,6,0.08)' } as any,
                 default: {
-                    ...glassShadow(isDark),
+                    ...Elevation[3](isDark),
                 },
             }),
         },
@@ -159,7 +169,7 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
             paddingVertical: 6,
         },
         iconWrapper: {
-            width: 40,
+            width: 42,
             height: 36,
             alignItems: 'center',
             justifyContent: 'center',
@@ -168,7 +178,15 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
         },
         iconWrapperActive: {
             backgroundColor: c.primaryMuted,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: isDark ? 'rgba(33,150,243,0.25)' : 'rgba(33,150,243,0.15)',
         },
-        label: { fontSize: 10, fontWeight: '600' },
+        label: { fontSize: 11, fontWeight: '600', letterSpacing: -0.1 },
         activeLabel: { fontWeight: '800' },
+        activeDot: {
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            marginTop: 3,
+        },
     });

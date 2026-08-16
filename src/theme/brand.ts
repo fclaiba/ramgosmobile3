@@ -12,6 +12,14 @@ export const Brand = {
     success: '#10B981',
     danger: '#EF4444',
     warning: '#F59E0B',
+
+    /** Glow colors for specular / interactive states */
+    primaryGlow: 'rgba(33, 150, 243, 0.35)',
+    surfaceGlow: 'rgba(33, 150, 243, 0.12)',
+
+    /** CTA gradient (start → end) */
+    gradient: ['#1E88E5', '#29B6F6'] as [string, string],
+    gradientVivid: ['#1565C0', '#4FC3F7'] as [string, string],
 } as const;
 
 export const brandTint = (isDark: boolean, alpha = 0.14) =>

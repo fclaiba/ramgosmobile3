@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { hashPassword } from "./passwordHelpers";
 
 const DEMO_PASSWORD = "RamgosDemo1!";
@@ -135,7 +135,7 @@ function slugify(s: string) {
  * Demo catalog: verified @test.com users + 40 map-ready listings
  * (5 product / 5 service / 5 event / 5 bono) × (NYC + Caracas).
  */
-export const seedVerifiedDemo = mutation({
+export const seedVerifiedDemo = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = new Date().toISOString();

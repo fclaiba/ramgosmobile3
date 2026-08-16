@@ -899,8 +899,10 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
     );
 }
 
-const getStyles = (isDark: boolean) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors(isDark).bg },
+const getStyles = (isDark: boolean) => {
+    const c = colors(isDark);
+    return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bg },
     headerControls: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
     mapHeaderControls: {
         marginHorizontal: 12,
@@ -909,25 +911,25 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         paddingTop: 12,
         paddingBottom: 10,
         borderRadius: Radius.xl,
-        backgroundColor: isDark ? 'rgba(17, 24, 39, 0.72)' : 'rgba(255, 255, 255, 0.82)',
-        borderWidth: 1,
-        borderColor: isDark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(229, 231, 235, 0.9)',
+        backgroundColor: c.surface1,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.glassBorder,
         ...glassShadow(isDark),
     },
-    cartBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: colors(isDark).glass, justifyContent: 'center', alignItems: 'center' },
+    cartBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: c.surface2, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
 
     // Favorites
-    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: colors(isDark).glass, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
-    favBtnActive: { ...glassShadow(isDark),},
+    favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: c.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
+    favBtnActive: { ...glassShadow(isDark) },
 
     // Search
     searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'center' },
-    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: Radius['2xl'], borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass, height: 52, overflow: 'hidden' },
-    searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, color: colors(isDark).text, height: '100%', outlineStyle: 'none' } as any,
-    filterBtn: { width: 52, height: 52, borderRadius: Radius['2xl'], justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass },
-    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: Radius.md, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? '#09090B' : '#FAFAFA' },
-    activeFilterText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+    searchInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: Radius['2xl'], borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, backgroundColor: c.surface1, height: 52, overflow: 'hidden' },
+    searchInput: { flex: 1, paddingHorizontal: 12, fontSize: 15, color: c.text, height: '100%', outlineStyle: 'none' } as any,
+    filterBtn: { width: 52, height: 52, borderRadius: Radius['2xl'], justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, backgroundColor: c.surface1 },
+    activeFilterBadge: { position: 'absolute', top: -4, right: -4, width: 20, height: 20, borderRadius: Radius.md, backgroundColor: '#4FC3F7', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: c.bg },
+    activeFilterText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
     // Compact Controls (View mode + Categories)
     compactControlsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -936,12 +938,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         alignItems: 'center',
         padding: 4,
         borderRadius: Radius.lg,
-        backgroundColor: colors(isDark).glass,
-        borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        backgroundColor: c.surface1,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.glassBorder,
     },
     viewModeBtn: { width: 34, height: 34, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center' },
-    viewModeBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' },
+    viewModeBtnActive: { backgroundColor: c.surface3 },
     categoryChipsScroll: { flex: 1 },
     categoryChipsContent: { flexDirection: 'row', alignItems: 'center', paddingRight: 4 },
     categoryChip: {
@@ -951,72 +953,73 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 8,
-        backgroundColor: colors(isDark).glass,
-        borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+        backgroundColor: c.surface1,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.glassBorder,
     },
-    categoryChipActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderColor: '#2196F3' },
-    categoryChipText: { fontSize: 12, color: colors(isDark).textMuted, fontWeight: '600' },
-    categoryChipTextActive: { color: '#2196F3' },
+    categoryChipActive: { backgroundColor: c.surface3, borderColor: c.primary },
+    categoryChipText: { fontSize: 12, color: c.textMuted, fontWeight: '600' },
+    categoryChipTextActive: { color: c.primary, fontWeight: '700' },
 
     // Toggles
-    viewToggleContainer: { flexDirection: 'row', backgroundColor: colors(isDark).glass, borderRadius: Radius.xl, padding: 4, marginBottom: 16 },
+    viewToggleContainer: { flexDirection: 'row', backgroundColor: c.surface1, borderRadius: Radius.xl, padding: 4, marginBottom: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     toggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: Radius.xl },
-    toggleBtnActive: { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', ...glassShadow(isDark),},
-    toggleBtnText: { fontSize: 13, marginLeft: 8, color: '#6B7280', fontWeight: '500' },
-    toggleBtnTextActive: { color: '#2196F3', fontWeight: 'bold' },
-    categoryToggleText: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
-    categoryToggleTextActive: { color: '#2196F3', fontWeight: 'bold' },
+    toggleBtnActive: { backgroundColor: c.surface3, ...glassShadow(isDark) },
+    toggleBtnText: { fontSize: 13, marginLeft: 8, color: c.textMuted, fontWeight: '600' },
+    toggleBtnTextActive: { color: c.primary, fontWeight: '800' },
+    categoryToggleText: { fontSize: 13, color: c.textMuted, fontWeight: '600' },
+    categoryToggleTextActive: { color: c.primary, fontWeight: '800' },
 
     // Tabs
     tabsContainer: { flexDirection: 'row', gap: 8, paddingHorizontal: 4 },
-    tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: Radius.xl, backgroundColor: 'rgba(255,255,255,0.62)', borderWidth: 1, borderColor: '#E5E7EB' },
-    tabActive: { backgroundColor: '#111827', borderColor: '#111827' },
-    tabText: { fontSize: 13, color: '#4B5563', fontWeight: '500' },
-    tabTextActive: { color: '#fff' },
+    tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: Radius.xl, backgroundColor: c.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
+    tabActive: { backgroundColor: c.primary, borderColor: c.primary },
+    tabText: { fontSize: 13, color: c.textMuted, fontWeight: '600' },
+    tabTextActive: { color: '#fff', fontWeight: '700' },
 
     // Grid Card
     gridCardWrapper: { marginBottom: 4 },
-    gridCard: { flex: 1, backgroundColor: colors(isDark).bg, borderRadius: Radius.lg, overflow: 'hidden', ...glassShadow(isDark),},
-    gridImgContainer: { aspectRatio: 1, backgroundColor: colors(isDark).glass, position: 'relative' },
+    gridCard: { flex: 1, backgroundColor: c.surface1, borderRadius: Radius.lg, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark) },
+    gridImgContainer: { aspectRatio: 1, backgroundColor: c.surface2, position: 'relative' },
     cardImg: { width: '100%', height: '100%' },
-    discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, overflow: 'hidden' },
-    discountText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+    discountBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(239, 68, 68, 0.95)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, overflow: 'hidden' },
+    discountText: { color: '#fff', fontSize: 10, fontWeight: '800' },
     categoryBadge: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.sm, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-    categoryText: { fontSize: 10, color: colors(isDark).text, fontWeight: '500' },
+    categoryText: { fontSize: 10, color: c.text, fontWeight: '600' },
     gridContent: { padding: 12 },
-    cardTitle: { fontSize: 13, fontWeight: '600', color: colors(isDark).text, marginBottom: 4, height: 36 },
+    cardTitle: { fontSize: 13, fontWeight: '700', color: c.text, marginBottom: 4, height: 36, letterSpacing: -0.2 },
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-    ratingText: { fontSize: 11, color: '#6B7280' },
+    ratingText: { fontSize: 11, color: c.textMuted },
     priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 8 },
-    price: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text },
-    originalPrice: { fontSize: 11, color: '#9CA3AF', textDecorationLine: 'line-through' },
-    btnSm: { backgroundColor: isDark ? '#374151' : '#111827', paddingVertical: 6, alignItems: 'center', borderRadius: Radius.sm },
-    btnSmText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+    price: { fontSize: 16, fontWeight: '800', color: c.text, letterSpacing: -0.5 },
+    originalPrice: { fontSize: 11, color: c.textSubtle, textDecorationLine: 'line-through' },
+    btnSm: { backgroundColor: c.surface3, paddingVertical: 6, alignItems: 'center', borderRadius: Radius.sm },
+    btnSmText: { color: c.text, fontSize: 12, fontWeight: '700' },
 
     // List Card
-    listCard: { flexDirection: 'row', backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 12, gap: 12, marginBottom: 12, ...glassShadow(isDark),},
-    listImgContainer: { width: 96, height: 96, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: colors(isDark).glass },
+    listCard: { flexDirection: 'row', backgroundColor: c.surface1, borderRadius: Radius.lg, padding: 12, gap: 12, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark) },
+    listImgContainer: { width: 96, height: 96, borderRadius: Radius.md, overflow: 'hidden', backgroundColor: c.surface2 },
     listContent: { flex: 1 },
     listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-    locationText: { fontSize: 11, color: '#6B7280' },
-    descText: { fontSize: 11, color: '#6B7280', marginBottom: 8 },
+    locationText: { fontSize: 11, color: c.textMuted },
+    descText: { fontSize: 11, color: c.textMuted, marginBottom: 8 },
     listFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' },
 
     // Map Specific
     mapContainer: { flex: 1, borderRadius: Radius.xl, overflow: 'hidden', marginTop: 8 },
     mapFloatBtnContainer: { position: 'absolute', bottom: 24, alignSelf: 'center', zIndex: 20 },
-    mapFloatBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111827', paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.xl, gap: 8, ...glassShadow(isDark),},
-    mapFloatBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+    mapFloatBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.xl, gap: 8, ...glassShadow(isDark) },
+    mapFloatBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
     // Map List Overlay
-    mapListOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: MAP_LIST_HEIGHT, backgroundColor: colors(isDark).glass, borderTopLeftRadius: 24, borderTopRightRadius: 24, ...glassShadow(isDark), zIndex: 30 },
-    mapListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
-    mapListHandle: { width: 40, height: 4, borderRadius: Radius.sm, backgroundColor: '#E5E7EB' },
+    mapListOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: MAP_LIST_HEIGHT, backgroundColor: c.surface1, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, ...glassShadow(isDark), zIndex: 30 },
+    mapListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.glassBorder },
+    mapListHandle: { width: 40, height: 4, borderRadius: Radius.sm, backgroundColor: c.border },
     closeListBtn: { position: 'absolute', right: 16, top: 16, padding: 4 },
-    mapListTitle: { fontSize: 16, fontWeight: 'bold', color: colors(isDark).text, margin: 16 },
+    mapListTitle: { fontSize: 16, fontWeight: '800', color: c.text, margin: 16 },
 });
+};
 
 // HOC inyectado automáticamente para soporte de teclado
 const HOC_KeyboardAvoidingView_MarketplaceScreen = (props: any) => (

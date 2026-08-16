@@ -489,6 +489,10 @@ export default defineSchema({
             })),
             distanceKm: v.optional(v.number()),
             referralCode: v.optional(v.string()),
+            // Social commerce: the post whose CommerceTag put this item in the
+            // cart. Survives to order creation so the sale can be attributed
+            // back to the creator in `socialPostSales`.
+            sourcePostId: v.optional(v.string()),
         }),
     }).index("by_user", ["userId"])
         .index("by_user_listing", ["userId", "listingId"]),
@@ -824,6 +828,8 @@ export default defineSchema({
         avatar: v.optional(v.string()),
         verified: v.optional(v.boolean()),
         isInfluencer: v.optional(v.boolean()),
+        // ISO country code. Drives the geo-local ranking of commercial posts.
+        country: v.optional(v.string()),
         followerCount: v.number(),
         followingCount: v.number(),
         postCount: v.number(),
@@ -873,15 +879,29 @@ export default defineSchema({
             type: v.optional(v.string()),
             location: v.optional(v.string()),
             description: v.optional(v.string()),
+            // Snapshot of the listing discount so the CommerceTag can lead with
+            // "40% OFF" without the feed joining `listings` for every post.
+            discountPercent: v.optional(v.number()),
         })),
         likeCount: v.number(),
         commentCount: v.number(),
         retweetCount: v.number(),
+        // Optional so pre-existing rows stay valid; treat undefined as 0.
+        viewCount: v.optional(v.number()),
+        // Country/region of the author at publish time. Used by the feed to
+        // rank commercial posts locally (social content stays borderless).
+        geoCountry: v.optional(v.string()),
         deletedAt: v.optional(v.string()),
         createdAt: v.string(),
     })
         .index('by_author', ['authorUserId'])
-        .index('by_created', ['createdAt']),
+        .index('by_created', ['createdAt'])
+        .index('by_author_created', ['authorUserId', 'createdAt'])
+        .index('by_type_created', ['type', 'createdAt'])
+        .searchIndex('search_content', {
+            searchField: 'content',
+            filterFields: ['type'],
+        }),
 
     // socialComments — flat comments on posts (no threading in v1).
     socialComments: defineTable({
@@ -946,6 +966,11 @@ export default defineSchema({
     // socialChats — 1:1 (or future group) DM threads.
     socialChats: defineTable({
         participantIds: v.array(v.string()),
+        // Sorted participant ids joined by ":" — Convex has no "array
+        // contains" index, so this flat key is what makes 1:1 chat lookup
+        // O(log n) instead of a full scan. Optional for rows created before
+        // the key existed; `createChat` backfills them on read.
+        participantsKey: v.optional(v.string()),
         lastMessagePreview: v.optional(v.string()),
         lastMessageAt: v.string(),
         // JSON-ish object (Convex `v.any()`) because the participant set
@@ -955,11 +980,9 @@ export default defineSchema({
         firstRepliedAt: v.optional(v.string()),
         firstReplierId: v.optional(v.string()),
     })
-        // No native "array contains" index — we store a flat
-        // `participantsKey` (sorted ids joined by ":") so we can find
-        // existing 1:1 chats in O(log n).
         .index('by_lastMessage', ['lastMessageAt'])
-        .index('by_participant', ['participantIds']),
+        .index('by_participant', ['participantIds'])
+        .index('by_participants_key', ['participantsKey']),
 
     // socialMessages — DM messages within a socialChats thread.
     socialMessages: defineTable({
@@ -1001,6 +1024,119 @@ export default defineSchema({
         createdAt: v.string(),
     })
         .index('by_user', ['userId']),
+
+    // socialPostViews — one row per (post, viewer) so impressions are
+    // idempotent. `socialPosts.viewCount` is the denormalized counter.
+    socialPostViews: defineTable({
+        postId: v.string(),
+        viewerUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_post_viewer', ['postId', 'viewerUserId'])
+        .index('by_viewer', ['viewerUserId']),
+
+    // socialPostSales — attribution ledger for social commerce. One row per
+    // checkout started from a post's CommerceTag. Written as `pending` when the
+    // PaymentIntent is created and flipped to `paid` by the webhook, so
+    // `getPostAnalytics` reports creator revenue without scanning `orders`.
+    //
+    // Money split (cents, computed server-side from the listing price):
+    //   grossCents = platformCommissionCents + creatorCommissionCents + sellerNetCents
+    // The actual payout runs through the existing escrow release
+    // (`payments.influencerId` → Stripe Connect transfer); this table is the
+    // per-post analytics view of it, never the source of truth for money.
+    socialPostSales: defineTable({
+        postId: v.string(),
+        creatorUserId: v.string(), // post author earning the commission
+        sellerId: v.string(),
+        buyerUserId: v.string(),
+        listingId: v.string(),
+        orderId: v.optional(v.string()),
+        stripePaymentIntentId: v.string(),
+        quantity: v.number(),
+        grossCents: v.number(),
+        creatorCommissionCents: v.number(),
+        platformCommissionCents: v.number(),
+        sellerNetCents: v.number(),
+        pointsRedeemed: v.optional(v.number()),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('paid'),
+            v.literal('refunded'),
+            v.literal('failed'),
+        ),
+        createdAt: v.string(),
+        settledAt: v.optional(v.string()),
+    })
+        .index('by_post', ['postId'])
+        .index('by_creator', ['creatorUserId'])
+        .index('by_buyer', ['buyerUserId'])
+        .index('by_intent', ['stripePaymentIntentId'])
+        .index('by_creator_created', ['creatorUserId', 'createdAt']),
+
+    // commercialCommunities — "pasillos digitales": groups where businesses
+    // and promoters associate for cross-traffic, plus private user groups.
+    commercialCommunities: defineTable({
+        name: v.string(),
+        description: v.optional(v.string()),
+        coverImage: v.optional(v.string()),
+        ownerUserId: v.string(),
+        kind: v.union(v.literal('business'), v.literal('user')),
+        visibility: v.union(v.literal('public'), v.literal('private')),
+        location: v.optional(v.string()),
+        memberCount: v.number(),
+        createdAt: v.string(),
+        deletedAt: v.optional(v.string()),
+    })
+        .index('by_owner', ['ownerUserId'])
+        .index('by_kind', ['kind'])
+        .searchIndex('search_name', {
+            searchField: 'name',
+            filterFields: ['kind', 'visibility'],
+        }),
+
+    communityMembers: defineTable({
+        communityId: v.string(),
+        userId: v.string(),
+        role: v.union(v.literal('owner'), v.literal('admin'), v.literal('member')),
+        status: v.union(v.literal('active'), v.literal('invited'), v.literal('left')),
+        createdAt: v.string(),
+    })
+        .index('by_community', ['communityId'])
+        .index('by_user', ['userId'])
+        .index('by_community_user', ['communityId', 'userId']),
+
+    // eventMatches — opt-in "Tinder interno" for event attendees. One row per
+    // directed swipe; a mutual pair flips both rows to `matched`.
+    eventMatches: defineTable({
+        eventId: v.string(),
+        userA: v.string(),
+        userB: v.string(),
+        intent: v.union(v.literal('dating'), v.literal('networking')),
+        status: v.union(v.literal('pending'), v.literal('matched'), v.literal('rejected')),
+        chatId: v.optional(v.string()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_event', ['eventId'])
+        .index('by_event_pair', ['eventId', 'userA', 'userB'])
+        .index('by_event_user', ['eventId', 'userA']),
+
+    // eventMatchOptIns — per (event, user) participation switch. Absent or
+    // `enabled: false` means the user is invisible to matching (opt-out default).
+    eventMatchOptIns: defineTable({
+        eventId: v.string(),
+        userId: v.string(),
+        enabled: v.boolean(),
+        intent: v.union(v.literal('dating'), v.literal('networking')),
+        displayName: v.optional(v.string()),
+        avatar: v.optional(v.string()),
+        bio: v.optional(v.string()),
+        updatedAt: v.string(),
+    })
+        .index('by_event', ['eventId'])
+        .index('by_event_user', ['eventId', 'userId'])
+        .index('by_event_enabled', ['eventId', 'enabled']),
 
     // Push deliveries — audit log of every push notification dispatched by
     // `notifications.notifyUser`. Persisted before/after the Expo Push API

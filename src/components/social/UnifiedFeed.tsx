@@ -1,113 +1,229 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { View, StyleSheet, Dimensions, RefreshControl, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, StyleSheet, Dimensions, RefreshControl, ActivityIndicator } from 'react-native';
 import { FlatList, ViewToken } from 'react-native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
+import { useNavigation } from '@react-navigation/native';
 import { PostCard, PostCardProps } from './PostCard';
-import { OneClickCheckoutSheet } from './OneClickCheckoutSheet';
+import { PostCommentsModal } from './PostCommentsModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 
 const { height } = Dimensions.get('window');
 
 // Restamos el área del botttom tab aprox (ajustable según el layout padre)
-const ITEM_HEIGHT = height - 85; 
+const ITEM_HEIGHT = height - 85;
+const PAGE_SIZE = 10;
 
-export const UnifiedFeed = () => {
-    const { sessionToken, user } = useAuth();
+export type UnifiedFeedMode = 'forYou' | 'following' | 'videos' | 'recent';
+
+export interface UnifiedFeedProps {
+    /** Restricts the feed to one author — used by profile screens. */
+    authorUserId?: string;
+    mode?: UnifiedFeedMode;
+}
+
+export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
+    const { sessionToken } = useAuth();
+    const { show } = useToast();
+    const navigation = useNavigation<any>();
+
+    // Cursor pagination: page 0 stays reactive (new posts stream in), older
+    // pages are appended snapshots. `getFeed` returns `{ items, nextCursor }`.
+    const [cursor, setCursor] = useState<string | undefined>(undefined);
+    const [olderPages, setOlderPages] = useState<any[]>([]);
+    const [exhausted, setExhausted] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    
-    // Rastreamos qué posts están en foco para auto-play de videos
+
     const [focusedIds, setFocusedIds] = useState<Set<string>>(new Set());
 
-    // Estado del Checkout
-    const [checkoutListingId, setCheckoutListingId] = useState<string | null>(null);
-    const [checkoutPostId, setCheckoutPostId] = useState<string | null>(null);
-    const [checkoutVisible, setCheckoutVisible] = useState(false);
+    const [addingToCart, setAddingToCart] = useState(false);
+    const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
 
-    const postsResult = useQuery(api.social.getFeed, sessionToken ? { limit: 10, sessionToken } : 'skip');
-    const posts = postsResult?.items || [];
-    const status = postsResult ? 'CanLoadMore' : 'LoadingFirstPage';
+    const page = useQuery(
+        api.social.getFeed,
+        sessionToken
+            ? {
+                  sessionToken,
+                  limit: PAGE_SIZE,
+                  cursor,
+                  ...(authorUserId ? { authorUserId } : {}),
+                  ...(mode ? { mode } : {}),
+              }
+            : 'skip',
+    );
 
     const toggleLike = useMutation(api.social.toggleLike);
+    const addView = useMutation(api.social.addView);
+    const addPostProductToCart = useMutation(api.commerce.addPostProductToCart);
+    const viewedIds = useRef<Set<string>>(new Set());
+
+    // Reset accumulated pages whenever the feed identity changes.
+    useEffect(() => {
+        setCursor(undefined);
+        setOlderPages([]);
+        setExhausted(false);
+        viewedIds.current = new Set();
+    }, [authorUserId, mode, sessionToken]);
+
+    // Fold each newly fetched page (beyond the live first one) into the tail.
+    useEffect(() => {
+        if (!page || !cursor) return;
+        setOlderPages((prev) =>
+            prev.some((p) => p.cursor === cursor)
+                ? prev
+                : [...prev, { cursor, items: page.items }],
+        );
+        if (!page.nextCursor) setExhausted(true);
+    }, [page, cursor]);
+
+    const posts = useMemo(() => {
+        const livePage = cursor ? [] : page?.items ?? [];
+        const tail = olderPages.flatMap((p) => p.items);
+        // The live page is re-queried on every cursor change, so dedupe.
+        const seen = new Set<string>();
+        return [...livePage, ...tail].filter((item) => {
+            const id = String(item?._id ?? '');
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+    }, [page, cursor, olderPages]);
+
+    const isLoadingFirstPage = page === undefined && olderPages.length === 0;
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
-        // El hook usePaginatedQuery no expone un "refetch" directo,
-        // pero podemos simular la recarga recargando la página entera o forzando la cache
-        // Por ahora lo desactivamos visualmente rápido.
-        setTimeout(() => setRefreshing(false), 1000);
+        setCursor(undefined);
+        setOlderPages([]);
+        setExhausted(false);
+        viewedIds.current = new Set();
+        // Convex re-runs the query on its own; this just releases the spinner
+        // once the reset has been committed.
+        setRefreshing(false);
     }, []);
 
-    const handleEndReached = () => {
-        // Ponytail: Pagination is deferred
-    };
+    const handleEndReached = useCallback(() => {
+        if (exhausted || !page?.nextCursor) return;
+        if (page.nextCursor === cursor) return;
+        setCursor(page.nextCursor);
+    }, [exhausted, page, cursor]);
 
-    const handleLike = useCallback((postId: Id<'socialPosts'>) => {
-        if (!sessionToken) return;
-        toggleLike({ sessionToken, targetType: 'post', targetId: postId }).catch(console.error);
-    }, [sessionToken, toggleLike]);
+    const handleLike = useCallback(
+        (postId: Id<'socialPosts'>) => {
+            if (!sessionToken) return;
+            toggleLike({ sessionToken, targetType: 'post', targetId: postId }).catch(
+                console.error,
+            );
+        },
+        [sessionToken, toggleLike],
+    );
 
-    const handleComment = useCallback((postId: Id<'socialPosts'>) => {
-        console.log("Abrir modal de comentarios para:", postId);
-        // TODO: Implementar Sheet de comentarios (Sprint posterior)
+    const handleComment = useCallback((postId: string) => {
+        setCommentsPostId(postId);
     }, []);
 
-    const handleCommercePress = useCallback((listingId: string, postId: string) => {
-        setCheckoutListingId(listingId);
-        setCheckoutPostId(postId);
-        setCheckoutVisible(true);
-    }, []);
-
-    const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-        const visibleIds = new Set<string>();
-        viewableItems.forEach(item => {
-            if (item.isViewable && item.item?._id) {
-                visibleIds.add(item.item._id);
+    /**
+     * El feed no cobra. Agrega el producto real al carrito del marketplace
+     * (con la atribución del creador) y navega al carrito; la compra sigue por
+     * el checkout normal, con stock, envío y escrow.
+     */
+    const handleCommercePress = useCallback(
+        async (_listingId: string, postId: string) => {
+            if (!sessionToken) {
+                show('Iniciá sesión para comprar', 'warning');
+                return;
             }
+            if (addingToCart) return;
+            setAddingToCart(true);
+            try {
+                await addPostProductToCart({
+                    sessionToken,
+                    postId: postId as any,
+                    quantity: 1,
+                });
+                show('Agregado al carrito', 'success');
+                navigation.navigate('Cart');
+            } catch (e: any) {
+                show(e?.message || 'No se pudo agregar al carrito', 'error');
+            } finally {
+                setAddingToCart(false);
+            }
+        },
+        [sessionToken, addingToCart, addPostProductToCart, navigation, show],
+    );
+
+    const onViewableItemsChanged = useRef(
+        ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+            const visibleIds = new Set<string>();
+            viewableItems.forEach((item) => {
+                if (item.isViewable && item.item?._id) {
+                    visibleIds.add(String(item.item._id));
+                }
+            });
+            setFocusedIds(visibleIds);
+        },
+    ).current;
+
+    // Impressions drive creator payouts, so record one per post that actually
+    // became visible. `addView` is idempotent per (post, viewer) server-side.
+    useEffect(() => {
+        if (!sessionToken || focusedIds.size === 0) return;
+        const fresh = Array.from(focusedIds).filter((id) => !viewedIds.current.has(id));
+        if (fresh.length === 0) return;
+        fresh.forEach((id) => viewedIds.current.add(id));
+        addView({ sessionToken, postIds: fresh as any }).catch(() => {
+            fresh.forEach((id) => viewedIds.current.delete(id));
         });
-        setFocusedIds(visibleIds);
-    }).current;
+    }, [focusedIds, sessionToken, addView]);
 
-    const renderItem = useCallback(({ item }: { item: any }) => {
-        // Mapeo seguro del backend al prop del PostCard
-        const mappedPost: PostCardProps['post'] = {
-            _id: item._id,
-            authorUserId: item.authorUserId,
-            type: item.type,
-            content: item.content,
-            images: item.images,
-            videoUrl: item.videoUrl,
-            commercialProduct: item.commercialProduct,
-            likesCount: item.likesCount || 0,
-            commentsCount: item.commentsCount || 0,
-            hasLiked: item.isLikedByMe || false,
-        };
+    const renderItem = useCallback(
+        ({ item }: { item: any }) => {
+            // Field names here must track convex/social.ts `decoratePosts`.
+            const mappedPost: PostCardProps['post'] = {
+                _id: item._id,
+                authorUserId: item.authorUserId,
+                type: item.type,
+                content: item.content,
+                images: item.images,
+                videoUrl: item.videoUrl,
+                commercialProduct: item.commercialProduct,
+                likesCount: item.likeCount ?? 0,
+                commentsCount: item.commentCount ?? 0,
+                hasLiked: item.isLikedByMe ?? false,
+            };
 
-        const authorInfo = item.author ? {
-            name: item.author.name,
-            avatar: item.author.avatar,
-            role: item.author.role
-        } : null;
+            const authorInfo = item.author
+                ? {
+                      name: item.author.displayName || item.author.username || 'Usuario',
+                      avatar: item.author.avatar,
+                      role: item.author.isInfluencer ? 'influencer' : undefined,
+                  }
+                : null;
 
-        return (
-            <View style={{ height: ITEM_HEIGHT }}>
-                <PostCard
-                    post={mappedPost}
-                    author={authorInfo}
-                    onLike={() => handleLike(mappedPost._id)}
-                    onComment={() => handleComment(mappedPost._id)}
-                    onCommercePress={(lId) => handleCommercePress(lId, mappedPost._id)}
-                    isFocused={focusedIds.has(item._id)}
-                />
-            </View>
-        );
-    }, [focusedIds, handleLike, handleComment, handleCommercePress]);
+            return (
+                <View style={{ height: ITEM_HEIGHT }}>
+                    <PostCard
+                        post={mappedPost}
+                        author={authorInfo}
+                        onLike={() => handleLike(mappedPost._id)}
+                        onComment={() => handleComment(String(mappedPost._id))}
+                        onCommercePress={(lId) =>
+                            handleCommercePress(lId, String(mappedPost._id))
+                        }
+                        isFocused={focusedIds.has(String(item._id))}
+                    />
+                </View>
+            );
+        },
+        [focusedIds, handleLike, handleComment, handleCommercePress],
+    );
 
-    if (status === 'LoadingFirstPage') {
+    if (isLoadingFirstPage) {
         return (
             <View style={[styles.container, styles.center]}>
-                {/* Fallback de carga, idealmente Skeleton */}
+                <ActivityIndicator color="#FFF" />
             </View>
         );
     }
@@ -117,14 +233,14 @@ export const UnifiedFeed = () => {
             <FlatList
                 data={posts}
                 renderItem={renderItem}
-                keyExtractor={(item) => item._id || item.id}
+                keyExtractor={(item) => String(item._id ?? item.id)}
                 pagingEnabled
                 showsVerticalScrollIndicator={false}
                 onEndReached={handleEndReached}
                 onEndReachedThreshold={0.5}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={{
-                    itemVisiblePercentThreshold: 70
+                    itemVisiblePercentThreshold: 70,
                 }}
                 refreshControl={
                     <RefreshControl
@@ -134,12 +250,11 @@ export const UnifiedFeed = () => {
                     />
                 }
             />
-            
-            <OneClickCheckoutSheet 
-                visible={checkoutVisible}
-                postId={checkoutPostId}
-                listingId={checkoutListingId}
-                onClose={() => setCheckoutVisible(false)}
+
+            <PostCommentsModal
+                postId={commentsPostId as any}
+                visible={commentsPostId !== null}
+                onClose={() => setCommentsPostId(null)}
             />
         </View>
     );
@@ -153,5 +268,5 @@ const styles = StyleSheet.create({
     center: {
         justifyContent: 'center',
         alignItems: 'center',
-    }
+    },
 });

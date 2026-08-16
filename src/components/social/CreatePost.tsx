@@ -4,7 +4,6 @@ import { X, Image as ImageIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
-import { useSocial } from '../../contexts/SocialContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -15,24 +14,25 @@ import { CommerceLinker } from './CommerceLinker';
 import { Tag as TagIcon } from 'lucide-react-native';
 
 export const CreatePost = ({ onClose }: { onClose: () => void }) => {
-    const { currentUser, createPost } = useSocial();
-    const { user: authUser } = useAuth();
+    const { user: authUser, sessionToken } = useAuth();
     const { show } = useToast();
     const [content, setContent] = useState('');
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isVideo, setIsVideo] = useState<boolean>(false);
     const [uploading, setUploading] = useState(false);
+    const [posting, setPosting] = useState(false);
     const [showLinker, setShowLinker] = useState(false);
     const [attachedListing, setAttachedListing] = useState<{ id: string, title: string } | null>(null);
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+    const createPost = useMutation(api.social.createPost);
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
     const handlePickImage = async () => {
-        if (!authUser) { show('Debes iniciar sesión', 'error'); return; }
+        if (!authUser || !sessionToken) { show('Debes iniciar sesión', 'error'); return; }
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) { show('Permiso de galería requerido', 'error'); return; }
 
@@ -44,7 +44,7 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
 
         setUploading(true);
         try {
-            const uploadUrl = await generateUploadUrl({});
+            const uploadUrl = await generateUploadUrl({ sessionToken });
             const asset = result.assets[0];
             setIsVideo(asset.type === 'video');
             let blob: Blob;
@@ -76,22 +76,27 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
         }
     };
 
-    const handlePost = () => {
+    const handlePost = async () => {
         if (!content.trim() && !imageUrl) return;
-        
-        const basePayload: any = {};
-        if (attachedListing) basePayload.attachedListingId = attachedListing.id;
+        if (!sessionToken) { show('Debes iniciar sesión', 'error'); return; }
+        if (posting) return;
 
-        if (imageUrl) {
-            if (isVideo) {
-                createPost(content || '', 'video', { videoUrl: imageUrl, ...basePayload });
-            } else {
-                createPost(content || '', 'image', { images: [imageUrl], ...basePayload });
-            }
-        } else {
-            createPost(content, 'text', basePayload);
+        setPosting(true);
+        try {
+            await createPost({
+                sessionToken,
+                type: imageUrl ? (isVideo ? 'video' : 'image') : 'text',
+                content: content.trim(),
+                ...(imageUrl && isVideo ? { videoUrl: imageUrl } : {}),
+                ...(imageUrl && !isVideo ? { images: [imageUrl] } : {}),
+                ...(attachedListing ? { attachedListingId: attachedListing.id as any } : {}),
+            });
+            onClose();
+        } catch (e: any) {
+            show(e?.message || 'No se pudo publicar', 'error');
+        } finally {
+            setPosting(false);
         }
-        onClose();
     };
 
     return (
@@ -104,8 +109,8 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
                     <SheetTitle style={styles.title}>Crear Publicación</SheetTitle>
                     <TouchableOpacity
                         onPress={handlePost}
-                        disabled={!content.trim()}
-                        style={[styles.postBtn, !content.trim() && styles.postBtnDisabled]}
+                        disabled={(!content.trim() && !imageUrl) || posting}
+                        style={[styles.postBtn, ((!content.trim() && !imageUrl) || posting) && styles.postBtnDisabled]}
                     >
                         <Text style={[styles.postBtnText, !content.trim() && styles.postBtnTextDisabled]}>
                             Publicar
@@ -116,10 +121,10 @@ export const CreatePost = ({ onClose }: { onClose: () => void }) => {
                 <View style={styles.content}>
                     <View style={styles.userInfo}>
                         <Avatar>
-                            <AvatarImage src={currentUser?.avatar} />
-                            <AvatarFallback>{currentUser?.name?.[0] || 'U'}</AvatarFallback>
+                            <AvatarImage src={authUser?.avatar} />
+                            <AvatarFallback>{authUser?.name?.[0] || 'U'}</AvatarFallback>
                         </Avatar>
-                        <Text style={styles.userName}>{currentUser?.name || 'Usuario'}</Text>
+                        <Text style={styles.userName}>{authUser?.name || 'Usuario'}</Text>
                     </View>
 
                     <TextInput

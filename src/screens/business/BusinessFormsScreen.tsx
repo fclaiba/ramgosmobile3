@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';

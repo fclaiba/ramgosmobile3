@@ -951,6 +951,8 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
     // Slightly wider card on tablets/web so the form breathes.
     const maxCardWidth = isWide ? 560 : 440;
 
+    const c = colors(isDark);
+
     return StyleSheet.create({
         container: { flex: 1 },
         scrollContent: {
@@ -965,12 +967,12 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         card: {
             width: '100%',
             maxWidth: maxCardWidth,
-            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255, 255, 255, 0.55)',
+            backgroundColor: c.surface1,
             borderRadius: isCompact ? 24 : 32,
             padding: cardPadding,
             alignSelf: 'center',
-            borderWidth: 1.5,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.6)',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
             overflow: 'hidden',
             ...Platform.select({
                 web: {
@@ -985,49 +987,51 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         },
 
         backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: isCompact ? 12 : 20 },
-        backText: { marginLeft: 8, color: colors(isDark).textMuted, fontWeight: '500' },
+        backText: { marginLeft: 8, color: c.textMuted, fontWeight: '600' },
 
-        title: { fontSize: isCompact ? 22 : 26, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#2196F3', marginBottom: 8, textAlign: 'center' },
-        subtitle: { fontSize: isCompact ? 13 : 14, color: colors(isDark).textMuted, textAlign: 'center', marginBottom: isCompact ? 16 : 24 },
+        title: { fontSize: isCompact ? 22 : 26, fontWeight: '800', color: isDark ? '#F9FAFB' : c.primary, marginBottom: 8, textAlign: 'center', letterSpacing: -0.5 },
+        subtitle: { fontSize: isCompact ? 13 : 14, color: c.textMuted, textAlign: 'center', marginBottom: isCompact ? 16 : 24 },
 
         // Type Selection
         typeBtn: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
+            backgroundColor: c.surface1,
             borderRadius: Radius.lg,
             padding: isCompact ? 12 : 16,
             marginBottom: 12,
-            borderWidth: 2,
-            borderColor: 'transparent',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
         },
         typeBtnSelected: {
+            backgroundColor: c.surface3,
+            borderColor: c.primary,
             ...Platform.select({
                 web: { boxShadow: '0 4px 6px rgba(0,0,0,0.05)' } as any,
-                default: { ...glassShadow(isDark),},
+                default: { ...glassShadow(isDark) },
             }),
         },
         typeIconBox: { width: isCompact ? 40 : 44, height: isCompact ? 40 : 44, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-        typeTitle: { fontSize: isCompact ? 15 : 16, fontWeight: '600', color: colors(isDark).text, marginBottom: 4 },
-        typeDesc: { fontSize: isCompact ? 11 : 12, color: colors(isDark).textMuted },
+        typeTitle: { fontSize: isCompact ? 15 : 16, fontWeight: '700', color: c.text, marginBottom: 4 },
+        typeDesc: { fontSize: isCompact ? 11 : 12, color: c.textMuted },
 
         // Form
         form: { gap: isCompact ? 12 : 16 },
         inputContainer: { gap: 6 },
-        label: { fontSize: 13, fontWeight: '500', color: isDark ? '#D1D5DB' : '#374151', marginLeft: 4 },
+        label: { fontSize: 13, fontWeight: '600', color: c.textMuted, marginLeft: 4 },
         inputWrapper: {
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
+            backgroundColor: c.surface2,
             borderRadius: Radius.md,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
             height: isCompact ? 44 : 48,
             paddingHorizontal: 12,
             minWidth: 0,
         },
         icon: { marginRight: 12 },
-        input: { flex: 1, fontSize: isCompact ? 14 : 15, color: colors(isDark).text },
+        input: { flex: 1, fontSize: isCompact ? 14 : 15, color: c.text },
 
         row: { flexDirection: isWide ? 'row' : 'column', gap: isCompact ? 10 : 12, width: '100%' },
         col: { flex: isWide ? 1 : undefined, minWidth: 0, width: isWide ? 'auto' : '100%' },
@@ -1036,19 +1040,19 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             marginTop: isCompact ? 8 : 12,
             ...Platform.select({
                 web: { boxShadow: '0 6px 16px rgba(33, 150, 243, 0.3)' } as any,
-                default: { ...glassShadow(isDark),},
+                default: { ...glassShadow(isDark) },
             }),
         },
         gradientBtn: { flexDirection: 'row', height: isCompact ? 50 : 56, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center' },
-        btnText: { color: '#fff', fontSize: isCompact ? 15 : 16, fontWeight: '600' },
+        btnText: { color: '#fff', fontSize: isCompact ? 15 : 16, fontWeight: '700' },
         legalRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: isCompact ? 10 : 14 },
-        legalCheckbox: { width: 20, height: 20, borderRadius: Radius.sm, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2 },
-        legalText: { fontSize: isCompact ? 12 : 13, color: colors(isDark).textMuted, flex: 1, flexWrap: 'wrap', lineHeight: isCompact ? 16 : 18 },
-        legalLink: { color: '#2196F3', fontWeight: 'bold', textDecorationLine: 'underline' },
+        legalCheckbox: { width: 20, height: 20, borderRadius: Radius.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, alignItems: 'center', justifyContent: 'center', marginRight: 12, marginTop: 2, backgroundColor: c.surface2 },
+        legalText: { fontSize: isCompact ? 12 : 13, color: c.textMuted, flex: 1, flexWrap: 'wrap', lineHeight: isCompact ? 16 : 18 },
+        legalLink: { color: c.primary, fontWeight: '700', textDecorationLine: 'underline' },
 
         divider: { flexDirection: 'row', alignItems: 'center', marginVertical: isCompact ? 16 : 24 },
-        line: { flex: 1, height: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.85)' },
-        orText: { marginHorizontal: 12, color: '#9CA3AF', fontSize: 12 },
+        line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
+        orText: { marginHorizontal: 12, color: c.textSubtle, fontSize: 12 },
         actionsBlock: {
             marginTop: 4,
             gap: 12,
@@ -1059,16 +1063,16 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         },
         changeTypeLink: {
             fontSize: 13,
-            color: '#2196F3',
-            fontWeight: '500',
+            color: c.primary,
+            fontWeight: '600',
         },
 
         socialRow: { flexDirection: 'row', gap: 12, marginBottom: 24, justifyContent: 'center' },
-        socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', justifyContent: 'center', alignItems: 'center' },
+        socialBtn: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: c.surface1, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder, justifyContent: 'center', alignItems: 'center' },
 
         footer: { flexDirection: 'row', justifyContent: 'center', marginTop: isCompact ? 16 : 24, flexWrap: 'wrap' },
-        footerText: { color: colors(isDark).textMuted },
-        registerLink: { color: '#2196F3', fontWeight: '600' },
+        footerText: { color: c.textMuted },
+        registerLink: { color: c.primary, fontWeight: '700' },
 
         // Badge (legacy)
         badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: Radius.xl },
@@ -1091,18 +1095,18 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
             width: '100%',
             maxWidth: 400,
             maxHeight: '70%',
-            backgroundColor: isDark ? 'rgba(24,24,27,0.85)' : 'rgba(255,255,255,0.85)',
+            backgroundColor: c.surface1,
             borderRadius: Radius.xl,
             padding: 20,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.5)',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: c.glassBorder,
             ...Platform.select({
                 web: { 
                     boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
                     backdropFilter: 'blur(20px)',
                     WebkitBackdropFilter: 'blur(20px)',
                 } as any,
-                default: { elevation: 8 }
+                default: { ...glassShadow(isDark) }
             })
         },
         modalHeader: {
@@ -1113,30 +1117,30 @@ const getStyles = (isDark: boolean, windowWidth: number, windowHeight: number) =
         },
         modalTitle: {
             fontSize: 18,
-            fontWeight: 'bold',
-            color: colors(isDark).text
+            fontWeight: '800',
+            color: c.text
         },
         categoryItem: {
             paddingVertical: 14,
             paddingHorizontal: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: c.glassBorder,
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center'
         },
         categoryItemActive: {
-            backgroundColor: isDark ? 'rgba(33, 150, 243, 0.1)' : '#FAFAFA',
+            backgroundColor: c.surface3,
             borderRadius: Radius.sm,
             borderBottomWidth: 0
         },
         categoryText: {
             fontSize: 15,
-            color: colors(isDark).textMuted
+            color: c.textMuted
         },
         categoryTextActive: {
-            color: '#2196F3',
-            fontWeight: '600'
+            color: c.primary,
+            fontWeight: '700'
         }
     });
 };

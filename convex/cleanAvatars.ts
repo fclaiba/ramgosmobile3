@@ -1,6 +1,6 @@
-import { mutation } from './_generated/server';
+import { internalMutation } from './_generated/server';
 
-export const cleanAvatars = mutation(async (ctx) => {
+export const cleanAvatars = internalMutation(async (ctx) => {
   const users = await ctx.db.query('users').collect();
   for (const user of users) {
     if (user.avatar && user.avatar.startsWith('blob:')) {

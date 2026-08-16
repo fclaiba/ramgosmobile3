@@ -23,6 +23,8 @@ function CartScreen({ navigation }: any) {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { show } = useToast();
+    const { mode, toggle } = usePaymentMode();
+    const isLive = mode === 'live';
     const { t } = useTranslation();
     const { gateCheckout } = useActionGate();
 

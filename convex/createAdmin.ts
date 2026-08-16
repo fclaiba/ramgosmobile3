@@ -1,7 +1,7 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { hashPassword } from "./passwordHelpers";
 
-export const run = mutation({
+export const run = internalMutation({
     args: {},
     handler: async (ctx) => {
         const email = "Ramgospublicidad@gmail.com".toLowerCase();

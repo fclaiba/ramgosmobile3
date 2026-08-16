@@ -142,7 +142,6 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                             style={[styles.sendBtn, (!commentText.trim() || sending) && styles.sendBtnDisabled]}
                             onPress={handleSendComment}
                             disabled={sending || !commentText.trim()}
-                            disabled={!commentText.trim()}
                         >
                             <Send size={20} color="#fff" />
                         </TouchableOpacity>

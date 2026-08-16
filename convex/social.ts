@@ -28,7 +28,7 @@ import {
     internalAction,
 } from './_generated/server';
 import { internal } from './_generated/api';
-import { assertSocialActor } from './social/_helpers';
+import { assertSocialActor, paginateQuery } from './social/_helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -322,6 +322,7 @@ export const createPost = mutation({
             type: v.optional(v.string()),
             location: v.optional(v.string()),
             description: v.optional(v.string()),
+            discountPercent: v.optional(v.number()),
         })),
         attachedListingId: v.optional(v.id('listings')),
     },
@@ -350,12 +351,29 @@ export const createPost = mutation({
                     listingId: listing._id,
                     name: listing.title,
                     price: listing.price,
-                    image: listing.images?.[0]?.url,
+                    image:
+                        listing.images?.find((i: any) => i.isPrimary)?.url ??
+                        listing.images?.[0]?.url ??
+                        listing.image ??
+                        listing.gallery?.[0],
                     type: listing.type,
                     description: listing.description,
+                    // Commission the creator earns if the seller opened this
+                    // listing to promotion; the payment path re-resolves it.
+                    commission: listing.openPromotion === true
+                        ? listing.openCommissionRate
+                        : undefined,
+                    discountPercent: listing.discountPercent,
                 };
             }
         }
+
+        // Stamp the author's country so the feed can rank commercial posts
+        // locally without re-reading the profile for every candidate.
+        const authorProfile = await ctx.db
+            .query('socialUsers')
+            .withIndex('by_user', (q) => q.eq('userId', actor.idString))
+            .first();
 
         const postId = await ctx.db.insert('socialPosts', {
             authorUserId: actor.idString,
@@ -368,17 +386,15 @@ export const createPost = mutation({
             likeCount: 0,
             commentCount: 0,
             retweetCount: 0,
+            viewCount: 0,
+            geoCountry: (authorProfile as any)?.country ?? undefined,
             createdAt: now,
         });
 
         // Bump postCount on the social profile.
-        const profile = await ctx.db
-            .query('socialUsers')
-            .withIndex('by_user', (q) => q.eq('userId', actor.idString))
-            .first();
-        if (profile) {
-            await ctx.db.patch(profile._id, {
-                postCount: profile.postCount + 1,
+        if (authorProfile) {
+            await ctx.db.patch(authorProfile._id, {
+                postCount: authorProfile.postCount + 1,
                 updatedAt: now,
             });
         }
@@ -437,6 +453,131 @@ export const votePoll = mutation({
     },
 });
 
+/**
+ * Uploads are stored as `convex-storage:<id>`, which is not a URL any
+ * `<Image>` or `<VideoView>` can load. Every read path that hands media to the
+ * client has to swap it for the signed HTTPS URL first.
+ */
+const resolveMediaUrl = async (ctx: any, raw?: string | null) => {
+    if (!raw) return raw ?? undefined;
+    if (!raw.startsWith('convex-storage:')) return raw;
+    try {
+        const url = await ctx.storage.getUrl(raw.replace('convex-storage:', ''));
+        return url ?? raw;
+    } catch {
+        return raw;
+    }
+};
+
+/**
+ * Hydrates a page of posts with the author profile, the viewer's own
+ * like/save state, and playable media URLs. Without this the client cannot
+ * paint a correct heart on first render and has to issue one query per post to
+ * find out — and images/videos would never load.
+ */
+const decoratePosts = async (ctx: any, posts: any[], viewerId: string) => {
+    if (posts.length === 0) return [];
+
+    const authorIds = Array.from(new Set(posts.map((p) => p.authorUserId))) as string[];
+    const authorProfiles = await Promise.all(
+        authorIds.map((id) =>
+            ctx.db
+                .query('socialUsers')
+                .withIndex('by_user', (q: any) => q.eq('userId', id))
+                .first(),
+        ),
+    );
+    const authorMap = new Map<string, any>();
+    authorProfiles.forEach((p, i) => {
+        if (p) authorMap.set(authorIds[i], p);
+    });
+
+    const [likeRows, saveRows] = await Promise.all([
+        Promise.all(
+            posts.map((p) =>
+                ctx.db
+                    .query('socialLikes')
+                    .withIndex('by_user_target', (q: any) =>
+                        q
+                            .eq('userId', viewerId)
+                            .eq('targetType', 'post')
+                            .eq('targetId', String(p._id)),
+                    )
+                    .first(),
+            ),
+        ),
+        Promise.all(
+            posts.map((p) =>
+                ctx.db
+                    .query('socialSavedPosts')
+                    .withIndex('by_user_post', (q: any) =>
+                        q.eq('userId', viewerId).eq('postId', String(p._id)),
+                    )
+                    .first(),
+            ),
+        ),
+    ]);
+
+    // Resolve every author avatar once, not once per post.
+    await Promise.all(
+        Array.from(authorMap.entries()).map(async ([id, a]: [string, any]) => {
+            authorMap.set(id, { ...a, avatar: await resolveMediaUrl(ctx, a.avatar) });
+        }),
+    );
+
+    return await Promise.all(
+        posts.map(async (post, i) => ({
+            ...post,
+            viewCount: post.viewCount ?? 0,
+            images: post.images
+                ? await Promise.all(
+                      post.images.map((img: string) => resolveMediaUrl(ctx, img)),
+                  )
+                : post.images,
+            videoUrl: await resolveMediaUrl(ctx, post.videoUrl),
+            commercialProduct: post.commercialProduct
+                ? {
+                      ...post.commercialProduct,
+                      image: await resolveMediaUrl(ctx, post.commercialProduct.image),
+                  }
+                : post.commercialProduct,
+            author: authorMap.get(post.authorUserId) ?? null,
+            isLikedByMe: Boolean(likeRows[i]),
+            isSavedByMe: Boolean(saveRows[i]),
+        })),
+    );
+};
+
+/**
+ * Ranking for the "forYou" mode. Recency is the spine; engagement lifts a
+ * post and, per the social-commerce spec, commercial posts are boosted only
+ * when they are local to the viewer — social content stays borderless.
+ */
+const scorePost = (
+    post: any,
+    opts: { affinityAuthors: Set<string>; viewerCountry?: string; nowMs: number },
+) => {
+    const ageHours = Math.max(0, (opts.nowMs - Date.parse(post.createdAt)) / 3_600_000);
+    // Half-life of ~18h keeps the feed fresh without burying the first page.
+    let score = 100 / (1 + ageHours / 18);
+
+    const engagement = (post.likeCount ?? 0) * 2 + (post.commentCount ?? 0) * 3;
+    score += Math.log1p(engagement) * 6;
+
+    if (opts.affinityAuthors.has(post.authorUserId)) score += 25;
+
+    if (post.commercialProduct) {
+        const sameCountry =
+            opts.viewerCountry && post.geoCountry
+                ? post.geoCountry === opts.viewerCountry
+                : true; // unknown geo → neither boosted nor punished
+        score += sameCountry ? 15 : -40;
+    }
+    return score;
+};
+
+const FOLLOW_FANOUT_CAP = 200;
+
 export const getFeed = query({
     args: {
         sessionToken: v.optional(v.string()),
@@ -444,55 +585,174 @@ export const getFeed = query({
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
         authorUserId: v.optional(v.string()),
+        mode: v.optional(
+            v.union(
+                v.literal('forYou'),
+                v.literal('following'),
+                v.literal('videos'),
+                v.literal('recent'),
+            ),
+        ),
     },
     handler: async (ctx, args) => {
+        let actor;
         try {
-            await assertSocialActor(ctx, (args as any).sessionToken);
+            actor = await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return { items: [], nextCursor: null };
         }
+        const viewerId = actor.idString;
         const cap = Math.min(args.limit ?? 20, 50);
+        const cursor = args.cursor ?? undefined;
+        const mode = args.mode ?? (args.authorUserId ? 'recent' : 'forYou');
 
-        let queryBuilder: any;
+        // Every mode uses the same `createdAt` cursor so the client paginates
+        // identically regardless of which tab it is on.
+        const olderThan = (q: any, field = 'createdAt') =>
+            cursor ? q.lt(field, cursor) : q;
+
+        let candidates: any[] = [];
+
         if (args.authorUserId) {
-            queryBuilder = ctx.db
+            candidates = await ctx.db
                 .query('socialPosts')
-                .withIndex('by_author', (q: any) => q.eq('authorUserId', args.authorUserId!))
-                .order('desc');
+                .withIndex('by_author_created', (q: any) =>
+                    olderThan(q.eq('authorUserId', args.authorUserId!)),
+                )
+                .order('desc')
+                .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+                .take(cap);
+        } else if (mode === 'videos') {
+            candidates = await ctx.db
+                .query('socialPosts')
+                .withIndex('by_type_created', (q: any) => olderThan(q.eq('type', 'video')))
+                .order('desc')
+                .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+                .take(cap);
+        } else if (mode === 'following') {
+            const follows = await ctx.db
+                .query('socialFollows')
+                .withIndex('by_follower', (q: any) => q.eq('followerUserId', viewerId))
+                .take(FOLLOW_FANOUT_CAP);
+            const authors = Array.from(
+                new Set([viewerId, ...follows.map((f: any) => f.followeeUserId)]),
+            );
+            const perAuthor = await Promise.all(
+                authors.map((a) =>
+                    ctx.db
+                        .query('socialPosts')
+                        .withIndex('by_author_created', (q: any) => olderThan(q.eq('authorUserId', a)))
+                        .order('desc')
+                        .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+                        .take(cap),
+                ),
+            );
+            candidates = perAuthor
+                .flat()
+                .sort((a: any, b: any) => (a.createdAt < b.createdAt ? 1 : -1))
+                .slice(0, cap);
+        } else if (mode === 'forYou') {
+            // Pull a wider window than we return, then rank it. Over-fetching
+            // 3x keeps ranking meaningful without unbounded reads.
+            const pool = await ctx.db
+                .query('socialPosts')
+                .withIndex('by_created', (q: any) => olderThan(q))
+                .order('desc')
+                .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+                .take(Math.min(cap * 3, 90));
+
+            const recentLikes = await ctx.db
+                .query('socialLikes')
+                .withIndex('by_user_target', (q: any) =>
+                    q.eq('userId', viewerId).eq('targetType', 'post'),
+                )
+                .order('desc')
+                .take(50);
+            const likedPosts = await Promise.all(
+                recentLikes.map((l: any) => {
+                    const id = ctx.db.normalizeId('socialPosts', l.targetId);
+                    return id ? ctx.db.get(id) : null;
+                }),
+            );
+            const affinityAuthors = new Set<string>(
+                likedPosts.filter(Boolean).map((p: any) => p.authorUserId),
+            );
+
+            const viewer = await ctx.db
+                .query('socialUsers')
+                .withIndex('by_user', (q: any) => q.eq('userId', viewerId))
+                .first();
+            const viewerCountry = (viewer as any)?.country ?? undefined;
+
+            const nowMs = Date.now();
+            candidates = pool
+                .map((p: any) => ({
+                    post: p,
+                    score: scorePost(p, { affinityAuthors, viewerCountry, nowMs }),
+                }))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, cap)
+                .map((x) => x.post);
+
+            // The cursor must stay chronological even though the page is
+            // ranked, otherwise pagination would loop over the same window.
+            const items = await decoratePosts(ctx, candidates, viewerId);
+            const oldestInPool = pool.length ? pool[pool.length - 1].createdAt : null;
+            return {
+                items,
+                nextCursor: pool.length < Math.min(cap * 3, 90) ? null : oldestInPool,
+            };
         } else {
-            queryBuilder = ctx.db.query('socialPosts').order('desc');
+            candidates = await ctx.db
+                .query('socialPosts')
+                .withIndex('by_created', (q: any) => olderThan(q))
+                .order('desc')
+                .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+                .take(cap);
         }
 
-        const result = await queryBuilder.paginate({
-            cursor: args.cursor ?? null,
-            numItems: cap,
-        });
+        const items = await decoratePosts(ctx, candidates, viewerId);
+        const nextCursor =
+            candidates.length < cap ? null : candidates[candidates.length - 1].createdAt;
 
-        // Filter out soft-deleted and join author info.
-        const visible = result.page.filter((p: any) => !p.deletedAt);
-        const authorIds = Array.from(
-            new Set(visible.map((p: any) => p.authorUserId)),
-        ) as string[];
-        const authorProfiles = await Promise.all(
-            authorIds.map((id) =>
-                ctx.db
-                    .query('socialUsers')
-                    .withIndex('by_user', (q: any) => q.eq('userId', id))
-                    .first(),
-            ),
-        );
-        const authorMap = new Map<string, any>();
-        authorProfiles.forEach((p, i) => {
-            if (p) authorMap.set(authorIds[i], p);
-        });
+        return { items, nextCursor };
+    },
+});
 
-        return {
-            items: visible.map((post: any) => ({
-                ...post,
-                author: authorMap.get(post.authorUserId) ?? null,
-            })),
-            nextCursor: result.isDone ? null : result.continueCursor,
-        };
+/**
+ * Idempotent impression counter. The client batches these (one call per
+ * post that actually became visible), so a duplicate is cheap and silent.
+ */
+export const addView = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        postIds: v.array(v.id('socialPosts')),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        let counted = 0;
+        for (const postId of args.postIds.slice(0, 50)) {
+            const existing = await ctx.db
+                .query('socialPostViews')
+                .withIndex('by_post_viewer', (q: any) =>
+                    q.eq('postId', String(postId)).eq('viewerUserId', actor.idString),
+                )
+                .first();
+            if (existing) continue;
+
+            const post = await ctx.db.get(postId);
+            if (!post || post.deletedAt) continue;
+
+            await ctx.db.insert('socialPostViews', {
+                postId: String(postId),
+                viewerUserId: actor.idString,
+                createdAt: NOW(),
+            });
+            await ctx.db.patch(postId, { viewCount: (post.viewCount ?? 0) + 1 });
+            counted += 1;
+        }
+        return { counted };
     },
 });
 
@@ -503,14 +763,11 @@ export const getPostById = query({
         postId: v.id('socialPosts'),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, (args as any).sessionToken);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const post = await ctx.db.get(args.postId);
         if (!post || post.deletedAt) return null;
-        const author = await ctx.db
-            .query('socialUsers')
-            .withIndex('by_user', (q) => q.eq('userId', post.authorUserId))
-            .first();
-        return { ...post, author };
+        const [decorated] = await decoratePosts(ctx, [post], actor.idString);
+        return decorated;
     },
 });
 
@@ -522,14 +779,19 @@ export const getPostsByUser = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        await assertSocialActor(ctx, (args as any).sessionToken);
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const cap = Math.min(args.limit ?? 50, 200);
         const posts = await ctx.db
             .query('socialPosts')
             .withIndex('by_author', (q) => q.eq('authorUserId', args.userId))
             .order('desc')
             .take(cap);
-        return posts.filter((p: any) => !p.deletedAt);
+        const items = await decoratePosts(
+            ctx,
+            posts.filter((p: any) => !p.deletedAt),
+            actor.idString,
+        );
+        return { items };
     },
 });
 
@@ -857,36 +1119,101 @@ export const unfollow = mutation({
     },
 });
 
+/**
+ * Shared body for the two follow-list queries. Returns hydrated social
+ * profiles rather than raw edges so the client renders a list from one
+ * round-trip, and paginates so a popular account cannot blow the read limit.
+ */
+const followList = async (
+    ctx: any,
+    opts: {
+        sessionToken?: string;
+        userId: string;
+        direction: 'followers' | 'following';
+        cursor?: string;
+        limit?: number;
+    },
+) => {
+    try {
+        await assertSocialActor(ctx, opts.sessionToken);
+    } catch {
+        return { items: [], nextCursor: null };
+    }
+    const cap = Math.min(opts.limit ?? 30, 100);
+
+    const page = await paginateQuery<any>(
+        opts.direction === 'followers'
+            ? ctx.db
+                .query('socialFollows')
+                .withIndex('by_followee', (q: any) => q.eq('followeeUserId', opts.userId))
+                .order('desc')
+            : ctx.db
+                .query('socialFollows')
+                .withIndex('by_follower', (q: any) => q.eq('followerUserId', opts.userId))
+                .order('desc'),
+        opts.cursor,
+        cap,
+    );
+
+    const otherIds = page.items.map((row: any) =>
+        opts.direction === 'followers' ? row.followerUserId : row.followeeUserId,
+    );
+    const profiles = await Promise.all(
+        otherIds.map((id: string) =>
+            ctx.db
+                .query('socialUsers')
+                .withIndex('by_user', (q: any) => q.eq('userId', id))
+                .first(),
+        ),
+    );
+
+    return {
+        items: profiles.map((p: any, i: number) => ({
+            userId: otherIds[i],
+            username: p?.username ?? 'usuario',
+            displayName: p?.displayName ?? 'Usuario',
+            avatar: p?.avatar,
+            verified: p?.verified ?? false,
+            isInfluencer: p?.isInfluencer ?? false,
+        })),
+        nextCursor: page.nextCursor,
+    };
+};
+
 export const getFollowers = query({
     args: {
-        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), userId: v.string() },
-    handler: async (ctx, args) => {
-        try {
-            await assertSocialActor(ctx, (args as any).sessionToken);
-        } catch {
-            return [];
-        }
-        return await ctx.db
-            .query('socialFollows')
-            .withIndex('by_followee', (q) => q.eq('followeeUserId', args.userId))
-            .collect();
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        userId: v.string(),
+        cursor: v.optional(v.string()),
+        limit: v.optional(v.number()),
     },
+    handler: async (ctx, args) =>
+        followList(ctx, {
+            sessionToken: (args as any).sessionToken,
+            userId: args.userId,
+            direction: 'followers',
+            cursor: args.cursor,
+            limit: args.limit,
+        }),
 });
 
 export const getFollowing = query({
     args: {
-        sessionToken: v.optional(v.string()), actorId: v.optional(v.any()), userId: v.string() },
-    handler: async (ctx, args) => {
-        try {
-            await assertSocialActor(ctx, (args as any).sessionToken);
-        } catch {
-            return [];
-        }
-        return await ctx.db
-            .query('socialFollows')
-            .withIndex('by_follower', (q) => q.eq('followerUserId', args.userId))
-            .collect();
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        userId: v.string(),
+        cursor: v.optional(v.string()),
+        limit: v.optional(v.number()),
     },
+    handler: async (ctx, args) =>
+        followList(ctx, {
+            sessionToken: (args as any).sessionToken,
+            userId: args.userId,
+            direction: 'following',
+            cursor: args.cursor,
+            limit: args.limit,
+        }),
 });
 
 export const isFollowing = query({
@@ -1095,19 +1422,36 @@ export const createChat = mutation({
         if (actor.idString === args.participantId) {
             throw new Error('No podés crear un chat con vos mismo.');
         }
-        const all = await ctx.db.query('socialChats').collect();
-        const existing = all.find((c: any) => {
-            if (c.participantIds.length !== 2) return false;
-            return (
-                c.participantIds.includes(actor.idString) &&
-                c.participantIds.includes(args.participantId)
-            );
-        });
+
+        const key = sortedKey([actor.idString, args.participantId]);
+        const existing = await ctx.db
+            .query('socialChats')
+            .withIndex('by_participants_key', (q) => q.eq('participantsKey', key))
+            .first();
         if (existing) return existing._id;
+
+        // Rows created before `participantsKey` existed are not reachable by
+        // the index; find them once by scanning the caller's own chats and
+        // backfill the key so this path stops being hit.
+        const legacy = await ctx.db
+            .query('socialChats')
+            .withIndex('by_participants_key', (q) => q.eq('participantsKey', undefined))
+            .collect();
+        const legacyMatch = legacy.find(
+            (c: any) =>
+                c.participantIds.length === 2 &&
+                c.participantIds.includes(actor.idString) &&
+                c.participantIds.includes(args.participantId),
+        );
+        if (legacyMatch) {
+            await ctx.db.patch(legacyMatch._id, { participantsKey: key });
+            return legacyMatch._id;
+        }
 
         const now = NOW();
         return await ctx.db.insert('socialChats', {
             participantIds: [actor.idString, args.participantId],
+            participantsKey: key,
             lastMessageAt: now,
             unreadCounts: { [actor.idString]: 0, [args.participantId]: 0 },
             createdAt: now,
@@ -1479,133 +1823,30 @@ export const getHighlights = query({
 // Social Commerce & Gamification (Sprint 3)
 // ---------------------------------------------------------------------------
 
+/**
+ * DESCARTADO (integración social-commerce).
+ *
+ * La red social ya no cobra: el CommerceTag de un post agrega el producto real
+ * al carrito del marketplace vía `api.commerce.addPostProductToCart` y la
+ * compra sigue por el checkout normal (stock, envío, escrow, disputas).
+ *
+ * Esta mutación movía plata parcheando `users.balance` a mano: sin Stripe, sin
+ * orden, sin escrow, sin webhook, y leyendo el campo de puntos equivocado
+ * (`pointsState.pointsBalance` en vez del canónico `rewardsState.points`).
+ * Se deja lanzando error para que ningún call site viejo cobre en silencio.
+ * Se elimina junto con el resto del código muerto en Fase 8d.
+ */
 export const simulateSocialCommercePayment = mutation({
     args: {
         sessionToken: v.optional(v.string()),
         postId: v.id("socialPosts"),
         pointsToRedeem: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        const buyerUser = await ctx.db.get(actor.id);
-        if (!buyerUser) throw new Error("Buyer not found");
-
-        // 1. Fetch Post
-        const post = await ctx.db.get(args.postId);
-        if (!post) throw new Error("Post no encontrado");
-        if (!post.commercialProduct || !post.commercialProduct.listingId) {
-            throw new Error("Este post no tiene un producto comercial vinculado");
-        }
-
-        // 2. Fetch Listing to get the seller
-        const listingId = post.commercialProduct.listingId as Id<"listings">;
-        const listing = await ctx.db.get(listingId);
-        if (!listing) throw new Error("Producto no encontrado");
-
-        // 3. Prevent buying own product
-        if (listing.sellerId === actor.idString) {
-            throw new Error("No puedes comprar tu propio producto");
-        }
-
-        const price = listing.price;
-        let finalPrice = price;
-
-        // 4. Redeem Points (Gamification)
-        if (args.pointsToRedeem && args.pointsToRedeem > 0) {
-            const economyState = await ctx.db
-                .query("economyState")
-                .withIndex("by_user", (q) => q.eq("userId", actor.idString))
-                .first();
-            
-            const pointsBalance = economyState?.pointsState?.pointsBalance || 0;
-            if (pointsBalance < args.pointsToRedeem) {
-                throw new Error("No tienes suficientes puntos");
-            }
-            
-            // Simular descuento: 100 puntos = $1 de descuento
-            const discount = args.pointsToRedeem / 100;
-            finalPrice = Math.max(0, price - discount);
-
-            // Restar puntos al comprador
-            if (economyState) {
-                await ctx.db.patch(economyState._id, {
-                    pointsState: {
-                        ...economyState.pointsState,
-                        pointsBalance: pointsBalance - args.pointsToRedeem
-                    }
-                });
-            }
-        }
-
-        // 5. Split Payment
-        // 80% to Seller
-        // 10% to Creator (Influencer)
-        // 10% to Platform (simulated)
-        const sellerId = listing.sellerId;
-        const creatorId = post.authorUserId; // Assuming socialPosts stores actorId as string
-        
-        const sellerCut = finalPrice * 0.8;
-        const creatorCut = finalPrice * 0.1;
-
-        // Add to Seller
-        const sellerUser = await ctx.db.query("users").withIndex("by_uid", q => q.eq("uid", sellerId)).first() 
-            || await ctx.db.get(sellerId as Id<"users">); // Fallback si sellerId era ObjectId
-        
-        if (sellerUser) {
-            await ctx.db.patch(sellerUser._id, {
-                balance: (sellerUser.balance || 0) + sellerCut
-            });
-        }
-
-        // Add to Creator (if different from Seller)
-        if (creatorId !== sellerId) {
-            const creatorUser = await ctx.db.query("users").withIndex("by_uid", q => q.eq("uid", creatorId)).first()
-                || await ctx.db.get(creatorId as Id<"users">);
-            
-            if (creatorUser) {
-                await ctx.db.patch(creatorUser._id, {
-                    balance: (creatorUser.balance || 0) + creatorCut
-                });
-            }
-        }
-
-        // 6. Award Gamification Points for buying
-        const pointsEarned = Math.floor(finalPrice * 5); // 5 points per dollar
-        const currentEco = await ctx.db
-            .query("economyState")
-            .withIndex("by_user", (q) => q.eq("userId", actor.idString))
-            .first();
-        
-        if (currentEco) {
-            await ctx.db.patch(currentEco._id, {
-                pointsState: {
-                    ...currentEco.pointsState,
-                    pointsBalance: (currentEco.pointsState?.pointsBalance || 0) + pointsEarned
-                }
-            });
-        } else {
-            await ctx.db.insert("economyState", {
-                userId: actor.idString,
-                pointsState: {
-                    pointsBalance: pointsEarned,
-                    energyBalance: 100,
-                },
-                updatedAt: new Date().toISOString(),
-            });
-        }
-
-        await ctx.db.insert("pointsLedger", {
-            userId: actor.idString,
-            eventKey: "purchase_" + Date.now(),
-            type: "earn",
-            description: "Compra Social Commerce",
-            amount: pointsEarned,
-            source: "purchase",
-            createdAt: new Date().toISOString()
-        });
-
-        return { success: true, finalPrice, pointsEarned };
-    }
+    handler: async (): Promise<never> => {
+        throw new Error(
+            "simulateSocialCommercePayment fue reemplazado por api.commerce.addPostProductToCart (el feed agrega al carrito; el pago va por el checkout).",
+        );
+    },
 });
 
 export const followUser = follow;

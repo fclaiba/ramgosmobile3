@@ -14,6 +14,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { AlertTriangle } from 'lucide-react-native';
 import { Radius, colors } from '../theme/tokens';
+import { productShareLink } from '../config/appOrigin';
 
 
 function SavedScreen({ navigation }: any) {
@@ -33,9 +34,11 @@ function SavedScreen({ navigation }: any) {
 
     const handleShare = async (item: FavoriteItem) => {
         try {
+            const url = productShareLink(item.business || '', String(item.id || ''));
             await Share.share({
                 title: item.name,
-                message: `¡Mira esto! ${item.name} en ${item.business || item.location}`,
+                message: url ? `¡Mira esto! ${item.name} - ${url}` : `¡Mira esto! ${item.name} en ${item.business || item.location}`,
+                url,
             });
         } catch (error) {
             console.error(error);

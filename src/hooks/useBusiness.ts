@@ -56,7 +56,7 @@ export function useBusiness(userId?: string) {
 
   const metrics = useQuery(
     api.dashboard.getBusinessMetrics,
-    userId ? ({ businessId: userId } as { businessId: Id<"users"> }) : "skip",
+    userId && sessionToken ? ({ businessId: userId, sessionToken } as { businessId: Id<"users">; sessionToken: string }) : "skip",
   );
 
   const listings = useQuery(

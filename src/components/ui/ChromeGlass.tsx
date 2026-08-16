@@ -18,7 +18,8 @@ type Props = {
  * Stack (back → front):
  * 1. Blur of content scrolling underneath
  * 2. Neutral frost veil (readable text, no purple wash)
- * 3. Soft specular highlight on the facing edge
+ * 3. Inner border luminous (very subtle white line)
+ * 4. Soft specular highlight on the facing edge
  */
 export function ChromeGlass({ edge = 'top' }: Props) {
     const { colorScheme } = useTheme();
@@ -27,6 +28,7 @@ export function ChromeGlass({ edge = 'top' }: Props) {
 
     return (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            {/* Layer 1: Blur + frost */}
             {Platform.OS === 'web' ? (
                 <View
                     style={[
@@ -34,8 +36,8 @@ export function ChromeGlass({ edge = 'top' }: Props) {
                         {
                             backgroundColor: t.frost,
                             // @ts-expect-error web CSS
-                            backdropFilter: `blur(${t.blurWebPx}px) saturate(1.35)`,
-                            WebkitBackdropFilter: `blur(${t.blurWebPx}px) saturate(1.35)`,
+                            backdropFilter: `blur(${t.blurWebPx}px) saturate(${t.saturation})`,
+                            WebkitBackdropFilter: `blur(${t.blurWebPx}px) saturate(${t.saturation})`,
                         },
                     ]}
                 />
@@ -55,20 +57,32 @@ export function ChromeGlass({ edge = 'top' }: Props) {
                 </>
             )}
 
-            {/* Specular rim — reads as glass catching light */}
+            {/* Layer 2: Inner border luminous */}
+            <View
+                style={[
+                    StyleSheet.absoluteFill,
+                    {
+                        borderWidth: StyleSheet.hairlineWidth,
+                        borderColor: t.innerBorder,
+                        borderRadius: 0,
+                    },
+                ]}
+            />
+
+            {/* Layer 3: Specular rim — reads as glass catching light */}
             {edge === 'top' ? (
                 <LinearGradient
                     colors={[t.specular, 'transparent']}
                     start={{ x: 0.5, y: 0 }}
                     end={{ x: 0.5, y: 1 }}
-                    style={styles.specularTop}
+                    style={[styles.specularTop, { height: t.specularHeight }]}
                 />
             ) : (
                 <LinearGradient
                     colors={['transparent', t.specular]}
                     start={{ x: 0.5, y: 0 }}
                     end={{ x: 0.5, y: 1 }}
-                    style={styles.specularBottom}
+                    style={[styles.specularBottom, { height: t.specularHeight - 2 }]}
                 />
             )}
         </View>
@@ -81,13 +95,11 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
-        height: 14,
     },
     specularBottom: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: 10,
     },
 });

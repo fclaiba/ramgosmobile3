@@ -34,12 +34,40 @@ export const addToCart = mutation({
             })),
             distanceKm: v.optional(v.number()),
             referralCode: v.optional(v.string()),
+            sourcePostId: v.optional(v.string()),
+        })),
+        // Attribution is NOT listing data, so it survives the server-side
+        // snapshot rebuild below. Callers that resolve a promoter server-side
+        // (see `commerce.addPostProductToCart`) pass it here.
+        attribution: v.optional(v.object({
+            referralCode: v.optional(v.string()),
+            sourcePostId: v.optional(v.string()),
         })),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        const userId = actor.idString;
+        return await applyAddToCart(ctx, actor.idString, args);
+    },
+});
 
+/**
+ * Shared body of `addToCart`, callable from other modules that have already
+ * authenticated the actor (see `commerce.addPostProductToCart`). Kept as a
+ * plain helper rather than an internal mutation so the add stays inside the
+ * caller's transaction.
+ */
+export const applyAddToCart = async (
+    ctx: any,
+    userId: string,
+    args: {
+        listingId: string;
+        quantity: number;
+        mutationKey?: string;
+        snapshot?: any;
+        attribution?: { referralCode?: string; sourcePostId?: string };
+    },
+) => {
+    {
         const quantity = Math.floor(args.quantity);
         if (!Number.isFinite(quantity) || quantity <= 0) {
             throw new Error("Cantidad inválida.");
@@ -66,7 +94,7 @@ export const addToCart = mutation({
         // Check if item already in cart
         const existing = await ctx.db
             .query("cart")
-            .withIndex("by_user_listing", q =>
+            .withIndex("by_user_listing", (q: any) =>
                 q.eq("userId", userId).eq("listingId", args.listingId)
             )
             .first();
@@ -80,6 +108,21 @@ export const addToCart = mutation({
             await ctx.db.patch(existing._id, {
                 quantity: newQuantity,
                 lastMutationKey: args.mutationKey,
+                // Last touch wins: if the buyer re-adds this item from a
+                // creator's post, that creator gets the credit.
+                ...(args.attribution
+                    ? {
+                          snapshot: {
+                              ...existing.snapshot,
+                              referralCode:
+                                  args.attribution.referralCode ??
+                                  existing.snapshot.referralCode,
+                              sourcePostId:
+                                  args.attribution.sourcePostId ??
+                                  existing.snapshot.sourcePostId,
+                          },
+                      }
+                    : {}),
             });
             return existing._id;
         }
@@ -88,7 +131,7 @@ export const addToCart = mutation({
 
         const currentItems = await ctx.db
             .query("cart")
-            .withIndex("by_user", q => q.eq("userId", userId))
+            .withIndex("by_user", (q: any) => q.eq("userId", userId))
             .take(MAX_CART_ITEMS);
         if (currentItems.length >= MAX_CART_ITEMS) {
             throw new Error("El carrito alcanzó el máximo de ítems.");
@@ -133,7 +176,10 @@ export const addToCart = mutation({
                 shippingWeightKg: listing.shippingWeightKg,
                 shippingDimensionsCm: listing.shippingDimensionsCm,
                 distanceKm: listing.location?.distanceKm ?? listing.distanceKm,
-                referralCode: listing.referralCode,
+                // Caller-resolved promoter wins over the listing default: it is
+                // who actually drove this sale.
+                referralCode: args.attribution?.referralCode ?? listing.referralCode,
+                sourcePostId: args.attribution?.sourcePostId,
             };
         }
 
@@ -151,8 +197,8 @@ export const addToCart = mutation({
             // Snapshot at time of adding (listing or virtual item)
             snapshot,
         });
-    },
-});
+    }
+};
 
 // Get user's cart
 export const getMyCart = query({

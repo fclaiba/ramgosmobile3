@@ -432,12 +432,9 @@
   "430": "@shopify/flash-list",
   "431": "stripe",
   "432": "@stripe/react-stripe-js",
-  "433": "@stripe/stripe-js",
-  "434": "tailwindcss",
-  "435": "@types/stripe-v3",
-  "436": "@testing-library/react-native",
-  "437": "expo-web-browser",
-  "438": "react-native-maps",
-  "439": "resend",
-  "440": "@stripe/stripe-react-native"
+  "433": "AnimatedCreditCard.tsx",
+  "434": "StripeCardElement.tsx",
+  "435": "checkApi.js",
+  "436": "SocialIcons.tsx",
+  "437": "confirmSocialPayment.web.ts"
 }

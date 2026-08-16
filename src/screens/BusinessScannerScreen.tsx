@@ -97,7 +97,7 @@ export default function BusinessScannerScreen() {
     const canAccessPos =
         !!sessionToken &&
         !!user &&
-        (role === 'business' || role === 'admin' || role === 'developer');
+        (role === 'business' || role === 'admin');
     const showKycWarning =
         role === 'business' && user?.kycStatus && user.kycStatus !== 'approved';
 
@@ -228,8 +228,7 @@ export default function BusinessScannerScreen() {
             user?.id &&
             lookupResult.sellerId &&
             String(lookupResult.sellerId) !== String(user.id) &&
-            user.role !== 'admin' &&
-            user.role !== 'developer'
+            user.role !== 'admin'
         ) {
             setPhase('error');
             setResultTitle('Bono de otro negocio');
@@ -310,8 +309,7 @@ export default function BusinessScannerScreen() {
         (!user?.id ||
             !lookupResult.sellerId ||
             String(lookupResult.sellerId) === String(user.id) ||
-            user.role === 'admin' ||
-            user.role === 'developer');
+            user.role === 'admin');
 
     const scanStatusLabel = IS_WEB
         ? cameraError
@@ -922,7 +920,7 @@ const getStyles = (
             }),
         },
         cameraFallback: {
-            ...StyleSheet.absoluteFillObject,
+            ...StyleSheet.absoluteFill,
             alignItems: 'center',
             justifyContent: 'center',
             padding: 28,
@@ -943,7 +941,7 @@ const getStyles = (
             marginBottom: 4,
         },
         scanFrame: {
-            ...StyleSheet.absoluteFillObject,
+            ...StyleSheet.absoluteFill,
             alignItems: 'center',
             justifyContent: 'center',
         },

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, FlatList, Dimensions, StyleSheet } from 'react-native';
 import { LoopItem } from './LoopItem';
-import { Post as PostType } from '../../contexts/SocialContext';
+import type { SocialFeedPost } from './types';
 
 const { height } = Dimensions.get('window');
 
 interface LoopFeedProps {
-    posts: PostType[];
+    posts: SocialFeedPost[];
     onUserClick: (id: string) => void;
     onEndReached?: () => void;
     onCommercePress?: (listingId: string, postId: string) => void;
@@ -29,7 +29,7 @@ export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress }: 
         <View style={styles.container}>
             <FlatList
                 data={posts}
-                keyExtractor={(item) => item._id || item.id}
+                keyExtractor={(item) => String(item._id ?? item.id)}
                 renderItem={({ item, index }) => (
                     <LoopItem
                         post={item}

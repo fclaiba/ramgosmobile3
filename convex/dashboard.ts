@@ -1,10 +1,15 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { requireActor, assertSelfOrAdmin } from "./authHelpers";
 
+// ponytail: métricas financieras privadas (revenue/balance). Solo el propio dueño o un admin
+// pueden verlas — se exige sessionToken y se valida con assertSelfOrAdmin (cierra el IDOR).
 export const getBusinessMetrics = query({
-  args: { businessId: v.id("users") },
+  args: { businessId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    const actor = await requireActor(ctx, args.sessionToken);
+    assertSelfOrAdmin(actor, args.businessId);
+
     // 1. Get listings (coupons, events, etc.)
     const listings = await ctx.db
       .query("listings")
@@ -16,7 +21,7 @@ export const getBusinessMetrics = query({
     // 2. Get wallet balance
     let availableBalance = 0;
     let pendingBalance = 0;
-    
+
     // We try to get the wallet account
     const wallet = await ctx.db
       .query("walletAccounts")
@@ -52,7 +57,7 @@ export const getBusinessMetrics = query({
       .collect();
 
     const successfulPayments = payments.filter(p => p.status === 'succeeded' || p.status === 'released_to_seller');
-    
+
     const revenueToday = successfulPayments
         .filter(p => p.createdAt >= todayIso)
         .reduce((sum, p) => sum + p.sellerNet, 0);
@@ -81,8 +86,11 @@ export const getBusinessMetrics = query({
 });
 
 export const getInfluencerMetrics = query({
-  args: { influencerId: v.id("users") },
+  args: { influencerId: v.id("users"), sessionToken: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    const actor = await requireActor(ctx, args.sessionToken);
+    assertSelfOrAdmin(actor, args.influencerId);
+
     // Campaigns
     const campaigns = await ctx.db
       .query("influencerCampaigns")
@@ -109,7 +117,7 @@ export const getInfluencerMetrics = query({
       .collect();
 
     const successfulPayments = payments.filter(p => p.status === 'succeeded' || p.status === 'released_to_seller');
-    
+
     const sales = successfulPayments.length;
     const totalEarnings = successfulPayments.reduce((sum, p) => sum + p.influencerAmount, 0);
 
@@ -121,7 +129,7 @@ export const getInfluencerMetrics = query({
       .map(p => ({ amount: p.influencerAmount, date: p.createdAt }));
 
     return {
-      totalEarnings, 
+      totalEarnings,
       clicks: 0, // Mocked for now, needs analytics tracking
       sales,
       conversionRate: 0,

@@ -214,8 +214,8 @@ export function CreatorStudioModal({ visible, onClose }: CreatorStudioModalProps
                     <View style={{ flex: 1, marginTop: 100 }}>
                         <CommerceLinker 
                             onClose={() => setIsLinkerVisible(false)} 
-                            onSelect={(prod) => {
-                                setAttachedProduct(prod);
+                            onSelect={(id, name) => {
+                                setAttachedProduct({ listingId: id, name, price: 0 });
                                 setIsLinkerVisible(false);
                             }} 
                         />

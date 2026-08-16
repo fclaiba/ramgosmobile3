@@ -207,6 +207,30 @@ const AppNavigator = () => {
                             ],
                         };
                     }
+                    
+                    // Parse canonical URLs: /{handle} and /{handle}/{slug}
+                    try {
+                        const cleanPath = path.replace(/^https?:\/\/[^/]+/, '').split('?')[0].replace(/^\//, '');
+                        if (cleanPath) {
+                            const parts = cleanPath.split('/').filter(Boolean);
+                            // Avoid matching known routes
+                            const reservedPaths = ['welcome', 'home', 'signup', 'login', 'item', 'ref', 'bono', 'p'];
+                            if (parts.length > 0 && !reservedPaths.includes(parts[0].toLowerCase())) {
+                                if (parts.length === 1) {
+                                    return {
+                                        routes: [{ name: 'CommercialProfile', params: { handle: parts[0] } }]
+                                    };
+                                } else if (parts.length === 2) {
+                                    return {
+                                        routes: [{ name: 'ProductDetail', params: { handle: parts[0], slug: parts[1] } }]
+                                    };
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                    
                     return rnGetStateFromPath(path, options);
                 },
             }}
