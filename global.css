@@ -27,3 +27,10 @@ input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
 }
+
+/* Force expo-av video tags to strictly center on Web */
+video {
+  object-fit: contain !important;
+  object-position: center center !important;
+  margin: auto !important;
+}

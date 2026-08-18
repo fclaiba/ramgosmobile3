@@ -14,7 +14,7 @@ import { glassShadow, Radius, colors } from '../theme/tokens';
 
 
 const { width } = Dimensions.get('window');
-const POINT_VALUE_USD = 0.01;
+const POINT_VALUE_USD = 0.001;
 
 // --- HAPTICS HELPER ---
 const triggerImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
@@ -253,13 +253,13 @@ export function PointsManager() {
                 {/* Quick Summary - Always visible */}
                 <View style={styles.howItWorksSummary}>
                     <View style={styles.summaryItem}>
-                        <Text style={styles.summaryValue}>${POINT_VALUE_USD.toFixed(2)}</Text>
-                        <Text style={styles.summaryLabel}>por punto</Text>
+                        <Text style={styles.summaryValue}>${POINT_VALUE_USD.toFixed(3)}</Text>
+                        <Text style={styles.summaryLabel}>por R Coin</Text>
                     </View>
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryItem}>
-                        <Text style={styles.summaryValue}>1:1</Text>
-                        <Text style={styles.summaryLabel}>$1 = 1 pt</Text>
+                        <Text style={styles.summaryValue}>5:1</Text>
+                        <Text style={styles.summaryLabel}>$1 = 5 R Coins</Text>
                     </View>
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryItem}>
@@ -298,7 +298,7 @@ export function PointsManager() {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Compras</Text>
                                 <Text style={styles.howItWorksText}>
-                                    1 punto por cada $1 pagado en efectivo. Si usás puntos para pagar, solo ganás puntos sobre el saldo restante.
+                                    5 R Coins por cada $1 gastado. Si usás R Coins para pagar, ganás sobre el saldo restante.
                                 </Text>
                             </View>
                         </View>
@@ -310,7 +310,7 @@ export function PointsManager() {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Bonus por Nivel</Text>
                                 <Text style={styles.howItWorksText}>
-                                    Tu nivel {currentTier?.label} te da {currentTier?.bonusMultiplier ? `+${Math.round(currentTier.bonusMultiplier * 100)}%` : 'puntos base'} extra en cada compra.
+                                    Tu nivel {currentTier?.label} te da {currentTier?.bonusMultiplier ? `+${Math.round(currentTier.bonusMultiplier * 100)}%` : 'R Coins base'} extra en cada compra.
                                     {nextTier ? ` Próximo: ${nextTier.label} (+${Math.round((nextTier.bonusMultiplier || 0) * 100)}%).` : ''}
                                 </Text>
                             </View>
@@ -323,7 +323,7 @@ export function PointsManager() {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Juegos</Text>
                                 <Text style={styles.howItWorksText}>
-                                    Jugá y ganá monedas. Convertí {conversionRate} monedas en 1 punto real.
+                                    Jugá y ganá monedas. Convertí {conversionRate} monedas en 1 R Coin.
                                 </Text>
                             </View>
                         </View>
@@ -335,7 +335,7 @@ export function PointsManager() {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Referidos</Text>
                                 <Text style={styles.howItWorksText}>
-                                    Compartí tu código "{referralCode}" y ganá cuando tus amigos se registran y compran.
+                                    Ganá 500 R Coins cuando completan su registro (KYC), y 1,000 extras en su primera compra. ¡Ellos se llevan 2,000!
                                     {referralSummary?.registrations ? ` Ya referiste a ${referralSummary.registrations} personas.` : ''}
                                 </Text>
                             </View>
@@ -348,7 +348,19 @@ export function PointsManager() {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Racha Diaria</Text>
                                 <Text style={styles.howItWorksText}>
-                                    Iniciá sesión todos los días para mantener tu racha y ganar puntos extra.
+                                    Iniciá sesión todos los días para mantener tu racha y ganar R Coins extra.
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.howItWorksRow}>
+                            <View style={[styles.howItWorksIconBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#DBEAFE' }]}>
+                                <Star size={14} color="#3B82F6" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.howItWorksRowTitle}>Reseñas</Text>
+                                <Text style={styles.howItWorksText}>
+                                    Ayudá a otros usuarios con tus opiniones. Ganá 5 R Coins por cada reseña verificada.
                                 </Text>
                             </View>
                         </View>
@@ -365,7 +377,7 @@ export function PointsManager() {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.howItWorksRowTitle}>Descuentos en Checkout</Text>
                                 <Text style={styles.howItWorksText}>
-                                    Canjeá puntos por descuentos al momento de pagar. Cada punto vale ${POINT_VALUE_USD.toFixed(2)}.
+                                    Canjeá R Coins por descuentos al momento de pagar. (1,000 R Coins = $1.00 USD).
                                 </Text>
                             </View>
                         </View>

@@ -374,7 +374,7 @@ export function PaymentForm({
                             value={pointsInput}
                             onChangeText={setPointsInput}
                             keyboardType="number-pad"
-                            placeholder="Puntos a usar"
+                            placeholder="R Coins a usar"
                             placeholderTextColor="#94A3B8"
                             style={[styles.pointsInput, { color: textColor, borderColor: muted + '44' }]}
                         />

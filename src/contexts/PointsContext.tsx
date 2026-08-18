@@ -87,6 +87,7 @@ type PointsContextValue = {
     playPet: () => Promise<{ success: boolean; message: string }>;
     unlockHat: (id: string, cost: number) => Promise<boolean>;
     equipHat: (id: string) => Promise<void>;
+    updatePetState: (updates: Partial<PetStats>) => Promise<boolean>;
     challenges: DailyChallenge[];
     quarterlyMission: { claimed: boolean; reward: number; purchasesCurrent: number; purchasesTarget: number };
     ready: boolean;
@@ -122,6 +123,7 @@ const DEFAULT_CONTEXT: PointsContextValue = {
     playPet: async () => ({ success: false, message: 'Sin sesión' }),
     unlockHat: async () => false,
     equipHat: async () => {},
+    updatePetState: async () => false,
     challenges: CHALLENGE_META.map((c) => ({ ...c, current: 0, claimed: false })),
     quarterlyMission: { claimed: false, reward: 150, purchasesCurrent: 0, purchasesTarget: 3 },
     ready: false,
@@ -152,6 +154,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const playMutation = useMutation(api.economy.playVirtualPet);
     const unlockHatMutation = useMutation(api.economy.unlockAccessory);
     const equipHatMutation = useMutation(api.economy.equipAccessory);
+    const updatePetStateMutation = useMutation(api.economy.updatePetState);
 
     React.useEffect(() => {
         if (userId && sessionToken && economyState === null) {
@@ -404,6 +407,20 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
         [equipHatMutation, sessionToken, userId],
     );
 
+    const updatePetState = useCallback(
+        async (updates: Partial<PetStats>) => {
+            if (!userId || !sessionToken) return false;
+            try {
+                await updatePetStateMutation({ sessionToken, userId, updates });
+                return true;
+            } catch (e) {
+                console.error(e);
+                return false;
+            }
+        },
+        [updatePetStateMutation, sessionToken, userId],
+    );
+
     const lastEarnTransactionId =
         transactions.find((t) => t.type === 'earn' || t.type === 'convert' || t.type === 'challenge')?.id ?? null;
 
@@ -435,6 +452,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             playPet,
             unlockHat,
             equipHat,
+            updatePetState,
             challenges,
             quarterlyMission,
             ready: economyState !== undefined,

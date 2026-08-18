@@ -437,7 +437,7 @@ function ProfileScreen({ navigation }: any) {
                         </View>
                         <View style={styles.rewardsBody}>
                             <Text style={styles.rewardsPoints}>{points}</Text>
-                            <Text style={styles.rewardsLabel}>Puntos Disponibles</Text>
+                            <Text style={styles.rewardsLabel}>R Coins Disponibles</Text>
                         </View>
                         <View style={styles.rewardsFooter}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -631,7 +631,7 @@ function ProfileScreen({ navigation }: any) {
                     </View>
 
                     {/* POINTS & REFERRALS */}
-                    <Text style={styles.sectionHeader}>Puntos y Referidos</Text>
+                    <Text style={styles.sectionHeader}>R Coins y Referidos</Text>
                     <View style={styles.card}>
                         <TouchableOpacity style={styles.pointsTopRow} onPress={() => setPointsHistoryVisible(true)}>
                             <View style={{ flex: 1 }}>
@@ -667,7 +667,7 @@ function ProfileScreen({ navigation }: any) {
                                     {referralCode ? ` · share ${referralCode}` : ''}
                                 </Text>
                                 <Text style={styles.pointsSubtitle}>
-                                    Registros: {referralSummary.registrations} · Compras: {referralSummary.purchases} · Puntos: {referralSummary.totalPoints}
+                                    Registros: {referralSummary.registrations} · Compras: {referralSummary.purchases} · R Coins: {referralSummary.totalPoints}
                                 </Text>
                             </View>
                             <Button variant="outline" onPress={() => navigation.navigate('Referrals')}>

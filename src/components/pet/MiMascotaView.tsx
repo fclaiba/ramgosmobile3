@@ -79,6 +79,7 @@ export function MiMascotaView({ navigation }: any) {
         cleanPet: cleanPetRemote,
         playPet: playPetRemote,
         addGameCoins,
+        updatePetState,
     } = usePoints();
     const { registerArcadeReward, unlockAccessory, equipAccessory } = useRewards();
     const petConfig = economyPetConfig;
@@ -153,10 +154,16 @@ export function MiMascotaView({ navigation }: any) {
     useEffect(() => {
         const requiredExp = stats.level * 100;
         if (stats.exp >= requiredExp) {
-            setStats(prev => ({ ...prev, level: prev.level + 1, exp: prev.exp - requiredExp, happiness: 100, hunger: 100, energy: 100 }));
-            show(`¡Subiste al nivel ${stats.level + 1}! 🎉`, 'success');
+            const newLevel = stats.level + 1;
+            const newExp = stats.exp - requiredExp;
+            
+            // Persistir en backend primero
+            updatePetState({ level: newLevel, exp: newExp, happiness: 100, hunger: 100, energy: 100 });
+            
+            setStats(prev => ({ ...prev, level: newLevel, exp: newExp, happiness: 100, hunger: 100, energy: 100 }));
+            show(`¡Subiste al nivel ${newLevel}! 🎉`, 'success');
         }
-    }, [stats.exp, stats.level, show]);
+    }, [stats.exp, stats.level, show, updatePetState]);
 
     // Mood Logic
     useEffect(() => {
@@ -569,7 +576,7 @@ export function MiMascotaView({ navigation }: any) {
                 <LinearGradient colors={['#F59E0B', '#B45309']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.converterCard}>
                     <View>
                         <Text style={styles.convTitle}>Bank</Text>
-                        <Text style={styles.convDesc}>Convierte tus monedas en Puntos Ramgos</Text>
+                        <Text style={styles.convDesc}>Convierte tus monedas en R Coins</Text>
                     </View>
                     <TouchableOpacity style={styles.convBtn} onPress={handleConvertCoins}>
                         <Text style={styles.convBtnText}>Canjear</Text>

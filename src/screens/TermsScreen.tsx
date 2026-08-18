@@ -169,13 +169,11 @@ export default function TermsScreen({ navigation, route }: any) {
                         <Text style={styles.text}>
                             <Text style={styles.bold}>🎁 Términos de Bonos:</Text> Válidos en establecimientos participantes. Canje solo vía App/QR.{'\n\n'}
 
-                            <Text style={styles.bold}>🪙 Términos y Valor de los Puntos:</Text>{'\n'}
-                            <Text style={styles.bold}>A. Valor y Conversión:</Text>{'\n'}
-                            • Tasa Base: 1 Punto = $0.01 USD.{'\n'}
-                            • Equivalencia: 100 Puntos = $1.00 USD.{'\n'}
-                            • Por Compras: $1.00 gastado = 1 punto.{'\n\n'}
-
-                            <Text style={styles.bold}>B. Puntos por Juegos y Actividad:</Text>{'\n'}
+                            <Text style={styles.bold}>🪙 Términos y Valor de los R Coins:</Text>{'\n'}
+                            • Equivalencia: 1,000 R Coins = $1.00 USD.{'\n'}
+                            • Caducidad: Los R Coins no caducan mientras la cuenta esté activa.{'\n'}
+                            {'\n'}
+                            <Text style={styles.bold}>B. R Coins por Juegos y Actividad:</Text>{'\n'}
                             • Mascota Virtual: +5 puntos por día.{'\n'}
                             • Arcade: 1–20 puntos (max 3/día).{'\n'}
                             • Rueda de la Suerte: 1 giro diario.{'\n'}

@@ -14,8 +14,8 @@ import { awardPoints, buildEventKey, countDailyAwards } from './economy/pointsEn
 
 
 
-/** $1 cash spent = 1 base point. Tier bonus matches PointsContext DISCOUNT_TIERS. */
-export const POINTS_PER_USD = 1;
+/** $1 cash spent = 5 base points. Tier bonus matches PointsContext DISCOUNT_TIERS. */
+export const POINTS_PER_USD = 5;
 const PURCHASE_TIERS = [
     { minPoints: 0, bonusMultiplier: 0 },
     { minPoints: 100, bonusMultiplier: 0.05 },
@@ -179,9 +179,22 @@ export const addCoins = mutation({
 async function internalAddCoins(ctx: any, args: { userId: string; amount: number; reason: string }) {
     const state = await ensureEconomyState(ctx, args);
     const currentState = state!.rewardsState || DEFAULT_PET_STATE;
+    const petStats = { ...(currentState.petStats || DEFAULT_PET_STATE.petStats) };
+    const newCoins = currentState.gameCoins + args.amount;
+
+    // "el huevo tiene que erosionar a la primera que juntas 100 monedas jugando"
+    if (newCoins >= 100 && petStats.level < 3) {
+        petStats.level = 3;
+        petStats.exp = 0;
+        petStats.happiness = 100;
+        petStats.hunger = 100;
+        petStats.energy = 100;
+    }
+
     const newState = {
         ...currentState,
-        gameCoins: currentState.gameCoins + args.amount,
+        gameCoins: newCoins,
+        petStats: petStats,
     };
 
     await ctx.db.patch(state!._id, {
@@ -754,7 +767,7 @@ export const redeemPoints = mutation({
             return { success: false, message: 'Puntos insuficientes' };
         }
 
-        const discountUsd = amount * 0.01;
+        const discountUsd = amount * 0.001;
         const newState = {
             ...current,
             points: current.points - amount,

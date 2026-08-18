@@ -151,7 +151,7 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                     <Text style={styles.content} numberOfLines={2}>{post.content}</Text>
                     
                     <View style={styles.musicRow}>
-                        <Music2 size={12} color="#fff" style={styles.iconShadow} />
+                        <Music2 size={12} color="#fff" style={styles.iconShadow as any} />
                         <Text style={styles.musicText}>Sonido original - {post.author?.username}</Text>
                     </View>
                 </View>
@@ -159,28 +159,28 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                 <View style={styles.actionSection}>
                     <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
                         <View style={styles.iconWrapper}>
-                            <Heart size={28} color={liked ? "#EF4444" : "#fff"} fill={liked ? "#EF4444" : "none"} style={styles.iconShadow} />
+                            <Heart size={28} color={liked ? "#EF4444" : "#fff"} fill={liked ? "#EF4444" : "none"} style={styles.iconShadow as any} />
                         </View>
                         <Text style={styles.actionText}>{likes}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(true)} accessibilityRole="button" accessibilityLabel="Comentar">
                         <View style={styles.iconWrapper}>
-                            <MessageCircle size={28} color="#fff" style={styles.iconShadow} />
+                            <MessageCircle size={28} color="#fff" style={styles.iconShadow as any} />
                         </View>
                         <Text style={styles.actionText}>{post.commentCount || 0}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionBtn} onPress={() => setShowShare(true)}>
                         <View style={styles.iconWrapper}>
-                            <Share2 size={28} color="#fff" style={styles.iconShadow} />
+                            <Share2 size={28} color="#fff" style={styles.iconShadow as any} />
                         </View>
                         <Text style={styles.actionText}>{post.shareCount || 0}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionBtn}>
                         <View style={styles.iconWrapper}>
-                            <MoreVertical size={28} color="#fff" style={styles.iconShadow} />
+                            <MoreVertical size={28} color="#fff" style={styles.iconShadow as any} />
                         </View>
                     </TouchableOpacity>
 
@@ -229,20 +229,15 @@ const styles = StyleSheet.create({
         backgroundColor: '#000',
     },
     videoCentering: {
-        ...StyleSheet.absoluteFillObject,
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
         justifyContent: 'center',
         alignItems: 'center',
     },
     video: {
+        flex: 1,
         width: '100%',
         height: '100%',
-        ...Platform.select({
-            web: {
-                // @ts-ignore — web-only CSS prop
-                objectPosition: 'center center',
-            },
-            default: {},
-        }),
     },
     gradient: {
         position: 'absolute',

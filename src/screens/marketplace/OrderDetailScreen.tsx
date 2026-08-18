@@ -413,7 +413,7 @@ export default function OrderDetailScreen() {
                                 <Coins size={22} color="#F59E0B" />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.pointsTitle}>Puntos ganados</Text>
+                                <Text style={styles.pointsTitle}>R Coins ganados</Text>
                                 <Text style={styles.pointsSubtitle}>Por esta compra</Text>
                             </View>
                             <View style={styles.pointsBadge}>
@@ -423,7 +423,7 @@ export default function OrderDetailScreen() {
                         </View>
                         <View style={styles.pointsBreakdown}>
                             <View style={styles.pointsRow}>
-                                <Text style={styles.pointsLabel}>Puntos base</Text>
+                                <Text style={styles.pointsLabel}>R Coins base</Text>
                                 <Text style={styles.pointsValue}>+{pointsInfo.basePoints} pts</Text>
                             </View>
                             {pointsInfo.hasBonusMultiplier && pointsInfo.bonusPoints > 0 && (

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { internal } from "./_generated/api";
 
 // PHASE 2: Reviews and Ratings
 
@@ -87,6 +88,16 @@ export const addReview = mutation({
 
         // Update listing's aggregated rating
         await updateListingRating(ctx, args.listingId);
+
+        // Award 5 R Coins for the review
+        await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+            userId: targetUserId,
+            eventKey: `review_${reviewId}`,
+            type: "earn",
+            source: "bonus",
+            amount: 5,
+            description: "Recompensa por dejar una reseña",
+        });
 
         return reviewId;
     },

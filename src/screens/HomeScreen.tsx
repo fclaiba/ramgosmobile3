@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBa
 import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -19,6 +20,7 @@ import { SidebarMenu } from '../components/SidebarMenu';
 import CartSidebar from '../components/CartSidebar';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { PointsManager } from '../components/PointsManager';
+import { Sheet } from '../components/ui/sheet';
 
 import { useResponsive } from '../hooks/useResponsive';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
@@ -66,27 +68,40 @@ const featuredOffers = [
     { id: 3, title: 'Bonos Exclusivos', subtitle: 'Negocios locales', image: 'https://images.unsplash.com/photo-1671749999622-4087a86868cc?w=1080', badge: 'Popular', badgeColor: '#4FC3F7', gradient: ['rgba(33, 150, 243,0.9)', 'rgba(41, 182, 246,0.9)'], icon: Tag, filter: 'bonos' },
 ];
 
-const discoverCards = [
-    { id: 'groceries', title: 'Groceries', image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=1080', badge: '🥗 Descubre', badgeColor: '#22C55E', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'restaurants', title: 'Restaurantes', image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1080', badge: '🍔 Descubre', badgeColor: '#3B82F6', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.25)', 'transparent'] },
-    { id: 'iglesias', title: 'Iglesias', image: 'https://images.unsplash.com/photo-1548614606-52b4451f994b?w=1080', badge: '⛪ Descubre', badgeColor: '#F59E0B', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 'shopping', title: 'Shopping', image: 'https://images.unsplash.com/photo-1481437156560-3205f6a55735?w=1080', badge: '🛍️ Descubre', badgeColor: '#EC4899', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'belleza', title: 'Belleza', image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1080', badge: '💇‍♀️ Descubre', badgeColor: '#8B5CF6', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'hoteles', title: 'Hoteles', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1080', badge: '🏨 Descubre', badgeColor: '#3B82F6', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 'eventos', title: 'Eventos', image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1080', badge: '🎉 Descubre', badgeColor: '#F97316', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 'servicios', title: 'Servicios', image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1080', badge: '🏥 Descubre', badgeColor: '#10B981', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'supermercados', title: 'Supermercados', image: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=1080', badge: '🥫 Descubre', badgeColor: '#EAB308', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'lugares', title: 'Lugares', image: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1080', badge: '📍 Descubre', badgeColor: '#EF4444', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'realestate', title: 'Real Estate', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1080', badge: '🏘️ Descubre', badgeColor: '#3B82F6', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 'autos', title: 'Automóviles', image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=1080', badge: '🚗 Descubre', badgeColor: '#6366F1', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
-    { id: 'negocios', title: 'Negocios', image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080', badge: '💼 Descubre', badgeColor: '#6B7280', gradient: ['rgba(17,24,39,0.6)', 'rgba(17,24,39,0.3)', 'transparent'] },
-    { id: 'mascotas', title: 'Mascotas', image: 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=1080', badge: '🐾 Descubre', badgeColor: '#F43F5E', gradient: ['rgba(17,24,39,0.5)', 'rgba(17,24,39,0.2)', 'transparent'] },
+const mainCategories = [
+    { id: 'moda', title: 'Moda', image: 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=1080', badge: '👗', badgeColor: '#EC4899', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'belleza', title: 'Beauty Care', image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=1080', badge: '💇‍♀️', badgeColor: '#8B5CF6', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'restaurants', title: 'Restaurantes', image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1080', badge: '🍔', badgeColor: '#3B82F6', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'bares', title: 'Bares', image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1080', badge: '🍸', badgeColor: '#F59E0B', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'shopping', title: 'Shopping', image: 'https://images.unsplash.com/photo-1481437156560-3205f6a55735?w=1080', badge: '🛍️', badgeColor: '#EC4899', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'influencer', title: 'Influencer', image: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=1080', badge: '📸', badgeColor: '#F43F5E', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'realestate', title: 'Real Estate', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1080', badge: '🏘️', badgeColor: '#3B82F6', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'eventos', title: 'Eventos', image: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1080', badge: '🎉', badgeColor: '#F97316', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'hoteles', title: 'Hoteles', image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1080', badge: '🏨', badgeColor: '#3B82F6', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'descubre', title: 'Descubre', image: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1080', badge: '🔍', badgeColor: '#10B981', gradient: ['transparent', 'rgba(16, 185, 129, 0.4)', 'rgba(16, 185, 129, 0.9)'], isDescubreTrigger: true },
+    { id: 'iglesias', title: 'Iglesias', image: 'https://images.unsplash.com/photo-1538356111053-748a48e1acb8?w=1080', badge: '⛪', badgeColor: '#F59E0B', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'hospitales', title: 'Hospitales', image: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1080', badge: '🏥', badgeColor: '#EF4444', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'foodtrucks', title: 'Food Trucks', image: 'https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?w=1080', badge: '🌮', badgeColor: '#F97316', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+    { id: 'mascotas', title: 'Mascotas', image: 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?w=1080', badge: '🐾', badgeColor: '#F43F5E', gradient: ['transparent', 'rgba(17,24,39,0.3)', 'rgba(17,24,39,0.8)'] },
+];
+
+const descubreCategories = [
+    { id: 'groceries', title: 'Grocery', badge: '🥗', badgeColor: '#22C55E' },
+    { id: 'farmacias', title: 'Farmacias', badge: '💊', badgeColor: '#EF4444' },
+    { id: 'abogados', title: 'Abogados', badge: '⚖️', badgeColor: '#6B7280' },
+    { id: 'lugares', title: 'Lugares de interés', badge: '📍', badgeColor: '#3B82F6' },
+    { id: 'actividades', title: 'Actividades de la ciudad', badge: '🎟️', badgeColor: '#F59E0B' },
+    { id: 'servicios', title: 'Servicios', badge: '🛠️', badgeColor: '#8B5CF6' },
+    { id: 'eventosciudad', title: 'Eventos de la ciudad', badge: '🎪', badgeColor: '#EC4899' },
+    { id: 'gimnasios', title: 'Gimnasios y Bienestar', badge: '💪', badgeColor: '#10B981' },
+    { id: 'infantil', title: 'Cuidado Infantil', badge: '🧸', badgeColor: '#F43F5E' },
+    { id: 'mecanica', title: 'Mecánica y Autos', badge: '🚗', badgeColor: '#6366F1' },
 ];
 
 const quickActions = [
     { id: 1, title: 'Mi Mascota', icon: Sparkles, color: '#2196F3', bg: 'rgba(33, 150, 243,0.1)', action: 'mascota' },
     { id: 2, title: 'Mapa', icon: MapPin, color: '#2563EB', bg: 'rgba(37,99,235,0.1)', action: 'marketplace-map' },
-    { id: 3, title: 'Mis Puntos', icon: Zap, color: '#D97706', bg: 'rgba(217,119,6,0.1)', action: 'points' },
+    { id: 3, title: 'Mis R Coins', icon: Zap, color: '#D97706', bg: 'rgba(217,119,6,0.1)', action: 'points' },
 ];
 
 const consumptionData: any[] = [];
@@ -152,6 +167,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const [view, setView] = useState<'home' | 'consumos' | 'puntos'>('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [marketplaceParams, setMarketplaceParams] = useState<any>(null);
+    const [showDescubreMenu, setShowDescubreMenu] = useState(false);
 
 
     // Initial Tab from Params
@@ -271,7 +287,7 @@ export default function HomeScreen({ navigation, route }: any) {
                                         }}
                                     >
                                         <Star size={16} color={view === 'puntos' ? (isDark ? '#FCD34D' : '#F59E0B') : colors(isDark).textMuted} fill={view === 'puntos' ? (isDark ? '#FCD34D' : '#F59E0B') : 'transparent'} />
-                                        <Text style={[styles.headerBtnText, view === 'puntos' && { color: isDark ? '#FCD34D' : '#F59E0B' }]}>Puntos</Text>
+                                        <Text style={[styles.headerBtnText, view === 'puntos' && { color: isDark ? '#FCD34D' : '#F59E0B' }]}>R Coins</Text>
                                     </TouchableOpacity>
                                 </GlobalHeaderActions>
                             }
@@ -377,19 +393,29 @@ export default function HomeScreen({ navigation, route }: any) {
                                     </View>
 
                                     <View style={styles.grid2}>
-                                        {discoverCards.map((card) => (
+                                        {mainCategories.map((card) => (
                                             <TouchableOpacity
                                                 key={card.id}
                                                 style={[styles.catCard, { width: '48%' }]}
-                                                onPress={() => handleNavigate('Marketplace', { category: card.id })}
+                                                onPress={() => {
+                                                    if (card.isDescubreTrigger) {
+                                                        setShowDescubreMenu(true);
+                                                    } else {
+                                                        handleNavigate('Marketplace', { category: card.id });
+                                                    }
+                                                }}
                                             >
                                                 <ImageWithFallback src={card.image} style={styles.catImg} />
-                                                <LinearGradient colors={card.gradient as [string, string, ...string[]]} style={StyleSheet.absoluteFill} />
+                                                <LinearGradient 
+                                                    colors={['transparent', 'rgba(0,0,0,0.02)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']} 
+                                                    locations={[0, 0.5, 0.75, 1]}
+                                                    style={StyleSheet.absoluteFill} 
+                                                />
                                                 <View style={styles.catOverlay}>
                                                     <View style={[styles.miniBadge, { backgroundColor: card.badgeColor }]}>
                                                         <Text style={styles.miniBadgeText}>{card.badge}</Text>
                                                     </View>
-                                                    <Text style={styles.catTitle}>{card.title}</Text>
+                                                    <Text style={[styles.catTitle, card.isDescubreTrigger && { color: '#10B981' }]}>{card.title}</Text>
                                                 </View>
                                             </TouchableOpacity>
                                         ))}
@@ -514,6 +540,46 @@ export default function HomeScreen({ navigation, route }: any) {
             {!isDesktop && <MobileNav activeSection={activeTab} onSectionChange={handleTabChange} />}
             <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
             <CartSidebar />
+            
+            {/* Descubre Submenu */}
+            <Sheet open={showDescubreMenu} onOpenChange={setShowDescubreMenu}>
+                <View style={[styles.descubreSheet, { backgroundColor: isDark ? '#0F172A' : '#F8FAFC' }]}>
+                    {/* Background decoration */}
+                    <View style={StyleSheet.absoluteFill}>
+                         <LinearGradient 
+                             colors={isDark ? ['rgba(59,130,246,0.15)', 'transparent'] : ['rgba(59,130,246,0.08)', 'transparent']}
+                             style={StyleSheet.absoluteFill}
+                         />
+                    </View>
+                    
+                    <View style={styles.descubreHeader}>
+                        <View style={styles.descubreHeaderBadge}>
+                            <MapPin size={14} color={isDark ? "#60A5FA" : "#3B82F6"} />
+                            <Text style={styles.descubreHeaderBadgeText}>Exploración en Mapa</Text>
+                        </View>
+                        <Text style={[styles.descubreTitle, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>¿Qué estás buscando?</Text>
+                        <Text style={[styles.descubreSubtitle, { color: colors(isDark).textMuted }]}>Encuentra los mejores lugares a tu alrededor</Text>
+                    </View>
+                    
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.descubreGrid}>
+                        {descubreCategories.map((cat) => (
+                            <TouchableOpacity
+                                key={cat.id}
+                                style={[styles.descubreGridItem, isDark ? styles.descubreGridItemDark : styles.descubreGridItemLight]}
+                                onPress={() => {
+                                    setShowDescubreMenu(false);
+                                    handleNavigate('Marketplace', { category: cat.id, viewMode: 'map' });
+                                }}
+                            >
+                                <LinearGradient colors={[cat.badgeColor, cat.badgeColor + '90']} style={styles.descubreGridIconBg}>
+                                    <Text style={{ fontSize: 24 }}>{cat.badge}</Text>
+                                </LinearGradient>
+                                <Text style={[styles.descubreGridText, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>{cat.title}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            </Sheet>
         </ResponsiveLayout>
     );
 }
@@ -568,7 +634,7 @@ const getStyles = (isDark: boolean) => {
     catCard: { height: 180, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: c.surface1, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     catImg: { width: '100%', height: '100%' },
     catOverlay: { position: 'absolute', inset: 0, padding: 16, justifyContent: 'space-between' },
-    catTitle: { color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+    catTitle: { color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: -0.3, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
 
     miniBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full },
     miniBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
@@ -613,5 +679,20 @@ const getStyles = (isDark: boolean) => {
     historyAmount: { fontSize: 13, fontWeight: '700', color: c.text },
     statusBadge: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.full, paddingHorizontal: 6, paddingVertical: 2 },
     statusText: { fontSize: 9, fontWeight: '700' },
+    
+    // Descubre Menu Premium Styles
+    descubreSheet: { padding: 24, paddingBottom: 40, borderTopLeftRadius: Radius['3xl'], borderTopRightRadius: Radius['3xl'], overflow: 'hidden' },
+    descubreHeader: { marginBottom: 24, alignItems: 'center' },
+    descubreHeaderBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full, marginBottom: 12 },
+    descubreHeaderBadgeText: { color: isDark ? "#60A5FA" : "#3B82F6", fontSize: 11, fontWeight: '800', marginLeft: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
+    descubreTitle: { fontSize: 26, fontWeight: '900', letterSpacing: -0.8, marginBottom: 4, textAlign: 'center' },
+    descubreSubtitle: { fontSize: 14, textAlign: 'center' },
+    
+    descubreGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, paddingBottom: 24 },
+    descubreGridItem: { width: '48%', padding: 16, borderRadius: Radius['2xl'], borderWidth: StyleSheet.hairlineWidth, ...glassShadow(isDark), alignItems: 'center' },
+    descubreGridItemDark: { backgroundColor: 'rgba(30,41,59,0.7)', borderColor: 'rgba(255,255,255,0.1)' },
+    descubreGridItemLight: { backgroundColor: '#FFFFFF', borderColor: 'rgba(0,0,0,0.05)' },
+    descubreGridIconBg: { width: 56, height: 56, borderRadius: Radius.xl, justifyContent: 'center', alignItems: 'center', marginBottom: 12, ...glassShadow(isDark) },
+    descubreGridText: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
 });
 };

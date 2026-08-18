@@ -60,9 +60,10 @@ export const checkInfluencerMetrics = internalMutation({
 });
 
 const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
-const REFERRAL_WELCOME_BONUS = 10;
-const REFERRAL_SIGNUP_BONUS = 5;
-const REFERRAL_FIRST_PURCHASE_BONUS = 10;
+const REFERRAL_WELCOME_BONUS = 0; // Ahora se da en la primera compra (2000)
+const REFERRAL_SIGNUP_BONUS = 500; // R Coins por completar KYC (se suma al balance)
+const REFERRAL_FIRST_PURCHASE_BONUS = 1000; // R Coins para quien invitó
+const REFERRAL_NEW_USER_FIRST_PURCHASE_BONUS = 2000; // R Coins para el comprador nuevo
 const REFERRAL_HIGH_TICKET_BONUS = 25;
 const REFERRAL_HIGH_TICKET_THRESHOLD_USD = 100;
 
@@ -1614,6 +1615,38 @@ export const internalHandleReferralPurchase = internalMutation({
                 claimedAt: new Date().toISOString(),
             });
             pointsAwarded += REFERRAL_FIRST_PURCHASE_BONUS;
+
+            // BONO NUEVO USUARIO (Primera Compra)
+            const buyerFirstPurchaseEventKey = `new_user_purchase_first_${String(buyer._id)}`;
+            const buyerFirstPurchaseClaim = await ctx.db
+                .query("rewardsClaims")
+                .withIndex("by_user_claim", (q: any) =>
+                    q.eq("userId", String(buyer._id)).eq("claimKey", buyerFirstPurchaseEventKey),
+                )
+                .first();
+
+            if (!buyerFirstPurchaseClaim) {
+                await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+                    userId: String(buyer._id),
+                    eventKey: buyerFirstPurchaseEventKey,
+                    type: "earn",
+                    source: "bonus",
+                    amount: REFERRAL_NEW_USER_FIRST_PURCHASE_BONUS,
+                    description: "Bono de bienvenida por tu primera compra",
+                    metadata: {
+                        paymentIntentId: args.paymentIntentId,
+                        amountUSD: paymentAmount,
+                    },
+                });
+                await ctx.db.insert("rewardsClaims", {
+                    userId: String(buyer._id),
+                    claimKey: buyerFirstPurchaseEventKey,
+                    type: "bonus",
+                    pointsAwarded: REFERRAL_NEW_USER_FIRST_PURCHASE_BONUS,
+                    metadata: { paymentIntentId: args.paymentIntentId },
+                    claimedAt: new Date().toISOString(),
+                });
+            }
         }
 
         if (paymentAmount >= REFERRAL_HIGH_TICKET_THRESHOLD_USD) {
