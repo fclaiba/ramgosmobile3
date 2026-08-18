@@ -14,7 +14,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 // Mock Points context to avoid complex dependencies
 jest.mock('../PointsContext', () => ({
     usePoints: () => ({
-        addPoints: jest.fn(),
+        // `addPoints` salió del contexto: los puntos los acredita el servidor.
         challengeProgress: { loginStreak: 5 },
         gameCoins: 100,
         addGameCoins: jest.fn(),

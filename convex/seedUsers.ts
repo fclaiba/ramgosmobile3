@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { newUserIdentityFields } from "./users/identity";
 
 // ponytail: bcryptjs doesn't run in Convex runtime, use legacy hash for dev seeds
 const DEMO_PASSWORD = "RamgosDemo1!";
@@ -18,7 +19,7 @@ export const createTests = internalMutation({
                 // and keeps @handles searchable for whitelist / campaign invite.
                 await ctx.db.patch(existing._id, {
                     password: legacyHash(DEMO_PASSWORD),
-                    username,
+                    ...newUserIdentityFields({ username, name: existing.name }),
                     referralCode: username.toUpperCase(),
                     kycStatus: "approved",
                     ...(role === "influencer"
@@ -32,7 +33,10 @@ export const createTests = internalMutation({
                     password: legacyHash(DEMO_PASSWORD),
                     name: role.charAt(0).toUpperCase() + role.slice(1),
                     role: role as any,
-                    username,
+                    ...newUserIdentityFields({
+                        username,
+                        name: role.charAt(0).toUpperCase() + role.slice(1),
+                    }),
                     referralCode: username.toUpperCase(),
                     kycStatus: "approved",
                     ...(role === "influencer"

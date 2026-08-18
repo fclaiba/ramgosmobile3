@@ -126,10 +126,21 @@ import InfluencerBonusesScreen from './src/screens/InfluencerBonusesScreen';
 import UserListScreen from './src/screens/social/UserListScreen';
 import InboxScreen from './src/screens/social/InboxScreen';
 import ChatScreen from './src/screens/social/ChatScreen';
+import GroupInfoScreen from './src/screens/social/GroupInfoScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import MapExplorerScreen from './src/screens/MapExplorerScreen';
 import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
 import { HybridProfileScreen } from './src/screens/HybridProfileScreen';
+import PostDetailScreen from './src/screens/social/PostDetailScreen';
+import ActivityScreen from './src/screens/social/ActivityScreen';
+import SavedPostsScreen from './src/screens/social/SavedPostsScreen';
+import SocialPrivacyScreen from './src/screens/social/SocialPrivacyScreen';
+import MyDraftsScreen from './src/screens/social/MyDraftsScreen';
+import EventMatchingScreen from './src/screens/social/EventMatchingScreen';
+import CommunitiesScreen from './src/screens/social/CommunitiesScreen';
+import CreateCommunityScreen from './src/screens/social/CreateCommunityScreen';
+import CommunityDetailScreen from './src/screens/social/CommunityDetailScreen';
+import AdminModerationScreen from './src/screens/admin/AdminModerationScreen';
 import AnalyticsDashboardScreen from './src/screens/AnalyticsDashboardScreen';
 import { navigationRef } from './src/navigation/navigationRef';
 import { SessionGuard } from './src/components/SessionGuard';
@@ -187,6 +198,7 @@ const AppNavigator = () => {
                         Login: 'login',
                         Inbox: 'mensajes',
                         Chat: 'chat/:chatId',
+                        GroupInfo: 'grupo/:chatId',
                         ItemDetail: {
                             path: 'item/:itemId',
                             parse: {
@@ -313,6 +325,17 @@ const AppNavigator = () => {
                     <Stack.Screen name="UserList" component={UserListScreen} />
                     <Stack.Screen name="Inbox" component={InboxScreen} />
                     <Stack.Screen name="Chat" component={ChatScreen} />
+                    <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
+                    <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+                    <Stack.Screen name="Activity" component={ActivityScreen} />
+                    <Stack.Screen name="SavedPosts" component={SavedPostsScreen} />
+                    <Stack.Screen name="SocialPrivacy" component={SocialPrivacyScreen} />
+                    <Stack.Screen name="MyDrafts" component={MyDraftsScreen} />
+                    <Stack.Screen name="EventMatching" component={EventMatchingScreen} />
+                    <Stack.Screen name="Communities" component={CommunitiesScreen} />
+                    <Stack.Screen name="CreateCommunity" component={CreateCommunityScreen} />
+                    <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
+                    <Stack.Screen name="AdminModeration" component={AdminModerationScreen} />
                     <Stack.Screen name="Games" component={GamesScreen} />
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />

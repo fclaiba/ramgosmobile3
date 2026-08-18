@@ -1,14 +1,26 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
-import { Home, ShoppingBag, Users, LayoutDashboard, Settings, LogOut, MapPin } from 'lucide-react-native';
+import {
+    Home,
+    ShoppingBag,
+    Users,
+    MessageCircle,
+    LayoutDashboard,
+    Settings,
+    LogOut,
+    MapPin,
+} from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Radius, colors } from '../theme/tokens';
+import { useUnreadMessages } from '../hooks/useMessaging';
 
-
-export type NavSection = 'home' | 'marketplace' | 'social' | 'dashboard';
+// Una sola definición: `HomeScreen` pasa el mismo valor a la barra inferior
+// y a esta sidebar, así que dos tipos separados se desincronizan.
+export type { NavSection } from './MobileNav';
+import type { NavSection } from './MobileNav';
 
 interface DesktopSidebarProps {
     activeSection: NavSection;
@@ -19,6 +31,7 @@ const navItems: { id: NavSection; icon: any; label: string }[] = [
     { id: 'home', icon: Home, label: 'Home' },
     { id: 'marketplace', icon: ShoppingBag, label: 'Tienda' },
     { id: 'social', icon: Users, label: 'Social' },
+    { id: 'messages', icon: MessageCircle, label: 'Mensajes' },
 ];
 
 export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSidebarProps) {
@@ -29,6 +42,7 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
+    const { unreadCount } = useUnreadMessages();
     const showDashboard = isAuthenticated && user && ['influencer', 'business', 'admin'].includes(user.role);
 
     const allItems = useMemo(() => {
@@ -69,6 +83,13 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
                             <Text style={[styles.label, isActive && styles.activeLabel, { color: isActive ? activeColor : inactiveColor }]}>
                                 {item.label}
                             </Text>
+                            {item.id === 'messages' && unreadCount > 0 && (
+                                <View style={styles.badge}>
+                                    <Text style={styles.badgeText}>
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     );
                 })}
@@ -138,6 +159,17 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     activeLabel: {
         fontWeight: '700',
     },
+    badge: {
+        marginLeft: 'auto',
+        minWidth: 20,
+        height: 20,
+        paddingHorizontal: 6,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#3B82F6',
+    },
+    badgeText: { fontSize: 10, fontWeight: '900', color: '#fff' },
     bottomContent: {
         borderTopWidth: 1,
         borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)',

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions, Platform } from 'react-native';
-import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp } from 'lucide-react-native';
+import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -9,8 +10,10 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useUnreadMessages } from '../hooks/useMessaging';
 
 import { MobileHeader } from '../components/MobileHeader';
+import { GlobalHeaderActions } from '../components/GlobalHeaderActions';
 import { MobileNav, type NavSection, NAV_CONTENT_HEIGHT } from '../components/MobileNav';
 import { SidebarMenu } from '../components/SidebarMenu';
 import CartSidebar from '../components/CartSidebar';
@@ -98,6 +101,7 @@ export default function HomeScreen({ navigation, route }: any) {
     const { isDesktop } = useResponsive();
     const styles = getStyles(isDark);
     const { t } = useTranslation();
+    const { unreadCount } = useUnreadMessages();
 
     const myOrders = useQuery(api.orders.getMyOrders, user?.id && sessionToken ? { sessionToken, userId: user.id } : "skip") || [];
     const mySellerOrders = useQuery(api.orders.getOrdersBySeller, user?.id && sessionToken ? { sellerId: user.id, sessionToken } : "skip") || [];
@@ -185,6 +189,12 @@ export default function HomeScreen({ navigation, route }: any) {
             navigation.navigate('Login');
             return;
         }
+        // Mensajes no es una pestaña embebida: es una pantalla del stack con
+        // su propia navegación (conversación, info de grupo, deep links).
+        if (tab === 'messages') {
+            navigation.navigate(user ? 'Inbox' : 'Login');
+            return;
+        }
         setActiveTab(tab);
     };
 
@@ -252,23 +262,18 @@ export default function HomeScreen({ navigation, route }: any) {
                             subtitle={t('home.subtitle', { defaultValue: 'Descubre oportunidades' })}
                             onMenuPress={() => setIsSidebarOpen(true)}
                             actions={
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <GlobalHeaderActions>
                                     <TouchableOpacity
                                         style={[styles.headerBtn, view === 'puntos' && styles.headerBtnActive]}
-                                        onPress={() => setView(view === 'puntos' ? 'home' : 'puntos')}
+                                        onPress={() => {
+                                            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                            setView(view === 'puntos' ? 'home' : 'puntos');
+                                        }}
                                     >
-                                        <Star size={16} color={view === 'puntos' ? '#fff' : (isDark ? '#D1D5DB' : '#374151')} fill={view === 'puntos' ? '#fff' : 'none'} />
-                                        <Text style={[styles.headerBtnText, view === 'puntos' && { color: '#fff' }]}>Puntos</Text>
+                                        <Star size={16} color={view === 'puntos' ? (isDark ? '#FCD34D' : '#F59E0B') : colors(isDark).textMuted} fill={view === 'puntos' ? (isDark ? '#FCD34D' : '#F59E0B') : 'transparent'} />
+                                        <Text style={[styles.headerBtnText, view === 'puntos' && { color: isDark ? '#FCD34D' : '#F59E0B' }]}>Puntos</Text>
                                     </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={styles.headerIconBtn}
-                                        onPress={openCart}
-                                    >
-                                        <ShoppingCart size={20} color={isDark ? '#D1D5DB' : '#374151'} />
-                                        {cartItems.length > 0 && <View style={styles.badge} />}
-                                    </TouchableOpacity>
-                                </View>
+                                </GlobalHeaderActions>
                             }
                         />
 
@@ -522,7 +527,8 @@ const getStyles = (isDark: boolean) => {
     headerBtnActive: { backgroundColor: c.surface3 },
     headerBtnText: { fontSize: 13, fontWeight: '600', color: c.textMuted, marginLeft: 6 },
     headerIconBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: c.surface1, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
-    badge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
+    badge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#EF4444' },
+    badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
     viewTabs: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 12, padding: 4, backgroundColor: c.surface1, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     viewTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: Radius.md },

@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { View, FlatList, Dimensions, StyleSheet } from 'react-native';
+import { View, FlatList, useWindowDimensions, StyleSheet } from 'react-native';
 import { LoopItem } from './LoopItem';
 import type { SocialFeedPost } from './types';
-
-const { height } = Dimensions.get('window');
 
 interface LoopFeedProps {
     posts: SocialFeedPost[];
@@ -13,6 +11,7 @@ interface LoopFeedProps {
 }
 
 export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress }: LoopFeedProps) => {
+    const { height, width } = useWindowDimensions();
     const [activeIndex, setActiveIndex] = useState(0);
 
     const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {

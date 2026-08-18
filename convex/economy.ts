@@ -1,37 +1,18 @@
 import { mutation, query, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import { assertSelfOrAdmin, requireActor } from './authHelpers';
+import {
+    DEFAULT_PET_STATE,
+    ensureEconomyState,
+    hydrateRewardsState,
+    normalizeChallenges,
+    quarterKey,
+    todayKey,
+    weekKey,
+} from './economy/pointsState';
+import { awardPoints, buildEventKey, countDailyAwards } from './economy/pointsEngine';
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
-const weekKey = () => {
-    const d = new Date();
-    const onejan = new Date(d.getFullYear(), 0, 1);
-    const week = Math.ceil(((d.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
-    return `${d.getFullYear()}-W${week}`;
-};
-const quarterKey = () => {
-    const d = new Date();
-    const q = Math.floor(d.getMonth() / 3) + 1;
-    return `${d.getFullYear()}-Q${q}`;
-};
 
-// Define the default pet / points state (single source of truth)
-const DEFAULT_PET_STATE = {
-    gameCoins: 100,
-    points: 0,
-    /** Cumulative earn lifetime — used for membership tiers (does not decrease on redeem). */
-    lifetimePoints: 0,
-    loginStreak: 0,
-    dailyClaimDate: null as string | null,
-    wheelClaimDate: null as string | null,
-    petStats: { happiness: 80, hunger: 60, energy: 70, level: 1, exp: 0 },
-    petConfig: { activeHat: 'none', unlockedHats: ['none'] },
-    challenges: {
-        daily_browse: { current: 0, claimed: false, dayKey: '' },
-        weekly_purchase: { current: 0, claimed: false, weekKey: '' },
-        quarterly_mission: { current: 0, claimed: false, quarterKey: '' },
-    },
-};
 
 /** $1 cash spent = 1 base point. Tier bonus matches PointsContext DISCOUNT_TIERS. */
 export const POINTS_PER_USD = 1;
@@ -60,30 +41,6 @@ const CHALLENGE_DEFS: Record<string, { reward: number; target: number; title: st
     quarterly_mission: { reward: 150, target: 3, title: 'Misión Trimestral' },
 };
 
-/** Merge partial/legacy rewardsState with defaults so UI never sees undefined coins/challenges. */
-function hydrateRewardsState(raw: any) {
-    const base = { ...DEFAULT_PET_STATE, ...(raw || {}) };
-    return {
-        ...base,
-        // ponytail: typeof NaN === 'number' — use isFinite
-        gameCoins: Number.isFinite(base.gameCoins) ? base.gameCoins : DEFAULT_PET_STATE.gameCoins,
-        points: Number.isFinite(base.points) ? base.points : 0,
-        lifetimePoints: Number.isFinite(base.lifetimePoints)
-            ? base.lifetimePoints
-            : (Number.isFinite(base.points) ? base.points : 0),
-        loginStreak: Number.isFinite(base.loginStreak) ? base.loginStreak : 0,
-        dailyClaimDate: base.dailyClaimDate ?? null,
-        wheelClaimDate: base.wheelClaimDate ?? null,
-        petStats: { ...DEFAULT_PET_STATE.petStats, ...(base.petStats || {}) },
-        petConfig: {
-            activeHat: base.petConfig?.activeHat || 'none',
-            unlockedHats: Array.isArray(base.petConfig?.unlockedHats)
-                ? base.petConfig.unlockedHats
-                : ['none'],
-        },
-        challenges: normalizeChallenges(base.challenges),
-    };
-}
 
 export const getEconomyState = query({
     args: { sessionToken: v.optional(v.string()), userId: v.string() },
@@ -134,44 +91,6 @@ export const initializeEconomy = mutation({
     },
 });
 
-async function ensureEconomyState(ctx: any, args: { userId: string }) {
-    let state = await ctx.db
-        .query('economyState')
-        .withIndex('by_user', (q: any) => q.eq('userId', args.userId))
-        .first();
-    if (!state) {
-        const id = await ctx.db.insert('economyState', {
-            userId: args.userId,
-            rewardsState: DEFAULT_PET_STATE,
-            updatedAt: new Date().toISOString(),
-        });
-        state = await ctx.db.get(id);
-    } else if (!state.rewardsState) {
-        await ctx.db.patch(state._id, {
-            rewardsState: DEFAULT_PET_STATE,
-            updatedAt: new Date().toISOString(),
-        });
-        state = await ctx.db.get(state._id);
-    } else {
-        // Backfill missing fields without wiping progress
-        const hydrated = hydrateRewardsState(state.rewardsState);
-        const needsPatch =
-            state.rewardsState.challenges == null ||
-            state.rewardsState.petConfig == null ||
-            !Number.isFinite(state.rewardsState.gameCoins) ||
-            !Number.isFinite(state.rewardsState.points);
-        if (needsPatch) {
-            await ctx.db.patch(state._id, {
-                rewardsState: hydrated,
-                updatedAt: new Date().toISOString(),
-            });
-            state = await ctx.db.get(state._id);
-        } else {
-            state = { ...state, rewardsState: hydrated };
-        }
-    }
-    return state;
-}
 
 export const updatePetState = mutation({
     args: { sessionToken: v.optional(v.string()),
@@ -380,11 +299,38 @@ export const playVirtualPet = mutation({
     }
 });
 
+/**
+ * Precio de los accesorios. Espeja `HATS` de
+ * `src/components/pet/MiMascotaView.tsx`, pero manda ESTE: el `cost` que
+ * llegaba por argumento lo elegía el cliente, así que mandar `cost: 0`
+ * desbloqueaba cualquier accesorio gratis.
+ */
+const ACCESSORY_PRICES: Record<string, number> = {
+    none: 0,
+    party: 50,
+    glasses: 100,
+    cowboy: 150,
+    viking: 200,
+    alien: 250,
+    wizard: 300,
+    crown: 500,
+};
+
 export const unlockAccessory = mutation({
-    args: { sessionToken: v.optional(v.string()), userId: v.string(), type: v.string(), id: v.string(), cost: v.number() },
+    args: {
+        sessionToken: v.optional(v.string()),
+        userId: v.string(),
+        type: v.string(),
+        id: v.string(),
+        /** Ignorado: el precio lo pone el servidor. Se acepta por compatibilidad. */
+        cost: v.optional(v.number()),
+    },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         assertSelfOrAdmin(actor, args.userId);
+
+        const price = ACCESSORY_PRICES[args.id];
+        if (price === undefined) return false;
 
         const doc = await ensureEconomyState(ctx, { userId: args.userId });
         const current = hydrateRewardsState(doc!.rewardsState);
@@ -393,7 +339,7 @@ export const unlockAccessory = mutation({
 
         const res = await internalSpendCoins(ctx, {
             userId: args.userId,
-            amount: args.cost,
+            amount: price,
             reason: `Comprar ropa ${args.id}`,
         });
         if (!res.success) return false;
@@ -475,44 +421,147 @@ export const convertCoinsToPoints = mutation({
     }
 });
 
-const ALLOWED_SOURCES = new Set(['purchase', 'game', 'referral', 'bonus', 'manual']);
+/**
+ * Catálogo de recompensas reclamables.
+ *
+ * Reemplaza a `addPoints`, que era una mutation PÚBLICA que recibía el monto
+ * desde el cliente y sólo validaba `amount > 0`: cualquiera podía acreditarse
+ * los puntos que quisiera. Acá el cliente sólo dice QUÉ reclama; cuánto vale
+ * y si corresponde lo decide el servidor.
+ *
+ * `refId` identifica la instancia del evento (el hito de racha, el número de
+ * partida). Junto con la fecha forma el `eventKey`, que es a la vez la clave
+ * de idempotencia y la del tope diario — ver `economy/pointsEngine.ts`.
+ */
+const REWARD_CATALOG: Record<
+    string,
+    {
+        points: number | ((refId: string) => number | null);
+        source: 'purchase' | 'game' | 'referral' | 'bonus' | 'manual';
+        description: string;
+        /** Máximo de reclamos por día para este `kind`. */
+        dailyMax: number;
+        /** Verificación server-side contra el estado real. `null` = OK. */
+        verify?: (state: any, refId: string) => string | null;
+    }
+> = {
+    /** Cuidado diario de la mascota. El `eventKey` con la fecha ya lo hace 1/día. */
+    pet_daily_care: {
+        points: 5,
+        source: 'bonus',
+        description: 'Cuidado diario de mascota virtual',
+        dailyMax: 1,
+    },
+    /**
+     * Recompensa de arcade. Deliberadamente PLANA y no derivada del puntaje:
+     * el puntaje lo reporta el cliente, así que atarle los puntos deja el
+     * monto en manos del cliente otra vez, que es justo el agujero que
+     * estamos cerrando. Tope diario duro de 3, igual que la UI.
+     */
+    arcade_play: {
+        points: 10,
+        source: 'game',
+        description: 'Recompensa de arcade',
+        dailyMax: 3,
+    },
+    /** Hito de racha. `refId` = días. El servidor verifica la racha real. */
+    streak_milestone: {
+        points: (refId) => STREAK_MILESTONE_REWARDS[refId] ?? null,
+        source: 'bonus',
+        description: 'Bonus de racha',
+        dailyMax: 4,
+        verify: (state, refId) => {
+            const target = Number(refId);
+            if (!STREAK_MILESTONE_REWARDS[refId]) return 'Hito inexistente.';
+            if ((state.loginStreak || 0) < target) {
+                return `Mantené la racha hasta el día ${target} para reclamar.`;
+            }
+            return null;
+        },
+    },
+};
 
-// Award points (from purchases, challenges, etc.)
-export const addPoints = mutation({
+const STREAK_MILESTONE_REWARDS: Record<string, number> = {
+    '3': 20,
+    '7': 60,
+    '14': 150,
+    '30': 400,
+};
+
+/**
+ * Los bonos de referido y bienvenida NO están en el catálogo a propósito:
+ * los otorga el servidor solo en el alta (`users.awardReferralOnSignup`),
+ * donde conoce al referidor de verdad. Si fueran reclamables, el cliente
+ * podría inventarse referidos.
+ */
+export const claimReward = mutation({
     args: {
         sessionToken: v.optional(v.string()),
-        userId: v.string(),
-        amount: v.number(),
-        description: v.string(),
-        source: v.string(),
+        kind: v.string(),
+        refId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        assertSelfOrAdmin(actor, args.userId);
-        if (args.amount <= 0) return { success: false, message: 'Monto inválido' };
 
-        const source = ALLOWED_SOURCES.has(args.source) ? args.source : 'bonus';
-        const doc = await ensureEconomyState(ctx, { userId: args.userId });
-        const currentState = hydrateRewardsState(doc!.rewardsState);
-        const newState = {
-            ...currentState,
-            points: (currentState.points || 0) + args.amount,
-            lifetimePoints: (currentState.lifetimePoints || 0) + args.amount,
-        };
+        const def = REWARD_CATALOG[args.kind];
+        if (!def) return { success: false, message: 'Recompensa desconocida.' };
 
-        await ctx.db.patch(doc!._id, { rewardsState: newState, updatedAt: new Date().toISOString() });
+        const refId = (args.refId ?? 'default').slice(0, 64);
+        // El `~` es el centinela del rango del tope diario; no puede aparecer
+        // dentro del id o rompería el conteo.
+        if (refId.includes(':') || refId.includes('~')) {
+            return { success: false, message: 'Referencia inválida.' };
+        }
 
-        await ctx.db.insert('pointsLedger', {
-            userId: args.userId,
-            eventKey: `add_pts_${Date.now()}_${Math.random()}`,
-            type: 'earn',
-            source: source as any,
-            amount: args.amount,
-            description: args.description,
-            createdAt: new Date().toISOString(),
+        const doc = await ensureEconomyState(ctx, { userId: actor.idString });
+        const state = hydrateRewardsState(doc!.rewardsState);
+
+        const reason = def.verify?.(state, refId);
+        if (reason) return { success: false, message: reason };
+
+        const amount = typeof def.points === 'function' ? def.points(refId) : def.points;
+        if (!amount || amount <= 0) return { success: false, message: 'Recompensa inválida.' };
+
+        const result = await awardPoints(ctx, {
+            userId: actor.idString,
+            eventKey: buildEventKey(args.kind, refId),
+            amount,
+            description: def.description,
+            source: def.source,
+            metadata: { kind: args.kind, refId },
+            dailyCapKind: args.kind,
+            dailyCapMax: def.dailyMax,
         });
 
-        return { success: true, points: newState.points };
+        if (result.awarded === 0) {
+            const message =
+                result.reason === 'duplicate'
+                    ? 'Ya reclamaste esta recompensa.'
+                    : result.reason === 'capped'
+                      ? 'Alcanzaste el límite diario de esta recompensa.'
+                      : 'No se pudo acreditar la recompensa.';
+            return { success: false, message, reason: result.reason, points: result.balance };
+        }
+
+        return { success: true, pointsAwarded: result.awarded, points: result.balance };
+    },
+});
+
+/** Cuántos reclamos de `kind` quedan hoy. La UI ya no lleva esa cuenta. */
+export const getRewardAllowance = query({
+    args: { sessionToken: v.optional(v.string()), kind: v.string() },
+    handler: async (ctx, args) => {
+        // Query: degrada en vez de lanzar (`useQuery` re-lanza en render).
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.sessionToken);
+        } catch {
+            return { used: 0, max: 0, remaining: 0 };
+        }
+        const def = REWARD_CATALOG[args.kind];
+        if (!def) return { used: 0, max: 0, remaining: 0 };
+        const used = await countDailyAwards(ctx, actor.idString, args.kind);
+        return { used, max: def.dailyMax, remaining: Math.max(0, def.dailyMax - used) };
     },
 });
 
@@ -802,31 +851,6 @@ export const getPointsHistory = query({
     }
 });
 
-function normalizeChallenges(raw: any) {
-    const day = todayKey();
-    const week = weekKey();
-    const quarter = quarterKey();
-    const browse = raw?.daily_browse ?? {};
-    const purchase = raw?.weekly_purchase ?? {};
-    const quarterly = raw?.quarterly_mission ?? {};
-    return {
-        daily_browse: {
-            current: browse.dayKey === day ? (browse.current || 0) : 0,
-            claimed: browse.dayKey === day ? !!browse.claimed : false,
-            dayKey: browse.dayKey === day ? day : '',
-        },
-        weekly_purchase: {
-            current: purchase.weekKey === week ? (purchase.current || 0) : 0,
-            claimed: purchase.weekKey === week ? !!purchase.claimed : false,
-            weekKey: purchase.weekKey === week ? week : '',
-        },
-        quarterly_mission: {
-            current: quarterly.quarterKey === quarter ? (quarterly.current || 0) : 0,
-            claimed: quarterly.quarterKey === quarter ? !!quarterly.claimed : false,
-            quarterKey: quarterly.quarterKey === quarter ? quarter : '',
-        },
-    };
-}
 
 /** Progress a challenge (browse marketplace, complete purchase, etc.) */
 export const progressChallenge = mutation({
@@ -993,34 +1017,22 @@ export const applyPointsEventInternal = internalMutation({
         description: v.string(),
         metadata: v.optional(v.any()),
     },
+    // Delega en el motor: misma idempotencia por `eventKey` que tenía, más el
+    // acotado de monto y la garantía de saldo no negativo, en un solo lugar.
     handler: async (ctx, args) => {
-        const existing = await ctx.db
-            .query('pointsLedger')
-            .withIndex('by_user_event', (q: any) => q.eq('userId', args.userId).eq('eventKey', args.eventKey))
-            .first();
-        if (existing) return { success: false, message: 'Already applied' };
-
-        let doc = await ensureEconomyState(ctx, { userId: args.userId });
-        const currentState = hydrateRewardsState(doc!.rewardsState);
-        const earn = args.amount > 0 ? args.amount : 0;
-        const newState = {
-            ...currentState,
-            points: (currentState.points || 0) + args.amount,
-            lifetimePoints: (currentState.lifetimePoints || 0) + earn,
-        };
-        await ctx.db.patch(doc!._id, { rewardsState: newState, updatedAt: new Date().toISOString() });
-
-        await ctx.db.insert('pointsLedger', {
+        const result = await awardPoints(ctx, {
             userId: args.userId,
             eventKey: args.eventKey,
-            type: args.type as any,
-            source: args.source as any,
             amount: args.amount,
             description: args.description,
+            type: args.type as any,
+            source: args.source as any,
             metadata: args.metadata,
-            createdAt: new Date().toISOString(),
         });
 
-        return { success: true };
+        if (result.awarded === 0) {
+            return { success: false, message: result.reason ?? 'Not applied' };
+        }
+        return { success: true, points: result.balance };
     }
 });

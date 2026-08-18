@@ -12,6 +12,16 @@ import {
     preferredShareCode,
     validateReferralAliasFormat,
 } from "./referralHelpers";
+import {
+    assertHandleAvailable,
+    assertHandleShape,
+    findFreeHandle,
+    newUserIdentityFields,
+    normalizeHandle,
+    writeUserIdentity,
+} from "./users/identity";
+import { searchDirectoryImpl } from "./userDirectory";
+import { toUserCard, socialProfileOf, userCardValidator } from "./userCard";
 
 export const internalCheckRateLimit = internalMutation({
     args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
@@ -247,24 +257,12 @@ export const register = mutation({
             throw new Error("No se pudo registrar la cuenta. Si ya tienes una cuenta, intenta iniciar sesión.");
         }
 
-        let finalUsername = args.username?.trim().replace(/^@/, "").toLowerCase();
+        const finalUsername = normalizeHandle(args.username);
         if (!finalUsername) {
             throw new Error("Elegí un nombre de usuario (@) para continuar.");
         }
-        if (!/^[a-z0-9_]{3,24}$/.test(finalUsername)) {
-            throw new Error(
-                "El usuario debe tener 3–24 caracteres (letras, números o _).",
-            );
-        }
-        {
-            const existingUsername = await ctx.db
-                .query("users")
-                .withIndex("by_username", (q) => q.eq("username", finalUsername))
-                .first();
-            if (existingUsername) {
-                throw new Error("El nombre de usuario ya está en uso. Por favor, elige otro.");
-            }
-        }
+        assertHandleShape(finalUsername);
+        await assertHandleAvailable(ctx, finalUsername);
 
         if (args.role === "business" && !args.businessCategory?.trim()) {
             throw new Error("Seleccioná la categoría de tu negocio.");
@@ -313,7 +311,12 @@ export const register = mutation({
             phoneNumber: args.phoneNumber?.trim() || undefined,
             bio: args.bio?.trim() || undefined,
             businessCategory: args.businessCategory?.trim() || undefined,
-            username: finalUsername,
+            ...newUserIdentityFields({
+                username: finalUsername,
+                name,
+                nickname: businessName,
+                kycProfile,
+            }),
             ...(referredByUserId ? { referredByUserId } : {}),
             ...(kycProfile ? { kycProfile } : {}),
             kycStatus: "pending",
@@ -460,22 +463,12 @@ export const oauthLoginFromProvider = internalMutation({
                 );
             }
 
-            let finalUsername = args.username?.trim().replace(/^@/, "").toLowerCase();
+            const finalUsername = normalizeHandle(args.username);
             if (!finalUsername) {
                 throw new Error("Elegí un nombre de usuario (@) para continuar.");
             }
-            if (!/^[a-z0-9_]{3,24}$/.test(finalUsername)) {
-                throw new Error(
-                    "El usuario debe tener 3–24 caracteres (letras, números o _).",
-                );
-            }
-            const existingUsername = await ctx.db
-                .query("users")
-                .withIndex("by_username", (q) => q.eq("username", finalUsername))
-                .first();
-            if (existingUsername) {
-                throw new Error("El nombre de usuario ya está en uso. Por favor, elige otro.");
-            }
+            assertHandleShape(finalUsername);
+            await assertHandleAvailable(ctx, finalUsername);
 
             if (args.role === "business" && !args.businessCategory?.trim()) {
                 throw new Error("Seleccioná la categoría de tu negocio.");
@@ -518,7 +511,12 @@ export const oauthLoginFromProvider = internalMutation({
                 email,
                 name: args.name.trim(),
                 role: args.role as any,
-                username: finalUsername,
+                ...newUserIdentityFields({
+                    username: finalUsername,
+                    name: args.name.trim(),
+                    nickname: businessName,
+                    kycProfile,
+                }),
                 ...(referredByUserId ? { referredByUserId } : {}),
                 nickname: businessName,
                 phoneNumber: args.phoneNumber?.trim() || undefined,
@@ -635,7 +633,10 @@ export const getUser = query({
     handler: async (ctx, args) => {
         try {
             if (args.sessionToken) {
-                 const actor = await getActorOrNull(ctx, args.sessionToken);
+                 // `allowBanned`: es la query con la que el cliente lee su
+                 // propio perfil. Si devolviera null para un baneado,
+                 // `BannedUserScreen` no tendría qué mostrar.
+                 const actor = await getActorOrNull(ctx, args.sessionToken, { allowBanned: true });
                  if (!actor || actor.idString !== args.id) {
                      return null;
                  }
@@ -681,11 +682,16 @@ export const syncUser = mutation({
 
         const isTestAccount = email.endsWith('@ramgos.com') || (args as any).isTest;
 
-        let finalUsername = args.name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase() + Math.floor(100 + Math.random() * 900);
-        const existingUsername = await ctx.db.query("users").withIndex("by_username", (q) => q.eq("username", finalUsername)).first();
-        if (existingUsername) {
-            finalUsername = `${finalUsername}${Math.floor(10 + Math.random() * 90)}`;
-        }
+        // Alta por OAuth: la persona no elige handle, así que lo derivamos.
+        // Antes era `nombre + 3 dígitos al azar` y ante colisión se le pegaban
+        // 2 dígitos más UNA vez, SIN volver a chequear — así entraban handles
+        // duplicados. `findFreeHandle` itera verificando en cada vuelta.
+        const finalUsername = await findFreeHandle(
+            ctx,
+            normalizeHandle(args.name.split(' ')[0]) ??
+                normalizeHandle(email.split('@')[0]) ??
+                'user',
+        );
 
         const newUserId = await ctx.db.insert("users", {
             uid: args.uid,
@@ -693,7 +699,7 @@ export const syncUser = mutation({
             name: args.name.trim(),
             role: args.role as any,
             avatar: args.avatar,
-            username: finalUsername,
+            ...newUserIdentityFields({ username: finalUsername, name: args.name.trim() }),
             kycStatus: "pending",
             joinedAt: new Date().toISOString(),
             tier: "Bronze",
@@ -734,9 +740,6 @@ export const updateProfile = mutation({
         if (!userDoc) throw new Error("Usuario no encontrado.");
 
         const updates: any = {};
-        if (args.updates.name !== undefined) updates.name = args.updates.name.trim();
-        if (args.updates.nickname !== undefined) updates.nickname = args.updates.nickname.trim();
-        if (args.updates.avatar !== undefined) updates.avatar = args.updates.avatar;
         if (args.updates.phoneNumber !== undefined) updates.phoneNumber = args.updates.phoneNumber.trim();
         if (args.updates.businessAvailability !== undefined) updates.businessAvailability = args.updates.businessAvailability;
 
@@ -774,50 +777,25 @@ export const updateProfile = mutation({
             }
         }
 
-        if (args.updates.username !== undefined) {
-            const newUsername = args.updates.username.trim().replace(/^@/, "").toLowerCase();
-            if (newUsername !== userDoc.username) {
-                if (!/^[a-z0-9_]{3,24}$/.test(newUsername)) {
-                    throw new Error(
-                        "El usuario debe tener 3–24 caracteres (letras, números o _).",
-                    );
-                }
-                const existing = await ctx.db
-                    .query("users")
-                    .withIndex("by_username", (q) => q.eq("username", newUsername))
-                    .first();
-                if (existing) {
-                    throw new Error("El nombre de usuario ya está en uso.");
-                }
-
-                const aliasCollision = await ctx.db
-                    .query("users")
-                    .withIndex("by_referral_alias", (q) =>
-                        q.eq("referralAlias", newUsername.toUpperCase()),
-                    )
-                    .first();
-                if (aliasCollision) {
-                    throw new Error(
-                        "Ese @usuario coincide con el alias de referido de otra persona.",
-                    );
-                }
-
-                // Own alias must stay distinct from own handle.
-                const ownAlias = (userDoc as any).referralAlias as string | undefined;
-                if (ownAlias && ownAlias.toLowerCase() === newUsername) {
-                    throw new Error(
-                        "Tu alias de referido debe ser distinto de tu @usuario. Cambiá el alias primero.",
-                    );
-                }
-
-                updates.username = newUsername;
-                updates.usernameLastChangedAt = Date.now();
-                // Do NOT sync referralAlias / referralCode — handle and alias are independent.
-            }
-        }
-
         if (Object.keys(updates).length > 0) {
             await ctx.db.patch(args.id, updates);
+        }
+
+        // Identidad (handle, nombre, nickname, avatar) por el único camino
+        // autorizado: valida, chequea unicidad contra handles Y alias de
+        // referido, recalcula `searchText` y espeja a `socialUsers`.
+        // Va al final para que el alias ya esté escrito cuando se compara
+        // "mi alias tiene que ser distinto de mi handle".
+        const identityPatch: any = {};
+        if (args.updates.name !== undefined) identityPatch.name = args.updates.name.trim();
+        if (args.updates.nickname !== undefined) identityPatch.nickname = args.updates.nickname.trim();
+        if (args.updates.avatar !== undefined) identityPatch.avatar = args.updates.avatar;
+        if (args.updates.username !== undefined) identityPatch.username = args.updates.username;
+
+        if (Object.keys(identityPatch).length > 0) {
+            await writeUserIdentity(ctx, args.id, identityPatch, {
+                actorIsAdmin: actor.role === "admin" || actor.role === "developer",
+            });
         }
     }
 });
@@ -829,14 +807,44 @@ export const listUsers = query({
         sessionToken: v.optional(v.string()),
         role: v.optional(v.string()),
         actorId: v.optional(v.string()),
+        term: v.optional(v.string()),
+        limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== 'admin' && actor.role !== 'developer') {
             throw new Error("No autorizado.");
         }
-        let q = ctx.db.query("users");
-        const users = await q.collect();
+
+        // Con término, el panel busca por el índice en vez de traerse la
+        // tabla entera y filtrar en memoria.
+        if (args.term?.trim()) {
+            const cards = await searchDirectoryImpl(
+                ctx,
+                (args as any).sessionToken,
+                args.term,
+                args.limit ?? 50,
+                { excludeSelf: false, role: args.role },
+            );
+            const docs = await Promise.all(
+                cards.map(async (c) => {
+                    const ref = ctx.db.normalizeId("users", c.userId);
+                    return ref ? await ctx.db.get(ref) : null;
+                }),
+            );
+            return await Promise.all(
+                docs.filter(Boolean).map((u) => sanitizeUser(ctx, u as any)),
+            );
+        }
+
+        // Sin término: tope duro. `.collect()` sobre `users` es una bomba de
+        // tiempo — el panel de admin se cae solo cuando la tabla crece.
+        const users = args.role
+            ? await ctx.db
+                  .query("users")
+                  .withIndex("by_role", (q) => q.eq("role", args.role as any))
+                  .take(Math.min(args.limit ?? 500, 1000))
+            : await ctx.db.query("users").take(Math.min(args.limit ?? 500, 1000));
         const sanitized = await Promise.all(users.map(u => sanitizeUser(ctx, u)));
         sanitized.sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
         if (args.role) {
@@ -850,7 +858,12 @@ export const listUsers = query({
 export const listBusinessStores = query({
     args: {},
     handler: async (ctx) => {
-        const users = await ctx.db.query("users").collect();
+        // Endpoint público sin auth: leía la tabla `users` COMPLETA en cada
+        // visita al marketplace. Ahora entra por el índice de rol.
+        const users = await ctx.db
+            .query("users")
+            .withIndex("by_role", (q) => q.eq("role", "business"))
+            .take(500);
         const businesses = users.filter(
             (u) =>
                 u.role === "business" &&
@@ -947,10 +960,26 @@ export const updateUser = mutation({
             throw new Error("Rol inválido.");
         }
 
-        await ctx.db.patch(args.id, {
-            ...args.updates,
-            role: args.updates.role as any,
-        });
+        // Los campos de identidad se separan del patch crudo: por acá se
+        // parcheaba `username` SIN validar formato ni unicidad —un bypass
+        // completo de las reglas de `updateProfile`, incluso para admin—.
+        const { username, name, nickname, avatar, ...rest } = args.updates;
+
+        if (Object.keys(rest).length > 0) {
+            await ctx.db.patch(args.id, {
+                ...rest,
+                ...(args.updates.role ? { role: args.updates.role as any } : {}),
+            });
+        }
+
+        const identityPatch: any = {};
+        if (username !== undefined) identityPatch.username = username;
+        if (name !== undefined) identityPatch.name = name;
+        if (nickname !== undefined) identityPatch.nickname = nickname;
+        if (avatar !== undefined) identityPatch.avatar = avatar;
+        if (Object.keys(identityPatch).length > 0) {
+            await writeUserIdentity(ctx, args.id, identityPatch, { actorIsAdmin: isAdmin });
+        }
     },
 });
 
@@ -988,7 +1017,7 @@ export const unbanUser = mutation({
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== 'admin') throw new Error("No autorizado.");
-        await ctx.db.patch(args.userId, { isBanned: false });
+        await writeUserIdentity(ctx, args.userId, { isBanned: false }, { actorIsAdmin: true });
         await ctx.db.insert("audit_logs", {
             actorUserId: actor.idString,
             targetUserId: String(args.userId),
@@ -1009,21 +1038,10 @@ export const banUser = mutation({
         const actor = await requireActor(ctx, (args as any).sessionToken);
         if (actor.role !== 'admin') throw new Error("No autorizado.");
         
-        await ctx.db.patch(args.userId, {
-            isBanned: true
-        });
-        
-        // Revoke active sessions
-        const sessions = await ctx.db
-            .query("sessions")
-            .withIndex("by_user", q => q.eq("userId", args.userId))
-            .collect();
+        // `writeUserIdentity` es el único escritor de `isBanned`: setea el
+        // flag, esconde del directorio y revoca las sesiones, todo junto.
+        await writeUserIdentity(ctx, args.userId, { isBanned: true }, { actorIsAdmin: true });
         const now = new Date().toISOString();
-        for (const session of sessions) {
-            if (!session.revokedAt) {
-                await ctx.db.patch(session._id, { revokedAt: now });
-            }
-        }
 
         await ctx.db.insert("audit_logs", {
             actorUserId: actor.idString,
@@ -1850,21 +1868,39 @@ export const getUserActivityStats = query({
     }
 });
 
+/**
+ * Resuelve un @handle público (deep links, perfiles compartidos).
+ *
+ * Era un `.filter()` sin índice —escaneo de la tabla entera—, sensible a
+ * mayúsculas y sin tolerar el `@`. Ahora entra por `by_username`.
+ *
+ * Va SIN sesión, así que sobre el perfil saneado se recortan además los
+ * campos que sólo le importan al propio dueño: email, teléfono, saldo,
+ * suscripción y de quién vino referido.
+ */
 export const getUserByHandle = query({
     args: { handle: v.string() },
     handler: async (ctx, args) => {
-        // Try username first
-        const users = await ctx.db
+        const handle = normalizeHandle(args.handle);
+        if (!handle) return null;
+        const user = await ctx.db
             .query("users")
-            .filter((q) => q.eq(q.field("username"), args.handle))
-            .take(1);
-        if (users.length > 0) return await sanitizeUser(ctx, users[0]);
+            .withIndex("by_username", (q) => q.eq("username", handle))
+            .first();
+        if (!user || (user as any).directoryHidden === true) return null;
 
-        // Try nickname as fallback
-        const byNickname = await ctx.db
-            .query("users")
-            .filter((q) => q.eq(q.field("nickname"), args.handle))
-            .take(1);
-        return byNickname.length > 0 ? await sanitizeUser(ctx, byNickname[0]) : null;
+        const safe = await sanitizeUser(ctx, user);
+        const {
+            email,
+            phoneNumber,
+            balance,
+            isTest,
+            subscriptionStatus,
+            subscriptionTier,
+            termsAcceptedVersion,
+            referredByUserId,
+            ...publicProfile
+        } = safe as any;
+        return publicProfile;
     }
 });

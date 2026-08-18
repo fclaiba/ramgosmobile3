@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Switch, ActivityIndicator, AccessibilityInfo, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen } from 'lucide-react-native';
+import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen, Bookmark, FileText } from 'lucide-react-native';
 import { useAuth, type UserRole } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -301,6 +301,8 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                     <MenuItem icon={User} label="Mi Perfil" action={() => { onClose(); navigation.navigate('Profile'); }} color="#4FC3F7" />
                                     <MenuItem icon={Users} label="Invitar Amigos" action={() => { onClose(); navigation.navigate('Referrals'); }} color="#10B981" />
                                     <MenuItem icon={Save} label="Guardados" action={() => { onClose(); navigation.navigate('Saved'); }} color="#F59E0B" />
+                                    <MenuItem icon={Bookmark} label="Posts guardados" action={() => { onClose(); navigation.navigate('SavedPosts'); }} color="#8B5CF6" />
+                                    <MenuItem icon={FileText} label="Borradores" action={() => { onClose(); navigation.navigate('MyDrafts'); }} color="#6B7280" />
                                     <MenuItem icon={PackageOpen} label="Mis Publicaciones" action={() => { onClose(); navigation.navigate('MyListings'); }} color="#3B82F6" />
                                 </>
                             )}

@@ -34,7 +34,7 @@ import {
     internalMutation,
 } from './_generated/server';
 import { internal } from './_generated/api';
-import { requireActor } from './authHelpers';
+import { requireActor, authError } from './authHelpers';
 import { applyAddToCart } from './cart';
 
 const NOW = () => new Date().toISOString();
@@ -332,7 +332,7 @@ export const addDmProductToCart = mutation({
             internal.commerce.internalGetDmListingAttribution,
             { messageId: args.messageId },
         );
-        if (!attribution) throw new Error('Este mensaje no tiene un producto disponible.');
+        if (!attribution) throw authError('FORBIDDEN', 'Este mensaje no tiene un producto disponible.');
 
         // Sólo los miembros del chat pueden comprar desde ese mensaje.
         const chatId = ctx.db.normalizeId('socialChats', attribution.chatId);
@@ -345,21 +345,21 @@ export const addDmProductToCart = mutation({
                   .first()
             : null;
         if (!membership || membership.state === 'left') {
-            throw new Error('No tenés acceso a esta conversación.');
+            throw authError('FORBIDDEN', 'No tenés acceso a esta conversación.');
         }
 
         if (attribution.listingStatus !== 'active') {
-            throw new Error('El producto ya no está disponible.');
+            throw authError('FORBIDDEN', 'El producto ya no está disponible.');
         }
         if (attribution.sellerId === actor.idString) {
-            throw new Error('No podés comprar tu propio producto.');
+            throw authError('FORBIDDEN', 'No podés comprar tu propio producto.');
         }
 
         const quantity = Math.max(1, Math.floor(args.quantity ?? 1));
         const tracksStock =
             attribution.listingType === 'product' || attribution.listingType === 'bono';
         if (tracksStock && attribution.listingStock < quantity) {
-            throw new Error('No hay stock suficiente.');
+            throw authError('FORBIDDEN', 'No hay stock suficiente.');
         }
 
         await applyAddToCart(ctx, actor.idString, {
@@ -524,6 +524,13 @@ export const getPostAnalytics = query({
             creatorEarningsUsd: commissionCents / 100,
             // The metric the algorithm rewards: sales per impression.
             conversionRate: views > 0 ? paid.length / views : 0,
+            // Señales del ranker v2 (Fase 5/7): cuánto se ve de verdad, no
+            // sólo cuántas impresiones. `avgCompletionPct`/`watchSampleCount`
+            // ya los mantiene `social.addView` de forma incremental, así que
+            // esto es una lectura directa, sin recalcular nada acá.
+            avgCompletionPct: post.avgCompletionPct ?? null,
+            watchSampleCount: post.watchSampleCount ?? 0,
+            replyCount: post.replyCount ?? 0,
         };
     },
 });

@@ -4,6 +4,7 @@ import { confirmAction } from '../../utils/confirm';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, ShoppingBag } from 'lucide-react-native';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { PostImageCarousel } from './PostImageCarousel';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
 import { useMutation, useQuery } from 'convex/react';
@@ -119,7 +120,12 @@ export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }
 
             {post.images && post.images.length > 0 && (
                 <View style={styles.imageContainer}>
-                    <ImageWithFallback src={post.images[0]} style={styles.postImage} />
+                    <PostImageCarousel
+                        images={post.images}
+                        alts={post.imageAlts}
+                        fallbackAlt={post.content}
+                        dotsPosition="bottom"
+                    />
                 </View>
             )}
 

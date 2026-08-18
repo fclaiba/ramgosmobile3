@@ -32,7 +32,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
     const { width } = useWindowDimensions();
     const { productId, slug } = route.params || {};
     const { getProductById } = useMarketplace();
-    const { addItem } = useCart();
+    const { openCart, addItem } = useCart();
     const { show } = useToast();
     const { user, sessionToken } = useAuth();
     const { isFavorite, toggleFavorite } = useFavorites();
@@ -164,7 +164,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
 
     const handleBuyNow = async () => {
         await handleAddToCart();
-        navigation.navigate('Cart');
+        openCart();
     };
 
     const iconColor = isDark ? '#FFF' : '#000';

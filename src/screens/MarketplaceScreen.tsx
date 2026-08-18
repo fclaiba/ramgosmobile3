@@ -4,7 +4,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, interpolate, Ex
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ShoppingCart, Heart, Search, Filter, LayoutGrid, List, MapPin, Plus as PlusIcon, Tag, Ticket, Star, Calendar, Wrench, X, Store } from 'lucide-react-native';
+import { ShoppingCart, Heart, Search, Filter, LayoutGrid, List, MapPin, Plus as PlusIcon, Tag, Ticket, Star, Calendar, Wrench, X, Store, MessageCircle } from 'lucide-react-native';
 import { api } from '../../convex/_generated/api';
 import { useQuery } from 'convex/react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,8 +17,10 @@ import { useFavorites } from '../hooks/useFavorites';
 import { usePoints } from '../contexts/PointsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useUnreadMessages } from '../hooks/useMessaging';
 
 import { MobileHeader } from '../components/MobileHeader';
+import { GlobalHeaderActions } from '../components/GlobalHeaderActions';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { SidebarMenu } from '../components/SidebarMenu';
 import { MobileNav, NAV_CONTENT_HEIGHT } from '../components/MobileNav';
@@ -148,6 +150,8 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
         browseProgressedRef.current = true;
         void progressChallenge('daily_browse', 1);
     }, [user?.id, progressChallenge]);
+
+    const { unreadCount } = useUnreadMessages();
 
     // State
     const [viewMode, setViewMode] = useState<ViewMode>(activeParams?.viewMode || 'grid');
@@ -661,7 +665,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
     };
 
     const headerActions = (
-        <View style={{ flexDirection: 'row', gap: 12 }}>
+        <GlobalHeaderActions>
             <TouchableOpacity
                 onPress={() => {
                     if (user?.role === 'business' && user?.kycStatus !== 'approved') {
@@ -674,14 +678,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
             >
                 <PlusIcon size={24} color={isDark || viewMode === 'map' ? '#D1D5DB' : '#374151'} />
             </TouchableOpacity>
-            <TouchableOpacity
-                style={styles.cartBtn}
-                onPress={openCart}
-            >
-                <ShoppingCart size={20} color={isDark ? '#D1D5DB' : '#374151'} />
-                {cartItems.length > 0 && <View style={styles.cartBadge} />}
-            </TouchableOpacity>
-        </View>
+        </GlobalHeaderActions>
     );
 
     return (
@@ -918,6 +915,8 @@ const getStyles = (isDark: boolean) => {
     },
     cartBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: c.surface2, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },
     cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
+    msgBadge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#EF4444' },
+    msgBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
     // Favorites
     favBtn: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: Radius.lg, justifyContent: 'center', alignItems: 'center', zIndex: 10, overflow: 'hidden', backgroundColor: c.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: c.glassBorder },

@@ -1,14 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Image, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Heart, MessageCircle, Share2, Tag, ShoppingCart } from 'lucide-react-native';
+import { Heart, MessageCircle, Share2, Tag, ShoppingCart, MoreVertical } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Id } from '../../../convex/_generated/dataModel';
 import { useTheme } from '../../contexts/ThemeContext';
 import { glassShadow, colors, Radius } from '../../theme/tokens';
 import { CommerceTag } from './CommerceTag';
+import { PostImageCarousel } from './PostImageCarousel';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,6 +24,8 @@ export interface PostCardProps {
         type: 'text' | 'image' | 'video' | 'poll' | 'commercial';
         content: string;
         images?: string[];
+        /** Texto alternativo por imagen, mismo índice que `images`. */
+        imageAlts?: string[];
         videoUrl?: string;
         commercialProduct?: {
             listingId?: string;
@@ -31,6 +34,12 @@ export interface PostCardProps {
             /** Backend field name (`socialPosts.commercialProduct.image`). */
             image?: string;
             discountPercent?: number;
+        };
+        poll?: {
+            options: Array<{ id: string; text: string; votes: number }>;
+            totalVotes: number;
+            endsAt: string;
+            voters?: Array<{ userId: string; optionId: string }>;
         };
         likesCount: number;
         commentsCount: number;
@@ -45,9 +54,96 @@ export interface PostCardProps {
     onComment: (postId?: any) => void;
     onCommercePress: (listingId: string) => void;
     isFocused?: boolean; // Para pausar/reproducir videos automáticamente
+    /** Reportar / silenciar / ocultar (Fase 2). Opcional: sin esto no se
+     *  muestra el botón "⋯", para no romper otros consumidores del card. */
+    onOpenActions?: () => void;
+    /** `post.type === 'poll'` sin esto no tenía NINGUNA UI — se guardaba el
+     *  voto pero nadie podía votar ni ver resultados. */
+    onVotePoll?: (optionId: string) => void;
+    /** Id del usuario actual, para saber si ya votó y mostrar resultados. */
+    currentUserId?: string;
 }
 
-export const PostCard = React.memo(({ post, author, onLike, onComment, onCommercePress, isFocused = true }: PostCardProps) => {
+/**
+ * Encuestas. El schema y `votePoll` (idempotente, respeta `endsAt`) ya
+ * existían enteros; lo único que faltaba era ALGO que los mostrara —
+ * `post.type === 'poll'` no tenía ninguna UI, así que se guardaba el voto
+ * pero nadie podía votar.
+ */
+const PollCard = ({
+    poll,
+    currentUserId,
+    onVote,
+}: {
+    poll: NonNullable<PostCardProps['post']['poll']>;
+    currentUserId?: string;
+    onVote?: (optionId: string) => void;
+}) => {
+    const myVote = poll.voters?.find((v) => v.userId === currentUserId)?.optionId;
+    const ended = new Date(poll.endsAt).getTime() < Date.now();
+    const showResults = Boolean(myVote) || ended;
+    const total = Math.max(1, poll.totalVotes);
+
+    return (
+        <View style={pollStyles.container}>
+            {poll.options.map((opt) => {
+                const pct = Math.round((opt.votes / total) * 100);
+                const isMine = myVote === opt.id;
+                return (
+                    <TouchableOpacity
+                        key={opt.id}
+                        style={pollStyles.option}
+                        disabled={showResults || !onVote}
+                        onPress={() => onVote?.(opt.id)}
+                        accessibilityRole="button"
+                    >
+                        {showResults && (
+                            <View style={[pollStyles.fill, { width: `${pct}%` }, isMine && pollStyles.fillMine]} />
+                        )}
+                        <View style={pollStyles.optionRow}>
+                            <Text style={pollStyles.optionText}>{opt.text}</Text>
+                            {showResults && <Text style={pollStyles.optionPct}>{pct}%</Text>}
+                        </View>
+                    </TouchableOpacity>
+                );
+            })}
+            <Text style={pollStyles.meta}>
+                {poll.totalVotes} voto{poll.totalVotes === 1 ? '' : 's'} · {ended ? 'Encuesta finalizada' : 'En curso'}
+            </Text>
+        </View>
+    );
+};
+
+const pollStyles = StyleSheet.create({
+    container: { marginTop: 8, gap: 8 },
+    option: {
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    fill: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    fillMine: { backgroundColor: 'rgba(59,130,246,0.35)' },
+    optionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+    },
+    optionText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+    optionPct: { color: '#fff', fontWeight: '700', fontSize: 13 },
+    meta: { color: 'rgba(255,255,255,0.7)', fontSize: 11 },
+});
+
+export const PostCard = React.memo(({ post, author, onLike, onComment, onCommercePress, isFocused = true, onOpenActions, onVotePoll, currentUserId }: PostCardProps) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
 
@@ -94,9 +190,24 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
 
 
         if (post.type === 'image' || post.type === 'commercial') {
-            const displayImage = post.commercialProduct?.image || (post.images && post.images.length > 0 ? post.images[0] : null);
-            if (displayImage) {
-                return <Image source={{ uri: displayImage }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
+            // Todas las imágenes del post, no sólo la primera. El
+            // `commercialProduct.image` es el fallback para posts comerciales
+            // que no subieron galería propia.
+            const gallery =
+                post.images && post.images.length > 0
+                    ? post.images
+                    : post.commercialProduct?.image
+                      ? [post.commercialProduct.image]
+                      : [];
+
+            if (gallery.length > 0) {
+                return (
+                    <PostImageCarousel
+                        images={gallery}
+                        alts={post.imageAlts}
+                        fallbackAlt={post.content}
+                    />
+                );
             }
         }
 
@@ -145,6 +256,10 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
                     <Text style={styles.content} numberOfLines={3}>{post.content}</Text>
                 ) : null}
 
+                {post.type === 'poll' && post.poll && (
+                    <PollCard poll={post.poll} currentUserId={currentUserId} onVote={onVotePoll} />
+                )}
+
                 {/* Commerce Tag (Liquid Glass) */}
                 {post.commercialProduct && (
                     <CommerceTag
@@ -176,6 +291,19 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
                     </View>
                     <Text style={styles.actionCount}>Share</Text>
                 </TouchableOpacity>
+
+                {onOpenActions && (
+                    <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={onOpenActions}
+                        accessibilityRole="button"
+                        accessibilityLabel="Más opciones"
+                    >
+                        <View style={styles.actionIconContainer}>
+                            <MoreVertical size={28} color="#FFF" />
+                        </View>
+                    </TouchableOpacity>
+                )}
             </View>
         </View>
     );

@@ -4,73 +4,124 @@ import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import { X, Camera, Tag, Send, ShoppingBag } from 'lucide-react-native';
+import { X, Camera, Tag, ShoppingBag, Plus, Video } from 'lucide-react-native';
 import { CommerceLinker } from './CommerceLinker';
 import { Radius } from '../../theme/tokens';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { LIMITS } from '../../utils/inputLimits';
+import { uploadLocalImageToConvex } from '../../utils/uploadToConvexStorage';
 
 export interface CreatorStudioModalProps {
     visible: boolean;
     onClose: () => void;
 }
 
+const MAX_IMAGES = 10;
+
+/**
+ * Composer estilo Twitter (decisión de producto, 2026-08-18).
+ *
+ * Antes era un `Modal` con `animationType="slide"` + `presentationStyle=
+ * "pageSheet"` — de ahí la sensación de "se desliza". Ahora entra con
+ * `fade` + `fullScreen`, sin el gesto de deslizar hacia abajo para cerrar
+ * que tenía el pageSheet.
+ *
+ * Sube hasta `MAX_IMAGES` fotos (antes una sola) vía `uploadLocalImageToConvex`
+ * — el mismo util que ya resuelve idempotencia, fallback XHR para URIs
+ * nativas y detección real de `contentType`, que el código viejo no tenía
+ * (subía con `fetch`+blob inline, hardcodeando `image/jpeg`). Un post sigue
+ * siendo galería O video, nunca ambos.
+ */
 export function CreatorStudioModal({ visible, onClose }: CreatorStudioModalProps) {
     const { sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const { show } = useToast();
     const isDark = colorScheme === 'dark';
 
-    const [mediaUri, setMediaUri] = useState<string | null>(null);
-    const [mediaType, setMediaType] = useState<'video' | 'image' | null>(null);
+    const [images, setImages] = useState<string[]>([]);
+    const [videoUri, setVideoUri] = useState<string | null>(null);
     const [caption, setCaption] = useState('');
     const [attachedProduct, setAttachedProduct] = useState<{ listingId: string, name: string, price: number, imageUrl?: string } | null>(null);
     const [isLinkerVisible, setIsLinkerVisible] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
 
     const createPost = useMutation(api.social.createPost);
+    const saveDraft = useMutation(api.social.drafts.saveDraft);
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+    const registerUpload = useMutation(api.files.registerUpload);
 
-    const handlePickMedia = async () => {
+    const hasContent = images.length > 0 || !!videoUri || caption.trim().length > 0;
+    const overLimit = caption.length > LIMITS.socialPost;
+
+    const handlePickImages = async () => {
+        const remaining = MAX_IMAGES - images.length;
+        if (remaining <= 0) {
+            show(`Máximo ${MAX_IMAGES} fotos por post.`, 'warning');
+            return;
+        }
+        // `allowsEditing` no es compatible con selección múltiple en
+        // expo-image-picker — hay que elegir uno de los dos.
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images', 'videos'],
-            allowsEditing: true,
+            mediaTypes: ['images'],
+            allowsMultipleSelection: true,
+            selectionLimit: remaining,
             quality: 0.7,
         });
+        if (result.canceled || result.assets.length === 0) return;
 
-        if (!result.canceled && result.assets[0]) {
-            setMediaUri(result.assets[0].uri);
-            setMediaType(result.assets[0].type === 'video' ? 'video' : 'image');
-        }
+        setVideoUri(null); // un post es galería O video, no ambos
+        setImages((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, MAX_IMAGES));
+    };
+
+    const handlePickVideo = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['videos'],
+            quality: 0.7,
+        });
+        if (result.canceled || !result.assets[0]) return;
+
+        setImages([]);
+        setVideoUri(result.assets[0].uri);
+    };
+
+    const removeImage = (index: number) => {
+        setImages((prev) => prev.filter((_, i) => i !== index));
     };
 
     const handlePublish = async () => {
-        if (!mediaUri && !caption.trim()) {
+        if (!hasContent) {
             show('Agregá un video, foto o texto para publicar.', 'error');
+            return;
+        }
+        if (overLimit) {
+            show(`Los posts no pueden superar los ${LIMITS.socialPost} caracteres.`, 'error');
             return;
         }
 
         setIsUploading(true);
         try {
-            let finalMediaUrl = '';
+            const uploadedImages = await Promise.all(
+                images.map((uri) =>
+                    uploadLocalImageToConvex({
+                        uri,
+                        generateUploadUrl,
+                        registerUpload,
+                        purpose: 'social_post',
+                        sessionToken: sessionToken || '',
+                    }),
+                ),
+            );
+            const uploadedVideo = videoUri
+                ? await uploadLocalImageToConvex({
+                      uri: videoUri,
+                      generateUploadUrl,
+                      registerUpload,
+                      purpose: 'social_post',
+                      sessionToken: sessionToken || '',
+                  })
+                : undefined;
 
-            // 1. Upload Media si existe (Ponytail: Simulación rápida usando fetch standard de Convex)
-            if (mediaUri) {
-                const uploadUrl = await generateUploadUrl({ sessionToken: sessionToken || '' });
-                const response = await fetch(mediaUri);
-                const blob = await response.blob();
-                
-                const uploadResult = await fetch(uploadUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': mediaType === 'video' ? 'video/mp4' : 'image/jpeg' },
-                    body: blob,
-                });
-                
-                const { storageId } = await uploadResult.json();
-                finalMediaUrl = `convex-storage:${storageId}`;
-            }
-
-            // 2. Armar el payload comercial si hay producto
             const commercialProduct = attachedProduct ? {
                 listingId: attachedProduct.listingId,
                 name: attachedProduct.name,
@@ -78,101 +129,167 @@ export function CreatorStudioModal({ visible, onClose }: CreatorStudioModalProps
                 image: attachedProduct.imageUrl,
             } : undefined;
 
-            // 3. Llamar a la mutación de social.ts
             const listingId = attachedProduct?.listingId;
+            const type = attachedProduct
+                ? 'commercial'
+                : uploadedVideo
+                  ? 'video'
+                  : uploadedImages.length > 0
+                    ? 'image'
+                    : 'text';
+
             await createPost({
                 sessionToken: sessionToken || '',
-                type: attachedProduct
-                    ? 'commercial'
-                    : mediaType || 'text',
+                type,
                 content: caption,
-                videoUrl: mediaType === 'video' ? finalMediaUrl : undefined,
-                images: mediaType === 'image' && finalMediaUrl ? [finalMediaUrl] : undefined,
+                videoUrl: uploadedVideo,
+                images: uploadedImages.length > 0 ? uploadedImages : undefined,
                 commercialProduct,
-                ...(listingId
-                    ? { attachedListingId: listingId as any }
-                    : {}),
+                ...(listingId ? { attachedListingId: listingId as any } : {}),
             });
 
             show('¡Publicado con éxito!', 'success');
             resetAndClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error al publicar:", error);
-            show('Hubo un error al publicar.', 'error');
+            show(error?.data?.message ?? 'Hubo un error al publicar.', 'error');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    /**
+     * Guarda el borrador con las URIs locales tal cual — `saveDraft` sólo
+     * valida forma y longitud (`createPostArgsValidator`), no exige que las
+     * imágenes ya estén subidas. La subida real ocurre recién al publicar
+     * (`publishDraftNow` o el cron), igual que en una publicación en vivo.
+     */
+    const handleSaveDraft = async () => {
+        if (!hasContent) {
+            show('Agregá algo para guardar como borrador.', 'error');
+            return;
+        }
+        if (overLimit) {
+            show(`Los posts no pueden superar los ${LIMITS.socialPost} caracteres.`, 'error');
+            return;
+        }
+        setIsUploading(true);
+        try {
+            const commercialProduct = attachedProduct ? {
+                listingId: attachedProduct.listingId,
+                name: attachedProduct.name,
+                price: attachedProduct.price,
+                image: attachedProduct.imageUrl,
+            } : undefined;
+
+            await saveDraft({
+                sessionToken: sessionToken || '',
+                payload: {
+                    type: attachedProduct ? 'commercial' : videoUri ? 'video' : images.length > 0 ? 'image' : 'text',
+                    content: caption,
+                    videoUrl: videoUri ?? undefined,
+                    images: images.length > 0 ? images : undefined,
+                    commercialProduct,
+                    ...(attachedProduct ? { attachedListingId: attachedProduct.listingId as any } : {}),
+                },
+            });
+            show('Guardado como borrador', 'success');
+            resetAndClose();
+        } catch (error: any) {
+            show(error?.data?.message ?? 'No se pudo guardar el borrador.', 'error');
         } finally {
             setIsUploading(false);
         }
     };
 
     const resetAndClose = () => {
-        setMediaUri(null);
-        setMediaType(null);
+        setImages([]);
+        setVideoUri(null);
         setCaption('');
         setAttachedProduct(null);
         setIsLinkerVisible(false);
         onClose();
     };
 
+    const counterColor = overLimit ? '#EF4444' : caption.length > LIMITS.socialPost - 30 ? '#F59E0B' : '#9CA3AF';
+
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={resetAndClose}>
+        <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={resetAndClose}>
             <KeyboardAvoidingView style={[styles.container, isDark ? styles.containerDark : styles.containerLight]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                
-                {/* Header */}
+
+                {/* Header estilo Twitter: X / título / Publicar */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={resetAndClose} style={styles.iconBtn}>
                         <X size={24} color={isDark ? '#FFF' : '#000'} />
                     </TouchableOpacity>
-                    <Text style={[styles.title, isDark ? styles.textLight : styles.textDark]}>Nuevo Post</Text>
-                    <TouchableOpacity 
-                        style={[styles.publishBtn, (!mediaUri && !caption.trim()) && styles.publishBtnDisabled]} 
-                        onPress={handlePublish}
-                        disabled={(!mediaUri && !caption.trim()) || isUploading}
-                    >
-                        {isUploading ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                        ) : (
-                            <Text style={styles.publishText}>Publicar</Text>
-                        )}
-                    </TouchableOpacity>
+                    <Text style={[styles.title, isDark ? styles.textLight : styles.textDark]}>Nuevo post</Text>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity
+                            style={styles.draftBtn}
+                            onPress={handleSaveDraft}
+                            disabled={!hasContent || overLimit || isUploading}
+                        >
+                            <Text style={[styles.draftBtnText, (!hasContent || overLimit) && styles.draftBtnTextDisabled]}>Borrador</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.publishBtn, (!hasContent || overLimit) && styles.publishBtnDisabled]}
+                            onPress={handlePublish}
+                            disabled={!hasContent || overLimit || isUploading}
+                        >
+                            {isUploading ? (
+                                <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                                <Text style={styles.publishText}>Publicar</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.content}>
-                    
-                    {/* Media Preview / Picker */}
-                    <TouchableOpacity style={styles.mediaPicker} onPress={handlePickMedia}>
-                        {mediaUri ? (
-                            <>
-                                <Image source={{ uri: mediaUri }} style={styles.mediaPreview} />
-                                <View style={styles.changeMediaBadge}>
-                                    <Camera size={16} color="#FFF" />
-                                    <Text style={styles.changeMediaText}>Cambiar</Text>
-                                </View>
-                            </>
-                        ) : (
-                            <View style={styles.mediaEmptyState}>
-                                <Camera size={40} color="#9CA3AF" />
-                                <Text style={styles.mediaEmptyText}>Toca para subir un Video o Foto</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
-                    {/* Caption Input */}
+                    {/* Textarea grande, protagonista — estilo Twitter */}
                     <TextInput
                         style={[styles.input, isDark ? styles.inputDark : styles.inputLight]}
-                        placeholder="Escribe una descripción..."
+                        placeholder="¿Qué está pasando?"
                         placeholderTextColor="#9CA3AF"
                         multiline
-                        maxLength={500}
+                        autoFocus
                         value={caption}
                         onChangeText={setCaption}
                     />
 
-                    {/* Commerce Linker Button */}
+                    {/* Grid de miniaturas + botón de agregar (carrusel al publicar) */}
+                    {(images.length > 0 || videoUri) && (
+                        <View style={styles.mediaGrid}>
+                            {videoUri ? (
+                                <View style={styles.thumbWrapper}>
+                                    <View style={[styles.thumbnail, styles.videoThumb]}>
+                                        <Video size={28} color="#9CA3AF" />
+                                    </View>
+                                    <TouchableOpacity style={styles.removeThumbBtn} onPress={() => setVideoUri(null)}>
+                                        <X size={14} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                images.map((uri, i) => (
+                                    <View key={`${uri}-${i}`} style={styles.thumbWrapper}>
+                                        <Image source={{ uri }} style={styles.thumbnail} />
+                                        <TouchableOpacity style={styles.removeThumbBtn} onPress={() => removeImage(i)}>
+                                            <X size={14} color="#fff" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))
+                            )}
+                            {!videoUri && images.length < MAX_IMAGES && (
+                                <TouchableOpacity style={styles.addThumbBtn} onPress={handlePickImages}>
+                                    <Plus size={24} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+
+                    {/* Commerce Linker */}
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, isDark ? styles.textLight : styles.textDark]}>
-                            Social Commerce
-                        </Text>
-                        
                         {attachedProduct ? (
                             <View style={[styles.attachedCard, isDark ? styles.cardDark : styles.cardLight]}>
                                 {attachedProduct.imageUrl ? (
@@ -198,26 +315,41 @@ export function CreatorStudioModal({ visible, onClose }: CreatorStudioModalProps
                                     <Tag size={20} color="#4F46E5" />
                                 </View>
                                 <View>
-                                    <Text style={[styles.addTagTitle, isDark ? styles.textLight : styles.textDark]}>Etiquetar Producto o Bono</Text>
-                                    <Text style={styles.addTagSub}>Permite a tus seguidores comprar sin salir del video.</Text>
+                                    <Text style={[styles.addTagTitle, isDark ? styles.textLight : styles.textDark]}>Etiquetar producto o bono</Text>
+                                    <Text style={styles.addTagSub}>Permite comprar sin salir del post.</Text>
                                 </View>
                             </TouchableOpacity>
                         )}
                     </View>
 
                 </ScrollView>
+
+                {/* Barra inferior: acciones de medio + contador */}
+                <View style={[styles.bottomBar, isDark ? styles.bottomBarDark : styles.bottomBarLight]}>
+                    <View style={styles.bottomActions}>
+                        <TouchableOpacity style={styles.bottomIconBtn} onPress={handlePickImages} disabled={!!videoUri}>
+                            <Camera size={22} color={videoUri ? '#4B5563' : '#4F46E5'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.bottomIconBtn} onPress={handlePickVideo} disabled={images.length > 0}>
+                            <Video size={22} color={images.length > 0 ? '#4B5563' : '#4F46E5'} />
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.counter, { color: counterColor }]}>
+                        {caption.length}/{LIMITS.socialPost}
+                    </Text>
+                </View>
             </KeyboardAvoidingView>
 
             {/* Modal Interno para el Buscador */}
             <Modal visible={isLinkerVisible} animationType="slide" transparent>
                 <View style={styles.linkerOverlay}>
                     <View style={{ flex: 1, marginTop: 100 }}>
-                        <CommerceLinker 
-                            onClose={() => setIsLinkerVisible(false)} 
+                        <CommerceLinker
+                            onClose={() => setIsLinkerVisible(false)}
                             onSelect={(id, name) => {
                                 setAttachedProduct({ listingId: id, name, price: 0 });
                                 setIsLinkerVisible(false);
-                            }} 
+                            }}
                         />
                     </View>
                 </View>
@@ -254,6 +386,23 @@ const styles = StyleSheet.create({
     },
     textLight: { color: '#FFF' },
     textDark: { color: '#111827' },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    draftBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+    },
+    draftBtnText: {
+        color: '#4F46E5',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    draftBtnTextDisabled: {
+        color: '#9CA3AF',
+    },
     publishBtn: {
         backgroundColor: '#4F46E5',
         paddingHorizontal: 16,
@@ -270,75 +419,59 @@ const styles = StyleSheet.create({
     content: {
         padding: 16,
     },
-    mediaPicker: {
-        width: '100%',
-        aspectRatio: 9 / 16, // Proporción de video vertical
-        maxHeight: 400,
-        backgroundColor: 'rgba(156, 163, 175, 0.1)',
-        borderRadius: Radius.lg,
-        overflow: 'hidden',
-        marginBottom: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    mediaEmptyState: {
-        alignItems: 'center',
-        gap: 12,
-    },
-    mediaEmptyText: {
-        color: '#9CA3AF',
-        fontSize: 14,
-    },
-    mediaPreview: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
-    changeMediaBadge: {
-        position: 'absolute',
-        bottom: 12,
-        right: 12,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: Radius.full,
-        gap: 6,
-    },
-    changeMediaText: {
-        color: '#FFF',
-        fontSize: 12,
-        fontWeight: '600',
-    },
     input: {
-        fontSize: 16,
-        minHeight: 80,
-        padding: 16,
-        borderRadius: Radius.lg,
-        textAlignVertical: 'top',
-        marginBottom: 24,
+        fontSize: 18,
+        minHeight: 120,
+        padding: 4,
+        marginBottom: 16,
     },
     inputDark: {
-        backgroundColor: 'rgba(255,255,255,0.05)',
         color: '#FFF',
     },
     inputLight: {
-        backgroundColor: '#FFF',
         color: '#111827',
+    },
+    mediaGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 16,
+    },
+    thumbWrapper: {
+        width: 90,
+        height: 90,
+        borderRadius: Radius.md,
+        overflow: 'hidden',
+    },
+    thumbnail: {
+        width: '100%',
+        height: '100%',
+    },
+    videoThumb: {
+        backgroundColor: 'rgba(156, 163, 175, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    removeThumbBtn: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: Radius.full,
+        padding: 4,
+    },
+    addThumbBtn: {
+        width: 90,
+        height: 90,
+        borderRadius: Radius.md,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderStyle: 'dashed',
+        borderColor: '#9CA3AF',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     section: {
         marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: 12,
-        opacity: 0.8,
     },
     addTagBtn: {
         flexDirection: 'row',
@@ -394,6 +527,31 @@ const styles = StyleSheet.create({
     },
     removeTagBtn: {
         padding: 8,
+    },
+    bottomBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderTopWidth: 1,
+    },
+    bottomBarDark: {
+        borderTopColor: 'rgba(255,255,255,0.1)',
+    },
+    bottomBarLight: {
+        borderTopColor: '#E5E7EB',
+    },
+    bottomActions: {
+        flexDirection: 'row',
+        gap: 16,
+    },
+    bottomIconBtn: {
+        padding: 4,
+    },
+    counter: {
+        fontSize: 13,
+        fontWeight: '600',
     },
     linkerOverlay: {
         flex: 1,

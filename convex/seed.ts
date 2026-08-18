@@ -1,5 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { newUserIdentityFields } from "./users/identity";
 
 export const seedE2E = internalMutation({
   args: {},
@@ -12,6 +13,7 @@ export const seedE2E = internalMutation({
       name: "Vendedor de Prueba",
       email: "vendedor@prueba.com",
       role: "business",
+      ...newUserIdentityFields({ username: "vendedorprueba", name: "Vendedor de Prueba" }),
       isTest: true,
       stripeConnectAccountId: "acct_test123", // Dummy ID
       stripeConnectStatus: "active",
@@ -23,6 +25,7 @@ export const seedE2E = internalMutation({
       name: "Comprador de Prueba",
       email: "comprador@prueba.com",
       role: "consumer",
+      ...newUserIdentityFields({ username: "compradorprueba", name: "Comprador de Prueba" }),
       isTest: true,
       joinedAt: new Date().toISOString(),
     });
@@ -32,6 +35,7 @@ export const seedE2E = internalMutation({
       name: "Influencer Prueba",
       email: "influencer@prueba.com",
       role: "influencer",
+      ...newUserIdentityFields({ username: "influencerprueba", name: "Influencer Prueba" }),
       isTest: true,
       joinedAt: new Date().toISOString(),
     });

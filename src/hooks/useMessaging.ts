@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -12,6 +12,13 @@ import { useAuth } from '../contexts/AuthContext';
  * timestamps crudos (`lastSeenAt`, `expiresAt`) y el "activo ahora" / el
  * indicador de "escribiendo…" se evalúan acá con un tick local.
  */
+
+/**
+ * Ventana en la que un heartbeat cuenta como "activo ahora". Tiene que
+ * coincidir con `PRESENCE_WINDOW_MS` del backend (`convex/social/dm.ts`):
+ * estaba duplicada a mano en cada pantalla que pintaba el punto verde.
+ */
+export const ONLINE_WINDOW_MS = 60_000;
 
 /** Fuerza un re-render cada `ms` para reevaluar estados que dependen del reloj. */
 export function useClockTick(ms: number, enabled = true) {
@@ -93,23 +100,27 @@ export function useTypingIndicator(chatId?: string) {
 export function useTypingSignal(chatId?: string) {
     const { sessionToken } = useAuth();
     const setTyping = useMutation(api.social.dm.setTyping);
-    const [lastSent, setLastSent] = useState(0);
+    // En un ref y no en estado: el debounce no tiene que provocar renders,
+    // y la limpieza al desmontar necesita el valor actual, no el capturado.
+    const lastSent = useRef(0);
 
-    const signalTyping = () => {
+    const signalTyping = useCallback(() => {
         if (!chatId || !sessionToken) return;
         const now = Date.now();
-        if (now - lastSent < 4000) return;
-        setLastSent(now);
+        if (now - lastSent.current < 4000) return;
+        lastSent.current = now;
         setTyping({ chatId: chatId as any, sessionToken, typing: true }).catch(() => {});
-    };
+    }, [chatId, sessionToken, setTyping]);
 
-    const stopTyping = () => {
+    const stopTyping = useCallback(() => {
         if (!chatId || !sessionToken) return;
-        setLastSent(0);
+        lastSent.current = 0;
         setTyping({ chatId: chatId as any, sessionToken, typing: false }).catch(() => {});
-    };
+    }, [chatId, sessionToken, setTyping]);
 
-    useEffect(() => stopTyping, [chatId]);
+    // Al cambiar de chat o desmontar hay que apagar la bandera del chat que
+    // se deja, o el otro lado ve "escribiendo…" hasta que vence el TTL.
+    useEffect(() => stopTyping, [stopTyping]);
 
     return { signalTyping, stopTyping };
 }

@@ -42,6 +42,8 @@ export interface CartContextData {
     closeCart: () => void;
     totalItems: number;
     totalPrice: number;
+    addPostProduct: (postId: string, quantity?: number) => Promise<void>;
+    addDmProduct: (messageId: string, quantity?: number) => Promise<void>;
 }
 
 const CartContext = createContext<CartContextData | null>(null);
@@ -80,6 +82,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const updateQuantityMutation = useMutation(api.cart.updateCartQuantity);
     const removeFromCartMutation = useMutation(api.cart.removeFromCart);
     const clearCartMutation = useMutation(api.cart.clearCart);
+
+    const addPostProductToCartMutation = useMutation(api.commerce.addPostProductToCart);
+    const addDmProductToCartMutation = useMutation(api.commerce.addDmProductToCart);
 
     const serverItems = useMemo<CartItem[]>(() => {
         if (!serverCart) return [];
@@ -157,6 +162,40 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         });
     };
 
+    const addPostProduct = async (postId: string, quantity: number = 1): Promise<void> => {
+        if (!isAuthenticated) {
+            show('Iniciá sesión para comprar', 'warning');
+            return;
+        }
+        try {
+            await addPostProductToCartMutation({
+                sessionToken,
+                postId: postId as any,
+                quantity,
+            });
+        } catch (e) {
+            reportError(e, 'No se pudo agregar al carrito.');
+            throw e;
+        }
+    };
+
+    const addDmProduct = async (messageId: string, quantity: number = 1): Promise<void> => {
+        if (!isAuthenticated) {
+            show('Iniciá sesión para comprar', 'warning');
+            return;
+        }
+        try {
+            await addDmProductToCartMutation({
+                sessionToken,
+                messageId: messageId as any,
+                quantity,
+            });
+        } catch (e) {
+            reportError(e, 'No se pudo agregar al carrito.');
+            throw e;
+        }
+    };
+
     const removeItem = (id: string) => {
         if (isAuthenticated) {
             const target = serverItems.find(i => i.id === id);
@@ -201,6 +240,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             isOpen,
             isLoading,
             addItem,
+            addPostProduct,
+            addDmProduct,
             removeItem,
             updateQuantity,
             clearCart,

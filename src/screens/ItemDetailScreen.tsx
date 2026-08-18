@@ -34,6 +34,7 @@ import {
     AlertTriangle,
     Check,
     Store,
+    HeartHandshake,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCart } from '../contexts/CartContext';
@@ -516,6 +517,21 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                             {item.eventTime ? <InfoRow icon={Clock} label="Horario" value={item.eventTime} isDark={isDark} /> : null}
                             {item.locationName ? <InfoRow icon={MapPin} label="Lugar" value={item.locationName} isDark={isDark} /> : null}
                         </View>
+                    )}
+
+                    {/* Matching de eventos (Fase 8) — sólo con entrada confirmada
+                        se puede activar; la pantalla misma valida eso. */}
+                    {item.type === 'event' && (
+                        <TouchableOpacity
+                            style={styles.matchingBtn}
+                            onPress={() => navigation.navigate('EventMatching', { eventId: item._id })}
+                        >
+                            <HeartHandshake size={20} color="#EC4899" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.matchingBtnTitle}>Conocé gente en este evento</Text>
+                                <Text style={styles.matchingBtnSubtitle}>Matching opt-in, sólo con entrada confirmada</Text>
+                            </View>
+                        </TouchableOpacity>
                     )}
 
                     {item.type === 'service' && (
@@ -1123,6 +1139,19 @@ function getStyles(isDark: boolean, insets: any) {
             borderWidth: 1,
             borderColor: border,
         },
+        matchingBtn: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            backgroundColor: isDark ? 'rgba(236,72,153,0.12)' : 'rgba(236,72,153,0.08)',
+            borderRadius: Radius.xl,
+            padding: 16,
+            marginBottom: 24,
+            borderWidth: 1,
+            borderColor: 'rgba(236,72,153,0.3)',
+        },
+        matchingBtnTitle: { fontSize: 14, fontWeight: '700', color: text },
+        matchingBtnSubtitle: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 2 },
         infoCardTitle: {
             fontSize: 16,
             fontWeight: '800',

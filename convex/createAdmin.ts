@@ -1,5 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import { hashPassword } from "./passwordHelpers";
+import { newUserIdentityFields } from "./users/identity";
 
 export const run = internalMutation({
     args: {},
@@ -30,6 +31,7 @@ export const run = internalMutation({
             email: email,
             password: "Seguridadjulio55#",
             role: "admin",
+            ...newUserIdentityFields({ username: "ramgosadmin", name: "Ramgos Admin" }),
             kycStatus: "approved",
             joinedAt: now,
             tier: "Gold",

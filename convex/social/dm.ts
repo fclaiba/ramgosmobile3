@@ -22,6 +22,9 @@ import { mutation, query, internalMutation } from '../_generated/server';
 import { api, internal } from '../_generated/api';
 import { getActorOrNull, authError, checkRateLimit } from '../authHelpers';
 import { assertSocialActor, assertNotBlocked } from './_helpers';
+import { resolveMediaUrl } from '../mediaUrl';
+import { toUserCard, socialProfileOf } from '../userCard';
+import { assertTextAllowed } from './moderationText';
 
 const NOW = () => new Date().toISOString();
 const sortedKey = (ids: string[]) => [...ids].sort().join(':');
@@ -43,6 +46,9 @@ const attachmentValidator = v.object({
         v.literal('document'),
         v.literal('post'),
         v.literal('listing'),
+        // Respuesta a una historia (Fase 7): reusa este mismo transporte en
+        // vez de un sistema de reacciones-a-stories aparte.
+        v.literal('story'),
     ),
     url: v.string(),
     metadata: v.optional(v.any()),
@@ -51,18 +57,6 @@ const attachmentValidator = v.object({
 // ---------------------------------------------------------------------------
 // Helpers internos
 // ---------------------------------------------------------------------------
-
-/** Los uploads se guardan como `convex-storage:<id>`; el cliente necesita URL. */
-const resolveMediaUrl = async (ctx: any, raw?: string | null) => {
-    if (!raw) return raw ?? undefined;
-    if (!raw.startsWith('convex-storage:')) return raw;
-    try {
-        const url = await ctx.storage.getUrl(raw.replace('convex-storage:', ''));
-        return url ?? raw;
-    } catch {
-        return raw;
-    }
-};
 
 const getMembership = async (ctx: any, chatId: string, userId: string) =>
     await ctx.db
@@ -75,6 +69,24 @@ const listMemberships = async (ctx: any, chatId: string) =>
         .query('socialChatMembers')
         .withIndex('by_chat', (q: any) => q.eq('chatId', chatId))
         .collect();
+
+/**
+ * Permiso de LECTURA sobre un chat. Las queries no pueden escribir, así que
+ * no hacen el backfill perezoso de `requireMembership`: si no hay fila de
+ * membresía (chat anterior a `socialChatMembers`) se cae a `participantIds`.
+ *
+ * Lo que NO hace es confiar en `participantIds` cuando la membresía existe:
+ * al rechazar una solicitud o salir de un grupo la fila queda en `'left'`
+ * pero el id sigue en `participantIds`, así que gatear por el array dejaba
+ * seguir leyendo el hilo —incluidos los mensajes nuevos— a alguien que ya
+ * no está en la conversación.
+ */
+const canRead = async (ctx: any, chat: any, chatId: any, userId: string) => {
+    if (!chat) return { allowed: false, member: null as any };
+    const member = await getMembership(ctx, chatId, userId);
+    if (member) return { allowed: member.state !== 'left', member };
+    return { allowed: chat.participantIds.includes(userId), member: null as any };
+};
 
 /**
  * Devuelve la membresía del actor o tira FORBIDDEN. Las filas creadas antes
@@ -126,18 +138,33 @@ const presenceOf = async (ctx: any, userId: string) => {
     return { lastSeenAt: row?.lastSeenAt ?? null };
 };
 
+/**
+ * Tarjeta del participante. Lee `users` (que SIEMPRE existe) además del
+ * perfil social: antes miraba sólo `socialUsers`, así que cualquiera que no
+ * hubiera posteado ni seguido a nadie aparecía en el chat como "Usuario" sin
+ * @, aunque tuviera nombre y handle desde el registro.
+ */
 const hydrateParticipant = async (ctx: any, userId: string) => {
-    const profile = await profileOf(ctx, userId);
-    const presence = await presenceOf(ctx, userId);
-    return {
-        userId,
-        username: profile?.username ?? null,
-        displayName: profile?.displayName ?? 'Usuario',
-        avatar: await resolveMediaUrl(ctx, profile?.avatar),
-        verified: profile?.verified === true,
-        isInfluencer: profile?.isInfluencer === true,
-        ...presence,
-    };
+    const [social, presence] = await Promise.all([
+        socialProfileOf(ctx, userId),
+        presenceOf(ctx, userId),
+    ]);
+    const ref = ctx.db.normalizeId('users', userId);
+    const user = ref ? await ctx.db.get(ref) : null;
+
+    if (!user) {
+        return {
+            userId,
+            username: social?.username ?? null,
+            displayName: social?.displayName ?? 'Usuario',
+            avatar: (await resolveMediaUrl(ctx, social?.avatar)) ?? null,
+            verified: social?.verified === true,
+            isInfluencer: social?.isInfluencer === true,
+            ...presence,
+        };
+    }
+    const card = await toUserCard(ctx, user, social);
+    return { ...card, userId, ...presence };
 };
 
 /**
@@ -158,6 +185,100 @@ const shouldLandInInbox = async (ctx: any, senderId: string, recipientId: string
     const normalized = ctx.db.normalizeId('users', recipientId);
     const user = normalized ? await ctx.db.get(normalized) : null;
     return user?.role === 'business' || user?.role === 'influencer';
+};
+
+/** Tipos de adjunto que el cliente puede mandar tal cual. */
+const CLIENT_ATTACHMENT_TYPES = new Set(['image', 'video', 'document']);
+const MAX_ATTACHMENTS = 10;
+
+/**
+ * Un `convex-storage:<id>` sólo se acepta de quien lo subió.
+ *
+ * `attachments[].url` es un string libre y `resolveMediaUrl` le firma una URL
+ * de descarga a lo que sea: sin esta comprobación, cualquiera podía adjuntar
+ * el id de un archivo ajeno en su propio chat y minar una URL para bajarlo.
+ * Se valida al ESCRIBIR, no al leer, así los adjuntos ya guardados —subidos
+ * antes de que existiera `mediaAssets`— siguen resolviendo.
+ */
+const assertOwnsMedia = async (ctx: any, actorId: string, raw?: string | null) => {
+    if (!raw || !raw.startsWith('convex-storage:')) return;
+    const storageId = raw.replace('convex-storage:', '').trim();
+    const asset = await ctx.db
+        .query('mediaAssets')
+        .withIndex('by_storage', (q: any) => q.eq('storageId', storageId))
+        .first();
+    if (!asset || asset.ownerUserId !== actorId) {
+        throw authError('FORBIDDEN', 'Ese archivo no es tuyo.');
+    }
+};
+
+/**
+ * Adjuntos que vienen del cliente. `listing` y `post` quedan prohibidos acá:
+ * su `metadata` es `v.any()`, así que un cliente podía armar a mano una
+ * tarjeta de producto con precio falso y con `sharedByUserId` apuntando a
+ * quien quisiera —y `commerce.internalGetDmListingAttribution` le pagaba la
+ * comisión a ese id—. La única vía es `shareListingInChat`/`sharePostInChat`,
+ * que arman el snapshot en el servidor.
+ */
+const assertClientAttachments = async (ctx: any, actorId: string, attachments?: any[]) => {
+    if (!attachments?.length) return;
+    if (attachments.length > MAX_ATTACHMENTS) {
+        throw authError('FORBIDDEN', 'Demasiados adjuntos en un mensaje.');
+    }
+    for (const a of attachments) {
+        if (!CLIENT_ATTACHMENT_TYPES.has(a.type)) {
+            throw authError(
+                'FORBIDDEN',
+                'Los productos y las publicaciones se comparten desde su propia pantalla.',
+            );
+        }
+        await assertOwnsMedia(ctx, actorId, a.url);
+    }
+};
+
+/**
+ * Normaliza y valida una lista de ids de miembros: deduplica, saca al propio
+ * actor, exige que cada id sea un usuario que existe de verdad y respeta los
+ * bloqueos. Sin esto entraban ids inventados, que quedaban en
+ * `participantIds` inflando el contador de integrantes con gente fantasma.
+ */
+const resolveMemberIds = async (ctx: any, actorId: string, rawIds: string[]) => {
+    const unique = Array.from(new Set(rawIds.filter((id) => id && id !== actorId)));
+    const resolved: string[] = [];
+    for (const id of unique) {
+        const ref = ctx.db.normalizeId('users', id);
+        const user = ref ? await ctx.db.get(ref) : null;
+        if (!user) throw authError('FORBIDDEN', 'Alguna de las personas no existe.');
+        await assertNotBlocked(ctx, actorId, id);
+        resolved.push(String(user._id));
+    }
+    return resolved;
+};
+
+/**
+ * Evento del hilo ("Fulana salió del grupo"). No suma no-leídos ni dispara
+ * push: es contexto, no un mensaje que alguien tenga que responder. Sin esto
+ * un grupo ganaba y perdía integrantes en silencio.
+ */
+const systemMessage = async (ctx: any, chatId: any, text: string) => {
+    const now = NOW();
+    await ctx.db.insert('socialMessages', {
+        chatId: String(chatId),
+        senderUserId: 'system',
+        kind: 'system' as const,
+        body: text,
+        createdAt: now,
+    });
+    await ctx.db.patch(chatId, { lastMessageAt: now, lastMessagePreview: text });
+};
+
+/** Nombre para mostrar en los mensajes de sistema. */
+const nameOf = async (ctx: any, userId: string) => {
+    const profile = await profileOf(ctx, userId);
+    if (profile?.displayName && !profile.displayName.includes('@')) return profile.displayName;
+    const ref = ctx.db.normalizeId('users', userId);
+    const user = ref ? await ctx.db.get(ref) : null;
+    return user?.nickname || user?.name || profile?.username || 'Alguien';
 };
 
 const previewFor = (body: string, attachments?: any[]) => {
@@ -184,7 +305,9 @@ const previewFor = (body: string, attachments?: any[]) => {
 export const listChats = query({
     args: {
         sessionToken: v.optional(v.string()),
-        folder: v.optional(v.union(v.literal('inbox'), v.literal('requests'))),
+        folder: v.optional(
+            v.union(v.literal('inbox'), v.literal('requests'), v.literal('archived')),
+        ),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
     },
@@ -192,7 +315,12 @@ export const listChats = query({
         const actor = await getActorOrNull(ctx, args.sessionToken);
         if (!actor) return { items: [], nextCursor: null };
 
-        const state = args.folder === 'requests' ? 'request' : 'active';
+        const state =
+            args.folder === 'requests'
+                ? 'request'
+                : args.folder === 'archived'
+                  ? 'archived'
+                  : 'active';
         const limit = Math.max(1, Math.min(args.limit ?? 25, 50));
 
         const page = await ctx.db
@@ -251,18 +379,22 @@ export const getUnreadTotal = query({
         const actor = await getActorOrNull(ctx, args.sessionToken);
         if (!actor) return { total: 0, requests: 0 };
 
+        // Con tope: esto corre en cada foreground de la app y un usuario con
+        // miles de conversaciones no puede hacerle leer la tabla entera.
+        const UNREAD_SCAN_CAP = 500;
         const active = await ctx.db
             .query('socialChatMembers')
             .withIndex('by_user_state_last', (q: any) =>
                 q.eq('userId', actor.idString).eq('state', 'active'),
             )
-            .collect();
+            .order('desc')
+            .take(UNREAD_SCAN_CAP);
         const requests = await ctx.db
             .query('socialChatMembers')
             .withIndex('by_user_state_last', (q: any) =>
                 q.eq('userId', actor.idString).eq('state', 'request'),
             )
-            .collect();
+            .take(UNREAD_SCAN_CAP);
 
         const total = active.reduce(
             (sum: number, m: any) =>
@@ -281,9 +413,9 @@ export const getChat = query({
         if (!actor) return null;
 
         const chat = await ctx.db.get(args.chatId);
-        if (!chat || !chat.participantIds.includes(actor.idString)) return null;
+        const { allowed, member } = await canRead(ctx, chat, args.chatId, actor.idString);
+        if (!chat || !allowed) return null;
 
-        const member = await getMembership(ctx, args.chatId, actor.idString);
         const isGroup = chat.kind === 'group';
         const otherIds = chat.participantIds.filter((id: string) => id !== actor.idString);
         const participants = await Promise.all(
@@ -322,7 +454,8 @@ export const getChatMessages = query({
         if (!actor) return { items: [], nextCursor: null, readerLastReadAt: null };
 
         const chat = await ctx.db.get(args.chatId);
-        if (!chat || !chat.participantIds.includes(actor.idString)) {
+        const { allowed } = await canRead(ctx, chat, args.chatId, actor.idString);
+        if (!chat || !allowed) {
             return { items: [], nextCursor: null, readerLastReadAt: null };
         }
 
@@ -332,6 +465,24 @@ export const getChatMessages = query({
             .withIndex('by_chat_created', (q: any) => q.eq('chatId', String(args.chatId)))
             .order('desc')
             .paginate({ cursor: args.cursor ?? null, numItems: cap });
+
+        // En grupos hay que poder ver quién mandó cada mensaje. Se resuelve
+        // una vez por emisor distinto, no una vez por mensaje.
+        const senderCards = new Map<string, any>();
+        if (chat.kind === 'group') {
+            for (const msg of page.page) {
+                if (msg.senderUserId === 'system' || senderCards.has(msg.senderUserId)) continue;
+                const social = await socialProfileOf(ctx, msg.senderUserId);
+                const ref = ctx.db.normalizeId('users', msg.senderUserId);
+                const u = ref ? await ctx.db.get(ref) : null;
+                senderCards.set(
+                    msg.senderUserId,
+                    u
+                        ? await toUserCard(ctx, u, social)
+                        : { displayName: social?.displayName ?? 'Alguien', avatar: null },
+                );
+            }
+        }
 
         const items = await Promise.all(
             [...page.page].reverse().map(async (msg: any) => {
@@ -353,7 +504,12 @@ export const getChatMessages = query({
                 if (msg.replyToId) {
                     const normalized = ctx.db.normalizeId('socialMessages', msg.replyToId);
                     const parent = normalized ? await ctx.db.get(normalized) : null;
-                    if (parent) {
+                    // El padre TIENE que ser de este mismo chat. `sendMessage`
+                    // ya lo valida al escribir; esto es defensa en profundidad
+                    // para las filas guardadas antes de esa validación, que
+                    // podían citar un mensaje de una conversación ajena y
+                    // filtrar su texto acá.
+                    if (parent && parent.chatId === String(args.chatId)) {
                         replyTo = {
                             messageId: String(parent._id),
                             senderUserId: parent.senderUserId,
@@ -364,9 +520,13 @@ export const getChatMessages = query({
                     }
                 }
 
+                const sender = senderCards.get(msg.senderUserId);
                 return {
                     _id: String(msg._id),
                     senderUserId: msg.senderUserId,
+                    senderName: sender?.displayName ?? null,
+                    senderAvatar: sender?.avatar ?? null,
+                    kind: msg.kind ?? 'user',
                     body: msg.deletedAt ? '' : msg.body,
                     deleted: !!msg.deletedAt,
                     attachments: msg.deletedAt ? undefined : attachments,
@@ -413,10 +573,15 @@ export const getTyping = query({
         const actor = await getActorOrNull(ctx, args.sessionToken);
         if (!actor) return [];
 
+        // Sin este chequeo, cualquier usuario autenticado pasaba un chatId
+        // ajeno y obtenía el userId y el nombre de quienes escriben ahí.
+        const member = await getMembership(ctx, args.chatId, actor.idString);
+        if (!member || member.state === 'left') return [];
+
         const rows = await ctx.db
             .query('socialChatTyping')
             .withIndex('by_chat', (q: any) => q.eq('chatId', String(args.chatId)))
-            .collect();
+            .take(GROUP_MAX_MEMBERS);
 
         return await Promise.all(
             rows
@@ -438,6 +603,58 @@ export const getTyping = query({
 // ---------------------------------------------------------------------------
 
 /**
+ * Resuelve (o crea) el hilo 1:1 entre dos personas. Extraído de la mutation
+ * para que compartir con alguien a quien nunca le escribiste sea UNA sola
+ * transacción: resolver-crear-y-enviar. Hacerlo en dos llamadas desde el
+ * cliente deja una conversación vacía colgada si el envío falla.
+ */
+const resolveDirectChat = async (ctx: any, actorId: string, participantId: string) => {
+    if (actorId === participantId) {
+        throw authError('FORBIDDEN', 'No podés abrir un chat con vos mismo.');
+    }
+
+    const target = ctx.db.normalizeId('users', participantId);
+    if (!target || !(await ctx.db.get(target))) {
+        throw authError('FORBIDDEN', 'Ese usuario no existe.');
+    }
+    await assertNotBlocked(ctx, actorId, participantId);
+
+    const key = sortedKey([actorId, participantId]);
+    const existing = await ctx.db
+        .query('socialChats')
+        .withIndex('by_participants_key', (q: any) => q.eq('participantsKey', key))
+        .first();
+    if (existing) {
+        await requireMembership(ctx, existing._id, actorId);
+        return existing._id;
+    }
+
+    const now = NOW();
+    const chatId = await ctx.db.insert('socialChats', {
+        kind: 'direct',
+        participantIds: [actorId, participantId],
+        participantsKey: key,
+        createdByUserId: actorId,
+        lastMessageAt: now,
+        createdAt: now,
+    });
+
+    // El que abre el chat siempre lo ve en su bandeja; el receptor recién
+    // aparece cuando llega el primer mensaje (ver `sendMessage`).
+    await ctx.db.insert('socialChatMembers', {
+        chatId,
+        userId: actorId,
+        state: 'active',
+        unreadCount: 0,
+        lastReadAt: now,
+        lastMessageAt: now,
+        joinedAt: now,
+    });
+
+    return chatId;
+};
+
+/**
  * Abre (o recupera) el chat 1:1 con `participantId`. Idempotente vía
  * `participantsKey`. No crea membresía de solicitud todavía: eso lo decide
  * el primer mensaje, así que abrir un chat y no escribir no le notifica nada
@@ -451,49 +668,7 @@ export const getOrCreateDirectChat = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        if (actor.idString === args.participantId) {
-            throw authError('FORBIDDEN', 'No podés abrir un chat con vos mismo.');
-        }
-
-        const target = ctx.db.normalizeId('users', args.participantId);
-        if (!target || !(await ctx.db.get(target))) {
-            throw authError('FORBIDDEN', 'Ese usuario no existe.');
-        }
-        await assertNotBlocked(ctx, actor.idString, args.participantId);
-
-        const key = sortedKey([actor.idString, args.participantId]);
-        const existing = await ctx.db
-            .query('socialChats')
-            .withIndex('by_participants_key', (q: any) => q.eq('participantsKey', key))
-            .first();
-        if (existing) {
-            await requireMembership(ctx, existing._id, actor.idString);
-            return String(existing._id);
-        }
-
-        const now = NOW();
-        const chatId = await ctx.db.insert('socialChats', {
-            kind: 'direct',
-            participantIds: [actor.idString, args.participantId],
-            participantsKey: key,
-            createdByUserId: actor.idString,
-            lastMessageAt: now,
-            createdAt: now,
-        });
-
-        // El que abre el chat siempre lo ve en su bandeja; el receptor recién
-        // aparece cuando llega el primer mensaje (ver `sendMessage`).
-        await ctx.db.insert('socialChatMembers', {
-            chatId,
-            userId: actor.idString,
-            state: 'active',
-            unreadCount: 0,
-            lastReadAt: now,
-            lastMessageAt: now,
-            joinedAt: now,
-        });
-
-        return String(chatId);
+        return String(await resolveDirectChat(ctx, actor.idString, args.participantId));
     },
 });
 
@@ -508,7 +683,7 @@ export const createGroupChat = mutation({
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
 
-        const unique = Array.from(new Set(args.participantIds.filter((id) => id !== actor.idString)));
+        const unique = await resolveMemberIds(ctx, actor.idString, args.participantIds);
         if (unique.length < 2) {
             throw authError('FORBIDDEN', 'Un grupo necesita al menos 3 personas.');
         }
@@ -517,6 +692,7 @@ export const createGroupChat = mutation({
         }
         const title = args.title.trim();
         if (!title) throw authError('FORBIDDEN', 'El grupo necesita un nombre.');
+        await assertOwnsMedia(ctx, actor.idString, args.avatar);
 
         const now = NOW();
         const chatId = await ctx.db.insert('socialChats', {
@@ -560,21 +736,25 @@ export const createGroupChat = mutation({
 // ---------------------------------------------------------------------------
 
 /**
- * Envía un mensaje. `clientId` lo genera el cliente: si el envío se reintenta
- * por un corte de red, el mensaje no se duplica.
+ * Entrega de un mensaje ya validado: inserta, actualiza el hilo, hace el
+ * fan-out de no-leídos y programa el push.
+ *
+ * Vive aparte de la mutation pública para que compartir un producto o una
+ * publicación no tenga que pasar por `sendMessage` —que ahora rechaza esos
+ * tipos de adjunto— y para evitar el `ctx.runMutation` de ida y vuelta.
  */
-export const sendMessage = mutation({
+const deliverMessage = async (
+    ctx: any,
+    actor: { idString: string },
     args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        chatId: v.id('socialChats'),
-        body: v.optional(v.string()),
-        attachments: v.optional(v.array(attachmentValidator)),
-        replyToId: v.optional(v.string()),
-        clientId: v.optional(v.string()),
+        chatId: any;
+        body?: string;
+        attachments?: any[];
+        replyToId?: string;
+        clientId?: string;
     },
-    handler: async (ctx, args) => {
-        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+): Promise<string> => {
+    {
         const chat = await ctx.db.get(args.chatId);
         if (!chat) throw authError('FORBIDDEN', 'Chat no encontrado.');
 
@@ -591,6 +771,23 @@ export const sendMessage = mutation({
             throw authError('FORBIDDEN', 'El mensaje es demasiado largo.');
         }
 
+        // Filtro de palabras (Fase 2). En DMs sólo corta si es `block`; un
+        // `flag` en un mensaje privado no genera reporte automático (a
+        // diferencia de posts/comentarios) porque no hay nadie más que un
+        // admin pueda revisar sin violar la privacidad de la conversación.
+        if (body) await assertTextAllowed(ctx, body, 'dm');
+
+        // El mensaje citado tiene que ser de ESTE chat. Sin este chequeo se
+        // podía citar cualquier id del sistema y `getChatMessages` devolvía
+        // el emisor y los primeros 60 caracteres de un mensaje ajeno.
+        if (args.replyToId) {
+            const parentRef = ctx.db.normalizeId('socialMessages', args.replyToId);
+            const parent = parentRef ? await ctx.db.get(parentRef) : null;
+            if (!parent || parent.chatId !== String(args.chatId)) {
+                throw authError('FORBIDDEN', 'No podés citar un mensaje de otra conversación.');
+            }
+        }
+
         // En 1:1 el bloqueo corta el envío. En grupos no: bloquear a una
         // persona no puede silenciarte el grupo entero — se filtra al leer.
         if (chat.kind !== 'group') {
@@ -599,13 +796,10 @@ export const sendMessage = mutation({
             }
         }
 
-        // `checkRateLimit` tira Error plano; lo envolvemos para que el cliente
-        // reciba un FORBIDDEN y no lo confunda con una sesión vencida.
-        try {
-            await checkRateLimit(ctx, `dm:send:${actor.idString}`, 60, 60_000);
-        } catch (e: any) {
-            throw authError('FORBIDDEN', e?.message ?? 'Demasiados mensajes. Esperá un momento.');
-        }
+        // `checkRateLimit` ya tira un ConvexError con `code: 'RATE_LIMITED'`,
+        // así que se deja propagar tal cual. Envolverlo acá volvería a
+        // aplanar el código que el cliente necesita para distinguirlo.
+        await checkRateLimit(ctx, `dm:send:${actor.idString}`, 60, 60_000);
 
         // Idempotencia: mismo clientId en el mismo chat = mismo mensaje.
         if (args.clientId) {
@@ -638,7 +832,9 @@ export const sendMessage = mutation({
 
         // Métrica de tiempo de respuesta de vendedores (se mantiene del
         // modelo anterior): primera respuesta de alguien que no abrió el chat.
-        if (!chat.firstRepliedAt && chat.participantIds[0] !== actor.idString) {
+        // Sólo en 1:1 — en un grupo `participantIds[0]` no significa nada y
+        // cualquier integrante contaminaba `sellerResponseTimeHours`.
+        if (chat.kind !== 'group' && !chat.firstRepliedAt && chat.participantIds[0] !== actor.idString) {
             patch.firstRepliedAt = now;
             patch.firstReplierId = actor.idString;
             const diffHours =
@@ -702,6 +898,9 @@ export const sendMessage = mutation({
             }
 
             if (member?.mutedUntil && member.mutedUntil > NOW()) continue;
+            // Las solicitudes no notifican: son de gente con la que todavía no
+            // aceptaste hablar, y sonaban igual que un chat aceptado.
+            if (member?.state === 'request') continue;
 
             // Agrupación por chat: si ya avisamos hace poco no mandamos otro
             // push, pero tampoco lo tiramos — programamos un único resumen.
@@ -735,14 +934,88 @@ export const sendMessage = mutation({
         }
 
         return String(messageId);
+    }
+};
+
+/**
+ * Envía un mensaje. `clientId` lo genera el cliente: si el envío se reintenta
+ * por un corte de red, el mensaje no se duplica.
+ */
+export const sendMessage = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        chatId: v.id('socialChats'),
+        body: v.optional(v.string()),
+        attachments: v.optional(v.array(attachmentValidator)),
+        replyToId: v.optional(v.string()),
+        clientId: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<string> => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        await assertClientAttachments(ctx, actor.idString, args.attachments);
+        return await deliverMessage(ctx, actor, args);
     },
 });
 
 /**
- * Comparte un producto en el chat. El snapshot (título, precio, imagen) y el
- * `sharedByUserId` se resuelven en el servidor: si vinieran del cliente,
- * cualquiera podría inventar un precio o atribuirse la recomendación.
+ * Snapshot de un producto, armado ENTERAMENTE en el servidor: título, precio,
+ * imagen y `sharedByUserId` salen de la base. Si vinieran del cliente,
+ * cualquiera podría inventar un precio o atribuirse la recomendación —y con
+ * ella la comisión— porque `attachments[].metadata` es `v.any()`.
  */
+const buildListingAttachment = async (ctx: any, actorId: string, listingId: string) => {
+    const listingRef = ctx.db.normalizeId('listings', listingId);
+    const listing: any = listingRef ? await ctx.db.get(listingRef) : null;
+    if (!listing) throw authError('FORBIDDEN', 'Ese producto no existe.');
+
+    const rawImage =
+        listing.images?.find((i: any) => i.isPrimary)?.url ??
+        listing.images?.[0]?.url ??
+        listing.image ??
+        listing.gallery?.[0];
+
+    return {
+        type: 'listing' as const,
+        url: String(listing._id),
+        metadata: {
+            listingId: String(listing._id),
+            sharedByUserId: actorId,
+            title: listing.title,
+            price: listing.price,
+            discountPercent: listing.discountPercent ?? 0,
+            image: await resolveMediaUrl(ctx, rawImage),
+            sellerId: listing.sellerId,
+            listingType: listing.type,
+        },
+    };
+};
+
+/** Ídem para una publicación del feed: la vista previa sale del post real. */
+const buildPostAttachment = async (ctx: any, actorId: string, postId: string) => {
+    const postRef = ctx.db.normalizeId('socialPosts', postId);
+    const post: any = postRef ? await ctx.db.get(postRef) : null;
+    if (!post) throw authError('FORBIDDEN', 'Esa publicación no existe.');
+
+    const authorProfile = await profileOf(ctx, post.authorUserId);
+    const rawImage = post.images?.[0] ?? post.commercialProduct?.image;
+    const text = (post.content ?? '').trim();
+
+    return {
+        type: 'post' as const,
+        url: String(post._id),
+        metadata: {
+            postId: String(post._id),
+            sharedByUserId: actorId,
+            authorUserId: post.authorUserId,
+            authorUsername: authorProfile?.username ?? null,
+            preview: text ? text.slice(0, 140) : (post.commercialProduct?.name ?? 'Publicación'),
+            image: await resolveMediaUrl(ctx, rawImage),
+        },
+    };
+};
+
+/** Comparte un producto en un chat en el que ya estás. */
 export const shareListingInChat = mutation({
     args: {
         sessionToken: v.optional(v.string()),
@@ -754,41 +1027,116 @@ export const shareListingInChat = mutation({
     handler: async (ctx, args): Promise<string> => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         await requireMembership(ctx, args.chatId, actor.idString);
-
-        const listingRef = ctx.db.normalizeId('listings', args.listingId);
-        const listing: any = listingRef ? await ctx.db.get(listingRef) : null;
-        if (!listing) throw authError('FORBIDDEN', 'Ese producto no existe.');
-
-        const rawImage =
-            listing.images?.find((i: any) => i.isPrimary)?.url ??
-            listing.images?.[0]?.url ??
-            listing.image ??
-            listing.gallery?.[0];
-
-        return await ctx.runMutation(api.social.dm.sendMessage, {
-            sessionToken: (args as any).sessionToken,
+        return await deliverMessage(ctx, actor, {
             chatId: args.chatId,
             body: args.note ?? '',
             clientId: args.clientId,
-            attachments: [
-                {
-                    type: 'listing' as const,
-                    url: String(listing._id),
-                    metadata: {
-                        listingId: String(listing._id),
-                        sharedByUserId: actor.idString,
-                        title: listing.title,
-                        price: listing.price,
-                        discountPercent: listing.discountPercent ?? 0,
-                        image: await resolveMediaUrl(ctx, rawImage),
-                        sellerId: listing.sellerId,
-                        listingType: listing.type,
-                    },
-                },
-            ],
+            attachments: [await buildListingAttachment(ctx, actor.idString, args.listingId)],
         });
     },
 });
+
+/** Comparte una publicación en un chat en el que ya estás. */
+const buildStoryAttachment = async (ctx: any, actorId: string, storyId: string) => {
+    const storyRef = ctx.db.normalizeId('socialStories', storyId);
+    const story: any = storyRef ? await ctx.db.get(storyRef) : null;
+    if (!story || story.deletedAt) throw authError('FORBIDDEN', 'Esa historia ya no existe.');
+
+    const authorProfile = await profileOf(ctx, story.authorUserId);
+    return {
+        type: 'story' as const,
+        url: String(story._id),
+        metadata: {
+            storyId: String(story._id),
+            sharedByUserId: actorId,
+            authorUserId: story.authorUserId,
+            authorUsername: authorProfile?.username ?? null,
+            preview: await resolveMediaUrl(ctx, story.url),
+            storyType: story.type,
+        },
+    };
+};
+
+/** Responder a una historia = mandar un DM con la historia adjunta. Reusa
+ *  TODO `deliverMessage` (rate limit, bloqueo, idempotencia) en vez de un
+ *  sistema de reacciones a stories aparte. */
+export const shareStoryInChat = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        chatId: v.id('socialChats'),
+        storyId: v.string(),
+        note: v.optional(v.string()),
+        clientId: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<string> => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        await requireMembership(ctx, args.chatId, actor.idString);
+        return await deliverMessage(ctx, actor, {
+            chatId: args.chatId,
+            body: args.note ?? '',
+            clientId: args.clientId,
+            attachments: [await buildStoryAttachment(ctx, actor.idString, args.storyId)],
+        });
+    },
+});
+
+export const sharePostInChat = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        chatId: v.id('socialChats'),
+        postId: v.string(),
+        note: v.optional(v.string()),
+        clientId: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<string> => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        await requireMembership(ctx, args.chatId, actor.idString);
+        return await deliverMessage(ctx, actor, {
+            chatId: args.chatId,
+            body: args.note ?? '',
+            clientId: args.clientId,
+            attachments: [await buildPostAttachment(ctx, actor.idString, args.postId)],
+        });
+    },
+});
+
+/**
+ * Compartir con alguien a quien nunca le escribiste. Resuelve-o-crea el hilo
+ * y envía en la MISMA transacción: hacerlo en dos llamadas desde el cliente
+ * deja una conversación vacía si el envío falla.
+ */
+export const shareToUser = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        participantId: v.string(),
+        listingId: v.optional(v.string()),
+        postId: v.optional(v.string()),
+        body: v.optional(v.string()),
+        clientId: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ chatId: string; messageId: string }> => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        if (!args.listingId && !args.postId && !args.body?.trim()) {
+            throw authError('FORBIDDEN', 'No hay nada para enviar.');
+        }
+
+        const chatId = await resolveDirectChat(ctx, actor.idString, args.participantId);
+        const attachments = args.listingId
+            ? [await buildListingAttachment(ctx, actor.idString, args.listingId)]
+            : args.postId
+              ? [await buildPostAttachment(ctx, actor.idString, args.postId)]
+              : undefined;
+
+        const messageId = await deliverMessage(ctx, actor, {
+            chatId,
+            body: args.body ?? '',
+            clientId: args.clientId,
+            attachments,
+        });
+        return { chatId: String(chatId), messageId };
+    },
+});
+
 
 /** Marca el chat como leído: una sola escritura, no una por mensaje. */
 export const markChatRead = mutation({
@@ -818,13 +1166,27 @@ export const deleteMessage = mutation({
         if (message.senderUserId !== actor.idString) {
             throw authError('FORBIDDEN', 'Solo podés eliminar tus mensajes.');
         }
+        if (message.deletedAt) return { success: true };
         await ctx.db.patch(args.messageId, { deletedAt: NOW() });
 
-        // Si era el último del chat, el preview tiene que reflejarlo.
         const chatId = ctx.db.normalizeId('socialChats', message.chatId);
         const chat = chatId ? await ctx.db.get(chatId) : null;
+
+        // Si era el último del chat, el preview tiene que reflejarlo.
         if (chat && chat.lastMessageAt === message.createdAt) {
             await ctx.db.patch(chat._id, { lastMessagePreview: 'Mensaje eliminado' });
+        }
+
+        // El no-leído tiene que bajar para quien todavía no lo había abierto:
+        // si no, queda un badge apuntando a un mensaje que ya no existe.
+        if (chatId) {
+            for (const m of await listMemberships(ctx, chatId)) {
+                if (m.userId === actor.idString || m.state === 'left') continue;
+                const unseen = !m.lastReadAt || m.lastReadAt < message.createdAt;
+                if (unseen && (m.unreadCount ?? 0) > 0) {
+                    await ctx.db.patch(m._id, { unreadCount: m.unreadCount - 1 });
+                }
+            }
         }
         return { success: true };
     },
@@ -844,7 +1206,17 @@ export const reactToMessage = mutation({
 
         const chatId = ctx.db.normalizeId('socialChats', message.chatId);
         if (!chatId) throw authError('FORBIDDEN', 'Chat no encontrado.');
-        await requireMembership(ctx, chatId, actor.idString);
+        const membership = await requireMembership(ctx, chatId, actor.idString);
+        if (membership.state === 'left') {
+            throw authError('FORBIDDEN', 'Ya no formás parte de esta conversación.');
+        }
+        if (message.kind === 'system') {
+            throw authError('FORBIDDEN', 'No se puede reaccionar a un aviso del grupo.');
+        }
+        // No se le puede reaccionar a alguien que te bloqueó.
+        if (message.senderUserId !== actor.idString) {
+            await assertNotBlocked(ctx, actor.idString, message.senderUserId);
+        }
 
         const existing = await ctx.db
             .query('socialMessageReactions')
@@ -966,6 +1338,9 @@ export const acceptRequest = mutation({
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const membership = await requireMembership(ctx, args.chatId, actor.idString);
+        if (membership.state !== 'request') {
+            throw authError('FORBIDDEN', 'Esta conversación no es una solicitud.');
+        }
         await ctx.db.patch(membership._id, { state: 'active' });
         return { success: true };
     },
@@ -1035,6 +1410,21 @@ export const blockUser = mutation({
                 blockedUserId: args.userId,
                 createdAt: NOW(),
             });
+
+            // Bloquear tiene que desmontar lo que ya existe, no sólo impedir
+            // lo nuevo: el chat 1:1 compartido sale de las dos bandejas.
+            const pairKey = sortedKey([actor.idString, args.userId]);
+            const shared = await ctx.db
+                .query('socialChats')
+                .withIndex('by_participants_key', (q: any) => q.eq('participantsKey', pairKey))
+                .first();
+            if (shared) {
+                for (const m of await listMemberships(ctx, shared._id)) {
+                    if (m.state !== 'left') {
+                        await ctx.db.patch(m._id, { state: 'left', unreadCount: 0 });
+                    }
+                }
+            }
         } else if (!args.blocked && existing) {
             await ctx.db.delete(existing._id);
         }
@@ -1050,8 +1440,15 @@ export const listBlockedUsers = query({
         const rows = await ctx.db
             .query('socialBlocks')
             .withIndex('by_blocker', (q: any) => q.eq('blockerUserId', actor.idString))
-            .collect();
-        return await Promise.all(rows.map((r: any) => hydrateParticipant(ctx, r.blockedUserId)));
+            .take(200);
+        return await Promise.all(
+            rows.map(async (r: any) => {
+                // Sin `lastSeenAt`: a quien bloqueaste no le tenés que estar
+                // publicando tu estado de conexión desde tu propia lista.
+                const { lastSeenAt, ...card } = await hydrateParticipant(ctx, r.blockedUserId);
+                return card;
+            }),
+        );
     },
 });
 
@@ -1080,7 +1477,16 @@ export const archiveChat = mutation({
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const membership = await requireMembership(ctx, args.chatId, actor.idString);
-        await ctx.db.patch(membership._id, { state: args.archived ? 'archived' : 'active' });
+        if (args.archived) {
+            if (membership.state === 'left') {
+                throw authError('FORBIDDEN', 'Ya no formás parte de esta conversación.');
+            }
+            await ctx.db.patch(membership._id, { state: 'archived' });
+        } else if (membership.state === 'archived') {
+            // Desarchivar no puede ascender una solicitud a la bandeja, así
+            // que sólo actúa sobre lo que está efectivamente archivado.
+            await ctx.db.patch(membership._id, { state: 'active' });
+        }
         return { success: true };
     },
 });
@@ -1095,10 +1501,26 @@ export const leaveChat = mutation({
             throw authError('FORBIDDEN', 'Solo se puede salir de un grupo.');
         }
         const membership = await requireMembership(ctx, args.chatId, actor.idString);
-        await ctx.db.patch(membership._id, { state: 'left', unreadCount: 0 });
-        await ctx.db.patch(args.chatId, {
-            participantIds: chat.participantIds.filter((id: string) => id !== actor.idString),
-        });
+        await ctx.db.patch(membership._id, { state: 'left', unreadCount: 0, role: undefined });
+
+        const remaining = chat.participantIds.filter((id: string) => id !== actor.idString);
+        const chatPatch: any = { participantIds: remaining };
+
+        // Sucesión: si se va quien administraba, el grupo quedaba sin nadie
+        // que pudiera agregar, sacar o renombrar — `requireGroupOwner` fallaba
+        // para todos porque `createdByUserId` seguía apuntando al que se fue.
+        const wasOwner = membership.role === 'owner' || chat.createdByUserId === actor.idString;
+        if (wasOwner) {
+            const heir = (await listMemberships(ctx, args.chatId))
+                .filter((m: any) => m.state !== 'left' && m.userId !== actor.idString)
+                .sort((a: any, b: any) => a.joinedAt.localeCompare(b.joinedAt))[0];
+            if (heir) {
+                await ctx.db.patch(heir._id, { role: 'owner' });
+                chatPatch.createdByUserId = heir.userId;
+            }
+        }
+        await ctx.db.patch(args.chatId, chatPatch);
+        await systemMessage(ctx, args.chatId, `${await nameOf(ctx, actor.idString)} salió del grupo`);
         return { success: true };
     },
 });
@@ -1128,7 +1550,9 @@ export const addGroupMembers = mutation({
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         const chat = await requireGroupOwner(ctx, args.chatId, actor.idString);
 
-        const toAdd = args.userIds.filter((id) => !chat.participantIds.includes(id));
+        const candidates = await resolveMemberIds(ctx, actor.idString, args.userIds);
+        const toAdd = candidates.filter((id) => !chat.participantIds.includes(id));
+        if (!toAdd.length) return { added: 0 };
         if (chat.participantIds.length + toAdd.length > GROUP_MAX_MEMBERS) {
             throw authError('FORBIDDEN', `Máximo ${GROUP_MAX_MEMBERS} integrantes.`);
         }
@@ -1137,7 +1561,14 @@ export const addGroupMembers = mutation({
         for (const id of toAdd) {
             const existing = await getMembership(ctx, args.chatId, id);
             if (existing) {
-                await ctx.db.patch(existing._id, { state: 'active', role: 'member' });
+                // Vuelve a entrar: el badge no puede arrastrar los no-leídos
+                // que quedaron de antes de que lo sacaran.
+                await ctx.db.patch(existing._id, {
+                    state: 'active',
+                    role: 'member',
+                    unreadCount: 0,
+                    joinedAt: now,
+                });
             } else {
                 await ctx.db.insert('socialChatMembers', {
                     chatId: args.chatId,
@@ -1153,6 +1584,13 @@ export const addGroupMembers = mutation({
         await ctx.db.patch(args.chatId, {
             participantIds: [...chat.participantIds, ...toAdd],
         });
+
+        const names = await Promise.all(toAdd.map((id) => nameOf(ctx, id)));
+        await systemMessage(
+            ctx,
+            args.chatId,
+            `${await nameOf(ctx, actor.idString)} agregó a ${names.join(', ')}`,
+        );
         return { added: toAdd.length };
     },
 });
@@ -1171,10 +1609,17 @@ export const removeGroupMember = mutation({
         }
 
         const membership = await getMembership(ctx, args.chatId, args.userId);
-        if (membership) await ctx.db.patch(membership._id, { state: 'left', unreadCount: 0 });
+        if (membership) {
+            await ctx.db.patch(membership._id, { state: 'left', unreadCount: 0, role: undefined });
+        }
         await ctx.db.patch(args.chatId, {
             participantIds: chat.participantIds.filter((id: string) => id !== args.userId),
         });
+        await systemMessage(
+            ctx,
+            args.chatId,
+            `${await nameOf(ctx, actor.idString)} sacó a ${await nameOf(ctx, args.userId)}`,
+        );
         return { success: true };
     },
 });
@@ -1191,13 +1636,25 @@ export const updateGroup = mutation({
         await requireGroupOwner(ctx, args.chatId, actor.idString);
 
         const patch: any = {};
+        let renamedTo: string | null = null;
         if (args.title !== undefined) {
             const title = args.title.trim();
             if (!title) throw authError('FORBIDDEN', 'El grupo necesita un nombre.');
             patch.title = title;
+            renamedTo = title;
         }
-        if (args.avatar !== undefined) patch.avatar = args.avatar;
+        if (args.avatar !== undefined) {
+            await assertOwnsMedia(ctx, actor.idString, args.avatar);
+            patch.avatar = args.avatar;
+        }
         await ctx.db.patch(args.chatId, patch);
+        if (renamedTo) {
+            await systemMessage(
+                ctx,
+                args.chatId,
+                `${await nameOf(ctx, actor.idString)} cambió el nombre del grupo a "${renamedTo}"`,
+            );
+        }
         return { success: true };
     },
 });
@@ -1208,21 +1665,50 @@ export const updateGroup = mutation({
 
 /**
  * Backfill del modelo viejo: una fila de `socialChatMembers` por participante,
- * tomando el unread del `unreadCounts` deprecado. Idempotente — se puede
- * correr las veces que haga falta con `npx convex run social/dm:backfillMembers`.
+ * tomando el unread del `unreadCounts` deprecado.
+ *
+ * Dos cosas que la versión anterior hacía mal:
+ *
+ * 1. Leía la tabla entera con `.collect()`. Va por lotes con marca de agua
+ *    sobre `_creationTime`, así es resumible y no revienta el límite de
+ *    lectura cuando `socialChats` crece.
+ * 2. No escribía `participantsKey`. `getOrCreateDirectChat` busca por ese
+ *    índice, así que cada chat 1:1 viejo quedaba invisible y al reabrirlo se
+ *    creaba un hilo NUEVO, partiendo el historial en dos.
+ *
+ * Idempotente: correrlo de nuevo devuelve todos los contadores en cero.
+ * `npx convex run social/dm:backfillMembers '{"chain":true}'`
  */
 export const backfillMembers = internalMutation({
-    args: {},
-    handler: async (ctx) => {
-        const chats = await ctx.db.query('socialChats').collect();
-        let created = 0;
+    args: {
+        cursor: v.optional(v.number()),
+        batchSize: v.optional(v.number()),
+        chain: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args): Promise<any> => {
+        const batchSize = Math.max(1, Math.min(args.batchSize ?? 100, 200));
+        const chats = await ctx.db
+            .query('socialChats')
+            .withIndex('by_creation_time', (q: any) => q.gt('_creationTime', args.cursor ?? 0))
+            .take(batchSize);
+
+        let membersCreated = 0;
+        let keysBackfilled = 0;
+        let kindsBackfilled = 0;
 
         for (const chat of chats) {
+            const patch: any = {};
+            const isDirect = (chat.kind ?? (chat.participantIds.length > 2 ? 'group' : 'direct')) === 'direct';
             if (!chat.kind) {
-                await ctx.db.patch(chat._id, {
-                    kind: chat.participantIds.length > 2 ? 'group' : 'direct',
-                });
+                patch.kind = isDirect ? 'direct' : 'group';
+                kindsBackfilled += 1;
             }
+            if (isDirect && !chat.participantsKey && chat.participantIds.length === 2) {
+                patch.participantsKey = sortedKey(chat.participantIds);
+                keysBackfilled += 1;
+            }
+            if (Object.keys(patch).length) await ctx.db.patch(chat._id, patch);
+
             for (const userId of chat.participantIds) {
                 const existing = await getMembership(ctx, chat._id, userId);
                 if (existing) continue;
@@ -1230,14 +1716,27 @@ export const backfillMembers = internalMutation({
                     chatId: chat._id,
                     userId,
                     state: 'active',
+                    role: isDirect ? undefined : 'member',
                     unreadCount: (chat.unreadCounts ?? {})[userId] ?? 0,
                     lastMessageAt: chat.lastMessageAt,
                     joinedAt: chat.createdAt ?? NOW(),
                 });
-                created += 1;
+                membersCreated += 1;
             }
         }
-        return { chats: chats.length, membersCreated: created };
+
+        const isDone = chats.length < batchSize;
+        const cursor = chats.length ? chats[chats.length - 1]._creationTime : (args.cursor ?? null);
+
+        if (!isDone && args.chain) {
+            await ctx.scheduler.runAfter(0, internal.social.dm.backfillMembers, {
+                cursor: cursor ?? undefined,
+                batchSize,
+                chain: true,
+            });
+        }
+
+        return { scanned: chats.length, membersCreated, keysBackfilled, kindsBackfilled, cursor, isDone };
     },
 });
 
@@ -1287,10 +1786,16 @@ export const cleanupEphemeral = internalMutation({
     args: {},
     handler: async (ctx) => {
         const now = Date.now();
+        // Con tope: sin él, un backlog tras una caída del cron hace que el
+        // barrido supere el límite de lectura y falle SIEMPRE — y como este
+        // es el único que limpia, nunca se recupera solo. Con tope, cada
+        // corrida avanza un poco y el sistema se cura en unos ciclos.
+        const SWEEP_CAP = 500;
+
         const staleTyping = await ctx.db
             .query('socialChatTyping')
             .withIndex('by_expires', (q: any) => q.lt('expiresAt', now))
-            .collect();
+            .take(SWEEP_CAP);
         for (const row of staleTyping) await ctx.db.delete(row._id);
 
         // Presencia más vieja que 30 días no aporta nada al "activo hace X".
@@ -1298,7 +1803,7 @@ export const cleanupEphemeral = internalMutation({
         const stalePresence = await ctx.db
             .query('socialPresence')
             .withIndex('by_lastSeen', (q: any) => q.lt('lastSeenAt', cutoff))
-            .collect();
+            .take(SWEEP_CAP);
         for (const row of stalePresence) await ctx.db.delete(row._id);
 
         return { typing: staleTyping.length, presence: stalePresence.length };

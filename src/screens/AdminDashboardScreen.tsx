@@ -16,6 +16,7 @@ import {
     Users, XCircle, Ban, RotateCcw, Gavel, Shield,
     KeyRound, ScrollText, Activity, LayoutDashboard, LogOut as SessionIcon,
     FileCheck, ChevronDown, ChevronUp, Filter, Wallet, ArrowUpRight, Clock, X, ChevronRight,
+    ShieldAlert,
 } from 'lucide-react-native';
 import { Radius, colors } from '../theme/tokens';
 
@@ -684,6 +685,13 @@ export default function AdminDashboardScreen({ navigation: navProp }: any) {
         const sessionsPage = paginate(sessionRows, pageOf('seg-sessions'));
         return (
         <>
+            <TouchableOpacity
+                style={[styles.iconBtn, { flexDirection: 'row', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 14, marginBottom: 12 }]}
+                onPress={() => navigation.navigate('AdminModeration')}
+            >
+                <ShieldAlert size={16} color={isDark ? '#fff' : '#111827'} />
+                <Text style={{ color: isDark ? '#fff' : '#111827', fontWeight: '600' }}>Cola de moderación social</Text>
+            </TouchableOpacity>
             <AdvancedSearchPanel
                 styles={styles} isDark={isDark}
                 open={advOpen.seguridad}

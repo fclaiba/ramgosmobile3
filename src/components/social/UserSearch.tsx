@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Search, X, CheckCircle } from 'lucide-react-native';
 import { useQuery } from 'convex/react';
@@ -10,6 +10,7 @@ import { Sheet, SheetContent } from '../ui/sheet';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
 import { SocialFollowButton } from './SocialFollowButton';
 import { formatCompactCount } from '../../utils/formatCompactCount';
+import { useDebouncedSearchTerm } from '../../hooks/useDebounce';
 
 
 interface UserSearchProps {
@@ -20,28 +21,24 @@ interface UserSearchProps {
 export const UserSearch = ({ onUserSelect, onClose }: UserSearchProps) => {
     const { user: authUser, sessionToken } = useAuth();
     const [query, setQuery] = useState('');
-    const [debouncedQuery, setDebouncedQuery] = useState('');
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedQuery(query.trim()), 250);
-        return () => clearTimeout(t);
-    }, [query]);
+    const debouncedQuery = useDebouncedSearchTerm(query, 250, 2);
 
+    // El directorio ya filtra al propio usuario, bloqueados y baneados; antes
+    // eso se hacía a mano en el cliente y sólo cubría el primer caso.
     const searchRows = useQuery(
-        api.social.searchUsers,
+        api.userDirectory.search,
         authUser && sessionToken && debouncedQuery
-            ? { term: debouncedQuery, limit: 25, sessionToken }
+            ? { term: debouncedQuery, limit: 25, excludeSelf: true, sessionToken }
             : 'skip',
     );
 
-    const meId = authUser?.id ? String(authUser.id) : '';
     const isSearching = debouncedQuery.length > 0;
     const results = (searchRows ?? [])
-        .filter((u: any) => u.userId !== meId)
         .map((u: any) => ({
             id: u.userId,
             name: u.displayName,

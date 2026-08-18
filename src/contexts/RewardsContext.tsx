@@ -211,27 +211,27 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         wheelClaimDate,
     } = usePoints();
     const { user, sessionToken } = useAuth();
-    const addPointsMutation = useMutation(api.economy.addPoints);
+    const claimRewardMutation = useMutation(api.economy.claimReward);
 
-    /** Always award via Convex — never depend on usePoints().addPoints shape */
-    const awardPoints = useCallback(
-        async (amount: number, description: string, source: string = 'bonus') => {
-            if (!user?.id || !sessionToken || amount <= 0) return false;
+    /**
+     * El cliente ya no dice CUÁNTO vale una recompensa, sólo QUÉ reclama.
+     * Antes esto llamaba `api.economy.addPoints` pasándole el monto, y esa
+     * mutation era pública: cualquiera podía acreditarse los puntos que
+     * quisiera. El catálogo, los topes diarios y la verificación viven ahora
+     * en `convex/economy.ts` (`REWARD_CATALOG`).
+     */
+    const claimReward = useCallback(
+        async (kind: string, refId?: string) => {
+            if (!user?.id || !sessionToken) return false;
             try {
-                const result = await addPointsMutation({
-                    sessionToken,
-                    userId: user.id,
-                    amount,
-                    description,
-                    source,
-                });
+                const result = await claimRewardMutation({ sessionToken, kind, refId });
                 return !!result?.success;
             } catch (e) {
-                console.error('[Rewards] awardPoints failed', e);
+                console.error('[Rewards] claimReward failed', e);
                 return false;
             }
         },
-        [addPointsMutation, sessionToken, user?.id],
+        [claimRewardMutation, sessionToken, user?.id],
     );
 
     const [dailyState, setDailyState] = useState<DailyEngagementState>(() => createDailyState(getTodayKey()));
@@ -380,7 +380,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         }));
 
         const rewardPts = FEED_PET_REWARD;
-        void awardPoints(rewardPts, 'Cuidado diario de mascota virtual', 'bonus');
+        void claimReward('pet_daily_care');
 
         return {
             status: 'awarded',
@@ -388,7 +388,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             pointsAwarded: rewardPts,
             metadata: { action: 'feed_pet' },
         };
-    }, [dailyState, awardPoints, ensureDailyForToday]);
+    }, [dailyState, claimReward, ensureDailyForToday]);
 
     const computeArcadeReward = (score: number) => {
         if (score <= 0) return 0;
@@ -432,7 +432,10 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             };
         });
 
-        void awardPoints(points, `Recompensa arcade (${gameId})`, 'game');
+        // El monto real lo fija el servidor (plano, con tope diario de 3):
+        // atarlo al puntaje reportado por el cliente sería devolverle el
+        // control del monto. `points` sólo se usa para el mensaje de la UI.
+        void claimReward('arcade_play', `${gameId}-${attemptsUsed + 1}`);
 
         return {
             status: 'awarded',
@@ -442,7 +445,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             attemptsUsed: attemptsUsed + 1,
             metadata: { gameId, score },
         };
-    }, [dailyState, awardPoints, ensureDailyForToday]);
+    }, [dailyState, claimReward, ensureDailyForToday]);
 
     const getArcadeStatus = useCallback(() => {
         const state = ensureDailyForToday(dailyState);
@@ -551,7 +554,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             longestStreak: Math.max(prev.longestStreak, challengeProgress.loginStreak),
         }));
 
-        void awardPoints(config.reward, `Bonus racha ${milestone} días`, 'bonus');
+        void claimReward('streak_milestone', String(milestone));
 
         return {
             status: 'awarded',
@@ -559,7 +562,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             pointsAwarded: config.reward,
             metadata: { milestone },
         };
-    }, [awardPoints, challengeProgress.loginStreak, streakState.claimedMilestones]);
+    }, [claimReward, challengeProgress.loginStreak, streakState.claimedMilestones]);
 
     const getStreakMilestones = useCallback((): StreakMilestone[] => {
         return STREAK_MILESTONES.map((item) => ({
@@ -602,15 +605,16 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             },
         }));
 
-        void awardPoints(REFERRAL_POINTS.registration, 'Bono por registro referido', 'referral');
-
+        // El bono de referido NO se acredita desde acá. Lo otorga el servidor
+        // en el alta (`users.awardReferralOnSignup`), que es el único que
+        // conoce al referidor de verdad; desde el cliente cualquiera podía
+        // inventarse referidos. Acá sólo se lleva el registro para la UI.
         return {
             status: 'awarded',
-            message: `¡Nuevo referido! Se acreditaron ${REFERRAL_POINTS.registration} puntos.`,
-            pointsAwarded: REFERRAL_POINTS.registration,
+            message: '¡Nuevo referido registrado!',
             metadata: { referredUserId: newUserId },
         };
-    }, [awardPoints, referralState.ownerId, referralState.referrals]);
+    }, [referralState.ownerId, referralState.referrals]);
 
     const registerReferralFirstPurchase = useCallback((referralId: string): RewardResult => {
         if (!referralState.ownerId) {
@@ -652,19 +656,14 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
             },
         }));
 
-        void awardPoints(
-            REFERRAL_POINTS.firstPurchase,
-            'Bono por primera compra de referido',
-            'referral',
-        );
-
+        // Igual que el alta: lo acredita el servidor cuando la compra del
+        // referido se confirma de verdad, no el cliente al decir que pasó.
         return {
             status: 'awarded',
-            message: `Compra inicial registrada. Se acreditaron ${REFERRAL_POINTS.firstPurchase} puntos.`,
-            pointsAwarded: REFERRAL_POINTS.firstPurchase,
+            message: 'Compra inicial del referido registrada.',
             metadata: { referredUserId: referralId },
         };
-    }, [awardPoints, referralState.ownerId, referralState.referrals]);
+    }, [referralState.ownerId, referralState.referrals]);
 
     // ponytail: coins live in Convex via PointsContext — fire-and-forget for sync callers
     const addGameCoins = useCallback((amount: number) => {

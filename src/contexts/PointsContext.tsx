@@ -43,7 +43,6 @@ const CHALLENGE_META: Omit<DailyChallenge, 'current' | 'claimed'>[] = [
     { id: 'weekly_purchase', type: 'weekly', title: 'Realiza una compra', description: 'Completa una compra esta semana para ganar puntos extra.', reward: 25, target: 1, icon: 'purchase' },
 ];
 
-type AddPointsOpts = { source?: string; metadata?: Record<string, unknown> };
 
 type PetStats = { happiness: number; hunger: number; energy: number; level: number; exp: number };
 type PetConfig = { activeHat: string; unlockedHats: string[] };
@@ -76,7 +75,6 @@ type PointsContextValue = {
         pointsAwarded?: number;
         message?: string;
     }>;
-    addPoints: (amount: number, description: string, opts?: AddPointsOpts) => Promise<boolean>;
     addGameCoins: (amount: number, reason?: string) => Promise<boolean>;
     spendGameCoins: (amount: number, reason?: string) => Promise<boolean>;
     redeemPoints: (
@@ -115,7 +113,6 @@ const DEFAULT_CONTEXT: PointsContextValue = {
     claimChallenge: async () => false,
     progressChallenge: async () => false,
     spinLuckyWheel: async () => ({ success: false, message: 'Sin sesión' }),
-    addPoints: async () => false,
     addGameCoins: async () => false,
     spendGameCoins: async () => false,
     redeemPoints: async () => ({ success: false, message: 'Sin sesión' }),
@@ -146,7 +143,6 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const claimChallengeMutation = useMutation(api.economy.claimChallenge);
     const progressChallengeMutation = useMutation(api.economy.progressChallenge);
     const spinWheelMutation = useMutation(api.economy.spinLuckyWheel);
-    const addPointsMutation = useMutation(api.economy.addPoints);
     const redeemPointsMutation = useMutation(api.economy.redeemPoints);
     const addCoinsMutation = useMutation(api.economy.addCoins);
     const spendCoinsMutation = useMutation(api.economy.spendCoins);
@@ -307,26 +303,6 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
         }
     }, [sessionToken, spinWheelMutation, userId]);
 
-    const addPoints = useCallback(
-        async (amount: number, description: string, opts?: AddPointsOpts) => {
-            if (!userId || !sessionToken || amount <= 0) return false;
-            try {
-                const result = await addPointsMutation({
-                    sessionToken,
-                    userId,
-                    amount,
-                    description,
-                    source: opts?.source ?? 'bonus',
-                });
-                return !!result?.success;
-            } catch (e) {
-                console.error('[Points] addPoints', e);
-                return false;
-            }
-        },
-        [addPointsMutation, sessionToken, userId],
-    );
-
     const redeemPoints = useCallback(
         async (pointsToRedeem: number, orderId?: string) => {
             if (!userId || !sessionToken) return { success: false, message: 'Sin sesión' };
@@ -450,7 +426,6 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             claimChallenge,
             progressChallenge,
             spinLuckyWheel,
-            addPoints,
             addGameCoins,
             spendGameCoins,
             redeemPoints,
@@ -482,7 +457,6 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             claimChallenge,
             progressChallenge,
             spinLuckyWheel,
-            addPoints,
             addGameCoins,
             spendGameCoins,
             redeemPoints,

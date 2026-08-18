@@ -8,18 +8,21 @@ import {
     useWindowDimensions,
     Platform,
     ActivityIndicator,
+    Image,
 } from 'react-native';
-import { Search, Plus as PlusIcon, Send, Film, List } from 'lucide-react-native';
+import { Search, Plus as PlusIcon, Send, Film, List, ShoppingCart, Bell, Users2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 import { MobileHeader } from '../components/MobileHeader';
+import { GlobalHeaderActions } from '../components/GlobalHeaderActions';
 import { MobileNav } from '../components/MobileNav';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../contexts/CartContext';
 import { useToast } from '../contexts/ToastContext';
 import {
     Post,
@@ -46,11 +49,16 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
 
     const { width: _width } = useWindowDimensions();
     const { colorScheme } = useTheme();
-    const { sessionToken } = useAuth();
+    const { sessionToken, user } = useAuth();
     const { isDesktop } = useResponsive();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const { unreadCount } = useUnreadMessages();
+    const unreadActivity = useQuery(
+        api.social.activity.getUnreadActivityCount,
+        sessionToken ? { sessionToken } : 'skip',
+    );
+    const { openCart, items: cartItems, addPostProduct } = useCart();
 
     const [activeTab, setActiveTab] = useState<'feed' | 'reels'>('feed');
     const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
@@ -59,7 +67,6 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
     const [showSearch, setShowSearch] = useState(false);
 
     const { show } = useToast();
-    const addPostProductToCart = useMutation(api.commerce.addPostProductToCart);
     const [addingToCart, setAddingToCart] = useState(false);
 
     const [feedCursor, setFeedCursor] = useState<string | null>(null);
@@ -132,20 +139,16 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
             if (addingToCart) return;
             setAddingToCart(true);
             try {
-                await addPostProductToCart({
-                    sessionToken,
-                    postId: postId as any,
-                    quantity: 1,
-                });
+                await addPostProduct(postId);
                 show('Agregado al carrito', 'success');
-                navigation.navigate('Cart');
+                openCart();
             } catch (e: any) {
-                show(e?.message || 'No se pudo agregar al carrito', 'error');
+                // error is already handled and shown by CartContext
             } finally {
                 setAddingToCart(false);
             }
         },
-        [sessionToken, addingToCart, addPostProductToCart, navigation, show],
+        [sessionToken, addingToCart, addPostProduct, navigation, show],
     );
 
     const loadMore = () => {
@@ -155,8 +158,8 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
     };
 
     const renderTabs = () => (
-        <View style={styles.tabContainer}>
-            <View style={[styles.tabSegment, glassSurface(isDark, 'subtle')]}>
+        <View style={[styles.tabContainer, activeTab === 'reels' && styles.tabContainerAbsolute]}>
+            <View style={[styles.tabSegment, glassSurface(isDark, 'subtle'), activeTab === 'reels' && styles.tabSegmentDark]}>
                 <TouchableOpacity
                     style={[styles.tabButton, activeTab === 'feed' && styles.tabButtonActive]}
                     onPress={() => setActiveTab('feed')}
@@ -210,34 +213,36 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                 style={StyleSheet.absoluteFill}
             />
 
-            <MobileHeader
-                title="Social"
-                subtitle="Conecta con la comunidad"
-                onMenuPress={onMenuPress}
-                actions={
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity
-                            style={styles.iconBtn}
-                            onPress={() => setShowSearch(true)}
-                        >
-                            <Search size={20} color={isDark ? '#fff' : '#111827'} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.iconBtn}
-                            onPress={() => navigation.navigate('Inbox')}
-                        >
-                            <Send size={20} color={isDark ? '#fff' : '#111827'} />
-                            {unreadCount > 0 && (
-                                <View style={styles.msgBadge}>
-                                    <Text style={styles.msgBadgeText}>
-                                        {unreadCount > 9 ? '9+' : unreadCount}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                }
-            />
+            {activeTab === 'feed' && (
+                <MobileHeader
+                    title="Social"
+                    subtitle="Conecta con la comunidad"
+                    onMenuPress={onMenuPress}
+                    actions={
+                        <GlobalHeaderActions>
+                            <TouchableOpacity
+                                style={styles.iconBtn}
+                                onPress={() => navigation.navigate('Communities')}
+                            >
+                                <Users2 size={20} color={isDark ? '#fff' : '#111827'} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.iconBtn}
+                                onPress={() => navigation.navigate('Activity')}
+                            >
+                                <Bell size={20} color={isDark ? '#fff' : '#111827'} />
+                                {unreadActivity?.count ? <View style={styles.activityBadge} /> : null}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.iconBtn}
+                                onPress={() => setShowSearch(true)}
+                            >
+                                <Search size={20} color={isDark ? '#fff' : '#111827'} />
+                            </TouchableOpacity>
+                        </GlobalHeaderActions>
+                    }
+                />
+            )}
 
             {renderTabs()}
 
@@ -267,7 +272,13 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                                 onPress={() => setShowCreatePost(true)}
                             >
                                 <View style={styles.avatarPlaceholder}>
-                                    <Text style={styles.avatarLetter}>R</Text>
+                                    {user?.avatar ? (
+                                        <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
+                                    ) : (
+                                        <Text style={styles.avatarLetter}>
+                                            {(user?.nickname || user?.name || '?')[0]?.toUpperCase()}
+                                        </Text>
+                                    )}
                                 </View>
                                 <View style={styles.cpInput}>
                                     <Text style={styles.cpText}>¿Qué estás pensando?</Text>
@@ -382,7 +393,6 @@ const getStyles = (isDark: boolean) => {
     const c = colors(isDark);
     return StyleSheet.create({
         container: { flex: 1 },
-        headerActions: { flexDirection: 'row', gap: 12 },
         iconBtn: {
             padding: 8,
             backgroundColor: c.surface2,
@@ -403,11 +413,36 @@ const getStyles = (isDark: boolean) => {
             backgroundColor: '#EF4444',
         },
         msgBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+        activityBadge: {
+            position: 'absolute',
+            top: 6,
+            right: 6,
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: '#EF4444',
+        },
+        cartBadge: {
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: '#EF4444',
+        },
 
         tabContainer: {
             paddingHorizontal: 16,
             paddingVertical: 8,
             alignItems: 'center',
+            zIndex: 10,
+        },
+        tabContainerAbsolute: {
+            position: 'absolute',
+            top: Platform.OS === 'ios' ? 50 : 20,
+            left: 0,
+            right: 0,
         },
         tabSegment: {
             flexDirection: 'row',
@@ -415,6 +450,10 @@ const getStyles = (isDark: boolean) => {
             borderRadius: Radius.full,
             width: '100%',
             maxWidth: 400,
+        },
+        tabSegmentDark: {
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            borderWidth: 0,
         },
         tabButton: {
             flex: 1,
@@ -458,6 +497,11 @@ const getStyles = (isDark: boolean) => {
             backgroundColor: c.surface2,
             justifyContent: 'center',
             alignItems: 'center',
+            overflow: 'hidden',
+        },
+        avatarImage: {
+            width: 40,
+            height: 40,
         },
         avatarLetter: {
             fontSize: 16,

@@ -18,11 +18,28 @@ export default defineSchema({
         balance: v.optional(v.number()), // Wallet balance in USD
         isTest: v.optional(v.boolean()), // Flag for test users able to be impersonated
         isBanned: v.optional(v.boolean()), // Phase 8b
+        // Moderación social — viven acá y no en tabla aparte porque
+        // `mapToActor` ya lee este documento: chequearlos en cada mutation
+        // social cuesta cero lecturas extra. Ausente ⇒ 'active'.
+        socialStatus: v.optional(v.union(
+            v.literal('active'),
+            v.literal('shadowbanned'),
+            v.literal('suspended'),
+        )),
+        socialSuspendedUntil: v.optional(v.string()), // ISO; vencido ⇒ vuelve a poder postear
+        strikeCount: v.optional(v.number()),
         termsAcceptedVersion: v.optional(v.number()), // Version of T&C accepted
 
         // PHASE 1 ADDITIONS - User Profile Enhancement
         username: v.optional(v.string()),
         usernameLastChangedAt: v.optional(v.number()),
+        // Corpus de búsqueda denormalizado: handle + nombre + nickname, en
+        // minúsculas y sin acentos. Un searchIndex admite UN solo campo, así
+        // que para buscar por @handle Y por nombre hay que denormalizar.
+        // SÓLO lo escribe `writeUserIdentity` (convex/users/identity.ts).
+        searchText: v.optional(v.string()),
+        // Fuera del directorio de personas (baneado / borrado / sistema).
+        directoryHidden: v.optional(v.boolean()),
         /** Legacy invite/attribution code — prefer username + referralAlias for invites. */
         referralCode: v.optional(v.string()),
         /** Optional vanity invite code (distinct from username). */
@@ -123,7 +140,18 @@ export default defineSchema({
         .index("by_username", ["username"])
         .index("by_referral_code", ["referralCode"])
         .index("by_referral_alias", ["referralAlias"])
-        .index("by_referred_by_user", ["referredByUserId"]),
+        .index("by_referred_by_user", ["referredByUserId"])
+        .index("by_role", ["role"])
+        // El cron diario de expiración de suspensiones (Fase 2) recorre SOLO
+        // los suspendidos, no la tabla entera — sin esto sería un full scan.
+        .index("by_social_status", ["socialStatus"])
+        // Directorio de personas. `directoryHidden` NO va como filterField: es
+        // opcional, así que en filas sin backfillear vale `undefined` y un
+        // `.eq(..., false)` las dejaría invisibles. Se filtra en JS.
+        .searchIndex("search_directory", {
+            searchField: "searchText",
+            filterFields: ["role"],
+        }),
 
     // FASE 1 — Auth server-side estricto.
     // Sesiones emitidas por el servidor en login/register. requireActor solo
@@ -550,7 +578,10 @@ export default defineSchema({
         userId: v.string(), // buyer
         sellerId: v.optional(v.string()),
         stripePaymentIntentId: v.optional(v.string()),
-        provider: v.string(), // 'stripe' | 'mercadopago' | 'points'
+        // 'stripe' | 'points'. Sigue siendo `v.string()` y no un union para
+        // no invalidar filas viejas que puedan tener otro valor; el único
+        // proveedor de cobro soportado es Stripe.
+        provider: v.string(),
         providerFee: v.number(),
         amount: v.number(),
         currency: v.literal('USD'),
@@ -836,11 +867,19 @@ export default defineSchema({
         followerCount: v.number(),
         followingCount: v.number(),
         postCount: v.number(),
+        // Post fijado en el perfil (estilo IG/Twitter). Un solo pin por
+        // simplicidad — la mayoría de las apps limitan a 1-3, y con 1 alcanza
+        // para el caso de uso ("mi mejor contenido / mi catálogo").
+        pinnedPostId: v.optional(v.string()),
         createdAt: v.string(),
         updatedAt: v.string(),
     })
         .index('by_user', ['userId'])
         .index('by_username', ['username'])
+        // Ranking real de sugeridos (antes: `.take(100)` + sort en JS).
+        .index('by_follower_count', ['followerCount'])
+        // DEPRECADO: la búsqueda de personas vive en `users.search_directory`.
+        // Se mantiene una release para poder revertir sin migrar de vuelta.
         .searchIndex('search_username', {
             searchField: 'username',
             filterFields: ['isInfluencer'],
@@ -858,6 +897,9 @@ export default defineSchema({
         ),
         content: v.string(),
         images: v.optional(v.array(v.string())),
+        // Texto alternativo por imagen, mismo índice que `images` (Fase 7,
+        // accesibilidad). Opcional: no rompe posts viejos sin alt-text.
+        imageAlts: v.optional(v.array(v.string())),
         videoUrl: v.optional(v.string()),
         poll: v.optional(v.object({
             options: v.array(v.object({
@@ -894,6 +936,34 @@ export default defineSchema({
         // Country/region of the author at publish time. Used by the feed to
         // rank commercial posts locally (social content stays borderless).
         geoCountry: v.optional(v.string()),
+        // ── Moderación (Fase 2) ────────────────────────────────────────────
+        // Ausente = 'visible'. `removed` lo saca del feed de todos salvo el
+        // panel admin; `flagged` lo deja visible pero on the radar.
+        moderationStatus: v.optional(v.union(
+            v.literal('visible'),
+            v.literal('flagged'),
+            v.literal('removed'),
+        )),
+        removedAt: v.optional(v.string()),
+        removedReason: v.optional(v.string()),
+        // ── Hilos y quote-repost (Fase 4, estilo Twitter) ───────────────────
+        parentPostId: v.optional(v.string()),
+        rootPostId: v.optional(v.string()),
+        replyCount: v.optional(v.number()),
+        quotedPostId: v.optional(v.string()),
+        // ── Comunidades comerciales (Fase 6) ────────────────────────────────
+        // Ausente = post del feed global. Presente = sólo visible para
+        // miembros de esa comunidad (se filtra en `getFeed`/`decoratePosts`).
+        communityId: v.optional(v.string()),
+        // ── Señales del ranker v2 (Fase 5, TikTok-style) ────────────────────
+        // Media móvil de cuánto del post se vio, actualizada incrementalmente
+        // en cada `addView` — nunca recalculada con un scan.
+        avgCompletionPct: v.optional(v.number()),
+        watchSampleCount: v.optional(v.number()),
+        // Ventas atribuidas a este post (`socialPostSales` con status 'paid').
+        // Implementa el "Zero-Penalty Algorithm" del doc: los posts que
+        // convierten suben en el ranking.
+        salesCount: v.optional(v.number()),
         deletedAt: v.optional(v.string()),
         createdAt: v.string(),
     })
@@ -901,22 +971,38 @@ export default defineSchema({
         .index('by_created', ['createdAt'])
         .index('by_author_created', ['authorUserId', 'createdAt'])
         .index('by_type_created', ['type', 'createdAt'])
+        // Hilo: replies de un post, en orden.
+        .index('by_parent_created', ['parentPostId', 'createdAt'])
+        // Feed de una comunidad.
+        .index('by_community_created', ['communityId', 'createdAt'])
         .searchIndex('search_content', {
             searchField: 'content',
             filterFields: ['type'],
         }),
 
-    // socialComments — flat comments on posts (no threading in v1).
+    // socialComments — comentarios con UN nivel de respuesta (estilo IG: el
+    // tercer nivel se aplana contra el padre, así el árbol nunca se
+    // descontrola).
     socialComments: defineTable({
         postId: v.string(),
         authorUserId: v.string(),
         content: v.string(),
         likeCount: v.number(),
+        parentCommentId: v.optional(v.string()),
+        replyCount: v.optional(v.number()),
+        moderationStatus: v.optional(v.union(
+            v.literal('visible'),
+            v.literal('flagged'),
+            v.literal('removed'),
+        )),
+        removedAt: v.optional(v.string()),
+        removedReason: v.optional(v.string()),
         deletedAt: v.optional(v.string()),
         createdAt: v.string(),
     })
         .index('by_post', ['postId'])
-        .index('by_post_created', ['postId', 'createdAt']),
+        .index('by_post_created', ['postId', 'createdAt'])
+        .index('by_parent_created', ['parentCommentId', 'createdAt']),
 
     // socialLikes — polymorphic likes (post / comment / story).
     socialLikes: defineTable({
@@ -951,11 +1037,25 @@ export default defineSchema({
         durationSec: v.number(),
         viewCount: v.number(),
         expiresAt: v.string(),
+        // Ausente = 'everyone' (comportamiento actual, sin cambios para
+        // historias viejas). 'close_friends' la esconde de todos salvo los
+        // que el autor agregó a `socialCloseFriends`.
+        audience: v.optional(v.union(v.literal('everyone'), v.literal('close_friends'))),
         deletedAt: v.optional(v.string()),
         createdAt: v.string(),
     })
         .index('by_author', ['authorUserId'])
         .index('by_expires', ['expiresAt']),
+
+    // socialCloseFriends — lista de "mejores amigos" de UN usuario, para
+    // segmentar el `audience` de las historias.
+    socialCloseFriends: defineTable({
+        ownerUserId: v.string(),
+        friendUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_owner', ['ownerUserId'])
+        .index('by_owner_friend', ['ownerUserId', 'friendUserId']),
 
     // socialStoryViews — viewer log. Idempotent per (storyId, userId).
     socialStoryViews: defineTable({
@@ -986,13 +1086,18 @@ export default defineSchema({
         // DEPRECADO: el unread por usuario vive en `socialChatMembers.unreadCount`.
         // Se mantiene para no romper filas viejas hasta terminar el backfill.
         unreadCounts: v.optional(v.any()),
+        // El chat grupal de una Comunidad Comercial (Fase 6). Se reusa TODO
+        // `social/dm.ts` (typing, reacciones, roles, mute, archive) en vez de
+        // construir un sistema de mensajería paralelo para comunidades.
+        communityId: v.optional(v.string()),
         createdAt: v.string(),
         firstRepliedAt: v.optional(v.string()),
         firstReplierId: v.optional(v.string()),
     })
         .index('by_lastMessage', ['lastMessageAt'])
         .index('by_participant', ['participantIds'])
-        .index('by_participants_key', ['participantsKey']),
+        .index('by_participants_key', ['participantsKey'])
+        .index('by_community', ['communityId']),
 
     // socialChatMembers — una fila por (chat, usuario). Es la tabla que hace
     // eficiente TODA la bandeja: sin ella hay que escanear `socialChats`
@@ -1054,6 +1159,9 @@ export default defineSchema({
         clientId: v.optional(v.string()),
         // Unsend: soft-delete para no romper los replies que lo citan.
         deletedAt: v.optional(v.string()),
+        // 'system' = evento del hilo ("X salió del grupo"). Ausente = mensaje
+        // normal de una persona. Los de sistema no suman unread ni push.
+        kind: v.optional(v.union(v.literal('user'), v.literal('system'))),
         // DEPRECADO: reemplazado por `socialChatMembers.lastReadAt`.
         readBy: v.optional(v.array(v.string())),
         createdAt: v.string(),
@@ -1104,15 +1212,53 @@ export default defineSchema({
         createdAt: v.string(),
     })
         .index('by_pair', ['blockerUserId', 'blockedUserId'])
-        .index('by_blocker', ['blockerUserId']),
+        .index('by_blocker', ['blockerUserId'])
+        // Dirección inversa: "quiénes me bloquearon", para no mostrarlos en
+        // el buscador de personas sin hacer una lectura por candidato.
+        .index('by_blocked', ['blockedUserId']),
 
     socialSavedPosts: defineTable({
         userId: v.string(),
         postId: v.string(),
+        // Colección a la que pertenece este guardado (Fase 7). Ausente =
+        // guardado suelto, fuera de cualquier colección — así ninguna fila
+        // vieja se rompe al agregar colecciones después.
+        collectionId: v.optional(v.string()),
         createdAt: v.string(),
     })
         .index('by_user', ['userId'])
-        .index('by_user_post', ['userId', 'postId']),
+        .index('by_user_post', ['userId', 'postId'])
+        .index('by_collection', ['collectionId']),
+
+    // socialSavedCollections — carpetas para organizar guardados, estilo
+    // "colecciones" de IG.
+    socialSavedCollections: defineTable({
+        userId: v.string(),
+        name: v.string(),
+        coverImage: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_user', ['userId']),
+
+    // socialPostDrafts — borradores y posts programados (Fase 7). Vive
+    // APARTE de `socialPosts` a propósito: así `getFeed`/`decoratePosts`/el
+    // ranker/la gamificación no necesitan aprender un estado "todavía no
+    // publicado" — un borrador simplemente no existe en `socialPosts` hasta
+    // que se publica de verdad (`social/drafts.ts` llama al mismo
+    // `createPostImpl` que usa una publicación en vivo).
+    socialPostDrafts: defineTable({
+        authorUserId: v.string(),
+        // Mismo payload que los args de `createPost` — validado con el
+        // mismo esquema (`createPostArgsValidator`) al guardar.
+        payload: v.any(),
+        status: v.union(v.literal('draft'), v.literal('scheduled')),
+        scheduledFor: v.optional(v.string()),
+        createdAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_author', ['authorUserId'])
+        // El cron de publicación recorre SOLO los programados vencidos.
+        .index('by_status_scheduled', ['status', 'scheduledFor']),
 
     socialRetweets: defineTable({
         userId: v.string(),
@@ -1137,9 +1283,18 @@ export default defineSchema({
         postId: v.string(),
         viewerUserId: v.string(),
         createdAt: v.string(),
+        // Señal de watch-time (Fase 5) — la palanca real de retención de
+        // TikTok. `dwellMs` es cuánto se quedó, `completionPct` qué fracción
+        // del clip vio. El cliente los manda al SALIR del ítem, no al entrar.
+        dwellMs: v.optional(v.number()),
+        completionPct: v.optional(v.number()),
+        updatedAt: v.optional(v.string()),
     })
         .index('by_post_viewer', ['postId', 'viewerUserId'])
-        .index('by_viewer', ['viewerUserId']),
+        .index('by_viewer', ['viewerUserId'])
+        // "No repetir lo ya visto" en el ranker sin escanear `socialPostViews`
+        // entero: los últimos N vistos del viewer, ordenados.
+        .index('by_viewer_created', ['viewerUserId', 'createdAt']),
 
     // socialPostSales — attribution ledger for social commerce. One row per
     // checkout started from a post's CommerceTag. Written as `pending` when the
@@ -1205,12 +1360,32 @@ export default defineSchema({
         communityId: v.string(),
         userId: v.string(),
         role: v.union(v.literal('owner'), v.literal('admin'), v.literal('member')),
-        status: v.union(v.literal('active'), v.literal('invited'), v.literal('left')),
+        status: v.union(
+            v.literal('active'),
+            v.literal('invited'),
+            v.literal('pending'),
+            v.literal('left'),
+        ),
         createdAt: v.string(),
     })
         .index('by_community', ['communityId'])
         .index('by_user', ['userId'])
-        .index('by_community_user', ['communityId', 'userId']),
+        .index('by_community_user', ['communityId', 'userId'])
+        // Cola de solicitudes pendientes de un dueño/admin.
+        .index('by_community_status', ['communityId', 'status']),
+
+    // communityListings — la "vidriera del pasillo digital": catálogo
+    // compartido de productos que los miembros deciden mostrar en la
+    // comunidad. No duplica `listings`; sólo referencia cuáles se muestran.
+    communityListings: defineTable({
+        communityId: v.string(),
+        listingId: v.string(),
+        addedByUserId: v.string(),
+        sellerId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_community_created', ['communityId', 'createdAt'])
+        .index('by_community_listing', ['communityId', 'listingId']),
 
     // eventMatches — opt-in "Tinder interno" for event attendees. One row per
     // directed swipe; a mutual pair flips both rows to `matched`.
@@ -1365,4 +1540,221 @@ export default defineSchema({
         status: v.union(v.literal('new'), v.literal('contacted'), v.literal('resolved'), v.literal('cancelled')),
         createdAt: v.string(),
     }).index("by_business", ["businessId"]).index("by_form", ["formId"]),
+
+    // mediaAssets — propiedad de los archivos subidos a Convex Storage.
+    // Sin esto, `attachments[].url` es un string libre: cualquiera podía
+    // adjuntar `convex-storage:<id>` de un archivo ajeno en su propio chat y
+    // el servidor le firmaba la URL. La propiedad se valida al ESCRIBIR, no
+    // al leer, así los adjuntos ya guardados siguen resolviendo.
+    mediaAssets: defineTable({
+        storageId: v.string(),
+        ownerUserId: v.string(),
+        purpose: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_storage', ['storageId'])
+        .index('by_owner', ['ownerUserId']),
+
+    // ── Moderación (Fase 2) ─────────────────────────────────────────────────
+
+    // socialReports — reportes de usuarios sobre contenido o cuentas.
+    socialReports: defineTable({
+        reporterUserId: v.string(),
+        targetType: v.union(
+            v.literal('post'),
+            v.literal('comment'),
+            v.literal('user'),
+            v.literal('message'),
+            v.literal('story'),
+        ),
+        targetId: v.string(),
+        // Autor del contenido reportado, desnormalizado para poder listar
+        // "todos los reportes que le hicieron a este usuario" sin joinear.
+        targetUserId: v.optional(v.string()),
+        reason: v.union(
+            v.literal('spam'),
+            v.literal('harassment'),
+            v.literal('nudity'),
+            v.literal('violence'),
+            v.literal('hate'),
+            v.literal('scam'),
+            v.literal('selfharm'),
+            v.literal('ip'),
+            v.literal('other'),
+        ),
+        details: v.optional(v.string()),
+        status: v.union(
+            v.literal('open'),
+            v.literal('reviewing'),
+            v.literal('actioned'),
+            v.literal('dismissed'),
+        ),
+        resolvedByUserId: v.optional(v.string()),
+        resolutionAction: v.optional(v.string()),
+        resolvedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        // Cola de admin, paginada por antigüedad dentro de cada estado.
+        .index('by_status_created', ['status', 'createdAt'])
+        // "¿Cuántos reportes tiene este post/usuario?"
+        .index('by_target', ['targetType', 'targetId'])
+        // Dedupe: que el mismo usuario no reporte el mismo target 20 veces.
+        .index('by_reporter_target', ['reporterUserId', 'targetType', 'targetId'])
+        .index('by_targetUser_created', ['targetUserId', 'createdAt']),
+
+    // socialMutes — silenciar a alguien sin bloquearlo. Corta en una sola
+    // dirección (a diferencia de `socialBlocks`, que corta en las dos).
+    socialMutes: defineTable({
+        muterUserId: v.string(),
+        mutedUserId: v.string(),
+        scope: v.union(v.literal('posts'), v.literal('stories'), v.literal('all')),
+        createdAt: v.string(),
+    })
+        .index('by_pair', ['muterUserId', 'mutedUserId'])
+        .index('by_muter', ['muterUserId']),
+
+    // socialHiddenPosts — "No me interesa" / ocultar. Doble uso: saca el post
+    // del feed del usuario Y alimenta la señal negativa del ranker (Fase 5).
+    socialHiddenPosts: defineTable({
+        userId: v.string(),
+        postId: v.string(),
+        authorUserId: v.string(),
+        reason: v.union(v.literal('not_interested'), v.literal('hidden'), v.literal('reported')),
+        createdAt: v.string(),
+    })
+        .index('by_user_post', ['userId', 'postId'])
+        .index('by_user_created', ['userId', 'createdAt']),
+
+    // moderationTerms — filtro de palabras. `severity: 'block'` corta la
+    // publicación; `flag` la deja pasar pero genera un reporte automático.
+    moderationTerms: defineTable({
+        term: v.string(), // normalizado: minúsculas, sin acentos
+        severity: v.union(v.literal('block'), v.literal('flag')),
+        scope: v.union(
+            v.literal('post'),
+            v.literal('comment'),
+            v.literal('dm'),
+            v.literal('all'),
+        ),
+        createdByUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_scope', ['scope'])
+        .index('by_term', ['term']),
+
+    // moderationActions — auditoría inmutable de toda acción de moderación.
+    moderationActions: defineTable({
+        actorUserId: v.string(), // 'system' para las automáticas
+        // Mismo universo que `socialReports.targetType`: la acción de
+        // moderación nace la mayoría de las veces resolviendo un reporte, y
+        // un reporte puede apuntar a un mensaje aunque hoy no exista un
+        // "remover mensaje" (`applyModerationAction` no toca contenido para
+        // este caso, sólo deja la auditoría).
+        targetType: v.union(
+            v.literal('post'),
+            v.literal('comment'),
+            v.literal('user'),
+            v.literal('story'),
+            v.literal('message'),
+        ),
+        targetId: v.string(),
+        targetUserId: v.optional(v.string()),
+        action: v.union(
+            v.literal('remove_content'),
+            v.literal('restore_content'),
+            v.literal('warn'),
+            v.literal('shadowban'),
+            v.literal('unshadowban'),
+            v.literal('suspend'),
+            v.literal('unsuspend'),
+            v.literal('dismiss'),
+        ),
+        reason: v.string(),
+        reportId: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_target', ['targetType', 'targetId'])
+        .index('by_targetUser_created', ['targetUserId', 'createdAt'])
+        .index('by_created', ['createdAt']),
+
+    // ── Grafo social (Fase 4) ────────────────────────────────────────────────
+
+    // socialPostTags — hashtags extraídos al publicar. Un post puede tener
+    // varios; una fila por (post, tag) para poder borrar en cascada.
+    socialPostTags: defineTable({
+        postId: v.string(),
+        tag: v.string(), // normalizado, sin '#'
+        authorUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_tag_created', ['tag', 'createdAt'])
+        .index('by_post', ['postId']),
+
+    // socialTagStats — contadores denormalizados para trending sin scan.
+    socialTagStats: defineTable({
+        tag: v.string(),
+        count24h: v.number(),
+        count7d: v.number(),
+        countTotal: v.number(),
+        lastPostAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_tag', ['tag'])
+        .index('by_count24h', ['count24h']),
+
+    // socialMentions — @menciones resueltas contra el handle canónico.
+    socialMentions: defineTable({
+        sourceType: v.union(v.literal('post'), v.literal('comment')),
+        sourceId: v.string(),
+        mentionedUserId: v.string(),
+        actorUserId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_user_created', ['mentionedUserId', 'createdAt'])
+        .index('by_source', ['sourceType', 'sourceId']),
+
+    // socialActivity — bandeja de "Actividad" real. NO se deriva de
+    // `pushDeliveries` (eso es un log de auditoría de envíos, no un feed: si
+    // el push falla o el usuario no tiene token, la interacción desaparece).
+    // `groupKey` agrupa ("le gustó a Fran y 12 personas más") para que un
+    // post viral no genere 500 filas.
+    socialActivity: defineTable({
+        userId: v.string(), // destinatario
+        type: v.union(
+            v.literal('like'),
+            v.literal('comment'),
+            v.literal('reply'),
+            v.literal('follow'),
+            v.literal('mention'),
+            v.literal('repost'),
+            v.literal('quote'),
+            v.literal('sale'),
+            v.literal('community_invite'),
+            v.literal('moderation'),
+            v.literal('match'), // Fase 8: match mutuo en el matching de eventos
+        ),
+        actorUserId: v.optional(v.string()),
+        targetType: v.optional(v.string()),
+        targetId: v.optional(v.string()),
+        preview: v.optional(v.string()),
+        groupKey: v.optional(v.string()),
+        groupCount: v.optional(v.number()),
+        readAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_user_created', ['userId', 'createdAt'])
+        .index('by_user_group', ['userId', 'groupKey']),
+
+    // migrationState — checkpoint de migraciones por lotes, para que sean
+    // resumibles tras un corte y auditables ("¿corrió?, ¿hasta dónde?").
+    migrationState: defineTable({
+        name: v.string(),
+        // Marca de agua sobre `_creationTime`. `null` = todavía no arrancó.
+        cursor: v.union(v.number(), v.null()),
+        processed: v.number(),
+        isDone: v.boolean(),
+        startedAt: v.string(),
+        updatedAt: v.string(),
+        stats: v.optional(v.any()),
+    }).index('by_name', ['name']),
 });

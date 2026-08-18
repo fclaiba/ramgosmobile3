@@ -1,8 +1,8 @@
 # Plan Estratégico Integral Maestro — Ramgos Mobile
 
-> **Versión:** 1.6 · **Última actualización plan:** 2026-08-15 · **Grafo:** 4374 nodos · 8298 edges · 438 comunidades  
-> **Fase activa:** RS-1 (red social + social commerce) — código listo, **bloqueada por deploy a Convex** (§15.1)  
-> **Estado general:** Fases 1–2, 6–8 y SEC-1 cerradas · Fases 3–5 código listo (QA manual §12.4 + tarea final Fase 5 pendientes)  
+> **Versión:** 1.7 · **Última actualización plan:** 2026-08-18 · **Grafo:** 4641 nodos · 9192 edges · 422 comunidades  
+> **Fase activa:** RS-2 a RS-8 (módulo social completo: fundaciones, feed, moderación, gamificación, hilos/hashtags/menciones/actividad, ranker v2, comunidades) — código listo, **bloqueado por deploy a Convex + migración `pointsUnification` + QA runtime** (§15.2)  
+> **Estado general:** Fases 1–2, 6–8 y SEC-1 cerradas · Fases 3–5 código listo (QA manual §12.4 + tarea final Fase 5 pendientes) · RS-1 a RS-8 código listo sin verificar en runtime · RS-9 (extras SHOULD + Eventos/Matching) sin iniciar por decisión del usuario  
 > **Objetivo:** Llevar Ramgos de MVP con deuda de seguridad → **production-ready** → pentest → launch NY (pagos live).
 
 ---
@@ -1246,6 +1246,15 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **S5** | Sprint 5 (Correcciones UI/Lógica) | ✅ Cerrada | 100% | — | 2026-08-12 |
 | **SEC-1** | Hardening: funciones dev/seed públicas → internal + IDOR dashboard | ✅ Cerrada | 100% | — | 2026-08-15 |
 | **RS-1** | Red social + social commerce (integración completa) | 🟡 Código listo | 90% | Deploy Convex (`commerce.js` no está en el deployment) + QA runtime §12.4 | 2026-08-15 |
+| **RS-2** | Fase 0 — Fundaciones de seguridad social (ban efectivo, puntos server-authoritative, unificación de saldo, rate limit) | ✅ Cerrada | 100% | — | 2026-08-18 |
+| **RS-3** | Fase 1 — Consolidación feed + performance (`useSocialFeed`, FlashList, media resolver memoizado) | 🟡 Código listo | 90% | Falta deploy + QA runtime; sin medición real de FPS/lecturas (no se corrió la app) | 2026-08-18 |
+| **RS-4** | Fase 2 — Moderación base (reportes, mute, ocultar, filtro de palabras, shadowban/suspensión, cola admin) | 🟡 Código listo | 90% | Falta deploy + QA runtime | 2026-08-18 |
+| **RS-5** | Fase 3 — Gamificación social (`sp_post`/`sp_cmt`/`sp_story`/`sp_community_join`/hito de 10 likes, clawback al borrar) | 🟡 Código listo | 90% | Falta deploy + QA runtime | 2026-08-18 |
+| **RS-6** | Fase 4 (MUST) — Hilos, quote-repost, hashtags+trending, menciones, bandeja de Actividad, watch-time signal | 🟡 Código listo | 80% | Falta deploy + QA runtime; SHOULD/COULD del tier (colecciones, close friends, drafts, sonidos, analytics extendido) **no implementados** | 2026-08-18 |
+| **RS-7** | Fase 5 — Ranker v2 (watch-time, conversión comercial, "no me interesa", anti-repetición, cap de diversidad por autor) | 🟡 Código listo | 90% | Falta deploy + QA runtime | 2026-08-18 |
+| **RS-8** | Fase 6 — Comunidades Comerciales (crear/unirse/aprobar, feed y catálogo de comunidad, chat vía `social/dm.ts`) | 🟡 Código listo | 80% | Falta deploy + QA runtime; **`communityAgreements`/convenios de comisión cruzada NO implementados** (fuera de alcance de este corte) | 2026-08-18 |
+| **RS-9** | Fase 7 — Extras SHOULD (pinned, poll UI, alt-text, colecciones, close friends, borradores/programación) | 🟡 Código listo | 85% | Falta deploy + QA runtime; sonidos reutilizables y link preview cards **no implementados** (ver §15.3) | 2026-08-18 |
+| **RS-10** | Fase 8 — Eventos + Matching ("Tinder interno") | 🟡 Código listo | 85% | Falta deploy + QA runtime; requiere datos reales de `eventReservations` para probar el gateo por entrada confirmada | 2026-08-18 |
 
 **Leyenda:** ✅ Cerrada · 🟡 En curso · 🔴 Bloqueada · ⚪ Pendiente
 
@@ -1306,6 +1315,113 @@ frontend**.
       [Tarea final Fase 5](#tarea-final-fase-5--push-convex-y-secrets-test)
       (`sk_test_`, `whsec_`, webhook → `/stripe-webhook`). Sin eso
       `claimFromPost` solo corre en modo mock.
+
+### 15.2 Fases RS-2 a RS-9 — Cierre del módulo social (Fases 0–6, 2026-08-18)
+
+Continuación de RS-1. Cubre desde la fundación de seguridad hasta comunidades
+comerciales, en el orden `F0 → F1 → F2 → F3 → F4(MUST) → F5 → F6`. **F7
+(extras SHOULD) y F8 (Eventos+Matching) quedan fuera de este corte**, F8 por
+decisión explícita del usuario (matching se hace al final).
+
+**Backend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RS.21 | Motor único de puntos `convex/economy/pointsEngine.ts`: idempotencia + tope diario por `eventKey` (`kind:día:entidad`), sin índices nuevos (range query sobre `by_user_event`) | Archivo nuevo |
+| RS.22 | `economy.addPoints` (pública, monto del cliente) **eliminada** → `economy.claimReward({kind, refId})` contra `REWARD_CATALOG` server-side | `convex/economy.ts` |
+| RS.23 | `points.syncPointsState` / `points.addLedgerEntry` / `points.saveGameScore` **eliminadas** (sin callers, mismo agujero) | `convex/points.ts` |
+| RS.24 | Ban efectivo en los dos caminos de auth: `getActorOrNull` chequea `isBanned` tanto en sesión servidor como en `ctx.auth` (OAuth); `revokeAllSessions` centralizado en `writeUserIdentity` | `convex/authHelpers.ts`, `convex/users/identity.ts` |
+| RS.25 | `assertSocialActor` real: bloquea `suspended`, deja pasar `shadowbanned` (invisible para terceros vía `decoratePosts`, visible para sí mismo) | `convex/social/_helpers.ts` |
+| RS.26 | Rate limiting social por acción (`createPost`, `addComment`, `toggleLike`, `follow`, `createStory`, `report`, `createCommunity`, `joinCommunity`) | `convex/social/_helpers.ts` |
+| RS.27 | Migración `pointsUnification`: canónico = `rewardsState.points`; `pointsState` retirado a lápida (`dryRun` reporta divergencias antes de aplicar) | `convex/migrations/pointsUnification.ts` |
+| RS.28 | Moderación completa: `socialReports`, `socialMutes`, `socialHiddenPosts`, `moderationTerms`, `moderationActions` + filtro de texto (`moderationText.ts`) + auto-escalada a 3+ reportes | `convex/social/moderation.ts`, schema |
+| RS.29 | Gamificación social: `sp_post`/`sp_cmt`/`sp_story`/`sp_community_join`/hito de 10 likes, con clawback si se borra dentro de 24h o si un admin remueve el contenido | `convex/social/gamification.ts` |
+| RS.30 | Hilos (`parentPostId`/`rootPostId`/`replyCount`) + quote-repost (`quotedPostId`) + respuestas de comentario a 1 nivel (aplanado del 2°) | `convex/schema.ts`, `convex/social.ts` |
+| RS.31 | Hashtags (`socialPostTags`/`socialTagStats`, trending por cron horario) + menciones (`socialMentions`, resueltas contra `users.by_username`) | `convex/social/hashtags.ts`, `convex/social/mentions.ts` |
+| RS.32 | Bandeja de Actividad real (`socialActivity`, agrupada por `groupKey` para no explotar en posts virales) — reemplaza el hueco de `pushDeliveries` (que no sirve como feed) | `convex/social/activity.ts` |
+| RS.33 | Ranker v2: watch-time (`avgCompletionPct` incremental en `addView`), conversión comercial (`salesCount`), penalización "no me interesa" y "ya visto", cap de diversidad (máx. 2 posts/autor por página) | `convex/social.ts` (`scorePost`, `getFeed`) |
+| RS.34 | `decoratePosts`: resolver de media memoizado por request (`createMediaResolver`) + filtro de moderación (mute/oculto/shadowban) antes de decorar | `convex/mediaUrl.ts`, `convex/social.ts` |
+| RS.35 | Comunidades Comerciales: crear/actualizar/unirse (pública directa, privada `pending`)/aprobar/rechazar/salir/roles, feed de comunidad (nunca en el feed global), catálogo compartido (`communityListings`), chat vía `socialChats.communityId` reusando `social/dm.ts` | `convex/social/communities.ts` |
+| RS.36 | 2 crons nuevos: `expire-social-suspensions` (diario), `recompute-tag-stats` (horario) | `convex/crons.ts` |
+
+**Frontend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RS.37 | `useSocialFeed` — paginación por cursor unificada (antes duplicada en `UnifiedFeed`/`SocialScreen`/`LoopFeed`) | `src/hooks/useSocialFeed.ts` |
+| RS.38 | `UnifiedFeed` migrado de `FlatList` a `FlashList` (instalada, sin usar); watch-time enviado al SALIR de cada post | `src/components/social/UnifiedFeed.tsx` |
+| RS.39 | `PostActionsSheet` + `ReportModal`: reportar / silenciar / "no me interesa", enganchados al botón "⋯" de `PostCard` | `src/components/social/PostActionsSheet.tsx`, `ReportModal.tsx`, `PostCard.tsx` |
+| RS.40 | `ActivityScreen` (tabs Todo/Menciones/Ventas, marca leído al entrar) | `src/screens/social/ActivityScreen.tsx` |
+| RS.41 | `CommunitiesScreen` / `CreateCommunityScreen` / `CommunityDetailScreen` (feed/catálogo/miembros/solicitudes, entrada al chat) | `src/screens/social/*.tsx` |
+| RS.42 | `AdminModerationScreen` (cola de reportes + resolución + filtro de palabras), enlazada desde `AdminDashboardScreen` (tab Seguridad) | `src/screens/admin/AdminModerationScreen.tsx` |
+| RS.43 | Entradas de Comunidades/Actividad (con badge de no-leídos) en el header de `SocialScreen` | `src/screens/SocialScreen.tsx` |
+| RS.44 | 6 pantallas nuevas registradas en `App.tsx` | `App.tsx` |
+
+**Verificación corrida ✅**
+
+- `npx.cmd convex codegen` → **exit 0**, sin errores de schema/funciones (typecheck de Convex incluido)
+- `npx.cmd tsc --noEmit` → **0 errores nuevos** (baseline preexistente `HomeScreen.tsx` `Haptics` sin importar **resuelto el 2026-08-18** en reanálisis del plan, ver E-073; `testID` en tipos web sigue sin tocar en este corte)
+- `npx.cmd jest` → **10 suites, 45 tests, todos verdes** (incluye `constitution.test.tsx`)
+- 2 bugs propios detectados y corregidos en revisión antes de cerrar (ver E-071, E-072 en §16): paginación truncada por filtrar después de `.take()`, y `eventKey` de clawback con la fecha equivocada.
+
+**Pendiente ❌ (bloquea el cierre de RS-2…RS-8)**
+
+- [ ] **Deploy a Convex** (`npx convex dev`/`deploy`) — sigue abierto desde RS-1 (E-061).
+- [ ] **Correr la migración** `migrations/pointsUnification:unifyPoints` (`dryRun` primero, revisar `divergences`, después `chain: true`) y confirmar `unifyPointsStatus.pendingRows === 0`.
+- [ ] **QA runtime** de los 7 flujos: ban por OAuth, reclamo de recompensa, reporte→resolución admin, hilo+hashtag+mención, watch-time moviendo el ranking, comunidad pública/privada, chat de comunidad.
+- [ ] **No se corrió la app** — el rendimiento real de FlashList y el comportamiento del ranker en producción quedan sin medir hasta la QA runtime.
+- [ ] **`communityAgreements`** (convenios de comisión cruzada entre miembros de una comunidad) — diseñado, no implementado; requiere su propia revisión de seguridad por tocar el split de pagos.
+
+### 15.3 Fases RS-9 y RS-10 — Extras SHOULD + Eventos y Matching (2026-08-18)
+
+Cierra el resto del roadmap social: lo que había quedado explícitamente diferido en §15.2 (extras SHOULD y Fase 8) se completó en la misma sesión a pedido del usuario ("no frenes, desarrollar por completo").
+
+**Backend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RS.45 | `createPost` refactorizado: `createPostArgsValidator` (validador compartido) + `createPostImpl` (función plana) — necesario para que borradores/programados publiquen por el MISMO camino que una publicación en vivo, con sus mismos hashtags/menciones/gamificación/filtro de texto | `convex/social.ts` |
+| RS.46 | Borradores y programación: `socialPostDrafts` (tabla aparte de `socialPosts` a propósito — ver comentario de cabecera del archivo), `saveDraft`/`updateDraft`/`listMyDrafts`/`deleteDraft`/`publishDraftNow`, cron cada 5 min `internalPublishDueScheduled` | `convex/social/drafts.ts` |
+| RS.47 | Posts fijados: `socialUsers.pinnedPostId` + `pinPost`/`unpinPost`, `getPostsByUser` los ordena primero | `convex/social.ts` |
+| RS.48 | Alt-text: `socialPosts.imageAlts` + arg en `createPost` — sin UI de carga todavía (ver pendientes) | `convex/schema.ts`, `convex/social.ts` |
+| RS.49 | Colecciones de guardados: `socialSavedCollections` + `socialSavedPosts.collectionId`, `createSavedCollection`/`listMySavedCollections`/`deleteSavedCollection`/`movePostToCollection`; `getSavedPosts` extendido con filtro por colección **usando el índice correcto según el caso** para no repetir el bug de paginación de RS.71 | `convex/social.ts` |
+| RS.50 | Close friends: `socialCloseFriends` + `socialStories.audience` ('everyone'/'close_friends'), `addCloseFriend`/`removeCloseFriend`/`listCloseFriends`; `getStoriesForFollowing` esconde las historias `close_friends` de quien no está en la lista | `convex/schema.ts`, `convex/social.ts` |
+| RS.51 | Respuesta a historias con adjunto real: `'story'` sumado al union de attachments de DM + `shareStoryInChat`/`buildStoryAttachment` (el flujo existente en `StoryViewer.tsx` seguía funcionando con un prefijo de texto; se dejó sin migrar — ver pendientes) | `convex/social/dm.ts` |
+| RS.52 | Encuestas: NINGUNA UI existía para `post.type === 'poll'` pese a que `votePoll` estaba completo y probado — sólo se guardaba el voto | `src/components/social/PostCard.tsx` (`PollCard`) |
+| RS.53 | `commerce.getPostAnalytics` extendido con `avgCompletionPct`/`watchSampleCount`/`replyCount` (lectura directa, sin recalcular nada) | `convex/commerce.ts` |
+| RS.54 | Matching de eventos completo: `convex/social/eventMatching.ts` — opt-in gateado por `eventReservations` confirmada/checked_in, candidatos con perfil espejo (nunca el perfil social real), swipe direccional sobre el `status` YA existente de `eventMatches` (sin agregar campo `direction`: `pending`/`matched`/`rejected` alcanza), match mutuo crea chat vía `dm.getOrCreateDirectChat`, ventana de 24h antes/después del evento, cron diario de limpieza | `convex/social/eventMatching.ts` |
+| RS.55 | `socialActivity.type` y `ActivityType` suman el literal `'match'` | `convex/schema.ts`, `convex/social/activity.ts` |
+| RS.56 | 2 crons nuevos: `publish-scheduled-posts` (cada 5 min), `cleanup-event-matching` (diario) | `convex/crons.ts` |
+
+**Frontend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RS.57 | Botón "Borrador" junto a "Publicar" en el creador de posts | `src/components/social/CreatePost.tsx` |
+| RS.58 | `MyDraftsScreen` (listar, publicar ahora, eliminar) | `src/screens/social/MyDraftsScreen.tsx` |
+| RS.59 | `SavedPostsScreen` — **no existía NINGUNA pantalla** para ver posts guardados pese a que `toggleSavePost`/`getSavedPosts` ya se usaban en `Post.tsx`; suma tabs de colección | `src/screens/social/SavedPostsScreen.tsx` |
+| RS.60 | `SocialPrivacyScreen` (silenciados / ocultos / mejores amigos en un solo lugar), enlazada desde `PrivacySecurityScreen` | `src/screens/social/SocialPrivacyScreen.tsx` |
+| RS.61 | Toggle "Mejores amigos" al publicar una historia | `src/components/social/CreateStory.tsx` |
+| RS.62 | "Fijar en mi perfil" en el menú "⋯" del post (propio) | `src/components/social/PostActionsSheet.tsx` |
+| RS.63 | `EventMatchingScreen` — deck de swipe con `react-native-gesture-handler`/`react-native-reanimated` (**primer uso de `Gesture.Pan`/`GestureDetector` en el repo** — no había precedente, quedó validado sólo por `tsc`, no ejecutado) | `src/screens/social/EventMatchingScreen.tsx` |
+| RS.64 | Entrada "Conocé gente en este evento" en `ItemDetailScreen` para listings tipo `event` | `src/screens/ItemDetailScreen.tsx` |
+| RS.65 | 5 pantallas nuevas registradas en `App.tsx`, 2 entradas nuevas en `SidebarMenu` | `App.tsx`, `src/components/SidebarMenu.tsx` |
+
+**Verificación corrida ✅**
+
+- `npx.cmd convex codegen` → **exit 0** tras cada tanda de cambios (se corrió varias veces durante la sesión, no sólo al final)
+- `npx.cmd tsc --noEmit` → **0 errores nuevos** en cada corte; 2 errores propios detectados y corregidos en el camino (un `ctx.db.get` mal tipado en el cron de borradores por no normalizar el id, un `q` sin anotar en el `createPostImpl` extraído)
+- `npx.cmd jest` → **10 suites, 45 tests, todos verdes**, sin cambios en la suite existente
+
+**Pendiente ❌**
+
+- [ ] **Deploy a Convex** y **correr la migración de puntos** — sigue siendo el mismo bloqueante de RS-1/RS-2.
+- [ ] **QA runtime completo** de: borrador → publicar ahora, post programado → el cron lo publica solo, colección de guardados, mejores amigos ocultando una historia, swipe → match → chat creado, opt-in de matching rechazado sin entrada confirmada.
+- [ ] **No se probó el deck de swipe en un dispositivo real** — es la primera vez que el repo usa la API de gestos de Reanimated 3/4; `tsc` no detecta problemas de runtime de gestos.
+- [ ] **Sonidos reutilizables** (`socialSounds`) y **link preview cards** (`socialLinkPreviews`) — explícitamente NO implementados: pedían, respectivamente, una UI de edición de audio y una `action` con fetch externo + parseo de HTML, y el costo relativo a su valor no cerraba dentro de esta sesión.
+- [ ] **UI de carga de alt-text** en el creador de posts — el campo y el render ya existen, falta el input para que el usuario lo escriba.
+- [ ] **Migración de `StoryViewer.tsx`** al nuevo `shareStoryInChat` con adjunto real — el flujo viejo (prefijo de texto) sigue andando y no se tocó para no arriesgar una regresión.
+- [ ] **`communityAgreements`** — sigue sin implementar (ver §15.2).
 
 ---
 
@@ -1379,6 +1495,25 @@ frontend**.
 | E-059 | 2026-08-15 | RS-1 | En el feed vertical de videos el corazón no persistía y "Seguir" era decorativo | `LoopItem.handleLike` sólo movía `useState` (el `toggleLike` estaba comentado) y el botón de seguir no tenía `onPress` | `toggleLike` optimista con rollback + `SocialFollowButton` + `addView` para impresiones | ✅ Resuelto | LoopItem.tsx |
 | E-060 | 2026-08-15 | Entorno | `py -m graphify update .` falla con "No module named graphify" | El `py` por defecto pasó a ser Python 3.13; graphify está instalado en 3.11 | Usar **`py -3.11 -m graphify update .`** (o el ejecutable `graphify` directo). Actualizar §3.1/Apéndice A si se reinstala | 🟡 Workaround | Entorno Windows |
 | E-061 | 2026-08-15 | RS-1 | El deployment Convex no tiene el código nuevo | `npx convex codegen` **genera tipos locales, no deploya**; se asumió que sí | `npx convex function-spec` confirma que falta `commerce.js` y sobran los módulos borrados en SEC-1. Pendiente `npx convex dev`/`deploy` | 🟡 Abierto | §15.1 RS-1 |
+| E-062 | 2026-08-17 | Mensajería | No se podía buscar usuarios por su @handle real; quien nunca posteó ni siguió a nadie era invisible y aparecía como "Usuario" sin @ en los chats | Dos namespaces de handle sin sincronizar: `users.username` (el del registro) y `socialUsers.username`, que `ensureSocialUser` derivaba del **prefijo del email**. Además `socialUsers` sólo se creaba de forma perezosa al postear/seguir | Directorio movido a `users` con `searchText` denormalizado + `search_directory`; búsqueda = unión de escaneo por prefijo (`by_username`) y texto completo; `writeUserIdentity` como única autoridad del handle; migración por lotes idempotente (16 usuarios, 0 renames) | ✅ Resuelto | convex/userDirectory.ts, convex/users/identity.ts, convex/userCard.ts, convex/migrations/userDirectory.ts, convex/social.ts |
+| E-063 | 2026-08-17 | Seguridad | 5 fallas en el backend de DM: `getTyping` sin chequeo de membresía; `replyToId` sin acotar al chat (fuga del texto de mensajes ajenos); `attachments[].url` aceptaba cualquier `convex-storage:<id>`; adjuntos `listing` forjables (precio falso + desvío de la comisión de referido); miembros en `state:'left'` seguían leyendo el hilo | Queries gateadas por `chat.participantIds.includes()` en vez de por la fila de membresía; `metadata: v.any()` sin validar; sin registro de propiedad de los uploads | Chequeo de membresía real (`canRead`), `replyToId` validado en escritura y lectura, tabla `mediaAssets` + `files.registerUpload`, `sendMessage` rechaza adjuntos `listing`/`post` (única vía: `shareListingInChat`/`sharePostInChat`, que hidratan en servidor) | ✅ Resuelto | convex/social/dm.ts, convex/files.ts, convex/schema.ts |
+| E-064 | 2026-08-17 | Mensajería | El historial del chat estaba tapado en los 30 mensajes más nuevos | `ChatScreen` seteaba `cursor` pero la query **nunca lo mandaba**, y `setOlderPages` no se llamaba nunca: `onEndReached` disparaba y no cargaba nada | Cursor en la query + acumulación real de páginas; ídem paginación en la bandeja | ✅ Resuelto | src/screens/social/ChatScreen.tsx, src/screens/social/InboxScreen.tsx |
+| E-065 | 2026-08-17 | Mensajería | 8 mutations del backend sin un solo call site: un grupo creado no se podía renombrar, editar ni abandonar, y no había forma de silenciar, archivar ni bloquear | Backend construido sin la UI correspondiente | `GroupInfoScreen` nueva, hoja de opciones en el chat, long-press en la bandeja, carpeta Archivados, mensajes de sistema en grupos y sucesión de owner al irse el creador | ✅ Resuelto | src/screens/social/GroupInfoScreen.tsx, src/screens/social/ChatScreen.tsx, src/screens/social/InboxScreen.tsx, convex/social/dm.ts |
+| E-066 | 2026-08-17 | Mensajería | Desde Inicio o Marketplace no había señal de mensajes nuevos ni forma de llegar a la bandeja | La bandeja sólo era alcanzable desde el ícono de avión del header de Social | Entrada "Mensajes" con badge de no leídos en la barra inferior y en la sidebar de escritorio; `HomeScreen.handleTabChange` la intercepta y navega a `Inbox` | ✅ Resuelto | src/components/MobileNav.tsx, src/components/DesktopSidebar.tsx, src/screens/HomeScreen.tsx |
+| E-067 | 2026-08-17 | Escala | `backfillMembers` nunca escribía `participantsKey`, así que cada chat 1:1 viejo generaba un hilo DUPLICADO al reabrirlo, y los chats legacy no aparecían en la bandeja; además leía la tabla entera con `.collect()` | La migración parcheaba `kind` pero no la clave que usa `getOrCreateDirectChat` para deduplicar | Reescrito por lotes con cursor, setea `participantsKey`, idempotente; topes en `cleanupEphemeral` y `getUnreadTotal`; `listBusinessStores` y `listUsers` por índice en vez de `.collect()` | ✅ Resuelto | convex/social/dm.ts, convex/users.ts |
+| E-068 | 2026-08-18 | RS-2 | Bypass de ban: un usuario baneado autenticado por OAuth (`ctx.auth.getUserIdentity()`) conservaba acceso a toda la app | `getActorFromAuth`/`getActorOrNull` nunca miraban `isBanned`; `banUser` sólo revocaba `sessions`, que un login OAuth no usa | `isBanned` propagado a `AuthActor`; `getActorOrNull`/`requireActor` lo chequean con default seguro (`allowBanned` explícito para los pocos endpoints que lo necesitan); `revokeAllSessions` centralizado en `writeUserIdentity` | ✅ Resuelto | convex/authHelpers.ts, convex/users/identity.ts |
+| E-069 | 2026-08-18 | RS-2 | Puntos falsificables: `economy.addPoints` era mutation pública con `amount` en los args | Sólo validaba `assertSelfOrAdmin` + `amount > 0`, sin catálogo server-side | Eliminada; reemplazada por `economy.claimReward({kind, refId})` contra `REWARD_CATALOG` server-side, vía el motor único `economy/pointsEngine.ts` (idempotencia + tope diario por `eventKey`) | ✅ Resuelto | convex/economy.ts, convex/economy/pointsEngine.ts |
+| E-070 | 2026-08-18 | RS-2 | Dos saldos divergentes: `rewardsState.points` vs `pointsState.balance`, con escritores y lectores cruzados sin reconciliar | `rewards.ts` escribía un campo que la UI principal no leía | Canónico = `rewardsState.points` (el único no-escribible por el cliente); `pointsState` retirado a lápida vía `migrations/pointsUnification.ts` (dry-run reporta divergencias antes de aplicar) | ✅ Resuelto | convex/migrations/pointsUnification.ts, convex/rewards.ts, convex/points.ts |
+| E-071 | 2026-08-18 | RS-3 | Bug propio detectado en review: filtrar `isGlobalFeedEligible` DESPUÉS de `.take(cap)` podía truncar la paginación antes de tiempo (`nextCursor: null` aunque quedaran posts) | El corte "se acabó" se decidía sobre `candidates.length` (post-filtro) en vez del lote crudo | `getFeed` ahora decide `nextCursor` sobre el tamaño y el `createdAt` más viejo del lote CRUDO, no del filtrado | ✅ Resuelto | convex/social.ts (`getFeed`) |
+| E-072 | 2026-08-18 | RS-3 | Bug propio detectado en review: el clawback de puntos (`revokePoints`) reconstruía el `eventKey` con la fecha de HOY en vez de la fecha de creación del contenido, apuntando a un evento que nunca existió | `buildEventKey(kind, entityId)` sin `day` explícito default a `todayKey()` | `internalRevokeContentReward`/`deletePost`/`deleteComment` pasan `day = createdAt.slice(0,10)` explícito | ✅ Resuelto | convex/social/gamification.ts, convex/social.ts |
+| E-073 | 2026-08-18 | Reanálisis §17.2 | `npm.cmd run typecheck` fallaba: `Cannot find name 'Haptics'` en `HomeScreen.tsx` — baseline preexistente que §15.2 había dejado explícitamente sin tocar | Import de `expo-haptics` faltante (patrón usado en otras 3+ pantallas: `import * as Haptics from 'expo-haptics'`) | Se agregó el import; `npm.cmd run typecheck` vuelve a exit 0 | ✅ Resuelto | src/screens/HomeScreen.tsx |
+| E-074 | 2026-08-18 | RS-9 | `internalPublishDueScheduled` (cron de posts programados) fallaba el typecheck: `ctx.db.get(draft.authorUserId as any)` infería la tabla `listings` en vez de `users` | `as any` sobre un string plano no le da a TS ninguna pista de a qué tabla apunta; toma la primera que calza por estructura | `ctx.db.normalizeId('users', draft.authorUserId)` antes del `.get()`, como en el resto del código | ✅ Resuelto | convex/social/drafts.ts |
+| E-075 | 2026-08-18 | RS-9 | Al extraer `createPostImpl` de la mutation `createPost` a función plana, un `(q) => q.eq(...)` quedó con `q` implícito `any` y typecheck falló | Ese query builder no había necesitado anotación explícita mientras vivía dentro del `mutation({...})` tipado; al mover el código a una función con `ctx: any`, ese caso puntual perdió la inferencia (el resto del archivo ya usaba `(q: any)` en todos lados) | Anotado `(q: any)`, igual que el resto de `social.ts` | ✅ Resuelto | convex/social.ts |
+| E-076 | 2026-08-18 | RS-4…RS-10 | **App tumbada por el `CrashHandler`** al entrar al tab Social con un token vencido/cuenta baneada | **Las 25 queries nuevas del módulo social violaban la convención documentada en `social/dm.ts:15`** ("las queries degradan, las mutations tiran"). `useQuery` re-lanza el error durante el render, así que una query que tira sube por el árbol hasta el error boundary. El disparador más probable: `getUnreadActivityCount`, agregada al header de `SocialScreen` (se ejecuta en cada montaje del tab). La Fase 0 amplió el problema al hacer que `requireActor` también tire para cuentas baneadas | Helper `socialViewer()` (+ `adminViewer()` para las de admin) que degrada a `null`; las 25 queries devuelven su valor vacío (`[]` / `{items:[],nextCursor:null}` / `null`). Se sumó `getSavedPosts` (preexistente) porque `SavedPostsScreen` la puso en un camino nuevo. `getCommunityFeed` dejó de lanzar `FORBIDDEN` a no-miembros de comunidades privadas: devuelve lista vacía | ✅ Resuelto | convex/social/_helpers.ts + activity/communities/drafts/eventMatching/hashtags/moderation, convex/social.ts, convex/economy.ts |
+| E-077 | 2026-08-18 | Producto | El doc de arquitectura prometía un "One-Click In-App Checkout" (`<OneClickCheckoutSheet />` + `claimFromPost`) que **no existe en el repo**: el sheet fue borrado y la mutation nunca se escribió. Peor, §15.1 (RS.1/RS.7/RS.8) de este mismo plan afirmaba que ambos funcionaban | Entradas de bitácora nunca reconciliadas con el código tras una depuración posterior | **Decisión del usuario: el pago pasa OBLIGATORIAMENTE por el carrito** (atribución del creador → checkout normal con stock/envío/escrow). Se reescribieron §1, §3, §4, §7.1, §9 Módulo 2, §10 y los criterios de Sprint 2/3 del doc de arquitectura para reflejarlo. `claimFromPost` deja de figurar como brecha: es una decisión, no un pendiente | ✅ Resuelto | docs/ARQUITECTURA_SOCIAL_COMMERCE.md |
+| E-078 | 2026-08-18 | Producto/UI | Un post con varias imágenes mostraba **sólo la primera, y recortada** (`images[0]` + `resizeMode="cover"`), en las DOS superficies que renderizan posts. No figuraba en ninguna lista de brechas | El doc §9 nombraba un `ImageSlider` que nunca se implementó; el recorte venía de `cover` | `PostImageCarousel` compartido: todas las imágenes deslizables + indicador de puntos, y la foto **completa en el encuadre** (`contain`) con copia desenfocada de fondo para rellenar. Cableado en `PostCard` (feed vertical) y en `Post` (tab Social) — este último es el que ve el usuario y se había pasado por alto en la primera pasada | ✅ Resuelto | src/components/social/PostImageCarousel.tsx, PostCard.tsx, Post.tsx, types.ts |
+| E-079 | 2026-08-18 | Producto | `MercadoPago` figuraba como pasarela en §8 del doc y como proveedor en el código, pero era un **mock puro del cliente** (`simulateNetworkLatency`, ids y URL de recibo inventados) | Se documentó como integración real algo que nunca lo fue | Decisión del usuario: **Stripe es la única pasarela**. Eliminado `mercadoPagoProvider` y el literal del union `PaymentProviderKey`; actualizado §8 y el comentario de `payments.provider` en el schema. Verificado que nada importaba ese módulo | ✅ Resuelto | src/services/fintech/paymentProviders.ts, convex/schema.ts, docs/ARQUITECTURA_SOCIAL_COMMERCE.md |
+| E-080 | 2026-08-18 | Producto | El feed salía **rankeado por algoritmo** (`forYou` por defecto), con lo que un post recién subido podía no aparecer arriba — o el cap de diversidad por autor lo sacaba de la página — y se leía como que la app lo perdió | §5 del doc definía el motor de recomendación como comportamiento por defecto | Decisión del usuario: **las publicaciones salen por orden de subida**. `getFeed` pasa a `mode: 'recent'` por defecto (cronológico, lo más nuevo primero). El ranker `scorePost` **no se borró**: sigue disponible pidiendo `mode: 'forYou'` explícitamente. §5 del doc actualizado con la aclaración | ✅ Resuelto | convex/social.ts (`getFeed`), docs/ARQUITECTURA_SOCIAL_COMMERCE.md |
 **Plantilla para nuevas entradas:**
 
 ```markdown

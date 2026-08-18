@@ -18,14 +18,25 @@ export type AuthActor = {
   role: string;
   email?: string;
   isTest?: boolean;
+  /** Ban total de la cuenta. Lo chequea `requireActor`. */
+  isBanned?: boolean;
+  /** Suspensión parcial: sólo corta la red social, no la app entera. */
+  socialStatus?: "active" | "shadowbanned" | "suspended";
+  socialSuspendedUntil?: string;
 };
 
+// Estos tres campos viven en `users` y no en una tabla aparte a propósito:
+// `mapToActor` ya lee ese documento, así que chequear el estado de moderación
+// en cada mutation cuesta CERO lecturas extra.
 const mapToActor = (user: any): AuthActor => ({
   id: user._id,
   idString: String(user._id),
   role: user.role,
   email: user.email,
   isTest: user.isTest,
+  isBanned: user.isBanned === true,
+  socialStatus: user.socialStatus,
+  socialSuspendedUntil: user.socialSuspendedUntil,
 });
 
 export const getActorFromAuth = async (ctx: any): Promise<AuthActor | null> => {
@@ -109,32 +120,85 @@ const getActorFromSessionToken = async (ctx: any, token: string): Promise<AuthAc
   return user ? mapToActor(user) : null;
 };
 
+export type ActorOpts = {
+  /**
+   * Deja pasar cuentas baneadas. Sólo para los endpoints que la cuenta
+   * baneada TIENE que poder usar: ver su propio estado, cerrar sesión,
+   * y contactar soporte. Todo lo demás usa el default seguro.
+   */
+  allowBanned?: boolean;
+};
+
+/**
+ * Resolución de identidad.
+ *
+ * El ban se chequea acá y no en cada camino por separado. `banUser` revoca
+ * las filas de `sessions`, pero eso **no alcanza**: `getActorFromAuth`
+ * resuelve por `ctx.auth.getUserIdentity()` contra `users.by_tokenIdentifier`
+ * y nunca toca la tabla `sessions`, así que un baneado que entró por OAuth
+ * no tenía nada que revocarle. Ese era el bypass.
+ */
 export const getActorOrNull = async (
   ctx: any,
   sessionToken?: string,
+  opts?: ActorOpts,
 ): Promise<AuthActor | null> => {
-  const fromAuth = await getActorFromAuth(ctx);
-  if (fromAuth) return fromAuth;
+  let actor = await getActorFromAuth(ctx);
 
-  if (sessionToken) {
-    const fromSession = await getActorFromSessionToken(ctx, sessionToken);
-    if (fromSession) return fromSession;
+  if (!actor && sessionToken) {
+    actor = await getActorFromSessionToken(ctx, sessionToken);
   }
 
-  return null;
+  if (!actor) return null;
+  if (actor.isBanned && opts?.allowBanned !== true) return null;
+
+  return actor;
 };
 
 export const requireActor = async (
   ctx: any,
   sessionToken?: string,
+  opts?: ActorOpts,
 ): Promise<AuthActor> => {
-  const actor = await getActorOrNull(ctx, sessionToken);
-  if (actor) return actor;
+  // Se pide el actor crudo para poder distinguir "no hay sesión" de
+  // "hay sesión pero la cuenta está baneada" — errores distintos en el
+  // cliente: el primero desloguea, el segundo manda a BannedUserScreen.
+  const actor = await getActorOrNull(ctx, sessionToken, { allowBanned: true });
 
-  throw authError(
-    "UNAUTHENTICATED",
-    "Sesión no válida o expirada. Por favor, inicie sesión nuevamente.",
-  );
+  if (!actor) {
+    throw authError(
+      "UNAUTHENTICATED",
+      "Sesión no válida o expirada. Por favor, inicie sesión nuevamente.",
+    );
+  }
+
+  if (actor.isBanned && opts?.allowBanned !== true) {
+    throw authError("FORBIDDEN", "ACCOUNT_BANNED");
+  }
+
+  return actor;
+};
+
+/**
+ * Corta TODAS las sesiones vivas de un usuario. Estaba embebido dentro de
+ * `users.banUser`, así que cualquier otro camino que seteara `isBanned`
+ * (por ejemplo el admin vía `updateUser` → `writeUserIdentity`) dejaba las
+ * sesiones abiertas. Ahora hay un solo lugar.
+ */
+export const revokeAllSessions = async (ctx: any, userId: Id<"users"> | string) => {
+  const sessions = await ctx.db
+    .query("sessions")
+    .withIndex("by_user", (q: any) => q.eq("userId", String(userId)))
+    .collect();
+  const now = new Date().toISOString();
+  let revoked = 0;
+  for (const session of sessions) {
+    if (!session.revokedAt) {
+      await ctx.db.patch(session._id, { revokedAt: now });
+      revoked += 1;
+    }
+  }
+  return revoked;
 };
 
 export const assertAdminOrDeveloper = (actor: AuthActor) => {
@@ -151,6 +215,17 @@ export const assertSelfOrAdmin = (actor: AuthActor, targetUserId: string) => {
   }
 };
 
+/**
+ * Antes esto tiraba un `Error` con un string suelto, indistinguible en el
+ * cliente de cualquier otra falla. Ahora es un ConvexError con código, para
+ * que la UI pueda mostrar "esperá un momento" en vez de "algo salió mal".
+ */
+export const rateLimitError = () =>
+  new ConvexError({
+    code: "RATE_LIMITED",
+    message: "Demasiados intentos. Inténtalo de nuevo más tarde.",
+  });
+
 export const checkRateLimit = async (ctx: any, key: string, maxAttempts: number, windowMs: number) => {
     const now = Date.now();
     const existing = await ctx.db
@@ -160,7 +235,7 @@ export const checkRateLimit = async (ctx: any, key: string, maxAttempts: number,
 
     if (existing) {
         if (existing.blockedUntil && now < existing.blockedUntil) {
-            throw new Error(`Demasiados intentos. Inténtalo de nuevo más tarde.`);
+            throw rateLimitError();
         }
         
         if (now - existing.windowStart > windowMs) {
@@ -179,7 +254,7 @@ export const checkRateLimit = async (ctx: any, key: string, maxAttempts: number,
                     attempts,
                     blockedUntil,
                 });
-                throw new Error(`Demasiados intentos. Inténtalo de nuevo más tarde.`);
+                throw rateLimitError();
             } else {
                 await ctx.db.patch(existing._id, {
                     attempts,

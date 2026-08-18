@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, Platform } from 'react-native';
-import { Heart, MessageCircle, Share2, Music2, ShoppingBag } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, Animated, Platform } from 'react-native';
+import { Heart, MessageCircle, Share2, Music2, ShoppingBag, MoreVertical } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { useMutation } from 'convex/react';
@@ -15,8 +15,6 @@ import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
 import { SocialFollowButton } from './SocialFollowButton';
 
-const { height, width } = Dimensions.get('window');
-
 interface LoopItemProps {
     post: any;
     isActive: boolean;
@@ -25,6 +23,7 @@ interface LoopItemProps {
 }
 
 export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopItemProps) => {
+    const { height, width } = useWindowDimensions();
     const videoRef = useRef<Video>(null);
     const isDark = useTheme().colorScheme === 'dark';
     const { sessionToken } = useAuth();
@@ -100,23 +99,26 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
     const hasVideo = !!post.videoUrl;
 
     return (
-        <View style={styles.container}>
-            {hasVideo ? (
-                <Video
-                    ref={videoRef}
-                    style={styles.video}
-                    source={{ uri: post.videoUrl }}
-                    resizeMode={ResizeMode.COVER}
-                    isLooping
-                    shouldPlay={isActive}
-                    onPlaybackStatusUpdate={status => setStatus(() => status)}
-                />
-            ) : (
-                <ImageWithFallback src={post.images?.[0]} style={styles.video} />
-            )}
+        <View style={[styles.container, { width, height }]}>
+            <View style={styles.videoCentering}>
+                {hasVideo ? (
+                    <Video
+                        ref={videoRef}
+                        style={styles.video}
+                        source={{ uri: post.videoUrl }}
+                        resizeMode={ResizeMode.CONTAIN}
+                        isLooping
+                        shouldPlay={isActive}
+                        onPlaybackStatusUpdate={status => setStatus(() => status)}
+                    />
+                ) : (
+                    <ImageWithFallback src={post.images?.[0]} style={styles.video} resizeMode="contain" />
+                )}
+            </View>
 
             <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.6)']}
+                colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)']}
+                locations={[0, 0.5, 1]}
                 style={styles.gradient}
             />
 
@@ -133,41 +135,53 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                                 <AvatarImage src={post.author?.avatar} />
                                 <AvatarFallback>{post.author?.displayName?.[0]}</AvatarFallback>
                             </Avatar>
-                            <Text style={styles.username}>@{post.author?.username}</Text>
+                            <Text style={styles.username}>{post.author?.username}</Text>
                         </TouchableOpacity>
-                        {post.author?.userId ? (
-                            <SocialFollowButton targetUserId={String(post.author.userId)} compact />
-                        ) : null}
+                        
+                        {post.author?.userId && (
+                            <View style={styles.followContainer}>
+                                <Text style={styles.bulletPoint}>•</Text>
+                                <TouchableOpacity>
+                                    <Text style={styles.followTextPlain}>Seguir</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                     
-                    <Text style={styles.content} numberOfLines={3}>{post.content}</Text>
+                    <Text style={styles.content} numberOfLines={2}>{post.content}</Text>
                     
                     <View style={styles.musicRow}>
-                        <Music2 size={14} color="#fff" />
+                        <Music2 size={12} color="#fff" style={styles.iconShadow} />
                         <Text style={styles.musicText}>Sonido original - {post.author?.username}</Text>
                     </View>
                 </View>
 
                 <View style={styles.actionSection}>
                     <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
-                        <View style={[styles.iconWrapper, liked && { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
-                            <Heart size={28} color={liked ? "#EF4444" : "#fff"} fill={liked ? "#EF4444" : "none"} />
+                        <View style={styles.iconWrapper}>
+                            <Heart size={28} color={liked ? "#EF4444" : "#fff"} fill={liked ? "#EF4444" : "none"} style={styles.iconShadow} />
                         </View>
                         <Text style={styles.actionText}>{likes}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionBtn} onPress={() => setShowComments(true)} accessibilityRole="button" accessibilityLabel="Comentar">
                         <View style={styles.iconWrapper}>
-                            <MessageCircle size={28} color="#fff" />
+                            <MessageCircle size={28} color="#fff" style={styles.iconShadow} />
                         </View>
                         <Text style={styles.actionText}>{post.commentCount || 0}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.actionBtn} onPress={() => setShowShare(true)}>
                         <View style={styles.iconWrapper}>
-                            <Share2 size={28} color="#fff" />
+                            <Share2 size={28} color="#fff" style={styles.iconShadow} />
                         </View>
-                        <Text style={styles.actionText}>Compartir</Text>
+                        <Text style={styles.actionText}>{post.shareCount || 0}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.actionBtn}>
+                        <View style={styles.iconWrapper}>
+                            <MoreVertical size={28} color="#fff" style={styles.iconShadow} />
+                        </View>
                     </TouchableOpacity>
 
                     {post.commercialProduct?.listingId && (
@@ -181,14 +195,9 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                                     : `Comprar ${post.commercialProduct.name}`
                             }
                         >
-                            <View style={[styles.iconWrapper, { backgroundColor: '#2563EB' }]}>
-                                <ShoppingBag size={26} color="#fff" />
+                            <View style={[styles.iconWrapper, { backgroundColor: '#2563EB', borderRadius: 8, width: 40, height: 40 }]}>
+                                <ShoppingBag size={20} color="#fff" />
                             </View>
-                            <Text style={styles.actionText}>
-                                {post.commercialProduct.discountPercent
-                                    ? `${Math.round(post.commercialProduct.discountPercent)}% OFF`
-                                    : 'Comprar'}
-                            </Text>
                         </TouchableOpacity>
                     )}
 
@@ -213,17 +222,27 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
     );
 };
 
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 90 : 70;
+
 const styles = StyleSheet.create({
     container: {
-        width,
-        height, 
         backgroundColor: '#000',
+    },
+    videoCentering: {
+        ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
+        alignItems: 'center',
     },
     video: {
-        ...StyleSheet.absoluteFill,
         width: '100%',
         height: '100%',
+        ...Platform.select({
+            web: {
+                // @ts-ignore — web-only CSS prop
+                objectPosition: 'center center',
+            },
+            default: {},
+        }),
     },
     gradient: {
         position: 'absolute',
@@ -234,21 +253,23 @@ const styles = StyleSheet.create({
     },
     bottomSection: {
         position: 'absolute',
-        bottom: Platform.OS === 'ios' ? 100 : 80, // Leave space for bottom nav
-        left: 16,
-        right: 8,
+        bottom: Platform.OS === 'ios' ? 90 : 70, // Espacio para bottom nav tab de IG
+        left: 0,
+        right: 0,
+        paddingHorizontal: 12,
         flexDirection: 'row',
         alignItems: 'flex-end',
+        justifyContent: 'space-between',
     },
     infoSection: {
         flex: 1,
-        paddingRight: 16,
+        paddingRight: 32,
+        paddingBottom: 8,
     },
     userRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
-        gap: 8,
+        marginBottom: 8,
     },
     userTap: {
         flexDirection: 'row',
@@ -256,83 +277,107 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: '#fff',
     },
     username: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 16,
-        ...Platform.select({
-            web: { textShadow: '0px 0px 4px rgba(0,0,0,0.5)' },
-            default: { textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }
-        })
+        fontSize: 15,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
     },
-    followBtn: {
-        borderWidth: 1,
-        borderColor: '#fff',
-        borderRadius: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
+    followContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
-    followText: {
+    bulletPoint: {
         color: '#fff',
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 14,
+        marginHorizontal: 6,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
+    },
+    followTextPlain: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 14,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
     },
     content: {
         color: '#fff',
-        fontSize: 15,
-        marginBottom: 12,
-        lineHeight: 20,
+        fontSize: 14,
+        marginBottom: 10,
+        lineHeight: 18,
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
     },
     musicRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
     },
     musicText: {
         color: '#fff',
-        fontSize: 13,
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    iconShadow: {
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
     },
     actionSection: {
         alignItems: 'center',
-        gap: 16,
+        gap: 20,
     },
     actionBtn: {
         alignItems: 'center',
-        gap: 4,
+        gap: 2,
     },
     iconWrapper: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: 'rgba(0,0,0,0.4)',
+        width: 40,
+        height: 40,
         justifyContent: 'center',
         alignItems: 'center',
+        // Transparent in Reels, no dark circle
+        backgroundColor: 'transparent',
     },
     actionText: {
         color: '#fff',
-        fontSize: 13,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: 'bold',
+        textShadowColor: 'rgba(0,0,0,0.5)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
     },
     recordWrapper: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#262626',
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#111',
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: 16,
-        borderWidth: 8,
-        borderColor: '#111',
+        marginTop: 8,
+        borderWidth: 6,
+        borderColor: '#262626',
     },
     recordImage: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
     },
 });

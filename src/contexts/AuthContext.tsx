@@ -56,6 +56,50 @@ async function maybePersistSession(
     await storage.setItem(CURRENT_SESSION_KEY, sessionPayload);
 }
 
+/**
+ * Códigos de error del backend que la UI tiene que tratar distinto.
+ *
+ * `requireActor` distingue "no hay sesión" (UNAUTHENTICATED → desloguear) de
+ * "la cuenta está baneada" (FORBIDDEN + ACCOUNT_BANNED → mandar a
+ * BannedUserScreen sin borrar credenciales) y de "suspensión sólo social"
+ * (SOCIAL_SUSPENDED → avisar, pero el resto de la app sigue funcionando).
+ * Aplanar los tres en "algo salió mal" era lo que había antes.
+ */
+export type BackendErrorKind =
+    | 'unauthenticated'
+    | 'banned'
+    | 'social_suspended'
+    | 'rate_limited'
+    | 'forbidden'
+    | 'unknown';
+
+export const classifyBackendError = (error: any): BackendErrorKind => {
+    const data = error?.data;
+    const code = typeof data === 'object' ? data?.code : undefined;
+    const message = typeof data === 'object' ? String(data?.message ?? '') : String(error?.message ?? '');
+
+    if (code === 'RATE_LIMITED') return 'rate_limited';
+    if (code === 'UNAUTHENTICATED') return 'unauthenticated';
+    if (message.includes('ACCOUNT_BANNED')) return 'banned';
+    if (message.includes('SOCIAL_SUSPENDED')) return 'social_suspended';
+    if (code === 'FORBIDDEN') return 'forbidden';
+    return 'unknown';
+};
+
+/** Texto listo para mostrar según el código. */
+export const backendErrorMessage = (error: any, fallback: string): string => {
+    switch (classifyBackendError(error)) {
+        case 'banned':
+            return 'Tu cuenta fue suspendida. Contactá a soporte.';
+        case 'social_suspended':
+            return 'Tu acceso a la red social está suspendido temporalmente.';
+        case 'rate_limited':
+            return 'Demasiadas acciones seguidas. Esperá un momento.';
+        default:
+            return extractErrorMessage(error, fallback);
+    }
+};
+
 const extractErrorMessage = (error: any, fallback: string) => {
     if (!error) return fallback;
     // ConvexError con payload objeto ({ code, message }): el mensaje vive en .data,

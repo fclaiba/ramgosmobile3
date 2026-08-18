@@ -8,6 +8,24 @@ export type GenerateUploadUrlFn = (args: {
     actorId?: string;
 }) => Promise<string>;
 
+/**
+ * Reclama la propiedad del archivo recién subido (`api.files.registerUpload`).
+ *
+ * Convex sólo devuelve el `storageId` DESPUÉS del POST, así que la propiedad
+ * no se puede registrar al pedir la URL. Sin este registro, cualquiera podía
+ * adjuntar el `convex-storage:<id>` de un archivo ajeno en su propio chat y el
+ * servidor le firmaba una URL de descarga.
+ *
+ * Es opcional para no romper los caminos de subida que no lo necesitan (KYC,
+ * avatares), pero todo lo que termine en un adjunto de mensaje tiene que
+ * pasarlo: `sendMessage` rechaza los storage ids sin dueño.
+ */
+export type RegisterUploadFn = (args: {
+    sessionToken?: string;
+    storageId: string;
+    purpose?: string;
+}) => Promise<unknown>;
+
 const KYC_IMAGE_FIELDS = [
     'documentFront',
     'documentBack',
@@ -80,6 +98,8 @@ function toStorageRef(storageId: string): string {
 export async function uploadLocalImageToConvex(opts: {
     uri: string;
     generateUploadUrl: GenerateUploadUrlFn;
+    registerUpload?: RegisterUploadFn;
+    purpose?: string;
     sessionToken?: string;
     actorId?: string;
 }): Promise<string> {
@@ -110,6 +130,14 @@ export async function uploadLocalImageToConvex(opts: {
     const json = (await result.json()) as { storageId?: string };
     if (!json.storageId) {
         throw new Error('El servidor no devolvió un ID de imagen.');
+    }
+
+    if (opts.registerUpload) {
+        await opts.registerUpload({
+            sessionToken: opts.sessionToken,
+            storageId: json.storageId,
+            purpose: opts.purpose,
+        });
     }
 
     return toStorageRef(json.storageId);

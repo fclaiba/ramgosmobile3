@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, Modal } from 'react-native';
-import { X, Send } from 'lucide-react-native';
+import { X, Send, Star } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
@@ -16,6 +16,7 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
     const [localUri, setLocalUri] = useState('');
     const [uploadedStorageId, setUploadedStorageId] = useState('');
     const [uploading, setUploading] = useState(false);
+    const [closeFriendsOnly, setCloseFriendsOnly] = useState(false);
     const insets = useSafeAreaInsets();
 
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -89,6 +90,7 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
                 sessionToken: sessionToken || '',
                 url: `convex-storage:${uploadedStorageId}`,
                 type: 'image',
+                audience: closeFriendsOnly ? 'close_friends' : 'everyone',
             });
             show('Historia publicada 🎉', 'success');
         } catch (error: any) {
@@ -115,6 +117,15 @@ export const CreateStory = ({ onClose }: { onClose: () => void }) => {
                 </View>
 
                 <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
+                    <TouchableOpacity
+                        style={[styles.closeFriendsToggle, closeFriendsOnly && styles.closeFriendsToggleActive]}
+                        onPress={() => setCloseFriendsOnly((v) => !v)}
+                    >
+                        <Star size={14} color={closeFriendsOnly ? '#000' : '#fff'} fill={closeFriendsOnly ? '#000' : 'transparent'} />
+                        <Text style={[styles.closeFriendsToggleText, closeFriendsOnly && { color: '#000' }]}>
+                            Mejores amigos
+                        </Text>
+                    </TouchableOpacity>
                     <View style={{ flex: 1 }} />
                     <TouchableOpacity
                         style={[styles.shareBtn, (uploading || !uploadedStorageId) && { opacity: 0.5 }]}
@@ -167,4 +178,15 @@ const styles = StyleSheet.create({
     },
     shareBtnText: { color: '#000', fontSize: 16, fontWeight: '700' },
     shareIconWrap: { backgroundColor: '#f0f0f0', padding: 6, borderRadius: 16 },
+    closeFriendsToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+    },
+    closeFriendsToggleActive: { backgroundColor: '#FBBF24' },
+    closeFriendsToggleText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 });

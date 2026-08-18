@@ -15,6 +15,14 @@ export const LIMITS = {
     phone: 20,
     taxId: 20,
     legalRep: 80,
+    /**
+     * Límite de un post social (decisión de producto, 2026-08-18). Espejo de
+     * `SOCIAL_POST_MAX_LENGTH` en `convex/social.ts` — ese es el que de
+     * verdad valida (los borradores reusan el mismo validador), este sólo
+     * corta el `TextInput` del composer para que el usuario no escriba de
+     * más y se encuentre con el error recién al publicar.
+     */
+    socialPost: 320,
 } as const;
 
 export const MIN = {

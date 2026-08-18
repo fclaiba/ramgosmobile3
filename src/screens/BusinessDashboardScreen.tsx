@@ -33,14 +33,19 @@ import {
   ExternalLink,
   ListTodo,
   CalendarDays,
+  MessageCircle,
+  ShoppingCart,
 } from "lucide-react-native";
 import { MobileHeader } from "../components/MobileHeader";
+import { GlobalHeaderActions } from "../components/GlobalHeaderActions";
 import { Badge } from "../components/ui/badge";
 import { Coupon } from "../contexts/BusinessContext";
 import { useBusiness } from "../hooks/useBusiness";
 import { useFintech } from "../contexts/FintechContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
+import { useCart } from "../contexts/CartContext";
+import { useUnreadMessages } from "../hooks/useMessaging";
 import { useActionGate } from "../utils/useActionGate";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -98,6 +103,8 @@ function BusinessDashboardScreen({
   const isDark = colorScheme === "dark";
   const styles = getStyles(isDark);
   const { show } = useToast();
+  const { unreadCount } = useUnreadMessages();
+  const { openCart, items: cartItems } = useCart();
   const { isDesktop } = useResponsive();
 
   // Stripe Connect V2 — onboarding to receive marketplace payouts.
@@ -535,7 +542,7 @@ function BusinessDashboardScreen({
         onBack={!isTabMode ? () => navigation.goBack() : undefined}
         onMenuPress={isTabMode ? onMenuPress : undefined}
         actions={
-          <View style={styles.headerActions}>
+          <GlobalHeaderActions>
             <TouchableOpacity
               onPress={() => navigation.navigate("BusinessScanner")}
               style={styles.scanBtn}
@@ -567,7 +574,7 @@ function BusinessDashboardScreen({
               <PlusIcon size={20} color="#fff" />
               <Text style={styles.createBtnText}>Nuevo</Text>
             </TouchableOpacity>
-          </View>
+          </GlobalHeaderActions>
         }
       />
 
@@ -902,7 +909,6 @@ const getStyles = (isDark: boolean) => {
     content: { padding: 16, paddingBottom: 100 },
     page: { width: "100%", alignSelf: "center", maxWidth: 980 },
 
-    headerActions: { flexDirection: "row", gap: 8 },
     scanBtn: {
       width: 36,
       height: 36,
@@ -921,6 +927,9 @@ const getStyles = (isDark: boolean) => {
       gap: 4,
     },
     createBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+    cartBadge: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: Radius.sm, backgroundColor: '#EF4444' },
+    msgBadge: { position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#EF4444' },
+    msgBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
 
     /* KYC Banner */
     kycBanner: {

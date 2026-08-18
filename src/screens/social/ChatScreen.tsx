@@ -13,13 +13,21 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowLeft, Check, CheckCheck, Image as ImageIcon, Send, X } from 'lucide-react-native';
+import {
+    ArrowLeft,
+    Image as ImageIcon,
+    MoreVertical,
+    Send,
+    X,
+} from 'lucide-react-native';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useCart } from '../../contexts/CartContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
 import { MessageBubble } from '../../components/social/MessageBubble';
 import { useClockTick, useTypingIndicator, useTypingSignal } from '../../hooks/useMessaging';
 import { uploadLocalImageToConvex } from '../../utils/uploadToConvexStorage';
@@ -46,6 +54,7 @@ export default function ChatScreen({ route, navigation }: any) {
     const [uploading, setUploading] = useState(false);
     const [replyTo, setReplyTo] = useState<any | null>(null);
     const [buyingId, setBuyingId] = useState<string | null>(null);
+    const [optionsOpen, setOptionsOpen] = useState(false);
     const [cursor, setCursor] = useState<string | null>(null);
     const [olderPages, setOlderPages] = useState<any[]>([]);
     const listRef = useRef<FlatList>(null);
@@ -58,7 +67,14 @@ export default function ChatScreen({ route, navigation }: any) {
     const acceptMut = useMutation(api.social.dm.acceptRequest);
     const declineMut = useMutation(api.social.dm.declineRequest);
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-    const addDmProductToCart = useMutation(api.commerce.addDmProductToCart);
+    // Reclama la propiedad del archivo: `sendMessage` rechaza los adjuntos
+    // cuyo storage id no pertenece a quien envía.
+    const registerUpload = useMutation(api.files.registerUpload);
+    const { addDmProduct, openCart } = useCart();
+    const muteChat = useMutation(api.social.dm.muteChat);
+    const archiveChat = useMutation(api.social.dm.archiveChat);
+    const leaveChat = useMutation(api.social.dm.leaveChat);
+    const blockUser = useMutation(api.social.dm.blockUser);
 
     // Chat abierto desde un perfil / una orden: resolvemos el hilo 1:1.
     useEffect(() => {
@@ -81,35 +97,70 @@ export default function ChatScreen({ route, navigation }: any) {
     const page = useQuery(
         api.social.dm.getChatMessages,
         chatId && sessionToken
-            ? { chatId: chatId as any, sessionToken, limit: PAGE_SIZE }
+            ? {
+                  chatId: chatId as any,
+                  sessionToken,
+                  limit: PAGE_SIZE,
+                  ...(cursor ? { cursor } : {}),
+              }
             : 'skip',
     );
+    // Precio, stock y estado VIVOS de los productos recomendados en el hilo.
+    // La tarjeta guarda un snapshot del momento en que se compartió, así que
+    // sin esto se sigue mostrando un precio viejo con un botón "Comprar".
+    const listingIds = useMemo(() => {
+        const ids = new Set<string>();
+        for (const m of page?.items ?? []) {
+            for (const a of m.attachments ?? []) {
+                if (a.type === 'listing' && a.metadata?.listingId) ids.add(String(a.metadata.listingId));
+            }
+        }
+        return Array.from(ids);
+    }, [page?.items]);
+    const listingStates = useQuery(
+        api.commerce.getDmListingCardState,
+        sessionToken && listingIds.length ? { sessionToken, listingIds } : 'skip',
+    );
+    const listingStateById = useMemo(() => {
+        const map = new Map<string, any>();
+        for (const st of listingStates ?? []) map.set(String((st as any).listingId), st);
+        return map;
+    }, [listingStates]);
 
     const typingLabel = useTypingIndicator(chatId);
     const { signalTyping, stopTyping } = useTypingSignal(chatId);
     // Reevalúa "Activo hace X" sin esperar a que cambien los datos.
     useClockTick(30_000, !!header);
 
+    // La lista es `inverted`, así que se guarda ya invertida y no se clona ni
+    // se revierte en cada render.
     const messages = useMemo(
-        () => [...olderPages.flat(), ...(page?.items ?? [])],
+        () => [...(page?.items ?? []), ...olderPages.flat()],
         [olderPages, page?.items],
     );
 
-    // Marcar leído al abrir y cada vez que entra un mensaje nuevo.
+    // Marcar leído al abrir y cada vez que entra un mensaje nuevo. Depende
+    // del createdAt del último, no de la cantidad: si entra uno y se borra
+    // otro, el largo no cambia y el efecto no se volvía a disparar.
+    const newestAt = page?.items?.[page.items.length - 1]?.createdAt;
     useEffect(() => {
-        if (!chatId || !sessionToken || !page?.items?.length) return;
+        if (!chatId || !sessionToken || !newestAt) return;
         markReadMut({ chatId: chatId as any, sessionToken }).catch(() => {});
-    }, [chatId, sessionToken, page?.items?.length]);
+    }, [chatId, sessionToken, newestAt]);
 
+    // `setOlderPages` no se llamaba nunca y el cursor no viajaba en la query:
+    // `onEndReached` disparaba y no cargaba nada, dejando el historial tapado
+    // en los mensajes más nuevos.
     const loadOlder = useCallback(() => {
-        const next = cursor ?? page?.nextCursor;
-        if (!next || !chatId) return;
+        const next = page?.nextCursor;
+        if (!next || !chatId || !page?.items?.length) return;
+        setOlderPages((prev) => [page.items, ...prev]);
         setCursor(next);
-    }, [cursor, page?.nextCursor, chatId]);
+    }, [page?.nextCursor, page?.items, chatId]);
 
     const handleSend = async () => {
         const body = text.trim();
-        if ((!body && !uploading) || !chatId || !sessionToken || sending) return;
+        if (!body || !chatId || !sessionToken || sending) return;
 
         setText('');
         setSending(true);
@@ -151,6 +202,8 @@ export default function ChatScreen({ route, navigation }: any) {
             const stored = await uploadLocalImageToConvex({
                 uri: result.assets[0].uri,
                 generateUploadUrl,
+                registerUpload,
+                purpose: 'dm',
                 sessionToken,
             });
             await sendMessageMut({
@@ -172,11 +225,11 @@ export default function ChatScreen({ route, navigation }: any) {
         if (!sessionToken || buyingId) return;
         setBuyingId(messageId);
         try {
-            await addDmProductToCart({ sessionToken, messageId: messageId as any, quantity: 1 });
+            await addDmProduct(messageId);
             show('Agregado al carrito', 'success');
-            navigation.navigate('Cart');
+            openCart();
         } catch (e) {
-            show(toUserMessage(e), 'error');
+            // error is handled by CartContext
         } finally {
             setBuyingId(null);
         }
@@ -194,6 +247,27 @@ export default function ChatScreen({ route, navigation }: any) {
         deleteMut({ messageId: messageId as any, sessionToken }).catch((e) =>
             show(toUserMessage(e), 'error'),
         );
+    };
+
+    /** Tocar el header: al perfil en 1:1, a los integrantes en grupo. */
+    const openChatSubject = () => {
+        if (!header) return;
+        if (header.kind === 'group') {
+            navigation.navigate('GroupInfo', { chatId });
+        } else if (header.participants?.[0]?.userId) {
+            navigation.navigate('CommercialProfile', { userId: header.participants[0].userId });
+        }
+    };
+
+    const runOption = async (fn: () => Promise<any>, okMessage: string, close?: boolean) => {
+        setOptionsOpen(false);
+        try {
+            await fn();
+            show(okMessage, 'success');
+            if (close) navigation.goBack();
+        } catch (e) {
+            show(toUserMessage(e), 'error');
+        }
     };
 
     const isRequest = header?.state === 'request';
@@ -216,36 +290,57 @@ export default function ChatScreen({ route, navigation }: any) {
                 onReact={handleReact}
                 onReply={setReplyTo}
                 onDelete={handleDelete}
+                onOpenPost={(postId: string) => navigation.navigate('PostDetail', { postId })}
                 onOpenListing={(listingId: string) =>
                     navigation.navigate('ItemDetail', { itemId: listingId })
                 }
                 onBuyListing={handleBuyListing}
                 buying={buyingId === item._id}
+                listingStateById={listingStateById}
+                isGroup={header?.kind === 'group'}
+                onOpenProfile={(userId: string) =>
+                    navigation.navigate('CommercialProfile', { userId })
+                }
             />
         ),
-        [isDark, page?.readerLastReadAt, navigation, buyingId],
+        [isDark, page?.readerLastReadAt, navigation, buyingId, listingStateById, header?.kind],
     );
 
     return (
         <View style={styles.screen}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
                     <ArrowLeft size={24} color={colors(isDark).text} />
                 </TouchableOpacity>
-                <Avatar size="md">
-                    <AvatarImage src={header?.avatar ?? undefined} />
-                    <AvatarFallback>{(header?.title ?? '?').charAt(0)}</AvatarFallback>
-                </Avatar>
-                <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle} numberOfLines={1}>
-                        {header?.title ?? 'Conversación'}
-                    </Text>
-                    {!!(typingLabel || presenceLabel) && (
-                        <Text style={styles.headerSubtitle} numberOfLines={1}>
-                            {typingLabel ?? presenceLabel}
+                <TouchableOpacity
+                    style={styles.headerTap}
+                    activeOpacity={0.7}
+                    onPress={openChatSubject}
+                    accessibilityLabel="Ver perfil o integrantes"
+                >
+                    <Avatar size="md">
+                        <AvatarImage src={header?.avatar ?? undefined} />
+                        <AvatarFallback>{(header?.title ?? '?').charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <View style={styles.headerInfo}>
+                        <Text style={styles.headerTitle} numberOfLines={1}>
+                            {header?.title ?? 'Conversación'}
                         </Text>
-                    )}
-                </View>
+                        {!!(typingLabel || presenceLabel) && (
+                            <Text style={styles.headerSubtitle} numberOfLines={1}>
+                                {typingLabel ?? presenceLabel}
+                            </Text>
+                        )}
+                    </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.iconBtn}
+                    onPress={() => setOptionsOpen(true)}
+                    disabled={!header}
+                    accessibilityLabel="Opciones de la conversación"
+                >
+                    <MoreVertical size={20} color={colors(isDark).text} />
+                </TouchableOpacity>
             </View>
 
             <FlatList
@@ -253,7 +348,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 // `inverted` deja el mensaje más nuevo abajo sin scroll manual
                 // y hace que `onEndReached` pida el historial viejo.
                 inverted
-                data={[...messages].reverse()}
+                data={messages}
                 renderItem={renderItem}
                 keyExtractor={(item: any) => item._id}
                 contentContainerStyle={styles.listContent}
@@ -358,6 +453,118 @@ export default function ChatScreen({ route, navigation }: any) {
                     </View>
                 </KeyboardAvoidingView>
             )}
+
+            <Sheet open={optionsOpen} onOpenChange={setOptionsOpen}>
+                <SheetContent side="bottom">
+                    <SheetHeader>
+                        <SheetTitle>{header?.title ?? 'Conversación'}</SheetTitle>
+                    </SheetHeader>
+
+                    {header?.kind === 'group' ? (
+                        <TouchableOpacity
+                            style={styles.option}
+                            onPress={() => {
+                                setOptionsOpen(false);
+                                navigation.navigate('GroupInfo', { chatId });
+                            }}
+                        >
+                            <Text style={styles.optionText}>Info del grupo</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={styles.option}
+                            onPress={() => {
+                                setOptionsOpen(false);
+                                openChatSubject();
+                            }}
+                        >
+                            <Text style={styles.optionText}>Ver perfil</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                        style={styles.option}
+                        onPress={() =>
+                            runOption(
+                                () =>
+                                    muteChat({
+                                        sessionToken: sessionToken!,
+                                        chatId: chatId as any,
+                                        muted: !header?.muted,
+                                    }),
+                                header?.muted ? 'Notificaciones activadas' : 'Conversación silenciada',
+                            )
+                        }
+                    >
+                        <Text style={styles.optionText}>
+                            {header?.muted ? 'Activar notificaciones' : 'Silenciar'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.option}
+                        onPress={() =>
+                            runOption(
+                                () =>
+                                    archiveChat({
+                                        sessionToken: sessionToken!,
+                                        chatId: chatId as any,
+                                        archived: header?.state !== 'archived',
+                                    }),
+                                header?.state === 'archived' ? 'Conversación restaurada' : 'Conversación archivada',
+                                true,
+                            )
+                        }
+                    >
+                        <Text style={styles.optionText}>
+                            {header?.state === 'archived' ? 'Desarchivar' : 'Archivar'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {header?.kind === 'group' ? (
+                        <TouchableOpacity
+                            style={styles.option}
+                            onPress={() =>
+                                runOption(
+                                    () =>
+                                        leaveChat({
+                                            sessionToken: sessionToken!,
+                                            chatId: chatId as any,
+                                        }),
+                                    'Saliste del grupo',
+                                    true,
+                                )
+                            }
+                        >
+                            <Text style={[styles.optionText, styles.optionDanger]}>
+                                Salir del grupo
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        !!other?.userId && (
+                            <TouchableOpacity
+                                style={styles.option}
+                                onPress={() =>
+                                    runOption(
+                                        () =>
+                                            blockUser({
+                                                sessionToken: sessionToken!,
+                                                userId: other.userId,
+                                                blocked: true,
+                                            }),
+                                        'Usuario bloqueado',
+                                        true,
+                                    )
+                                }
+                            >
+                                <Text style={[styles.optionText, styles.optionDanger]}>
+                                    Bloquear a {other.displayName ?? 'esta persona'}
+                                </Text>
+                            </TouchableOpacity>
+                        )
+                    )}
+                </SheetContent>
+            </Sheet>
         </View>
     );
 }
@@ -371,16 +578,22 @@ const getStyles = (isDark: boolean, bottomInset: number) => {
             alignItems: 'center',
             gap: 10,
             paddingHorizontal: 12,
-            paddingTop: 52,
+            // `paddingTop` lo pone el componente con `insets.top`: el 52 fijo
+            // que había acá quedaba mal en pantallas sin muesca y en las de
+            // muesca grande.
             paddingBottom: 12,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: c.divider,
             backgroundColor: c.chrome,
         },
+        headerTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
         headerInfo: { flex: 1 },
         headerTitle: { fontSize: 16, fontWeight: '700', color: c.text },
         headerSubtitle: { fontSize: 12, color: c.textSecondary, marginTop: 1 },
         iconBtn: { padding: 8, borderRadius: Radius.md },
+        option: { paddingVertical: 14, paddingHorizontal: 20 },
+        optionText: { fontSize: 15, fontWeight: '600', color: c.text },
+        optionDanger: { color: c.danger ?? '#EF4444' },
         listContent: { paddingHorizontal: 12, paddingVertical: 16, gap: 2 },
         empty: { alignItems: 'center', paddingTop: 64, transform: [{ scaleY: -1 }] },
         emptyTitle: { fontSize: 15, fontWeight: '600', color: c.text },

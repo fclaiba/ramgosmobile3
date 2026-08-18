@@ -1,4 +1,10 @@
-export type PaymentProviderKey = 'stripe' | 'mercadopago';
+/**
+ * Stripe es el ÚNICO proveedor de pagos (decisión de producto, 2026-08-18).
+ * Había un `mercadoPagoProvider` simulado —`simulateNetworkLatency`, ids y
+ * URL de recibo inventados— que nunca fue una integración real; se eliminó
+ * para que no quede un camino de cobro falso disponible.
+ */
+export type PaymentProviderKey = 'stripe';
 
 export interface PaymentGatewayChargeRequest {
     amount: number;
@@ -72,39 +78,8 @@ const stripeProvider: PaymentProviderDefinition = {
     },
 };
 
-const mercadoPagoProvider: PaymentProviderDefinition = {
-    key: 'mercadopago',
-    displayName: 'Mercado Pago',
-    supportsSplit: true,
-    async charge(request) {
-        await simulateNetworkLatency(500, 1200);
-
-        const variableFee = request.amount * 0.036;
-        const providerFee = roundCurrency(variableFee);
-        const netAmount = roundCurrency(request.amount - providerFee);
-
-        return {
-            id: randomId('mp_payment'),
-            status: 'succeeded',
-            authorizationCode: randomId('mp_auth'),
-            providerFee,
-            netAmount,
-            currency: request.currency,
-            processedAt: new Date().toISOString(),
-            provider: 'mercadopago',
-            receiptUrl: `https://www.mercadopago.com/receipt/${randomId('cmp')}`,
-            riskLevel: 'medium',
-            rawResponse: {
-                installments: 1,
-                paymentType: 'credit_card',
-            },
-        };
-    },
-};
-
 const providers: Record<PaymentProviderKey, PaymentProviderDefinition> = {
     stripe: stripeProvider,
-    mercadopago: mercadoPagoProvider,
 };
 
 export const listPaymentProviders = (): PaymentProviderDefinition[] => Object.values(providers);

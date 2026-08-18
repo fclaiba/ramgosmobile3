@@ -7,7 +7,10 @@
 ## 1. Concepto General
 Ramgos Social-Commerce Hub es la evolución del consumo de contenido. Busca fusionar las características más adictivas de los tres gigantes (la retención visual del feed infinito de TikTok, la familiaridad y cercanía de las historias y carruseles de Instagram, y la inmediatez de los hilos de Twitter) en una única plataforma unificada.
 
-La diferencia radical es su lógica de **social-commerce sutil**. Los influencers pueden duplicar o resubir el contenido que ya crean para las redes de Meta, X o ByteDance, pero aquí cada publicación puede ser un escaparate transaccional nativo. Sin necesidad de "ir al link en la bio" ni salir de la app, los creadores monetizan su tráfico en tiempo real mediante botones de compra o reclamo de bonos incrustados directamente en el contenido.
+La diferencia radical es su lógica de **social-commerce sutil**. Los influencers pueden duplicar o resubir el contenido que ya crean para las redes de Meta, X o ByteDance, pero aquí cada publicación puede ser un escaparate transaccional nativo. Sin necesidad de "ir al link en la bio" ni salir de la app, los creadores monetizan su tráfico en tiempo real mediante botones de compra incrustados directamente en el contenido.
+
+> [!IMPORTANT]
+> **El pago SIEMPRE pasa por el carrito del marketplace.** Tocar el CommerceTag de un post agrega el producto al carrito (con la atribución del creador) y abre el carrito; de ahí en adelante la compra sigue el checkout normal, con stock, envío y escrow. Esto es una decisión de producto deliberada y **obligatoria**: no existe —ni debe existir— un checkout paralelo dentro del feed. Las versiones previas de este documento describían un "One-Click In-App Checkout" con un modal de pago sobre el video; eso quedó descartado.
 
 ## 2. Análisis Funcional (Roles de Usuario)
 
@@ -30,7 +33,7 @@ La diferencia radical es su lógica de **social-commerce sutil**. Los influencer
 
 ### Los Contra-Quiebres (Soluciones Ramgos)
 1. **Zero-Penalty Algorithm:** Lejos de castigar al creador por vender, el algoritmo de Ramgos premia los posts que generan transacciones, aumentando sus impresiones a mayor tasa de conversión.
-2. **One-Click In-App Checkout:** Se elimina la fuga de usuarios. El carrito y el pago ocurren dentro del mismo modal sobre el video, destruyendo la fricción.
+2. **Compra sin salir de la app:** Se elimina la fuga de usuarios. Desde el post, el producto va directo al carrito de Ramgos con la atribución del creador, y el pago se completa en el checkout del marketplace — nunca en un navegador externo ni en un "link en bio". El paso por el carrito es obligatorio: da stock, envío y escrow reales.
 3. **Repurposing Amigable:** No se castiga el contenido con marca de agua de TikTok. Se prioriza la utilidad comercial sobre la exclusividad del clip.
 
 ## 4. Flujograma
@@ -45,8 +48,8 @@ graph TD
     D --> E
     
     E --> |Le interesa el producto| F[Toca el botón flotante / CommerceTag]
-    F --> G[Se abre One-Click Checkout Sheet]
-    G --> H[Paga con saldo / Puntos / Tarjeta]
+    F --> G[Producto al carrito con atribución del creador]
+    G --> H[Checkout del marketplace: envío + pago con Stripe / Puntos]
     
     H --> I((Transacción Exitosa))
     I --> J[Comisión transferida al Influencer]
@@ -55,7 +58,12 @@ graph TD
 
 ## 5. Lógica del Algoritmo (Motor de Recomendación)
 
-El éxito del feed unificado recae en un algoritmo de recomendación híbrido que aprende dinámicamente del comportamiento del usuario:
+> [!IMPORTANT]
+> **El feed por defecto es CRONOLÓGICO: las publicaciones salen por orden de subida, lo más nuevo primero.** Decisión de producto (2026-08-18) que reemplaza lo que esta sección describía como comportamiento por defecto.
+>
+> El motor de recomendación descrito abajo **sigue implementado** (`scorePost` en `convex/social.ts`), pero sólo se activa si el cliente pide `mode: 'forYou'` explícitamente. El motivo del cambio: con un catálogo chico de posts, un feed rankeado hace que una publicación recién subida no aparezca arriba —o que el cap de diversidad por autor la saque de la página— y se lee como que la app perdió el post.
+
+El motor de recomendación (modo `forYou`, opcional) es un algoritmo híbrido que aprende dinámicamente del comportamiento del usuario:
 
 1. **Decodificación por Interacción:** A medida que el usuario da "Me gusta", visualiza videos completos o comenta, el algoritmo descifra su "noción de intereses" en tiempo real y comienza a inyectar contenido similar.
 2. **Priorización de Geolocalización (Comercial):** La ubicación geográfica del usuario es **primordial** para el contenido transaccional. Si el usuario está en Argentina, el algoritmo priorizará mostrar posts con CommerceTags de negocios o influencers locales (y no productos de España o Estados Unidos). 
@@ -82,7 +90,7 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 * **Privacidad:** Totalmente opt-out. Si un usuario no quiere participar, simplemente apaga el switch. Al hacer *match*, se habilita automáticamente un chat privado (DM) en la app.
 
 ## 7. Reglamento de Desarrollo
-1. **Fricción Cero (Dogma):** Cualquier flujo de compra no debe superar los 2 clicks desde que el usuario ve el post hasta que se aprueba el pago.
+1. **Fricción Mínima (Dogma):** Llegar del post al carrito debe ser **un solo toque**. El checkout posterior es el del marketplace y no se recorta: stock, envío y escrow no son negociables. (Antes este punto exigía "máximo 2 clicks hasta aprobar el pago"; se reemplazó al fijar que el pago pasa obligatoriamente por el carrito.)
 2. **Performance Crítica:** El feed unificado debe renderizar a 60fps sin cuelgues, independientemente de si hay videos pesados. Obligatorio el uso de reciclaje de vistas.
 3. **Diseño "Liquid Glass":** Los botones de comercio deben ser sutiles, elegantes y translúcidos (BlurView) para no arruinar la estética del contenido original.
 4. **Transparencia Financiera:** Los dashboards de Influencers y Negocios deben reflejar las ventas en tiempo real sin demoras.
@@ -90,7 +98,7 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 ## 8. Arquitectura de Software
 * **Frontend:** React Native (Expo). Uso de `@shopify/flash-list` para el feed continuo de alto rendimiento y `expo-video` para el streaming y pre-caching agresivo de multimedia.
 * **Backend:** Convex. Estructura Serverless NoSQL, ideal para manejar alta concurrencia de lecturas en el feed (WebSockets) y transacciones seguras (Mutations).
-* **Infraestructura de Pagos (Monetización Real):** Integración con pasarelas de pago (Stripe Connect / MercadoPago) para transacciones reales y Split Payments automáticos entre negocio, influencer y plataforma.
+* **Infraestructura de Pagos (Monetización Real):** **Stripe Connect es la única pasarela.** Transacciones reales y Split Payments automáticos entre negocio, influencer y plataforma. *(MercadoPago figuraba antes en este documento; existía sólo como un proveedor simulado del lado del cliente y fue eliminado del código — ver `src/services/fintech/paymentProviders.ts`.)*
 * **Motor de Gamificación (Economía Interna):** Paralelo al sistema de pagos, la app cuenta con un **Sistema de Puntos**. Las interacciones (likes, matchings, compras) generan puntos individuales que pueden canjearse por descuentos. **Importante: Los puntos son intransferibles y no suplen al dinero real para el pago de comisiones.**
 
 ## 9. Módulos, Componentes y Funciones
@@ -98,7 +106,9 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 ### 🧩 Módulo 1: Core Social (Consumo)
 **Componentes Internos:**
 * `<UnifiedFeed />`: El contenedor principal (FlashList) que mezcla videos, carruseles y texto.
-* `<PostCard />`: Componente dinámico. Renderiza el contenido según su tipo (VideoPlayer, ImageSlider, ThreadText).
+* `<PostCard />`: Componente dinámico. Renderiza el contenido según su tipo (VideoPlayer, carrusel de imágenes, texto).
+  * **Carrusel:** un post con varias imágenes las muestra TODAS, deslizables en horizontal, con indicador de puntos.
+  * **Encuadre:** las imágenes se ven **completas** dentro del encuadre del post (`resizeMode="contain"`), nunca recortadas. Como eso deja bandas, detrás va una copia de la misma imagen recortada y desenfocada para rellenar.
 * `<StoryRing />` / `<StoryViewer />`: Visor inmersivo a pantalla completa para contenido efímero (24hs).
 
 **Funciones Internas (Convex & Hooks):**
@@ -109,12 +119,14 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 
 ### 🧩 Módulo 2: Social-Commerce (Monetización)
 **Componentes Internos:**
-* `<CommerceTag />`: El botón holográfico superpuesto sobre el `<PostCard />`. Muestra el precio o el descuento.
-* `<OneClickCheckoutSheet />`: Bottom sheet nativo (BottomSheetModal) que resume la compra y tiene el botón de "Confirmar Pago".
+* `<CommerceTag />`: El botón superpuesto sobre el `<PostCard />`. Muestra el precio o el descuento. Un toque = producto al carrito.
 
 **Funciones Internas (Convex & Hooks):**
-* `claimFromPost(postId, userId)`: Ejecuta la lógica transaccional, resta saldo/puntos y genera el recibo.
-* `processSplitPayment(amount, influencerId, businessId)`: Función interna de pagos que liquida las comisiones.
+* `commerce.addPostProductToCart(postId)`: Resuelve el producto del post en el servidor y lo agrega al carrito **con la atribución del creador**, para que la comisión se liquide después en el checkout normal.
+* `commerce.getPostCommerceOffer(postId)`: Hidrata precio/descuento/stock del CommerceTag.
+* `commerce.internalRecordSocialSalesForOrder(...)`: Al confirmarse el pago, escribe la fila de `socialPostSales` (atribución y split: plataforma / creador / vendedor).
+
+> Este módulo **ya no incluye** `<OneClickCheckoutSheet />` ni `claimFromPost()`. Ambos figuraban en versiones previas de este documento; el sheet fue eliminado del repo y la mutation nunca llegó a existir. El pago pasa obligatoriamente por el carrito (ver §1).
 
 ### 🧩 Módulo 3: Creator Studio (Publicación)
 **Componentes Internos:**
@@ -135,22 +147,48 @@ Entrada: `HomeScreen` → sección `social` → `SocialScreen`.
 | Feed + Loops (`getFeed`, paginación) | Hecho |
 | Stories (crear / ver / `viewStory`) | Hecho |
 | Creator Studio + CommerceLinker + `attachedListingId` | Hecho |
-| CTA comercial → `OneClickCheckoutSheet` + pago simulado | Hecho |
+| CTA comercial → producto al carrito con atribución del creador | Hecho |
 | Likes / comentarios / save / delete / follow vía Convex | Hecho |
 | DMs (`DirectMessages` + share a chat) | Hecho |
 | Búsqueda de usuarios | Hecho |
 | Perfil híbrido (`HybridProfile` registrado) | Hecho |
 | Seguidores = `socialFollows` / `socialUsers.followerCount` | Hecho |
 
+### Hecho (Fases RS-2 a RS-8, 2026-08-18 — ver §15.2 del Plan Maestro)
+
+| Capacidad | Estado |
+|---|---|
+| `UnifiedFeed` en `@shopify/flash-list` (era FlatList) | Hecho — falta pre-cache agresivo de video (queda abierto abajo) |
+| Algoritmo de ranking v2: geo + afinidad + **watch-time** + **conversión comercial** + "no me interesa" + anti-repetición + cap de diversidad por autor | Hecho |
+| Gamificación social: puntos por publicar/comentar/story/unirse a comunidad/hito de 10 likes, con clawback anti-abuso | Hecho |
+| Comunidades comerciales: crear/unirse/aprobar, feed y catálogo de comunidad, chat vía `social/dm.ts` | Hecho — **convenios de comisión cruzada (`communityAgreements`) NO implementados** |
+| Moderación completa: reportes, mute, ocultar, filtro de palabras, shadowban/suspensión, cola admin | Hecho |
+| Hilos, quote-repost, hashtags + trending, menciones, bandeja de Actividad real | Hecho |
+| Ban efectivo también vía OAuth (antes sólo cortaba sesiones server-side) | Hecho |
+| Puntos server-authoritative (antes el cliente mandaba el monto) | Hecho |
+
+### Hecho (Fases RS-9 y RS-10, 2026-08-18 — ver §15.3 del Plan Maestro)
+
+| Capacidad | Estado |
+|---|---|
+| Matching de eventos (Sprint 5): opt-in gateado por entrada confirmada, deck de swipe, match mutuo → chat automático | Hecho |
+| Posts fijados, encuestas con UI de resultados, colecciones de guardados, mejores amigos (audiencia de historias), borradores y publicación programada | Hecho |
+| **Carrusel de imágenes** en el feed, con la foto completa en el encuadre (`contain` + fondo desenfocado) | Hecho |
+| **Feed cronológico por orden de subida** como comportamiento por defecto | Hecho |
+| **Stripe como única pasarela** (se eliminó el proveedor MercadoPago simulado) | Hecho |
+
 ### Aún abierto
-1. **FlashList unificado estricto** (`@shopify/flash-list` + pre-cache video agresivo) — hoy FlatList + LoopFeed.
+1. **Pre-cache agresivo de video** en el feed (FlashList ya está; falta el pool de reproductores `expo-video` con ventana adelante/atrás).
 2. **CommerceTag holográfico** overlay tipo Liquid Glass (hoy card/CTA en el post).
-3. **Algoritmo geo / intereses** — `getFeed` es cronológico.
-4. **`claimFromPost` bono one-click** — no hay mutation dedicada; checkout de listing sí.
-5. **Discovery vectorial** (personas + productos en una lupa).
-6. **Comunidades comerciales** (Sprint 4).
-7. **Matching de eventos** (Sprint 5).
-8. **Gamificación social** (puntos por likes/posts) — puntos en checkout simulado sí.
+3. **Discovery vectorial** (personas + productos en una lupa).
+4. **Convenios de comunidad** (`communityAgreements`: comisión cruzada entre miembros) — diseñado, no implementado; toca el split de pagos y merece su propia revisión de seguridad.
+5. **Sonidos reutilizables** y **link preview cards** — piden UI de edición de audio / fetch externo + parseo de HTML.
+6. **UI de carga de alt-text** en el creador de posts (el campo y el render en el feed ya existen).
+7. **`StoryViewer.tsx`** no se migró al nuevo `shareStoryInChat` con adjunto real; su respuesta por texto con prefijo sigue funcionando.
+8. **`<MediaUploader />` y `<StoryRing />`** (§9) no existen como componentes con ese nombre: la funcionalidad vive inline en `CreatePost` y `StoriesBar`. Es nomenclatura del doc, no falta funcionalidad.
+9. **El video sigue en `cover`** (recortado a pantalla completa). La regla de "verse completo en el encuadre" se aplicó a **imágenes**; si se quiere lo mismo para video, es un cambio aparte.
+
+> **Nota:** `claimFromPost` salió de esta lista porque ya no es una brecha sino una decisión: el pago pasa por el carrito y no habrá una mutation de checkout dentro del feed (ver §1).
 
 ---
 
@@ -176,22 +214,22 @@ Para ejecutar esta visión de forma clínica, dividiremos el trabajo en 5 Sprint
   - `CommerceTag.tsx`: Botón holográfico (BlurView) superpuesto al `PostCard`. Muestra precio/descuento en mini-formato.
   - `CreatorStudioModal.tsx` (`CreatePost.tsx`): Flujo de subida de contenido expandido. Ahora cuenta con un botón "Vincular Producto" que levanta el modal `<CommerceLinker />`.
   - `CommerceLinker.tsx`: Componente de búsqueda que consulta `api.listings.searchListings` para vincular un `listingId` al post.
-  - `OneClickCheckoutSheet.tsx`: BottomSheet que emerge al tocar el CommerceTag. Muestra el resumen del ítem sin salir de la vista de video.
+  - Al tocar el CommerceTag, el producto va al carrito con la atribución del creador y se abre el carrito. **No hay bottom sheet de pago sobre el video** (ver §1).
 * **Backend (Convex):**
   - Mutación `createPost`: Ahora acepta `attachedListingId`. Si se recibe, el backend consulta internamente los datos del producto (precio, imagen, nombre) y guarda el objeto desnormalizado `commercialProduct` en el documento del post, optimizando la carga masiva del feed en O(1).
-  - Query `getCommerceInfoForPost(postId)` para hidratar el BottomSheet instantáneamente.
+  - Query `getPostCommerceOffer(postId)` para hidratar el CommerceTag instantáneamente.
 * **Criterio de Éxito:** Un influencer puede subir un video, atacharle una zapatilla de un negocio local y publicarlo en menos de 1 minuto.
 
 ### 🏃 Sprint 3: Economía Dual (Transacciones Reales y Gamificación)
 **Objetivo:** Cerrar el ciclo financiero (pagos) y el ciclo de retención (puntos).
 * **Frontend (Pagos & Gamificación):**
-  - Integrar UI de Checkout (Simulación de pasarela de pagos / Stripe en modo test) dentro de `OneClickCheckoutSheet.tsx`.
+  - Integrar UI de Checkout (Stripe en modo test) en el flujo del carrito, al que llega el producto desde el post.
   - Slider interactivo para "Usar mis Puntos como Descuento".
   - Animaciones de partículas/haptics al ganar puntos por likes o compras.
 * **Backend (Convex):**
   - Mutación `processSimulatedPayment(postId, mockToken)` ejecutando el **Split Payment**: % Influencer, % Negocio, % Plataforma. *(Aclaración: Por ahora los pagos de dinero real son SIMULADOS para testear el flujo sin fricción bancaria)*.
   - Motor de Gamificación: `awardPoints(userId, actionType)`. (Ej: +5 puntos por dar 10 likes).
-* **Criterio de Éxito:** Simular el pago de un producto desde un video en solo 2 clicks y ver el dinero simulado repartirse en los dashboards. Los puntos jamás se transfieren entre usuarios.
+* **Criterio de Éxito:** Desde un video, un toque deja el producto en el carrito con la atribución correcta; al completar el checkout, el dinero se reparte en los dashboards. Los puntos jamás se transfieren entre usuarios.
 
 ### 🏃 Sprint 4: Retención Dura (DMs y Comunidades Comerciales)
 **Objetivo:** Crear un foso competitivo reteniendo a los usuarios dentro de la plataforma para socializar y comerciar en grupo.

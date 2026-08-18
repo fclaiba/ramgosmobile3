@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Home, ShoppingBag, Users, LayoutDashboard } from 'lucide-react-native';
+import { Home, ShoppingBag, Users, LayoutDashboard, MessageCircle } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -8,9 +8,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brand } from '../theme/brand';
 import { colors, Radius, Touch, Motion, Elevation } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
+import { useUnreadMessages } from '../hooks/useMessaging';
 
 
-export type NavSection = 'home' | 'marketplace' | 'social' | 'dashboard';
+// 'messages' no es una pestaña: `HomeScreen` lo intercepta y navega a la
+// bandeja. Va acá para que el ítem viva en la misma barra que el resto.
+export type NavSection = 'home' | 'marketplace' | 'social' | 'messages' | 'dashboard';
 
 export const NAV_CONTENT_HEIGHT = 65;
 
@@ -32,6 +35,7 @@ const NavItem = ({
     c,
     styles,
     isDark,
+    badge = 0,
 }: {
     item: any;
     isActive: boolean;
@@ -39,6 +43,7 @@ const NavItem = ({
     c: ReturnType<typeof colors>;
     styles: any;
     isDark: boolean;
+    badge?: number;
 }) => {
     const activeColor = Brand.primary;
     const inactiveColor = c.textMuted;
@@ -57,7 +62,9 @@ const NavItem = ({
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
             accessibilityState={{ selected: isActive }}
-            accessibilityLabel={item.label}
+            accessibilityLabel={
+                badge > 0 ? `${item.label}, ${badge} sin leer` : item.label
+            }
         >
             <Animated.View style={[
                 styles.iconWrapper,
@@ -65,6 +72,11 @@ const NavItem = ({
                 iconWrapperStyle,
             ]}>
                 <Icon size={21} color={isActive ? activeColor : inactiveColor} strokeWidth={isActive ? 2.5 : 1.8} />
+                {badge > 0 && (
+                    <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                    </View>
+                )}
             </Animated.View>
             <Text
                 style={[
@@ -90,6 +102,11 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
     const isDark = colorScheme === 'dark';
     const c = colors(isDark);
     const styles = getStyles(isDark, c);
+
+    // Contador global de mensajes sin leer. Antes sólo existía en el header
+    // de Social: desde Inicio o Tienda no había ninguna señal de que había
+    // llegado un mensaje, ni forma de llegar a la bandeja.
+    const { unreadCount } = useUnreadMessages();
 
     const showDashboard =
         isAuthenticated && user && ['influencer', 'business', 'admin'].includes(user.role);
@@ -124,6 +141,7 @@ export function MobileNav({ activeSection, onSectionChange }: MobileNavProps) {
                         c={c}
                         styles={styles}
                         isDark={isDark}
+                        badge={item.id === 'messages' ? unreadCount : 0}
                     />
                 ))}
             </View>
@@ -153,6 +171,19 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) =>
             }),
         },
         hairline: { height: StyleSheet.hairlineWidth, opacity: 1 },
+        badge: {
+            position: 'absolute',
+            top: -4,
+            right: -8,
+            minWidth: 16,
+            height: 16,
+            paddingHorizontal: 4,
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: Brand.primary,
+        },
+        badgeText: { fontSize: 9, fontWeight: '900', color: '#fff' },
         navContent: {
             flexDirection: 'row',
             justifyContent: 'space-around',

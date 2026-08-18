@@ -34,6 +34,8 @@ export interface SocialFeedPost {
     type: 'text' | 'image' | 'video' | 'poll' | 'commercial';
     content: string;
     images?: string[];
+    /** Texto alternativo por imagen, mismo índice que `images` (a11y). */
+    imageAlts?: string[];
     videoUrl?: string;
     commercialProduct?: SocialCommercialProduct;
     likeCount: number;

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
-import { X, Send, Trash2 } from 'lucide-react-native';
+import { Trash2, Heart } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
-import { Radius, colors } from '../../theme/tokens';
+import { Sheet, SheetContent } from '../ui/sheet';
+import { Radius, colors, Elevation } from '../../theme/tokens';
 
 
 interface PostCommentsModalProps {
@@ -30,7 +31,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
 
     const commentsResult = useQuery(
         api.social.getCommentsForPost,
-        authUser && sessionToken
+        authUser && sessionToken && postId
             ? { postId: postId as any, limit: 100, sessionToken }
             : 'skip',
     );
@@ -73,6 +74,11 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
         const author = item.author;
         const authorName = author?.displayName ?? 'Usuario';
         const authorAvatar = author?.avatar;
+        
+        // Simple relative time formatting
+        const date = new Date(item.createdAt);
+        const timeStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
         return (
             <View style={styles.commentItem}>
                 <Avatar style={styles.commentAvatar}>
@@ -81,18 +87,25 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                 </Avatar>
                 <View style={styles.commentContent}>
                     <View style={styles.commentHeader}>
-                        <Text style={styles.commentUser}>{authorName}</Text>
-                        <Text style={styles.commentTime}>
-                            {new Date(item.createdAt).toLocaleDateString()}
+                        <Text style={styles.commentUser}>
+                            {authorName} <Text style={styles.commentTime}> {timeStr}</Text>
                         </Text>
+                        {myId && item.authorUserId === myId && (
+                            <TouchableOpacity onPress={() => handleDelete(item._id)} style={styles.deleteBtn}>
+                                <Trash2 size={14} color={isDark ? "#ef4444" : "#ef4444"} />
+                            </TouchableOpacity>
+                        )}
                     </View>
                     <Text style={styles.commentText}>{item.content}</Text>
+                    <View style={styles.commentActions}>
+                        <TouchableOpacity style={styles.actionBtn}>
+                            <Text style={styles.actionText}>Responder</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                {myId && item.authorUserId === myId && (
-                    <TouchableOpacity onPress={() => handleDelete(item._id)}>
-                        <Trash2 size={16} color={isDark ? "#9CA3AF" : "#9CA3AF"} />
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity style={styles.likeBtn}>
+                    <Heart size={14} color={colors(isDark).textMuted} />
+                </TouchableOpacity>
             </View>
         );
     };
@@ -100,21 +113,34 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
     return (
         <Sheet open={visible} onOpenChange={(val: boolean) => !val && onClose()}>
             <SheetContent side="bottom" style={styles.sheetContent}>
-                <SheetHeader style={styles.header}>
-                    <SheetTitle style={styles.headerTitle}>Comentarios</SheetTitle>
-                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <X size={24} color={isDark ? "#F9FAFB" : "#111"} />
-                    </TouchableOpacity>
-                </SheetHeader>
+                <BlurView 
+                    intensity={isDark ? 80 : 100} 
+                    tint={isDark ? 'dark' : 'light'} 
+                    style={StyleSheet.absoluteFill} 
+                />
+                
+                {/* Drag indicator */}
+                <View style={styles.dragIndicatorWrapper}>
+                    <View style={styles.dragIndicator} />
+                </View>
+
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Comentarios</Text>
+                </View>
 
                 <FlatList
                     data={comments}
                     renderItem={renderComment}
                     keyExtractor={item => item._id}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, comments.length === 0 && { flex: 1, justifyContent: 'center' }]}
+                    showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
                         <View style={styles.emptyState}>
-                            <Text style={styles.emptyText}>Sé el primero en comentar 👇</Text>
+                            <View style={styles.emptyIconCircle}>
+                                <Text style={{fontSize: 24}}>💬</Text>
+                            </View>
+                            <Text style={styles.emptyTitle}>Sin comentarios aún</Text>
+                            <Text style={styles.emptyText}>Inicia la conversación.</Text>
                         </View>
                     }
                 />
@@ -123,28 +149,33 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
                 >
-                    <View style={styles.inputContainer}>
-                        <Avatar style={styles.inputAvatar}>
-                            {authUser?.avatar ? <AvatarImage src={authUser.avatar} /> : null}
-                            <AvatarFallback>
-                                {(authUser?.name || authUser?.nickname || 'U')[0]}
-                            </AvatarFallback>
-                        </Avatar>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Agrega un comentario..."
-                            placeholderTextColor="#9CA3AF"
-                            value={commentText}
-                            onChangeText={setCommentText}
-                            multiline
-                        />
-                        <TouchableOpacity
-                            style={[styles.sendBtn, (!commentText.trim() || sending) && styles.sendBtnDisabled]}
-                            onPress={handleSendComment}
-                            disabled={sending || !commentText.trim()}
-                        >
-                            <Send size={20} color="#fff" />
-                        </TouchableOpacity>
+                    <View style={styles.inputOuterContainer}>
+                        <View style={styles.inputInnerContainer}>
+                            <Avatar style={styles.inputAvatar}>
+                                {authUser?.avatar ? <AvatarImage src={authUser.avatar} /> : null}
+                                <AvatarFallback>
+                                    {(authUser?.name || authUser?.nickname || 'U')[0]}
+                                </AvatarFallback>
+                            </Avatar>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Agrega un comentario..."
+                                placeholderTextColor={colors(isDark).textMuted}
+                                value={commentText}
+                                onChangeText={setCommentText}
+                                multiline
+                                maxLength={300}
+                            />
+                            {commentText.trim().length > 0 ? (
+                                <TouchableOpacity
+                                    style={styles.sendBtn}
+                                    onPress={handleSendComment}
+                                    disabled={sending}
+                                >
+                                    <Text style={styles.sendBtnText}>Publicar</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
                     </View>
                 </KeyboardAvoidingView>
             </SheetContent>
@@ -154,27 +185,169 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
 
 const getStyles = (isDark: boolean) => StyleSheet.create({
     sheetContent: {
-        backgroundColor: colors(isDark).glass,
-        height: '85%',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        backgroundColor: 'transparent', // Let BlurView handle the background
+        height: '90%',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors(isDark).glassBorder,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 0,
+        overflow: 'hidden', // Ensure BlurView respects border radius
     },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: isDark ? '#F9FAFB' : '#111' },
-    closeBtn: { padding: 4 },
-    listContent: { padding: 16 },
-    commentItem: { flexDirection: 'row', marginBottom: 16 },
-    commentAvatar: { width: 36, height: 36, marginRight: 12 },
-    commentContent: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.md, padding: 10, marginRight: 8 },
-    commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-    commentUser: { fontWeight: '600', fontSize: 13, color: isDark ? '#F9FAFB' : '#111' },
-    commentTime: { fontSize: 11, color: '#9CA3AF' },
-    commentText: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151' },
-    emptyState: { alignItems: 'center', paddingVertical: 40 },
-    emptyText: { color: '#9CA3AF', fontSize: 15 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12, borderTopWidth: 1, borderTopColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)', backgroundColor: colors(isDark).glass },
-    inputAvatar: { width: 32, height: 32, marginRight: 10 },
-    input: { flex: 1, backgroundColor: colors(isDark).glass, borderRadius: Radius.xl, paddingHorizontal: 16, paddingVertical: 8, maxHeight: 100, fontSize: 15, color: isDark ? '#F9FAFB' : '#111' },
-    sendBtn: { width: 36, height: 36, borderRadius: Radius.lg, backgroundColor: isDark ? '#4F46E5' : '#000', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-    sendBtnDisabled: { backgroundColor: colors(isDark).glass },
+    dragIndicatorWrapper: {
+        width: '100%',
+        alignItems: 'center',
+        paddingTop: 8,
+        paddingBottom: 4,
+    },
+    dragIndicator: {
+        width: 36,
+        height: 5,
+        borderRadius: Radius.full,
+        backgroundColor: colors(isDark).textMuted,
+        opacity: 0.4,
+    },
+    header: { 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        paddingVertical: 14, 
+        borderBottomWidth: StyleSheet.hairlineWidth, 
+        borderBottomColor: colors(isDark).divider 
+    },
+    headerTitle: { 
+        fontSize: 17, 
+        fontWeight: '800', 
+        color: colors(isDark).text,
+        letterSpacing: -0.4,
+    },
+    listContent: { 
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 40,
+    },
+    commentItem: { 
+        flexDirection: 'row', 
+        marginBottom: 24 
+    },
+    commentAvatar: { 
+        width: 40, 
+        height: 40, 
+        marginRight: 14,
+    },
+    commentContent: { 
+        flex: 1, 
+        justifyContent: 'center'
+    },
+    commentHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'flex-start',
+        marginBottom: 4 
+    },
+    commentUser: { 
+        fontWeight: '700', 
+        fontSize: 14, 
+        color: colors(isDark).text,
+    },
+    commentTime: { 
+        fontWeight: '500',
+        fontSize: 13, 
+        color: colors(isDark).textMuted,
+    },
+    deleteBtn: {
+        padding: 4,
+        marginLeft: 8,
+    },
+    commentText: { 
+        fontSize: 15, 
+        lineHeight: 22,
+        color: colors(isDark).textSecondary,
+        marginBottom: 6,
+    },
+    commentActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    actionBtn: {
+        marginRight: 16,
+    },
+    actionText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors(isDark).textMuted,
+    },
+    likeBtn: {
+        padding: 4,
+        alignSelf: 'center',
+        marginLeft: 8,
+    },
+    emptyState: { 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        paddingVertical: 40 
+    },
+    emptyIconCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: colors(isDark).surface2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors(isDark).text,
+        marginBottom: 8,
+    },
+    emptyText: { 
+        color: colors(isDark).textSubtle, 
+        fontSize: 15,
+        textAlign: 'center'
+    },
+    inputOuterContainer: { 
+        paddingHorizontal: 20, 
+        paddingTop: 12, 
+        paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+        backgroundColor: 'transparent',
+    },
+    inputInnerContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        backgroundColor: colors(isDark).surface1,
+        borderRadius: 26,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        minHeight: 52,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors(isDark).glassBorder,
+        ...Elevation[1](isDark),
+    },
+    inputAvatar: { 
+        width: 32, 
+        height: 32, 
+        marginRight: 12,
+        marginBottom: 2,
+    },
+    input: { 
+        flex: 1, 
+        maxHeight: 120, 
+        fontSize: 15, 
+        color: colors(isDark).text,
+        paddingTop: Platform.OS === 'ios' ? 6 : 4,
+        paddingBottom: Platform.OS === 'ios' ? 6 : 4,
+    },
+    sendBtn: { 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginBottom: 2,
+    },
+    sendBtnText: {
+        color: colors(isDark).primary,
+        fontWeight: '700',
+        fontSize: 15,
+    },
 });

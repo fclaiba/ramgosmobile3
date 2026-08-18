@@ -12,6 +12,7 @@ import {
     Eye,
     ChevronRight,
     Lock,
+    Users2,
 } from 'lucide-react-native';
 import { MobileHeader } from '../components/MobileHeader';
 import { Card, CardContent } from '../components/ui/card';
@@ -200,6 +201,14 @@ export default function PrivacySecurityScreen({ navigation }: any) {
                             type="switch"
                             value={state.allowMessages}
                             onPress={() => toggle('allowMessages')}
+                        />
+                        <View style={styles.divider} />
+                        <Row
+                            icon={Users2}
+                            label="Silenciados, ocultos y mejores amigos"
+                            hint="Gestioná tu privacidad en la red social"
+                            type="chevron"
+                            onPress={() => navigation.navigate('SocialPrivacy')}
                         />
                     </CardContent>
                 </Card>

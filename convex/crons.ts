@@ -56,4 +56,38 @@ crons.interval(
     {},
 );
 
+// Moderación (Fase 2): reactiva cuentas cuya suspensión social ya venció.
+crons.daily(
+    "expire-social-suspensions",
+    { hourUTC: 3, minuteUTC: 0 },
+    internal.social.moderation.internalExpireSuspensions,
+    {},
+);
+
+// Grafo social (Fase 4): recalcula `count24h` de tendencias desde las filas
+// reales en vez de dejarlo crecer sin decaer.
+crons.interval(
+    "recompute-tag-stats",
+    { hours: 1 },
+    internal.social.hashtags.internalRecomputeTagStats,
+    {},
+);
+
+// Borradores y programación (Fase 7): publica lo que ya venció.
+crons.interval(
+    "publish-scheduled-posts",
+    { minutes: 5 },
+    internal.social.drafts.internalPublishDueScheduled,
+    {},
+);
+
+// Matching de eventos (Fase 8): purga opt-ins viejos. Los matches ya
+// concretados (con chat real) sobreviven siempre.
+crons.daily(
+    "cleanup-event-matching",
+    { hourUTC: 4, minuteUTC: 45 },
+    internal.social.eventMatching.internalCleanupStaleMatching,
+    {},
+);
+
 export default crons;
