@@ -58,6 +58,7 @@ import Animated, { useAnimatedStyle, useSharedValue, useAnimatedScrollHandler, i
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+import { SocialProfileFeed } from '../components/social/SocialProfileFeed';
 import FormFillScreen from './FormFillScreen';
 
 
@@ -107,7 +108,7 @@ const AnimatedButton = ({ onPress, style, children, isDark, active = true }: any
 };
 
 export default function CommercialProfileScreen({ navigation, route }: any) {
-    const routeSellerId = route?.params?.sellerId;
+    const routeSellerId = route?.params?.sellerId || route?.params?.userId || route?.params?.id;
     const handle = route?.params?.handle;
     
     const userByHandle = useQuery(api.users.getUserByHandle, !routeSellerId && handle ? { handle } : "skip");
@@ -140,6 +141,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     );
 
     const [activeTab, setActiveTab] = useState<TabType>('product');
+    const [profileMode, setProfileMode] = useState<'social' | 'comercial'>('social');
     const [followLoading, setFollowLoading] = useState(false);
     const [contactLoading, setContactLoading] = useState(false);
     const [formOpen, setFormOpen] = useState(false);
@@ -526,8 +528,27 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 )}
             </View>
 
+            {/* Profile Mode Toggle */}
+            <View style={{ flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderRadius: Radius.lg, padding: 4, marginHorizontal: 20, marginBottom: 16 }}>
+                <TouchableOpacity
+                    style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: Radius.md, gap: 8 }, profileMode === 'social' && { backgroundColor: isDark ? '#374151' : '#FFFFFF', ...glassShadow }]}
+                    onPress={() => setProfileMode('social')}
+                >
+                    <UserCircle size={16} color={profileMode === 'social' ? (isDark ? '#F9FAFB' : '#111827') : (isDark ? '#9CA3AF' : '#6B7280')} />
+                    <Text style={[{ fontSize: 14, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280' }, profileMode === 'social' && { color: isDark ? '#F9FAFB' : '#111827' }]}>Social</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: Radius.md, gap: 8 }, profileMode === 'comercial' && { backgroundColor: isDark ? '#374151' : '#FFFFFF', ...glassShadow }]}
+                    onPress={() => setProfileMode('comercial')}
+                >
+                    <Building2 size={16} color={profileMode === 'comercial' ? (isDark ? '#F9FAFB' : '#111827') : (isDark ? '#9CA3AF' : '#6B7280')} />
+                    <Text style={[{ fontSize: 14, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280' }, profileMode === 'comercial' && { color: isDark ? '#F9FAFB' : '#111827' }]}>Comercial</Text>
+                </TouchableOpacity>
+            </View>
+
             {/* Tabs */}
-            <View style={styles.tabsContainer}>
+            {profileMode === 'comercial' && (
+                <View style={styles.tabsContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll} nestedScrollEnabled>
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
@@ -547,6 +568,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                     })}
                 </ScrollView>
             </View>
+            )}
         </View>
     );
 
@@ -601,34 +623,41 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 </View>
             </Animated.View>
 
-            <FlatList
-                data={activeItems}
-                keyExtractor={(item: any) => (item._id || item.id).toString()}
-                numColumns={2}
-                renderItem={renderGridItem}
-                columnWrapperStyle={styles.gridColumnWrapper}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-                ListHeaderComponent={renderHeader}
-                onScroll={
-                    Platform.OS === 'web'
-                        ? (e: any) => {
-                              scrollY.value = e.nativeEvent.contentOffset.y;
-                          }
-                        : scrollHandler
-                }
-                scrollEventThrottle={16}
-                ListEmptyComponent={() => (
-                    <View style={styles.emptyContainer}>
-                        <Package size={48} color={isDark ? '#374151' : '#E5E7EB'} />
-                        <Text style={styles.emptyText}>
-                            {listingsRaw === undefined
-                                ? 'Cargando…'
-                                : `No hay ${tabs.find(t => t.id === activeTab)?.label.toLowerCase()} disponibles.`}
-                        </Text>
-                    </View>
-                )}
-            />
+            {profileMode === 'comercial' ? (
+                <FlatList
+                    data={activeItems}
+                    keyExtractor={(item: any) => (item._id || item.id).toString()}
+                    numColumns={2}
+                    renderItem={renderGridItem}
+                    columnWrapperStyle={styles.gridColumnWrapper}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    ListHeaderComponent={renderHeader}
+                    onScroll={
+                        Platform.OS === 'web'
+                            ? (e: any) => {
+                                  scrollY.value = e.nativeEvent.contentOffset.y;
+                              }
+                            : scrollHandler
+                    }
+                    scrollEventThrottle={16}
+                    ListEmptyComponent={() => (
+                        <View style={styles.emptyContainer}>
+                            <Package size={48} color={isDark ? '#374151' : '#E5E7EB'} />
+                            <Text style={styles.emptyText}>
+                                {listingsRaw === undefined
+                                    ? 'Cargando…'
+                                    : `No hay ${tabs.find(t => t.id === activeTab)?.label.toLowerCase()} disponibles.`}
+                            </Text>
+                        </View>
+                    )}
+                />
+            ) : (
+                <SocialProfileFeed 
+                    authorUserId={String(sellerId)} 
+                    externalHeader={renderHeader()} 
+                />
+            )}
 
             {/* Top floating controls — after list so they win the touch stack */}
             <View

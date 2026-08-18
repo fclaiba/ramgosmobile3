@@ -17,5 +17,5 @@ export * from './UnifiedFeed';
 export * from './CommerceTag';
 export * from './CreatorEarningsPanel';
 export * from './CommerceLinker';
-export * from './CreatorStudioModal';
+export * from './InlineComposer';
 export * from './SocialFollowButton';

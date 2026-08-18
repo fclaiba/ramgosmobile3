@@ -51,9 +51,11 @@ export const useSocialFeed = ({ authorUserId, mode, pageSize = 20 }: UseSocialFe
     // Pliega cada página nueva (más allá de la primera, que es reactiva) a
     // la cola acumulada.
     useEffect(() => {
-        if (!page || !cursor) return;
+        if (!page) return;
+        // Si no hay cursor (página 1), la guardamos con cursor 'first' o vacío para no perderla
+        const pageCursor = cursor || 'first';
         setOlderPages((prev) =>
-            prev.some((p) => p.cursor === cursor) ? prev : [...prev, { cursor, items: page.items }],
+            prev.some((p) => p.cursor === pageCursor) ? prev : [...prev, { cursor: pageCursor, items: page.items }],
         );
         if (!page.nextCursor) setExhausted(true);
     }, [page, cursor]);

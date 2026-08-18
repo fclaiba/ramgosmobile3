@@ -833,7 +833,7 @@ const getStyles = (isDark: boolean) => {
 
     profileHeader: { alignItems: 'center', width: '100%' },
     avatarWrapper: { marginBottom: 12, position: 'relative' },
-    avatar: { width: 100, height: 100, borderRadius: Radius.full, borderWidth: 4, borderColor: 'rgba(255,255,255,0.35)' },
+    avatar: { width: 140, height: 140, borderRadius: Radius.full, borderWidth: 4, borderColor: 'rgba(255,255,255,0.35)' },
     cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.72)', padding: 8, borderRadius: Radius.xl },
     cameraBtnGlass: {
         position: 'absolute', bottom: -4, right: -4, borderRadius: Radius.full, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.5)',

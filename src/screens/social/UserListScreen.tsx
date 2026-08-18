@@ -60,7 +60,7 @@ export default function UserListScreen() {
                     <UserListItem
                         user={item}
                         onPress={() =>
-                            navigation.navigate('HybridProfile', {
+                            navigation.navigate('CommercialProfile', {
                                 userId: item.id,
                             })
                         }

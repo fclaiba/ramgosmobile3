@@ -10,7 +10,7 @@ import { formatCurrency } from '../../utils/formatters';
 
 interface CommerceLinkerProps {
     onClose: () => void;
-    onSelect: (listingId: string, listingName: string) => void;
+    onSelect: (listingId: string, listingName: string, price: number, imageUrl?: string) => void;
 }
 
 export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
@@ -22,7 +22,8 @@ export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
     const searchResults = useQuery(api.listings.searchListings, { query: searchTerm, limit: 10 });
 
     const handleSelect = (item: any) => {
-        onSelect(item._id, item.title);
+        const imageUrl = item.image || item.gallery?.[0] || item.images?.[0]?.url || item.images?.[0] || undefined;
+        onSelect(item._id, item.title, item.price, typeof imageUrl === 'string' ? imageUrl : undefined);
         onClose();
     };
 
@@ -61,10 +62,14 @@ export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
                         keyExtractor={(item) => item._id}
                         style={styles.list}
                         contentContainerStyle={{ paddingBottom: 40 }}
-                        renderItem={({ item }) => (
+                        renderItem={({ item }) => {
+                            const imageUrl = item.image || item.gallery?.[0] || item.images?.[0]?.url || item.images?.[0] || undefined;
+                            const validImageUrl = typeof imageUrl === 'string' ? imageUrl : undefined;
+                            
+                            return (
                             <TouchableOpacity style={styles.itemCard} onPress={() => handleSelect(item)}>
-                                {item.images && item.images.length > 0 ? (
-                                    <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
+                                {validImageUrl ? (
+                                    <Image source={{ uri: validImageUrl }} style={styles.itemImage} />
                                 ) : (
                                     <View style={[styles.itemImage, styles.placeholderImage]}>
                                         <Tag size={24} color="#9CA3AF" />
@@ -75,7 +80,8 @@ export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
                                     <Text style={styles.itemPrice}>{formatCurrency(item.price)}</Text>
                                 </View>
                             </TouchableOpacity>
-                        )}
+                            );
+                        }}
                     />
                 )}
             </SheetContent>

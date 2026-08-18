@@ -97,7 +97,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 // El listing vivo manda; la snapshot es respaldo (items virtuales o listings borrados).
                 name: listing?.title ?? snapshot.title ?? '',
                 price: listing?.price ?? snapshot.price ?? 0,
-                image: listing?.image ?? snapshot.image ?? '',
+                image: listing?.images?.[0]?.url ?? listing?.images?.[0] ?? listing?.image ?? snapshot.image ?? '',
                 type: listing?.type ?? snapshot.type ?? 'product',
                 location: snapshot.location,
                 sellerId: listing?.sellerId ?? snapshot.sellerId,

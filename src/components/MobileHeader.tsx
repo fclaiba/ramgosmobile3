@@ -45,7 +45,8 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                         {logo ? (
                             <Image 
                                 source={require('../../logo.png')} 
-                                style={{ width: 140, height: 40, resizeMode: 'contain', marginLeft: -4 }} 
+                                style={{ width: 140, height: 40, marginLeft: -4 }} 
+                                resizeMode="contain"
                             />
                         ) : (
                             <>

@@ -118,7 +118,6 @@ import DisputeScreen from './src/screens/marketplace/DisputeScreen';
 
 // Business Screens
 import BusinessProfileScreen from './src/screens/business/BusinessProfileScreen';
-import PublicBusinessProfileScreen from './src/screens/BusinessProfileScreen';
 import BusinessKYCScreen from './src/screens/business/BusinessKYCScreen';
 import BusinessQRScannerScreen from './src/screens/business/BusinessQRScannerScreen';
 import BusinessFormsScreen from './src/screens/BusinessFormsScreen';
@@ -130,7 +129,6 @@ import GroupInfoScreen from './src/screens/social/GroupInfoScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import MapExplorerScreen from './src/screens/MapExplorerScreen';
 import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
-import { HybridProfileScreen } from './src/screens/HybridProfileScreen';
 import PostDetailScreen from './src/screens/social/PostDetailScreen';
 import ActivityScreen from './src/screens/social/ActivityScreen';
 import SavedPostsScreen from './src/screens/social/SavedPostsScreen';
@@ -304,7 +302,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="BusinessCreate" component={BusinessCreateScreen} />
                     <Stack.Screen name="VerifyBusiness" component={BusinessKYCScreen} />
                     <Stack.Screen name="Referrals" component={ReferralsScreen} />
-                    <Stack.Screen name="BusinessQR" component={BusinessQRScannerScreen} />
+                    <Stack.Screen name="BusinessQRScanner" component={BusinessQRScannerScreen} />
                     <Stack.Screen name="BusinessForms" component={BusinessFormsScreen} />
                     <Stack.Screen name="FormFill" component={FormFillScreen} />
                     <Stack.Screen name="MyBookings" component={MyBookingsScreen} />
@@ -319,7 +317,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="AddEditProduct" component={AddEditProductScreen} />
                                         {/* Maps & QR Module */}
                     {/* MapExplorer integrated into Marketplace */}
-                    <Stack.Screen name="BusinessDetail" component={PublicBusinessProfileScreen} />
                     <Stack.Screen name="BonusQR" component={BonusQRScreen} />
                     <Stack.Screen name="BusinessScanner" component={BusinessScannerScreen} />
                     <Stack.Screen name="UserList" component={UserListScreen} />
@@ -339,7 +336,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="Games" component={GamesScreen} />
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
-                    <Stack.Screen name="HybridProfile" component={HybridProfileScreen} />
                     <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
                     <Stack.Screen name="InfluencerBonuses" component={InfluencerBonusesScreen} />
                 </Stack.Navigator>

@@ -106,7 +106,7 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                         ref={videoRef}
                         style={styles.video}
                         source={{ uri: post.videoUrl }}
-                        resizeMode={ResizeMode.CONTAIN}
+                        resizeMode={ResizeMode.COVER}
                         isLooping
                         shouldPlay={isActive}
                         onPlaybackStatusUpdate={status => setStatus(() => status)}

@@ -3,22 +3,31 @@ import { Image, View, StyleSheet } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export const ImageWithFallback = ({ src, style, className, ...props }: any) => {
-    const [error, setError] = useState(!src);
+    const isInvalidSrc = (url: any) => {
+        if (!url || typeof url !== 'string') return true;
+        if (url.startsWith('blob:') || url.startsWith('file:')) return true;
+        return false;
+    };
+
+    const isInvalid = isInvalidSrc(src);
+    const [loadError, setLoadError] = useState(false);
+
+    useEffect(() => {
+        setLoadError(false);
+    }, [src]);
+
+    const hasError = isInvalid || loadError;
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
 
-    useEffect(() => {
-        setError(!src);
-    }, [src]);
-
     return (
         <View style={[styles.container, style]}>
             <Image
-                source={error ? undefined : { uri: src }}
+                source={hasError ? undefined : { uri: src }}
                 style={StyleSheet.absoluteFill}
                 resizeMode="cover"
-                onError={() => setError(true)}
+                onError={() => setLoadError(true)}
                 {...props}
             />
         </View>

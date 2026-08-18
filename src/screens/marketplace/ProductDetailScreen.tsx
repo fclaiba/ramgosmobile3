@@ -175,7 +175,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                 {/* Image Carousel */}
                 <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carousel}>
                     {product.images?.map((img: any) => (
-                        <Image key={img.id} source={{ uri: img.url }} style={[styles.productImage, { width }]} />
+                        <Image key={img.id} source={{ uri: img.url }} style={[styles.productImage, { width }]} resizeMode="contain" />
                     ))}
                 </ScrollView>
 
@@ -343,7 +343,7 @@ const getStyles = (isDark: any) => StyleSheet.create({
         ...glassShadow(isDark),
     },
     carousel: { height: 350 },
-    productImage: { height: 350, resizeMode: 'contain' },
+    productImage: { height: 350 },
     content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: colors(isDark).glass },
     title: { fontSize: 24, fontWeight: '400', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 12 },
     price: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#FAFAFA' : '#111827', marginBottom: 4 },

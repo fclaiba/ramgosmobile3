@@ -234,7 +234,21 @@ export const getMyCart = query({
                     ? null
                     : ctx.db.normalizeId("listings", item.listingId);
                 const listing = listingId ? await ctx.db.get(listingId) : null;
-                return { ...item, listing };
+                
+                let imageUrl = listing?.images?.[0]?.url ?? listing?.image;
+                if (imageUrl && !imageUrl.startsWith("http") && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")) {
+                    try {
+                        const url = await ctx.storage.getUrl(imageUrl);
+                        if (url) imageUrl = url;
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+                
+                return { 
+                    ...item, 
+                    listing: listing ? { ...listing, image: imageUrl } : null 
+                };
             })
         );
     },

@@ -32,7 +32,7 @@ import {
     CreateStory,
     UserSearch,
 } from '../components/social';
-import { CreatorStudioModal } from '../components/social/CreatorStudioModal';
+import { InlineComposer } from '../components/social/InlineComposer';
 
 import { useResponsive } from '../hooks/useResponsive';
 import { useUnreadMessages } from '../hooks/useMessaging';
@@ -62,7 +62,6 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
 
     const [activeTab, setActiveTab] = useState<'feed' | 'reels'>('feed');
     const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
-    const [showCreatePost, setShowCreatePost] = useState(false);
     const [showCreateStory, setShowCreateStory] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
 
@@ -120,7 +119,7 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
         (userId: string) => {
             if (!userId) return;
             // Social hub → hybrid profile (feed + catálogo + bonos)
-            navigation.navigate('HybridProfile', { userId: String(userId) });
+            navigation.navigate('CommercialProfile', { userId: String(userId) });
         },
         [navigation],
     );
@@ -262,30 +261,18 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                         />
                     )}
                     ListHeaderComponent={
-                        <>
+                        <View>
                             <StoriesBar
                                 onStoryClick={(id) => setSelectedStoryId(id)}
                                 onAddStory={() => setShowCreateStory(true)}
                             />
-                            <TouchableOpacity
-                                style={styles.createPostBar}
-                                onPress={() => setShowCreatePost(true)}
-                            >
-                                <View style={styles.avatarPlaceholder}>
-                                    {user?.avatar ? (
-                                        <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
-                                    ) : (
-                                        <Text style={styles.avatarLetter}>
-                                            {(user?.nickname || user?.name || '?')[0]?.toUpperCase()}
-                                        </Text>
-                                    )}
-                                </View>
-                                <View style={styles.cpInput}>
-                                    <Text style={styles.cpText}>¿Qué estás pensando?</Text>
-                                </View>
-                                <PlusIcon size={20} color={isDark ? '#fff' : '#000'} />
-                            </TouchableOpacity>
-                        </>
+                            <InlineComposer 
+                                onPostCreated={() => {
+                                    setFeedCursor(null);
+                                    setAccumulatedPosts([]);
+                                }} 
+                            />
+                        </View>
                     }
                     ListEmptyComponent={
                         postsResult === undefined ? (
@@ -335,19 +322,7 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                 </View>
             )}
 
-            {activeTab === 'feed' && (
-                <TouchableOpacity
-                    style={styles.fab}
-                    onPress={() => setShowCreatePost(true)}
-                >
-                    <LinearGradient
-                        colors={['#4FC3F7', '#29B6F6']}
-                        style={styles.fabGradient}
-                    >
-                        <PlusIcon size={24} color="#fff" />
-                    </LinearGradient>
-                </TouchableOpacity>
-            )}
+
 
             {selectedStoryId && (
                 <StoryViewer
@@ -368,14 +343,6 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                 />
             )}
 
-            <CreatorStudioModal
-                visible={showCreatePost}
-                onClose={() => {
-                    setShowCreatePost(false);
-                    setFeedCursor(null);
-                    setAccumulatedPosts([]);
-                }}
-            />
             {showCreateStory && (
                 <CreateStory onClose={() => setShowCreateStory(false)} />
             )}

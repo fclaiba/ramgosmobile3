@@ -135,7 +135,7 @@ export default function ChatScreen({ route, navigation }: any) {
     // La lista es `inverted`, así que se guarda ya invertida y no se clona ni
     // se revierte en cada render.
     const messages = useMemo(
-        () => [...(page?.items ?? []), ...olderPages.flat()],
+        () => [...(page?.items ?? []), ...olderPages.flat()].reverse(),
         [olderPages, page?.items],
     );
 

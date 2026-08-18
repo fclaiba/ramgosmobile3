@@ -103,7 +103,7 @@ export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }
             <View style={styles.header}>
                 <TouchableOpacity style={styles.userInfo} onPress={() => onUserClick((post.author || post.user)?.userId || (post.author || post.user)?.id)}>
                     <Avatar style={{ width: 44, height: 44, borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)' }}>
-                        <AvatarImage src={(post.author || post.user)?.avatar} />
+                        <AvatarImage src={(post.author || post.user)?.avatar && !(post.author || post.user)?.avatar?.startsWith('blob:') && !(post.author || post.user)?.avatar?.startsWith('file:') ? (post.author || post.user)?.avatar : undefined} />
                         <AvatarFallback>{((post.author || post.user)?.displayName || (post.author || post.user)?.name || 'U')[0]}</AvatarFallback>
                     </Avatar>
                     <View style={{ marginLeft: 12 }}>
@@ -118,10 +118,10 @@ export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }
 
             <Text style={styles.content}>{post.content}</Text>
 
-            {post.images && post.images.length > 0 && (
+            {post.images && post.images.filter((img: string) => img && !img.startsWith('blob:') && !img.startsWith('file:')).length > 0 && (
                 <View style={styles.imageContainer}>
                     <PostImageCarousel
-                        images={post.images}
+                        images={post.images.filter((img: string) => img && !img.startsWith('blob:') && !img.startsWith('file:'))}
                         alts={post.imageAlts}
                         fallbackAlt={post.content}
                         dotsPosition="bottom"

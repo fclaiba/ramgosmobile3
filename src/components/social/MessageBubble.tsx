@@ -341,13 +341,12 @@ export const MessageBubble = React.memo(function MessageBubble({
 const getStyles = (isDark: boolean, mine: boolean) => {
     const c = colors(isDark);
     return StyleSheet.create({
-        // La lista es `inverted`; esto devuelve la burbuja a su orientación.
+        // La lista es `inverted`; la react-native-web u os manejan la re-inversión
         row: {
-            transform: [{ scaleY: -1 }],
             alignItems: mine ? 'flex-end' : 'flex-start',
             marginVertical: 3,
         },
-        systemRow: { transform: [{ scaleY: -1 }], alignItems: 'center', marginVertical: 8 },
+        systemRow: { alignItems: 'center', marginVertical: 8 },
         systemText: {
             fontSize: 11,
             color: c.textMuted,

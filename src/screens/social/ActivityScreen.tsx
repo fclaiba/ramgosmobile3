@@ -71,11 +71,11 @@ export default function ActivityScreen({ navigation }: any) {
 
     const handlePress = (item: any) => {
         if (item.type === 'match') {
-            navigation.navigate('HybridProfile', { userId: item.actorUserId });
+            navigation.navigate('CommercialProfile', { userId: item.actorUserId });
         } else if (item.targetType === 'post' && item.targetId) {
             navigation.navigate('PostDetail', { postId: item.targetId });
         } else if (item.type === 'follow' && item.actorUserId) {
-            navigation.navigate('HybridProfile', { userId: item.actorUserId });
+            navigation.navigate('CommercialProfile', { userId: item.actorUserId });
         }
     };
 

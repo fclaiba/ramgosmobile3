@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Image, Platform, LayoutChangeEvent } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, ScrollView, Image, Platform, LayoutChangeEvent, TouchableOpacity } from 'react-native';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 /**
  * Carrusel de imágenes de un post, compartido por las dos superficies que
@@ -34,6 +35,7 @@ export const PostImageCarousel = ({
 }) => {
     const [index, setIndex] = useState(0);
     const [pageWidth, setPageWidth] = useState(0);
+    const scrollRef = useRef<ScrollView>(null);
 
     const onLayout = (e: LayoutChangeEvent) => {
         const w = e.nativeEvent.layout.width;
@@ -46,6 +48,12 @@ export const PostImageCarousel = ({
         if (next !== index) setIndex(next);
     };
 
+    const scrollToIndex = (i: number) => {
+        if (!pageWidth || !scrollRef.current) return;
+        scrollRef.current.scrollTo({ x: i * pageWidth, animated: true });
+        setIndex(i);
+    };
+
     if (images.length === 0) return null;
 
     return (
@@ -54,6 +62,7 @@ export const PostImageCarousel = ({
                 dejaría todas las páginas encimadas. */}
             {pageWidth > 0 && (
                 <ScrollView
+                    ref={scrollRef}
                     horizontal
                     pagingEnabled
                     showsHorizontalScrollIndicator={false}
@@ -93,13 +102,32 @@ export const PostImageCarousel = ({
                     ))}
                 </View>
             )}
+
+            {images.length > 1 && index > 0 && (
+                <TouchableOpacity 
+                    style={[styles.navButton, styles.navLeft]} 
+                    onPress={() => scrollToIndex(index - 1)}
+                >
+                    <ChevronLeft size={24} color="#FFF" />
+                </TouchableOpacity>
+            )}
+            
+            {images.length > 1 && index < images.length - 1 && (
+                <TouchableOpacity 
+                    style={[styles.navButton, styles.navRight]} 
+                    onPress={() => scrollToIndex(index + 1)}
+                >
+                    <ChevronRight size={24} color="#FFF" />
+                </TouchableOpacity>
+            )}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
     backdropTint: {
-        ...StyleSheet.absoluteFill,
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
         backgroundColor: 'rgba(0,0,0,0.35)',
     },
     dots: {
@@ -118,5 +146,24 @@ const styles = StyleSheet.create({
         borderRadius: 3,
         backgroundColor: 'rgba(255,255,255,0.55)',
     },
-    dotActive: { backgroundColor: '#fff', width: 18 },
+    dotActive: {
+        backgroundColor: '#FFF',
+    },
+    navButton: {
+        position: 'absolute',
+        top: '50%',
+        marginTop: -20,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    navLeft: {
+        left: 8,
+    },
+    navRight: {
+        right: 8,
+    }
 });
