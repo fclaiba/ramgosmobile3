@@ -1,7 +1,6 @@
 export * from './types';
 export * from './StoriesBar';
 export * from './StoryViewer';
-export * from './CreateStory';
 export * from './Post';
 export * from './PostCard';
 export * from './PostCommentsModal';

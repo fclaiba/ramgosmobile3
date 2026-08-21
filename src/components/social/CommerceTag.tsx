@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ShoppingCart, Ticket } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Radius } from '../../theme/tokens';
+import { GlassSurface } from '../ui/GlassSurface';
 
 export interface CommerceTagProduct {
     listingId?: string;
@@ -21,10 +22,19 @@ export interface CommerceTagProps {
     variant?: 'full' | 'compact';
 }
 
+/** El borde iridiscente "holográfico" — la diferencia entre una tarjeta de
+ *  vidrio genérica y el gancho de venta que se supone que salte del feed. */
+const HOLO_COLORS = ['#FCD34D', '#F472B6', '#818CF8', '#34D399', '#FCD34D'] as const;
+
 /**
  * The floating "gancho" overlaid on a post — the one tap that turns content
  * into a sale. Discount-first when the listing has one ("🎟️ 40% OFF"),
  * price-first otherwise, per docs/DISEÑO_RED_SOCIAL_COMMERCE.md §2.
+ *
+ * Reescrito sobre `GlassSurface` (el mismo "Liquid Glass" de
+ * `src/utils/glass.ts` que ya usa el resto de la app) en vez de un
+ * `BlurView` a mano, más un borde iridiscente ("holográfico") que lo separa
+ * visualmente del resto de tarjetas de vidrio — es plata, tiene que saltar.
  */
 export const CommerceTag = React.memo(({ product, onPress, variant = 'full' }: CommerceTagProps) => {
     const { colorScheme } = useTheme();
@@ -48,16 +58,25 @@ export const CommerceTag = React.memo(({ product, onPress, variant = 'full' }: C
         return (
             <TouchableOpacity
                 onPress={handlePress}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={label}
             >
-                <BlurView intensity={isDark ? 60 : 40} tint={isDark ? 'dark' : 'light'} style={styles.compact}>
-                    {hasDiscount ? <Ticket size={14} color={accent} /> : <ShoppingCart size={14} color={accent} />}
-                    <Text style={styles.compactText} numberOfLines={1}>
-                        {hasDiscount ? `${Math.round(discount)}% OFF` : `$${product.price ?? ''}`}
-                    </Text>
-                </BlurView>
+                <LinearGradient
+                    colors={HOLO_COLORS}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.holoRingCompact}
+                >
+                    <GlassSurface intensity="prominent" style={styles.compactInner} specular>
+                        <View style={styles.compact}>
+                            {hasDiscount ? <Ticket size={14} color={accent} /> : <ShoppingCart size={14} color={accent} />}
+                            <Text style={styles.compactText} numberOfLines={1}>
+                                {hasDiscount ? `${Math.round(discount)}% OFF` : `$${product.price ?? ''}`}
+                            </Text>
+                        </View>
+                    </GlassSurface>
+                </LinearGradient>
             </TouchableOpacity>
         );
     }
@@ -66,33 +85,42 @@ export const CommerceTag = React.memo(({ product, onPress, variant = 'full' }: C
         <TouchableOpacity
             style={styles.wrapper}
             onPress={handlePress}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel={label}
         >
-            <BlurView intensity={isDark ? 60 : 40} tint={isDark ? 'dark' : 'light'} style={styles.tag}>
-                {hasDiscount ? <Ticket size={16} color={accent} /> : <ShoppingCart size={16} color={accent} />}
+            <LinearGradient
+                colors={HOLO_COLORS}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.holoRing}
+            >
+                <GlassSurface intensity="prominent" style={styles.tagInner} specular pressable>
+                    <View style={styles.tag}>
+                        {hasDiscount ? <Ticket size={16} color={accent} /> : <ShoppingCart size={16} color={accent} />}
 
-                <View style={styles.info}>
-                    <Text style={styles.name} numberOfLines={1}>
-                        {product.name}
-                    </Text>
-                    {hasDiscount ? (
-                        <View style={styles.priceRow}>
-                            <Text style={styles.discountBadge}>{Math.round(discount)}% OFF</Text>
-                            {product.price !== undefined && (
-                                <Text style={styles.price}>${product.price}</Text>
+                        <View style={styles.info}>
+                            <Text style={styles.name} numberOfLines={1}>
+                                {product.name}
+                            </Text>
+                            {hasDiscount ? (
+                                <View style={styles.priceRow}>
+                                    <Text style={styles.discountBadge}>{Math.round(discount)}% OFF</Text>
+                                    {product.price !== undefined && (
+                                        <Text style={styles.price}>${product.price}</Text>
+                                    )}
+                                </View>
+                            ) : (
+                                product.price !== undefined && <Text style={styles.price}>${product.price}</Text>
                             )}
                         </View>
-                    ) : (
-                        product.price !== undefined && <Text style={styles.price}>${product.price}</Text>
-                    )}
-                </View>
 
-                <View style={styles.buyBtn}>
-                    <Text style={styles.buyBtnText}>{hasDiscount ? 'Obtener' : 'Comprar'}</Text>
-                </View>
-            </BlurView>
+                        <View style={styles.buyBtn}>
+                            <Text style={styles.buyBtnText}>{hasDiscount ? 'Obtener' : 'Comprar'}</Text>
+                        </View>
+                    </View>
+                </GlassSurface>
+            </LinearGradient>
         </TouchableOpacity>
     );
 });
@@ -102,8 +130,22 @@ CommerceTag.displayName = 'CommerceTag';
 const styles = StyleSheet.create({
     wrapper: {
         marginTop: 12,
+    },
+    // El "anillo" de gradiente hace de marco: 1.5px de grosor visible
+    // alrededor de la superficie de vidrio insertada adentro.
+    holoRing: {
+        borderRadius: Radius.xl + 1.5,
+        padding: 1.5,
+    },
+    holoRingCompact: {
+        borderRadius: Radius.full + 1.5,
+        padding: 1.5,
+    },
+    tagInner: {
         borderRadius: Radius.xl,
-        overflow: 'hidden',
+    },
+    compactInner: {
+        borderRadius: Radius.full,
     },
     tag: {
         flexDirection: 'row',
@@ -111,8 +153,6 @@ const styles = StyleSheet.create({
         gap: 10,
         paddingVertical: 10,
         paddingHorizontal: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.18)',
     },
     info: {
         flex: 1,
@@ -156,10 +196,6 @@ const styles = StyleSheet.create({
         gap: 6,
         paddingVertical: 8,
         paddingHorizontal: 12,
-        borderRadius: Radius.full,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.18)',
     },
     compactText: {
         color: '#FFF',

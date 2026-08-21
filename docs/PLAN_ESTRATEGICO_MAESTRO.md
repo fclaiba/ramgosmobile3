@@ -1,8 +1,8 @@
 # Plan Estratégico Integral Maestro — Ramgos Mobile
 
-> **Versión:** 1.7 · **Última actualización plan:** 2026-08-18 · **Grafo:** 4641 nodos · 9192 edges · 422 comunidades  
-> **Fase activa:** RS-2 a RS-8 (módulo social completo: fundaciones, feed, moderación, gamificación, hilos/hashtags/menciones/actividad, ranker v2, comunidades) — código listo, **bloqueado por deploy a Convex + migración `pointsUnification` + QA runtime** (§15.2)  
-> **Estado general:** Fases 1–2, 6–8 y SEC-1 cerradas · Fases 3–5 código listo (QA manual §12.4 + tarea final Fase 5 pendientes) · RS-1 a RS-8 código listo sin verificar en runtime · RS-9 (extras SHOULD + Eventos/Matching) sin iniciar por decisión del usuario  
+> **Versión:** 1.10 · **Última actualización plan:** 2026-08-20 · **Grafo:** 4641 nodos · 9192 edges · 422 comunidades (desactualizado — falta `graphify update` post-sesión)  
+> **Fase activa:** Ranking dual Feed/Loops (RS-RANK) — código listo y deployado a dev ✅, QA runtime 🔴 sin ejecutar (mismo bloqueante de herramientas de navegador que E-083), prod pendiente de deploy (ver §15.4, E-085/E-086). Bloqueantes previos sin cambios: `pointsUnification` en prod y el hallazgo de ledger de E-082 siguen pendientes de que el usuario actúe  
+> **Estado general:** Fases 1–2, 6–8 y SEC-1 cerradas · Fases 3–5 código listo (QA manual §12.4 + tarea final Fase 5 pendientes) · RS-1 a RS-10 código listo, dev migrado y verificado, runtime todavía sin recorrer · RS-RANK (ranking dual) código listo en dev, mismo pendiente de QA runtime  
 > **Objetivo:** Llevar Ramgos de MVP con deuda de seguridad → **production-ready** → pentest → launch NY (pagos live).
 
 ---
@@ -1108,6 +1108,156 @@ Reglas:
   12. **Contactar vendedor** — en el detalle de una orden, el botón de
       contacto debe abrir el chat de verdad (regresión E-054).
 
+- [ ] **RS-2 — Ban efectivo también vía OAuth** *(ver §15.2)*
+
+  **Precondición dura:** migración `pointsUnification` aplicada (ver §15.3);
+  usuario de prueba logueable tanto por sesión (`email`/`password`) como por
+  Google OAuth (`oauthGoogle.ts`).
+
+  1. Loguearse con el usuario de prueba por sesión normal.
+  2. Como admin, correr `moderation.adminSuspendUser` sobre ese usuario.
+  3. Confirmar que la sesión activa pierde acceso (queries protegidas
+     rechazan).
+  4. Cerrar sesión, volver a loguearse con el **mismo** usuario pero por el
+     flujo OAuth de Google (`oauthGoogle.ts`).
+  5. Confirmar que el ban también aplica por ese camino — no solo por el de
+     sesión server-side (el gap que motivó este flujo).
+  6. Como admin, `moderation.adminUnsuspendUser` y confirmar que ambos
+     caminos de login vuelven a funcionar.
+
+- [ ] **RS-3 — Reclamo de recompensa** *(ver §15.2)*
+
+  1. Ejecutar una acción que otorgue reward social (`gamification.ts` →
+     `awardSocialAction`, p. ej. publicar un post que califica).
+  2. Ir a la pantalla de recompensas/economía y reclamarla vía
+     `economy.claimReward` (línea `economy.ts:510`).
+  3. Confirmar que `rewardsState.points` (canónico) sube y que la UI lo
+     refleja sin recargar.
+  4. Intentar reclamar la misma recompensa dos veces → debe rechazar
+     (idempotencia).
+
+- [ ] **RS-4 — Reporte → resolución admin** *(ver §15.2)*
+
+  1. Como usuario A, reportar un post de usuario B (`moderation.reportContent`).
+  2. Como admin, ver el reporte en `moderation.adminListReports` /
+     `adminGetReportDetail`.
+  3. Resolverlo con `moderation.adminResolveReport` (acción: remover post o
+     desestimar).
+  4. Si se removió: confirmar que el post desaparece del feed de todos
+     (`adminRemovePost`) y que queda registrado en
+     `adminListModerationActions`.
+
+- [ ] **RS-5 — Hilo + hashtag + mención** *(ver §15.2)*
+
+  1. Crear un post con un `#hashtag` y una `@mención` de otro usuario en el
+     texto.
+  2. Confirmar que `hashtags.attachHashtags` lo indexa: buscar el tag vía
+     `hashtags.getPostsByTag` y verlo en `hashtags.getTrendingTags`.
+  3. Confirmar que `mentions.attachMentions` generó notificación al usuario
+     mencionado (`activity.listActivity` de ese usuario).
+  4. Responder al post (hilo) y confirmar que la respuesta queda anidada
+     correctamente bajo el post original.
+
+- [ ] **RS-6 — Watch-time mueve el ranking (`forYou` vs `recent`)** *(ver §15.2)*
+
+  **Nota:** desde el 2026-08-18 el feed por defecto es **cronológico**
+  (`getFeed` con `mode: 'recent'`, ver `social.ts:943-956`); `forYou` (el
+  ranker `scorePost` con watch-time/conversión/afinidad/geo) solo se activa
+  si el cliente lo pide explícito. Este flujo prueba `forYou`, no el default.
+
+  1. Ver varios posts de video completos (watch-time alto) de un mismo
+     autor/categoría vía `social.addView`.
+  2. Pedir el feed con `mode: 'forYou'` y confirmar que ese contenido similar
+     sube de posición respecto a pedir `mode: 'recent'` con los mismos posts.
+  3. Confirmar que `mode: 'recent'` (el default real de la app) sigue
+     estrictamente cronológico sin importar el watch-time.
+
+- [ ] **RS-7 — Comunidad pública/privada (crear/unirse/aprobar/rechazar)** *(ver §15.2)*
+
+  1. Crear una comunidad pública (`communities.createCommunity`,
+     `isPrivate: false`) y otra privada.
+  2. Con otro usuario, unirse a la pública (`joinCommunity`) → acceso
+     inmediato.
+  3. Con otro usuario, pedir unirse a la privada → queda en
+     `listPendingRequests`, no tiene acceso todavía.
+  4. Como admin/dueño de la comunidad, `approveMember` a uno y `rejectMember`
+     a otro → confirmar accesos resultantes.
+  5. `leaveCommunity` y `removeMember` → confirmar que se pierde el acceso.
+
+- [ ] **RS-8 — Chat de comunidad** *(ver §15.2)*
+
+  1. Desde una comunidad (pública o privada) con miembros aprobados, abrir su
+     chat vía `communities.getOrCreateCommunityChat`.
+  2. Enviar un mensaje y confirmar que todos los miembros aprobados lo ven.
+  3. Confirmar que un usuario **no** miembro (o con solicitud pendiente) no
+     puede acceder al chat.
+
+- [ ] **RS-9 — Borradores, programados, guardados, mejores amigos** *(ver §15.3)*
+
+  1. **Borrador → publicar ahora:** `drafts.saveDraft` → `drafts.listMyDrafts`
+     → `drafts.publishDraftNow` → confirmar que aparece en el feed y el
+     borrador desaparece de la lista.
+  2. **Programado → cron lo publica solo:** `drafts.saveDraft` con fecha
+     futura cercana → esperar al cron `internalPublishDueScheduled`
+     (`drafts.ts:135`, ver `crons.ts` para el intervalo) → confirmar que se
+     publica solo sin intervención manual.
+  3. **Colección de guardados:** `social.toggleSavePost` sobre un post →
+     `social.createSavedCollection` → `social.movePostToCollection` →
+     `social.listMySavedCollections` / `getSavedPosts` reflejan el cambio.
+  4. **Mejores amigos ocultan una historia:** `social.addCloseFriend` sobre
+     un usuario → crear una story marcada solo-mejores-amigos → confirmar que
+     el usuario agregado la ve y uno **no** agregado no la ve
+     (`getStoriesForFollowing`).
+
+- [ ] **RS-10 — Matching de eventos (swipe)** *(ver §15.3)*
+
+  **Nota:** el deck de swipe usa `Gesture.Pan`/`GestureDetector` (primera vez
+  en el repo) + haptics — **no se puede validar en web**, queda a cargo del
+  usuario en dispositivo real (ver Fase 4 de este plan).
+
+  1. **Opt-in:** `eventMatching.setMatchOptIn` para un evento con dos
+     usuarios de prueba.
+  2. **Swipe mutuo → match → chat automático:** ambos usuarios
+     `eventMatching.swipe` con like mutuo sobre el otro → confirmar que
+     aparece en `getMyMatches` y que se creó un chat automáticamente (ver si
+     `swipe` dispara `getOrCreateDirectChat` internamente).
+  3. **Opt-in rechazado sin entrada confirmada:** un tercer usuario sin
+     entrada confirmada al evento intenta `setMatchOptIn` → debe rechazar.
+  4. **Unmatch:** `eventMatching.unmatch` → confirmar que desaparece de
+     `getMyMatches` de ambos usuarios.
+
+- [ ] **RS-RANK — Ranking dual Feed/Loops** *(ver §15.4, E-085/E-086)*
+
+  **Precondición dura:** `npx convex dev` corriendo con el schema/funciones
+  nuevas deployadas (tablas `socialAuthorAffinity`/`socialTagAffinity`,
+  campos `socialPosts.shareCount`/`quickSkipCount`/`totalLoopCount`/
+  `loopsTier`).
+
+  1. **"Para ti" es el default y mezcla, no es cronológico:** entrar al tab
+     Social sin tocar nada → el sub-tab activo es "Para ti"; los posts NO
+     deben salir estrictamente por fecha de subida.
+  2. **"Siguiendo" es estrictamente cronológico** (guardia de regresión de
+     E-080): tocar el sub-tab "Siguiendo" → orden = fecha de subida, sin
+     excepciones.
+  3. **Cold-start de Feed:** con una cuenta nueva/sin afinidad, publicar un
+     post → debe aparecer en "Para ti" de otra cuenta en pocos scrolls (el
+     caso exacto que E-080 había arreglado originalmente).
+  4. **Completion/skip real en Loops:** mirar un video de Loops entero vs.
+     salir a los 2 segundos → `social:debugScoreLoops` (`npx convex run
+     social:debugScoreLoops '{"viewerUserId":"..."}'`) debe reflejar
+     `avgCompletionPct`/`quickSkipCount` moviéndose acorde.
+  5. **Compartir un Loop sube `shareCount`:** compartir un video por DM
+     (`sharePostInChat`/`shareToUser`) → `shareCount` del post sube 1 y
+     aparece en el desglose de `debugScoreLoops`.
+  6. **Exploración de contenido nuevo:** publicar un video nuevo
+     (`viewCount≈0`) → debe seguir apareciendo en Loops (vía slot de
+     exploración) aunque no compita todavía por score. Correr a mano
+     `npx convex run social:loopsTiering:internalGradeLoopsTier '{}'` tras
+     juntar ≥200 vistas simuladas → el post debe recibir `loopsTier`.
+  7. **"No me interesa" baja el score de ese autor:** en el tab Feed, marcar
+     "No me interesa" sobre un post → `social:debugScoreFeed` debe mostrar
+     ese autor con score visiblemente más bajo en la próxima corrida.
+
 ---
 
 ## 13. Riesgos conocidos (confirmados por grafo)
@@ -1252,9 +1402,10 @@ Solo cuando tengas **usuarios y métricas reales**:
 | **RS-5** | Fase 3 — Gamificación social (`sp_post`/`sp_cmt`/`sp_story`/`sp_community_join`/hito de 10 likes, clawback al borrar) | 🟡 Código listo | 90% | Falta deploy + QA runtime | 2026-08-18 |
 | **RS-6** | Fase 4 (MUST) — Hilos, quote-repost, hashtags+trending, menciones, bandeja de Actividad, watch-time signal | 🟡 Código listo | 80% | Falta deploy + QA runtime; SHOULD/COULD del tier (colecciones, close friends, drafts, sonidos, analytics extendido) **no implementados** | 2026-08-18 |
 | **RS-7** | Fase 5 — Ranker v2 (watch-time, conversión comercial, "no me interesa", anti-repetición, cap de diversidad por autor) | 🟡 Código listo | 90% | Falta deploy + QA runtime | 2026-08-18 |
-| **RS-8** | Fase 6 — Comunidades Comerciales (crear/unirse/aprobar, feed y catálogo de comunidad, chat vía `social/dm.ts`) | 🟡 Código listo | 80% | Falta deploy + QA runtime; **`communityAgreements`/convenios de comisión cruzada NO implementados** (fuera de alcance de este corte) | 2026-08-18 |
+| **RS-8** | Fase 6 — Comunidades Comerciales (crear/unirse/aprobar, feed y catálogo de comunidad, chat vía `social/dm.ts`) | 🟡 Código listo | 80% | Falta deploy + QA runtime. `communityAgreements`/convenios de comisión cruzada **eliminados del alcance del producto** (no es un pendiente, ver E-087) | 2026-08-20 |
 | **RS-9** | Fase 7 — Extras SHOULD (pinned, poll UI, alt-text, colecciones, close friends, borradores/programación) | 🟡 Código listo | 85% | Falta deploy + QA runtime; sonidos reutilizables y link preview cards **no implementados** (ver §15.3) | 2026-08-18 |
 | **RS-10** | Fase 8 — Eventos + Matching ("Tinder interno") | 🟡 Código listo | 85% | Falta deploy + QA runtime; requiere datos reales de `eventReservations` para probar el gateo por entrada confirmada | 2026-08-18 |
+| **RS-RANK** | Ranking dual Feed (X/Instagram-style)/Loops (TikTok-style): afinidad graduada, `scoreLoop` por tasas, exploración/graduación por etapas, instrumentación real de watch-time | ✅ Código listo (deployado a dev) | 95% | QA runtime §12.4 sin ejecutar (mismo bloqueante de herramientas de navegador que E-083); prod pendiente de deploy | 2026-08-20 |
 
 **Leyenda:** ✅ Cerrada · 🟡 En curso · 🔴 Bloqueada · ⚪ Pendiente
 
@@ -1370,7 +1521,7 @@ decisión explícita del usuario (matching se hace al final).
 - [ ] **Correr la migración** `migrations/pointsUnification:unifyPoints` (`dryRun` primero, revisar `divergences`, después `chain: true`) y confirmar `unifyPointsStatus.pendingRows === 0`.
 - [ ] **QA runtime** de los 7 flujos: ban por OAuth, reclamo de recompensa, reporte→resolución admin, hilo+hashtag+mención, watch-time moviendo el ranking, comunidad pública/privada, chat de comunidad.
 - [ ] **No se corrió la app** — el rendimiento real de FlashList y el comportamiento del ranker en producción quedan sin medir hasta la QA runtime.
-- [ ] **`communityAgreements`** (convenios de comisión cruzada entre miembros de una comunidad) — diseñado, no implementado; requiere su propia revisión de seguridad por tocar el split de pagos.
+- [x] ~~`communityAgreements` (convenios de comisión cruzada entre miembros de una comunidad)~~ — **eliminado por completo del alcance del producto** (2026-08-20, ver §15.4/E-087): las comunidades no reparten comisiones entre miembros, sólo compiten por vender más dentro de un nicho compartido.
 
 ### 15.3 Fases RS-9 y RS-10 — Extras SHOULD + Eventos y Matching (2026-08-18)
 
@@ -1421,7 +1572,59 @@ Cierra el resto del roadmap social: lo que había quedado explícitamente diferi
 - [ ] **Sonidos reutilizables** (`socialSounds`) y **link preview cards** (`socialLinkPreviews`) — explícitamente NO implementados: pedían, respectivamente, una UI de edición de audio y una `action` con fetch externo + parseo de HTML, y el costo relativo a su valor no cerraba dentro de esta sesión.
 - [ ] **UI de carga de alt-text** en el creador de posts — el campo y el render ya existen, falta el input para que el usuario lo escriba.
 - [ ] **Migración de `StoryViewer.tsx`** al nuevo `shareStoryInChat` con adjunto real — el flujo viejo (prefijo de texto) sigue andando y no se tocó para no arriesgar una regresión.
-- [ ] **`communityAgreements`** — sigue sin implementar (ver §15.2).
+- [x] ~~`communityAgreements`~~ — eliminado del alcance del producto, ver §15.2/§15.4/E-087.
+
+### 15.4 Ranking dual — Feed (X/Instagram) y Loops (TikTok/Reels) (2026-08-20 — E-085/E-086)
+
+Diseñado en sesión de Plan Mode dedicada (dos Explore agents + un Plan agent,
+plan aprobado por el usuario) y ejecutado íntegro en la misma sesión.
+Decisiones de producto del usuario: (1) el Feed se alinea con cómo funcionan
+X/Instagram HOY — "Para ti" (algorítmico) es el default, revirtiendo E-080
+a propósito; (2) Loops recibe "el modelo más completo... para aumentar la
+viralización y la segmentación de contenido" — de ahí el mecanismo de
+exploración/graduación por etapas, no sólo un score plano.
+
+**Backend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RK.1 | `scorePost`/`scoreLoop`/`applyDiversityCap` extraídos a un módulo puro sin imports de Convex — testeables con Jest liso, sin runtime | `convex/social/scoring.ts` (nuevo) |
+| RK.2 | `scorePost` v2: + término de velocidad de engagement normalizado por edad (usa `retweetCount`, sin usar hasta ahora), + afinidad graduada (reemplaza el `+25` plano de "¿le dio like alguna vez?") | `convex/social/scoring.ts` |
+| RK.3 | `socialAuthorAffinity` — EMA persistida por (viewer, autor), media vida 14 días, cap 8.0, actualizada incrementalmente desde like/comentario/DM/watch-time≥80% (`bumpAuthorAffinity`) | `convex/schema.ts`, `convex/social.ts` |
+| RK.4 | `getFeed` `mode:'forYou'` pasa a ser el DEFAULT (`args.mode ?? 'forYou'`, antes `'recent'`) — reversión explícita de E-080, documentada inline y en este plan | `convex/social.ts` |
+| RK.5 | `scoreLoop` nuevo: scorer separado por TASAS (completion/like/comment/share/rewatch/quick-skip sobre `viewCount`), casi sin depender del grafo social a pedido explícito del usuario | `convex/social/scoring.ts` |
+| RK.6 | `socialTagAffinity` — misma mecánica EMA, media vida 4 días, alimentada SOLO por eventos de Loops (nunca por likes del Feed) | `convex/schema.ts`, `convex/social.ts` |
+| RK.7 | `getFeed` `mode:'videos'` ahora scorea in-place con `scoreLoop` + tags por post + diversity cap por hashtag de mayor afinidad (antes: orden cronológico puro) | `convex/social.ts` |
+| RK.8 | Exploración/graduación por etapas ("bandit-lite"): `socialPosts.loopsTier`/`loopsTierDecidedAt`/`loopsTierCycles`, slots garantizados (20% de la página, menos-visto-primero) para posts sin tier, cron cada 2h que gradúa por percentil (top 30%/bottom 15% del lote) | `convex/social/loopsTiering.ts` (nuevo), `convex/crons.ts` |
+| RK.9 | `addView` extendido: `watch[].quickSkip`/`loopCount`, contadores denormalizados `socialPosts.quickSkipCount`/`totalLoopCount`, dispara `bumpAuthorAffinity`/`bumpTagAffinityForPost` según el evento | `convex/social.ts` |
+| RK.10 | `socialPosts.shareCount` real, incrementado en `buildPostAttachment` (cubre `sharePostInChat`/`shareToUser`, no `shareStoryInChat` — las historias no son posts) | `convex/social/dm.ts` |
+| RK.11 | Afinidad de autor también sube al mandar un DM (2.5) — cubre `sendMessage`/`shareListingInChat`/`sharePostInChat`/`shareToUser`/`shareStoryInChat`, todos vía `deliverMessage` | `convex/social/dm.ts` |
+| RK.12 | Migración `loopsTierBackfill`: videos existentes con `viewCount≥200` gradúan directo (no arrancan en 'exploring' el día del lanzamiento), mismo template dry-run/`chain:true` que `pointsUnification.ts` | `convex/migrations/loopsTierBackfill.ts` (nuevo) |
+| RK.13 | Debug interno (NO público, lección de E-048): `social:debugScoreFeed`/`social:debugScoreLoops`, desglose término-por-término para un `viewerUserId` | `convex/social.ts` |
+
+**Frontend — hecho ✅**
+
+| # | Ítem | Evidencia |
+|---|---|---|
+| RK.14 | `SocialScreen` tab Feed migrado de query manual (sin ninguna señal de vista) a `<UnifiedFeed>` — ya trackea dwell/completion al salir de cada post y tiene el wiring de "No me interesa"/silenciar | `src/screens/SocialScreen.tsx` |
+| RK.15 | Tab "Siguiendo" nuevo (antes no existía ningún cronológico visible), sub-tabs "Para ti"/"Siguiendo" | `src/screens/SocialScreen.tsx` |
+| RK.16 | `UnifiedFeed`/`useSocialFeed` ganan `refreshKey`/`listHeaderComponent` — necesario para que `SocialScreen` le pase el header (StoriesBar + composer) y fuerce refresh al publicar | `src/components/social/UnifiedFeed.tsx`, `src/hooks/useSocialFeed.ts` |
+| RK.17 | `UnifiedFeed` deja de tener fondo negro fijo (pensado sólo para video a pantalla completa) — ahora themeable, porque también sirve el tab Feed de texto/imagen en modo claro | `src/components/social/UnifiedFeed.tsx` |
+| RK.18 | `LoopItem` manda completion/skip rápido/rewatch REALES del player (antes: una sola impresión al entrar, sin `watch`). Rewatch vía evento `playToEnd` del propio `expo-video` player (`loop:true`) — conteo exacto, no heurístico | `src/components/social/LoopItem.tsx` |
+
+**Verificación corrida ✅**
+
+- `convex/__tests__/socialScoring.test.ts` (nuevo, 15 tests) → **verde**: decay de recency, velocidad hot-vs-viejo, afinidad graduada y su cap, penalización "no me interesa"/ya-visto, completion/skip/shareRate>likeRate/afinidad-de-tag-negativa en Loops, diversity cap por clave y por autor, EMA con media vida.
+- `npx convex dev --once` → **0 errores** (schema + 3 archivos nuevos + `social.ts`/`dm.ts` reescritos deployados a dev, tipos regenerados). Requirió excluir `convex/__tests__` del `convex/tsconfig.json` (usa globals de Jest que el typechecker de Convex no conoce).
+- `npx tsc --noEmit -p tsconfig.check.json` → **0 errores** en todo el proyecto (backend + frontend).
+
+**Pendiente ❌**
+
+- [ ] **QA runtime** del checklist RS-RANK (§12.4, 7 pasos) — mismo bloqueante que E-083 (sin herramientas de navegador en esta sesión).
+- [ ] **Deploy a prod** — sólo se deployó a dev en esta sesión.
+- [ ] **Recalibración de constantes con datos reales**: los pesos de `scoreLoop` (`*1000` dentro de `log1p`, `EXPLORATION_SAMPLE_SIZE=200`, `EXPLORATION_SLOT_FRACTION=0.2`) son puntos de partida razonables, no derivados de datos — están documentados como tal en el código.
+- [ ] **`salesCount` sin escritor real**: término de `scorePost` que hoy no puede ganar nada (siempre 0) — no bloquea, pero no se debe presentar como "ranking commerce-aware" completo hasta confirmar/ubicar el escritor real.
+- [ ] Ver tabla de riesgos abiertos completa (cold-start, filter-bubble, shares/rewatch farming) en el plan de diseño original de esta fase.
 
 ---
 
@@ -1514,6 +1717,14 @@ Cierra el resto del roadmap social: lo que había quedado explícitamente diferi
 | E-078 | 2026-08-18 | Producto/UI | Un post con varias imágenes mostraba **sólo la primera, y recortada** (`images[0]` + `resizeMode="cover"`), en las DOS superficies que renderizan posts. No figuraba en ninguna lista de brechas | El doc §9 nombraba un `ImageSlider` que nunca se implementó; el recorte venía de `cover` | `PostImageCarousel` compartido: todas las imágenes deslizables + indicador de puntos, y la foto **completa en el encuadre** (`contain`) con copia desenfocada de fondo para rellenar. Cableado en `PostCard` (feed vertical) y en `Post` (tab Social) — este último es el que ve el usuario y se había pasado por alto en la primera pasada | ✅ Resuelto | src/components/social/PostImageCarousel.tsx, PostCard.tsx, Post.tsx, types.ts |
 | E-079 | 2026-08-18 | Producto | `MercadoPago` figuraba como pasarela en §8 del doc y como proveedor en el código, pero era un **mock puro del cliente** (`simulateNetworkLatency`, ids y URL de recibo inventados) | Se documentó como integración real algo que nunca lo fue | Decisión del usuario: **Stripe es la única pasarela**. Eliminado `mercadoPagoProvider` y el literal del union `PaymentProviderKey`; actualizado §8 y el comentario de `payments.provider` en el schema. Verificado que nada importaba ese módulo | ✅ Resuelto | src/services/fintech/paymentProviders.ts, convex/schema.ts, docs/ARQUITECTURA_SOCIAL_COMMERCE.md |
 | E-080 | 2026-08-18 | Producto | El feed salía **rankeado por algoritmo** (`forYou` por defecto), con lo que un post recién subido podía no aparecer arriba — o el cap de diversidad por autor lo sacaba de la página — y se leía como que la app lo perdió | §5 del doc definía el motor de recomendación como comportamiento por defecto | Decisión del usuario: **las publicaciones salen por orden de subida**. `getFeed` pasa a `mode: 'recent'` por defecto (cronológico, lo más nuevo primero). El ranker `scorePost` **no se borró**: sigue disponible pidiendo `mode: 'forYou'` explícitamente. §5 del doc actualizado con la aclaración | ✅ Resuelto | convex/social.ts (`getFeed`), docs/ARQUITECTURA_SOCIAL_COMMERCE.md |
+| E-081 | 2026-08-19 | Documentación | Cabecera del plan (v1.7) decía "RS-9 (extras SHOULD + Eventos/Matching) sin iniciar por decisión del usuario", pero §15.3 (agregado en la misma sesión del 2026-08-18) ya documenta RS-9 y RS-10 como código listo (85%, RS.45–RS.65). Además existe un segundo archivo `PLAN_ESTRATEGICO_MAESTRO.md` suelto en la raíz del repo (fuera de `docs/`) que NO es este plan: es un log corto y desactualizado de una tanda distinta de trabajo (Reels/bugs/UX/perfiles, última fase "4. Unificación de Perfiles"), con sus propios §15/§16/§17 vacíos — puede confundirse con este archivo por tener el mismo nombre | La cabecera se escribió antes de que se cerrara la sesión que agregó §15.3, y nunca se refrescó. El archivo duplicado en la raíz nunca se consolidó con `docs/PLAN_ESTRATEGICO_MAESTRO.md` | Cabecera corregida (líneas 3–6): versión 1.8, RS-2 a RS-10 listadas como código listo. **Pendiente de decisión del usuario:** qué hacer con el `PLAN_ESTRATEGICO_MAESTRO.md` de la raíz (fusionar su bitácora dentro de `docs/` y borrarlo, o dejarlo como log aparte pero renombrado para no confundir) | 🟡 Parcial — falta resolver el archivo duplicado | docs/PLAN_ESTRATEGICO_MAESTRO.md (cabecera), PLAN_ESTRATEGICO_MAESTRO.md (raíz, sin resolver) |
+| E-082 | 2026-08-20 | RS-2…RS-10 (Fase 2 de este plan) | Migración `pointsUnification` nunca había corrido en ningún deployment (bloqueante de cierre de RS-2…RS-10) | Bloqueante externo puro, no de código: la mutation estaba escrita e idempotente desde antes, solo faltaba ejecutarla | **Dev:** corrida con `chain:true` → `pendingRows: 0`, `legacyBalanceAhead: 0`, 125 filas procesadas. Los 28 "divergentes" del dry-run eran cuentas huérfanas (`userId` ya no existe en `users`) — cero riesgo real, se aplicó sin pedir más permiso. **Prod:** dry-run limpio (13 filas, 0 divergencias) pero la aplicación real (`chain:true --prod`) la bloqueó el clasificador de permisos del harness incluso con autorización explícita del usuario en el chat — requiere que el usuario la corra en su propia terminal (comando dejado en el chat) o agregue una regla de permiso Bash. **Hallazgo colateral, fuera de alcance de este plan:** `auditLedgerConsistency` en dev encontró 3 usuarios reales (no huérfanos) con `pointsLedger` desalineado del canónico `rewardsState.points` — `fclaibainfo@gmail.com` (529 vs 959), `andrescartcm@gmail.com` (0 vs 500), `agustinlory@gmail.com` (125 vs 261). Es un bug de contabilidad previo a esta sesión, no causado por la migración (que no toca el ledger) | 🟡 Parcial — dev cerrado, prod pendiente de que el usuario ejecute el comando, y el hallazgo del ledger sin investigar | convex/migrations/pointsUnification.ts |
+| E-083 | 2026-08-20 | Fase 4 de este plan (QA runtime) | El plan aprobado asumía correr el checklist de §12.4 (13 flujos RS-2…RS-10) vía `claude-in-chrome` contra `localhost:8081` — las herramientas de navegador no aparecieron disponibles en esta sesión (`ToolSearch` sin resultados para ninguna variante) | Extensión de Chrome no conectada a esta sesión concreta (es una integración por sesión, no por proyecto) | Se levantó igual el server (`npm run web`, responde 200 en `localhost:8081`) para que el usuario lo recorra a mano con el checklist de §12.4, o para retomarlo en otra sesión con la extensión conectada | 🔴 Pendiente — Fase 4 no se pudo ejecutar | — |
+| E-084 | 2026-08-20 | `docs/ARQUITECTURA_SOCIAL_COMMERCE.md` §10 "Aún abierto" | 8 features quedaban documentadas como pendientes, fuera del alcance del plan de cierre de RS-2…RS-10 | Estaban explícitamente pospuestas para "un plan posterior" — el usuario pidió desarrollarlas ahora | Se implementaron 6 de las 8 completas: (1) video en `contain` con blur de fondo igual que las imágenes (`PostCard.tsx`); (2) pool de 3 reproductores `expo-video` compartidos por feed (`useVideoPlayerPool.ts`) + de paso `LoopItem`/`LoopFeed` migraron de `expo-av` (deprecado) a `expo-video`; (3) `CommerceTag` reescrito sobre `GlassSurface`/`glass.ts` + borde iridiscente; (4) UI de alt-text en `InlineComposer` (botón "Aa" por miniatura); (5) `StoryViewer` migrado a `shareStoryInChat` (adjunto real, no texto con prefijo); (6) link preview cards nuevas de punta a punta (tabla `socialLinkPreviews`, `social/linkPreview.ts` con fetch+parseo OG en background vía scheduler, render en `Post.tsx`/`PostCard.tsx`). Las otras 2 se dejaron **deliberadamente sin cerrar del todo**, con la brecha real documentada en el propio código en vez de fingir que están resueltas: **discovery** (`convex/discovery.ts`, nuevo — unifica personas+productos en un buscador) es full-text sobre índices de Convex, **no semántico/vectorial** (no hay proveedor de embeddings elegido en el stack); **`communityAgreements`** (`communities.ts`, nuevo) tiene el CRUD completo del convenio (proponer/aceptar/rechazar/revocar) pero el split de pagos real —acreditar la comisión en una venta— se dejó sin cablear a propósito, por tocar plata de terceros sin una revisión de seguridad dedicada. **Sonidos reutilizables** no se tocó: necesita procesamiento de audio/video que este stack no tiene instalado, es una decisión de infraestructura aparte, no un gap chico. `tsc --noEmit` y `test:constitution` verdes después de cada tanda; deployado a dev (`npx convex dev --once`) para regenerar tipos | ✅ 6/8 completas · 🟡 2/8 con brecha real documentada (discovery semántico, split de pagos de convenios) | convex/discovery.ts, convex/social/linkPreview.ts, convex/social/communities.ts, convex/schema.ts, src/hooks/useVideoPlayerPool.ts, src/components/social/{PostCard,CommerceTag,InlineComposer,StoryViewer,LoopItem,LoopFeed,UserSearch,LinkPreviewCard}.tsx |
+| E-085 | 2026-08-20 | Ranking dual (planificado en Plan Mode, ver §15.4) | El Feed salía **cronológico por defecto** (`mode:'recent'`, E-080) — decisión de producto de esta sesión: revertirlo a propósito para alinear con cómo funcionan X/Instagram HOY | El usuario pidió explícitamente "la lógica con que funcionen las redes sociales actuales" al elegir el default del Feed — en X/Instagram real, el tab algorítmico ("Para ti") ES el default, no una opción sobre un cronológico | `getFeed`: `mode = args.mode ?? 'forYou'` (antes `'recent'`). El riesgo que motivó E-080 (catálogo chico esconde posts nuevos) **no se da por resuelto**, se mitiga con oversample + diversity cap y queda como riesgo abierto documentado. Tab "Siguiendo" nuevo en `SocialScreen.tsx` para el cronológico explícito. `scorePost` también se mejoró en la misma pasada: + velocidad de engagement normalizada por edad, + afinidad graduada (`socialAuthorAffinity`, EMA) en vez del `+25` plano | ✅ Resuelto — reversión deliberada, documentada como tal (no como corrección de un error) | convex/social.ts (`getFeed`), convex/social/scoring.ts, docs/ARQUITECTURA_SOCIAL_COMMERCE.md §5 |
+| E-086 | 2026-08-20 | Ranking dual — Loops (ver §15.4) | Loops (`mode:'videos'`) no tenía NINGÚN ranking: orden cronológico puro sobre `by_type_created`, y la instrumentación de watch-time real (`LoopItem`) sólo mandaba una impresión al entrar, sin `watch` — `avgCompletionPct`/`quickSkipCount` nunca se llenaban | El usuario pidió "el modelo más completo y funcional... para aumentar la viralización y la segmentación de contenido" — explícitamente el más sofisticado de las dos opciones planteadas, no un score heurístico plano | `scoreLoop` nuevo (scorer por TASAS, separado de `scorePost`, casi sin depender del grafo social) + `socialTagAffinity` (afinidad por interés, sólo alimentada por Loops) + mecanismo de exploración/graduación por etapas ("bandit-lite" sin ML real todavía: slots garantizados + cron de graduación por percentil cada 2h, `social/loopsTiering.ts`) + `LoopItem` instrumentado de verdad (completion/skip/rewatch reales vía el player, rewatch por evento `playToEnd` exacto) + `shareCount` real (`sharePostInChat`/`shareToUser`) | ✅ Resuelto — deployado a dev, QA runtime pendiente (mismo bloqueante que E-083) | convex/social/{scoring,loopsTiering}.ts, convex/social.ts, convex/social/dm.ts, convex/migrations/loopsTierBackfill.ts, src/components/social/LoopItem.tsx |
+| E-087 | 2026-08-20 | Comunidades comerciales (`social/communities.ts`) | `communityAgreements` (convenios de comisión cruzada entre miembros de una comunidad: "si B vende algo promocionado por A, A cobra X%") existía en el schema y como CRUD completo (`proposeAgreement`/`respondToAgreement`/`revokeAgreement`/`listMyAgreements`), documentado como "split de pagos sin cablear a propósito" — pero el usuario **no quiere esta feature en el sistema en absoluto**, ni siquiera a medio implementar | Decisión de producto explícita: las Comunidades son un nicho compartido donde varios vendedores postean y **compiten** por vender más de ese rubro — no un vehículo para repartirse comisiones entre sí. La única figura que puede cobrar comisión de una venta en toda la app es un usuario `role:'influencer'` vía campaña (ya gateado — `campaigns.ts:650`, `if (influencer.role !== 'influencer') continue`, sin relación con comunidades) | **Eliminado por completo**, no descontinuado a medias: tabla `communityAgreements` borrada de `convex/schema.ts` (confirmado 0 documentos vía `npx convex data communityAgreements` antes de borrar, así que no hizo falta migración de baja); las 4 funciones + el bloque de comentario de "convenios" borrados de `convex/social/communities.ts`; sin frontend que las llamara (nunca se construyó UI). Docs actualizados: `ARQUITECTURA_SOCIAL_COMMERCE.md` §6.B/§10/§11 ya no mencionan convenios como pendiente, sino como decisión de exclusión | ✅ Resuelto — feature removida, no diferida | convex/schema.ts, convex/social/communities.ts, docs/ARQUITECTURA_SOCIAL_COMMERCE.md |
+
 **Plantilla para nuevas entradas:**
 
 ```markdown

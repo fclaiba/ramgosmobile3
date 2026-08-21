@@ -10,6 +10,14 @@ export interface UseSocialFeedOptions {
     authorUserId?: string;
     mode?: SocialFeedMode;
     pageSize?: number;
+    /** Cambiar este valor fuerza un `refresh()` (ej: se creó un post nuevo
+     *  desde un composer que vive FUERA de este hook). */
+    refreshKey?: string | number;
+    /** B2: si viene seteado, el feed sale de `getCommunityFeed` en vez de
+     *  `getFeed` — mismo shape de página (`{items, nextCursor}`), así que
+     *  toda la paginación/dedupe de abajo se reusa sin cambios. Anula
+     *  `authorUserId`/`mode`. */
+    communityId?: string;
 }
 
 /**
@@ -21,16 +29,20 @@ export interface UseSocialFeedOptions {
  * propia variante de los mismos bugs potenciales (cursor repetido, página
  * vieja no descartada al cambiar de modo). Ahora las tres consumen esto.
  */
-export const useSocialFeed = ({ authorUserId, mode, pageSize = 20 }: UseSocialFeedOptions = {}) => {
+export const useSocialFeed = ({ authorUserId, mode, pageSize = 20, refreshKey, communityId }: UseSocialFeedOptions = {}) => {
     const { sessionToken } = useAuth();
 
     const [cursor, setCursor] = useState<string | undefined>(undefined);
     const [olderPages, setOlderPages] = useState<Array<{ cursor: string; items: any[] }>>([]);
     const [exhausted, setExhausted] = useState(false);
 
-    const page = useQuery(
+    // Dos `useQuery` incondicionales (una de las dos siempre en 'skip') en
+    // vez de elegir el hook a llamar — Convex/React no permite condicionar
+    // CUÁL hook se llama, sólo sus args (mismo patrón ya usado en
+    // `SoundDetailsScreen`).
+    const globalPage = useQuery(
         api.social.getFeed,
-        sessionToken
+        sessionToken && !communityId
             ? {
                   sessionToken,
                   limit: pageSize,
@@ -40,13 +52,21 @@ export const useSocialFeed = ({ authorUserId, mode, pageSize = 20 }: UseSocialFe
               }
             : 'skip',
     );
+    const communityPage = useQuery(
+        api.social.communities.getCommunityFeed,
+        sessionToken && communityId
+            ? { sessionToken, communityId: communityId as any, limit: pageSize, cursor }
+            : 'skip',
+    );
+    const page = communityId ? communityPage : globalPage;
 
-    // Reset al cambiar de identidad del feed (autor, modo, o sesión).
+    // Reset al cambiar de identidad del feed (autor, modo, comunidad,
+    // sesión, o un `refreshKey` externo — ej: se creó un post nuevo).
     useEffect(() => {
         setCursor(undefined);
         setOlderPages([]);
         setExhausted(false);
-    }, [authorUserId, mode, sessionToken]);
+    }, [authorUserId, mode, communityId, sessionToken, refreshKey]);
 
     // Pliega cada página nueva (más allá de la primera, que es reactiva) a
     // la cola acumulada.
@@ -92,7 +112,7 @@ export const useSocialFeed = ({ authorUserId, mode, pageSize = 20 }: UseSocialFe
     const viewedIds = useRef<Set<string>>(new Set());
     useEffect(() => {
         viewedIds.current = new Set();
-    }, [authorUserId, mode, sessionToken]);
+    }, [authorUserId, mode, communityId, sessionToken, refreshKey]);
 
     return {
         posts,

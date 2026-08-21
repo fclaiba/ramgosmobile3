@@ -94,7 +94,8 @@ export const getFeed = query({
 
 // Helper to resolve storage URLs
 // Helper to resolve storage URLs
-const resolveListingUrls = async (ctx: any, listing: any) => {
+// Exportado para `convex/discovery.ts` (discovery unificado personas+productos).
+export const resolveListingUrls = async (ctx: any, listing: any) => {
     if (!listing) return null;
 
     const isStorageId = (url: string) => {

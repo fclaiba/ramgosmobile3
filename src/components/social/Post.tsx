@@ -5,6 +5,7 @@ import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, ShoppingBag } f
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
 import { PostImageCarousel } from './PostImageCarousel';
+import { LinkPreviewCard } from './LinkPreviewCard';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
 import { useMutation, useQuery } from 'convex/react';
@@ -117,6 +118,12 @@ export const Post: React.FC<PostProps> = ({ post, onUserClick, onCommercePress }
             </View>
 
             <Text style={styles.content}>{post.content}</Text>
+
+            {/* Sólo en posts de puro texto: si ya hay galería/video/tag
+                comercial, el espacio visual es de eso. */}
+            {!post.images?.length && !post.videoUrl && !post.commercialProduct && (
+                <LinkPreviewCard content={post.content} />
+            )}
 
             {post.images && post.images.filter((img: string) => img && !img.startsWith('blob:') && !img.startsWith('file:')).length > 0 && (
                 <View style={styles.imageContainer}>

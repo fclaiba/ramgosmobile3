@@ -59,13 +59,15 @@ graph TD
 ## 5. Lógica del Algoritmo (Motor de Recomendación)
 
 > [!IMPORTANT]
-> **El feed por defecto es CRONOLÓGICO: las publicaciones salen por orden de subida, lo más nuevo primero.** Decisión de producto (2026-08-18) que reemplaza lo que esta sección describía como comportamiento por defecto.
+> **El feed por defecto es ALGORÍTMICO ("Para ti"), igual que X/Instagram hoy.** Decisión de producto (2026-08-20, bitácora E-085) que **revierte deliberadamente** la decisión anterior (2026-08-18) de que el default fuera cronológico.
 >
-> El motor de recomendación descrito abajo **sigue implementado** (`scorePost` en `convex/social.ts`), pero sólo se activa si el cliente pide `mode: 'forYou'` explícitamente. El motivo del cambio: con un catálogo chico de posts, un feed rankeado hace que una publicación recién subida no aparezca arriba —o que el cap de diversidad por autor la saque de la página— y se lee como que la app perdió el post.
+> Hay un tab cronológico explícito, **"Siguiendo"** (`mode: 'following'`), como alternativa — no al revés. El riesgo que motivó el cronológico-por-default (con catálogo chico, un feed rankeado puede esconder un post recién subido) **no se da por resuelto**, sólo se mitiga con oversample + cap de diversidad por autor; es un riesgo abierto documentado en el plan de ranking (`docs/PLAN_ESTRATEGICO_MAESTRO.md` §16, E-085).
+>
+> **Loops (Reels) tiene su propio scorer separado** (`scoreLoop`, distinto de `scorePost`): rankea por TASAS de engagement (completion/like/comment/share/rewatch sobre `viewCount`, no conteos absolutos) y depende mucho menos del grafo social — la personalización es por interés de contenido (`socialTagAffinity`, alimentada sólo por eventos de Loops), no por a quién seguís. Además tiene un mecanismo de exploración/graduación por etapas ("bandit-lite" vía cron, ver §10) para que un video nuevo no quede invisible mientras junta sus primeras vistas.
 
-El motor de recomendación (modo `forYou`, opcional) es un algoritmo híbrido que aprende dinámicamente del comportamiento del usuario:
+El motor de recomendación de Feed (modos `forYou`/`following`, ambos siempre disponibles) es un algoritmo híbrido que aprende dinámicamente del comportamiento del usuario:
 
-1. **Decodificación por Interacción:** A medida que el usuario da "Me gusta", visualiza videos completos o comenta, el algoritmo descifra su "noción de intereses" en tiempo real y comienza a inyectar contenido similar.
+1. **Decodificación por Interacción:** A medida que el usuario da "Me gusta", visualiza videos completos, comenta o manda un DM, el algoritmo actualiza una afinidad graduada por autor (`socialAuthorAffinity`, EMA con media vida de 14 días) y comienza a inyectar más contenido de esas personas — no una regla booleana de "le gustó alguna vez sí/no".
 2. **Priorización de Geolocalización (Comercial):** La ubicación geográfica del usuario es **primordial** para el contenido transaccional. Si el usuario está en Argentina, el algoritmo priorizará mostrar posts con CommerceTags de negocios o influencers locales (y no productos de España o Estados Unidos). 
 3. **Fronteras Abiertas (Social):** Aunque lo comercial está fuertemente geolocalizado para asegurar la viabilidad de la compra/envío, el contenido puramente social o de *lifestyle* no está restringido de forma estricta, permitiendo al usuario interactuar con creadores de cualquier parte del mundo.
 
@@ -79,7 +81,7 @@ El perfil de un usuario es la síntesis perfecta entre Instagram y Twitter, pero
 ### B. Comunidades Comerciales (El Shopping Digital)
 Inspirado en los "Mejores Amigos" de IG, las "Comunidades" de Twitter y las "Notas":
 * **Usuarios:** Pueden tener grupos privados para compartir contenido exclusivo.
-* **Negocios (Digitalización de Pasillos Comerciales):** Los negocios pueden crear o unirse a **Comunidades Comerciales**. Esto permite que múltiples vendedores y promotores se asocien (ej. "Comunidad de Vendedores de Palermo") para generar tráfico cruzado, armar convenios y digitalizar la experiencia de un centro comercial.
+* **Negocios (Digitalización de Pasillos Comerciales):** Los negocios pueden crear o unirse a **Comunidades Comerciales**: varios vendedores del mismo rubro comparten un espacio para postear y **compiten entre sí por vender más** de ese nicho (ej. "Comunidad de Vendedores de Palermo"), digitalizando la experiencia de un centro comercial. **Sin reparto de comisiones entre miembros** — una comunidad no es un vehículo de comisión cruzada; la única figura que cobra comisión de una venta en toda la app es un usuario `influencer` vía campaña (§2).
 
 ### C. Eventos y Matching (Tinder Interno)
 Para potenciar la presencialidad y la vida nocturna o social, la red integra un sistema de **Matching en Eventos**:
@@ -109,7 +111,7 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 * `<PostCard />`: Componente dinámico. Renderiza el contenido según su tipo (VideoPlayer, carrusel de imágenes, texto).
   * **Carrusel:** un post con varias imágenes las muestra TODAS, deslizables en horizontal, con indicador de puntos.
   * **Encuadre:** las imágenes se ven **completas** dentro del encuadre del post (`resizeMode="contain"`), nunca recortadas. Como eso deja bandas, detrás va una copia de la misma imagen recortada y desenfocada para rellenar.
-* `<StoryRing />` / `<StoryViewer />`: Visor inmersivo a pantalla completa para contenido efímero (24hs).
+* `<StoriesBar />` / `<StoryViewer />`: Visor inmersivo a pantalla completa para contenido efímero (24hs).
 
 **Funciones Internas (Convex & Hooks):**
 * `getUnifiedFeed(cursor, limit)`: Carga el contenido paginado mezclando el algoritmo de intereses.
@@ -130,7 +132,7 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 
 ### 🧩 Módulo 3: Creator Studio (Publicación)
 **Componentes Internos:**
-* `<MediaUploader />`: Selector ultrarrápido de galería.
+* `<CreatePost />` (Selector de media): Selector ultrarrápido de galería integrado en el flujo de creación.
 * `<CommerceLinker />`: Modal para que el creador busque y asocie un producto o bono existente a su post antes de publicarlo.
 
 **Funciones Internas (Convex & Hooks):**
@@ -158,10 +160,10 @@ Entrada: `HomeScreen` → sección `social` → `SocialScreen`.
 
 | Capacidad | Estado |
 |---|---|
-| `UnifiedFeed` en `@shopify/flash-list` (era FlatList) | Hecho — falta pre-cache agresivo de video (queda abierto abajo) |
+| `UnifiedFeed` en `@shopify/flash-list` (era FlatList) | Hecho |
 | Algoritmo de ranking v2: geo + afinidad + **watch-time** + **conversión comercial** + "no me interesa" + anti-repetición + cap de diversidad por autor | Hecho |
 | Gamificación social: puntos por publicar/comentar/story/unirse a comunidad/hito de 10 likes, con clawback anti-abuso | Hecho |
-| Comunidades comerciales: crear/unirse/aprobar, feed y catálogo de comunidad, chat vía `social/dm.ts` | Hecho — **convenios de comisión cruzada (`communityAgreements`) NO implementados** |
+| Comunidades comerciales: crear/unirse/aprobar, feed y catálogo de comunidad, chat vía `social/dm.ts` | Hecho |
 | Moderación completa: reportes, mute, ocultar, filtro de palabras, shadowban/suspensión, cola admin | Hecho |
 | Hilos, quote-repost, hashtags + trending, menciones, bandeja de Actividad real | Hecho |
 | Ban efectivo también vía OAuth (antes sólo cortaba sesiones server-side) | Hecho |
@@ -174,21 +176,40 @@ Entrada: `HomeScreen` → sección `social` → `SocialScreen`.
 | Matching de eventos (Sprint 5): opt-in gateado por entrada confirmada, deck de swipe, match mutuo → chat automático | Hecho |
 | Posts fijados, encuestas con UI de resultados, colecciones de guardados, mejores amigos (audiencia de historias), borradores y publicación programada | Hecho |
 | **Carrusel de imágenes** en el feed, con la foto completa en el encuadre (`contain` + fondo desenfocado) | Hecho |
-| **Feed cronológico por orden de subida** como comportamiento por defecto | Hecho |
+| ~~**Feed cronológico por orden de subida** como comportamiento por defecto~~ | **Revertido 2026-08-20** — ver fila de ranking dual abajo y E-085 |
 | **Stripe como única pasarela** (se eliminó el proveedor MercadoPago simulado) | Hecho |
 
-### Aún abierto
-1. **Pre-cache agresivo de video** en el feed (FlashList ya está; falta el pool de reproductores `expo-video` con ventana adelante/atrás).
-2. **CommerceTag holográfico** overlay tipo Liquid Glass (hoy card/CTA en el post).
-3. **Discovery vectorial** (personas + productos en una lupa).
-4. **Convenios de comunidad** (`communityAgreements`: comisión cruzada entre miembros) — diseñado, no implementado; toca el split de pagos y merece su propia revisión de seguridad.
-5. **Sonidos reutilizables** y **link preview cards** — piden UI de edición de audio / fetch externo + parseo de HTML.
-6. **UI de carga de alt-text** en el creador de posts (el campo y el render en el feed ya existen).
-7. **`StoryViewer.tsx`** no se migró al nuevo `shareStoryInChat` con adjunto real; su respuesta por texto con prefijo sigue funcionando.
-8. **`<MediaUploader />` y `<StoryRing />`** (§9) no existen como componentes con ese nombre: la funcionalidad vive inline en `CreatePost` y `StoriesBar`. Es nomenclatura del doc, no falta funcionalidad.
-9. **El video sigue en `cover`** (recortado a pantalla completa). La regla de "verse completo en el encuadre" se aplicó a **imágenes**; si se quiere lo mismo para video, es un cambio aparte.
+### Hecho (cierre de brechas, 2026-08-20)
 
-> **Nota:** `claimFromPost` salió de esta lista porque ya no es una brecha sino una decisión: el pago pasa por el carrito y no habrá una mutation de checkout dentro del feed (ver §1).
+| Capacidad | Estado |
+|---|---|
+| **Video en `contain`** (como las imágenes): segunda `VideoView` del mismo `player` en `cover`+blur de fondo, la de encima en `contain` | Hecho — `PostCard.tsx` |
+| **Pool de reproductores de video**: `useVideoPlayerPool` (3 fijos, `slot = index % 3`, `replaceAsync` en vez de crear/destruir) — de paso, `LoopItem`/`LoopFeed` migraron de `expo-av` (deprecado) a `expo-video` | Hecho — `src/hooks/useVideoPlayerPool.ts` |
+| **CommerceTag "Liquid Glass" holográfico**: reescrito sobre `GlassSurface`/`glass.ts` + borde iridiscente (`LinearGradient`) | Hecho — `CommerceTag.tsx` |
+| **UI de alt-text** en el composer: botón "Aa" por miniatura, editor inline, viaja en `createPost` | Hecho — `InlineComposer.tsx` |
+| **`StoryViewer` migrado a `shareStoryInChat`**: la respuesta a una historia manda el adjunto real, no un texto con prefijo | Hecho — `StoryViewer.tsx` |
+| **Link preview cards**: OG metadata fetcheada server-side en background al publicar (`social/linkPreview.ts`), cacheada por URL, renderizada en `Post.tsx`/`PostCard.tsx` para posts de puro texto | Hecho |
+| **Discovery unificado** (personas + productos en un buscador): `convex/discovery.ts` corre las dos búsquedas en paralelo; **full-text sobre índices de Convex, NO semántico/vectorial** (no hay proveedor de embeddings en el stack — ver nota en el archivo) | Hecho (con esa salvedad) — `UserSearch.tsx` |
+
+### Hecho (ranking dual Feed/Loops, 2026-08-20 — E-085/E-086, ver §15.4 del Plan Maestro)
+
+| Capacidad | Estado |
+|---|---|
+| **Feed "Para ti" (algorítmico) como default**, tab "Siguiendo" (cronológico) como alternativa explícita — reversión deliberada de E-080 | Hecho — `getFeed` en `convex/social.ts`, `SocialScreen.tsx` |
+| `scorePost` v2: + término de velocidad de engagement normalizado por edad, + afinidad graduada (`socialAuthorAffinity`, EMA persistida, media vida 14 días) en vez del scan booleano de "últimos 50 likes" | Hecho — `convex/social/scoring.ts` |
+| **`scoreLoop`**: scorer separado para Loops, por TASAS (completion/like/comment/share/rewatch/quick-skip sobre `viewCount`), casi sin depender del grafo social | Hecho — `convex/social/scoring.ts` |
+| **`socialTagAffinity`**: afinidad por hashtag/interés, alimentada SOLO por eventos de Loops (nunca por el Feed) — la "segmentación de contenido" pedida | Hecho |
+| **Exploración/graduación por etapas de Loops** ("bandit-lite" sin ML real todavía): slots garantizados para contenido nuevo, cron de graduación por percentil (`social/loopsTiering.ts`), multiplicador por tier | Hecho |
+| **Instrumentación real de watch-time**: `SocialScreen` migrado a `UnifiedFeed` (antes no mandaba ninguna señal de vista); `LoopItem` ahora manda completion/skip rápido/rewatch reales del player, no sólo una impresión al entrar | Hecho |
+| `socialPosts.shareCount` real, incrementado sólo al compartir por DM (`sharePostInChat`/`shareToUser`) — el único funnel no falseable sin mandar un mensaje real | Hecho |
+| Cap de diversidad generalizado por clave (autor en Feed, hashtag de mayor afinidad en Loops) | Hecho — `applyDiversityCap` |
+| Tests unitarios de los scorers (funciones puras, sin runtime de Convex) | Hecho — `convex/__tests__/socialScoring.test.ts` |
+
+### Aún abierto
+1. **Sonidos reutilizables** (estilo TikTok: catálogo, "usar este sonido" al crear un post nuevo) — no se implementó. Necesita extraer/recortar el audio de un video existente para reutilizarlo en uno nuevo, y este stack (Expo/RN) no tiene ninguna librería de procesamiento de audio/video instalada; es una decisión de infraestructura aparte (¿procesamiento client-side vía librería nativa, o un servicio server-side?), no un gap chico.
+2. **Discovery semántico/vectorial de verdad** (embeddings): lo que hay hoy (`convex/discovery.ts`) es full-text, no semántico — para "zapatillas para correr" encontrar "tenis de running" hace falta un proveedor de embeddings, que no está elegido todavía.
+
+> **Nota:** `claimFromPost` salió de esta lista porque ya no es una brecha sino una decisión: el pago pasa por el carrito y no habrá una mutation de checkout dentro del feed (ver §1). Asimismo, **`communityAgreements`** (convenios de comisión cruzada entre miembros de una comunidad) fue **eliminado por completo** (código + tabla del schema, 2026-08-20) — no es una brecha pendiente, es una decisión de producto: las comunidades son un espacio para postear en un nicho compartido y competir por vender más, sin repartirse comisiones entre sí. La única figura que cobra comisión de una venta en toda la app es un usuario `influencer` vía campaña (§2, `campaigns.internalResolveCartAttribution`).
 
 ---
 
@@ -238,7 +259,7 @@ Para ejecutar esta visión de forma clínica, dividiremos el trabajo en 5 Sprint
   - `CommunitiesDashboard.tsx`: UI estilo "Mejores Amigos" o Grupos para que los Negocios formen asociaciones ("Pasillos Digitales").
 * **Backend (Convex):**
   - Conectar UI con la tabla `socialChats` y `messages` existente mediante suscripciones (WebSockets / `useQuery`).
-  - Tabla `commercialCommunities`, `communityMembers` y lógica de roles/convenios.
+  - Tabla `commercialCommunities`, `communityMembers` y lógica de roles/membresía (sin reparto de comisiones entre miembros).
 * **Criterio de Éxito:** Los usuarios pueden responder a una Historia y transicionar fluidamente a un chat privado en tiempo real.
 
 ### 🏃 Sprint 5: Eventos y Matching (El "Tinder" Interno)

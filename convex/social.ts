@@ -38,6 +38,17 @@ import { attachHashtags } from './social/hashtags';
 import { attachMentions } from './social/mentions';
 import { awardSocialAction, qualifiesForReward } from './social/gamification';
 import { recordActivity } from './social/activity';
+import {
+    scorePost,
+    scoreLoop,
+    applyDiversityCap,
+    applyAuthorDiversityCap,
+    decayedAffinity,
+    AFFINITY_CAP,
+    AUTHOR_AFFINITY_HALFLIFE_HOURS,
+    TAG_AFFINITY_HALFLIFE_HOURS,
+    EXPLORATION_SLOT_FRACTION,
+} from './social/scoring';
 import { buildEventKey, revokePoints } from './economy/pointsEngine';
 
 // ---------------------------------------------------------------------------
@@ -353,6 +364,15 @@ export const createPostArgsValidator = {
     quotedPostId: v.optional(v.id('socialPosts')),
     // Comunidades comerciales (Fase 6): post scoped a una comunidad.
     communityId: v.optional(v.id('commercialCommunities')),
+    // ── Sonidos reutilizables ────────────────────────────────────────────
+    // Mutuamente excluyentes — el mux ya pasó client-side (ffmpeg-expo)
+    // antes de llamar a esta mutation, acá sólo se registra el resultado:
+    //  - `audioTrackId`: el video reusa un sonido existente ("Usar este
+    //    sonido"). Bumpea `usageCount` del track, no crea uno nuevo.
+    //  - `originalAudioStorageId`: video ORIGINAL — el cliente extrajo su
+    //    audio-solo y lo subió aparte. Se crea el `audioTracks` nuevo acá.
+    audioTrackId: v.optional(v.id('audioTracks')),
+    originalAudioStorageId: v.optional(v.id('_storage')),
 };
 
 type CreatePostArgs = {
@@ -367,6 +387,8 @@ type CreatePostArgs = {
     parentPostId?: any;
     quotedPostId?: any;
     communityId?: any;
+    audioTrackId?: any;
+    originalAudioStorageId?: any;
 };
 
 /**
@@ -453,6 +475,17 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
             .withIndex('by_user', (q: any) => q.eq('userId', actor.idString))
             .first();
 
+        // Sonidos reutilizables: si reusa uno existente, validar que exista
+        // ANTES de insertar el post — mejor un error claro acá que un post
+        // publicado con una referencia colgante.
+        let reusedTrack: any = null;
+        if (args.audioTrackId && !args.originalAudioStorageId) {
+            reusedTrack = await ctx.db.get(args.audioTrackId);
+            if (!reusedTrack) {
+                throw new ConvexError({ code: 'NOT_FOUND', message: 'El sonido elegido ya no existe.' });
+            }
+        }
+
         const postId = await ctx.db.insert('socialPosts', {
             authorUserId: actor.idString,
             type: args.type,
@@ -468,6 +501,7 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
             viewCount: 0,
             geoCountry: (authorProfile as any)?.country ?? undefined,
             moderationStatus: textVerdict.verdict === 'flag' ? 'flagged' : 'visible',
+            audioTrackId: reusedTrack ? reusedTrack._id : undefined,
             parentPostId,
             rootPostId,
             replyCount: 0,
@@ -475,6 +509,22 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
             communityId: args.communityId ? String(args.communityId) : undefined,
             createdAt: now,
         });
+
+        // Sonidos reutilizables: caso "original" (no reusó nada) — crea el
+        // track recién ahora que existe `postId` (necesario para
+        // `originalPostId`, que es sólo atribución, no cascadea).
+        if (args.originalAudioStorageId) {
+            const trackId = await ctx.db.insert('audioTracks', {
+                name: args.content.trim().slice(0, 60) || 'Sonido original',
+                authorId: actor.idString,
+                originalPostId: postId,
+                storageId: args.originalAudioStorageId,
+                usageCount: 1,
+            });
+            await ctx.db.patch(postId, { audioTrackId: trackId });
+        } else if (reusedTrack) {
+            await ctx.db.patch(reusedTrack._id, { usageCount: reusedTrack.usageCount + 1 });
+        }
 
         // Auto-reporte cuando el filtro sólo marcó (no bloqueó): entra a la
         // cola de admin sin que nadie tenga que reportarlo a mano.
@@ -516,6 +566,17 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
                 actorUserId: actor.idString,
                 handles: mentionHandles,
                 preview: args.content.slice(0, 120),
+            });
+        }
+
+        // Link preview (Fase 5 del gap analysis, 0% antes de esto): si el
+        // texto trae un link, precachear su OG en background. Best-effort —
+        // el post se guarda y se ve igual si esto falla o todavía no
+        // terminó cuando se renderiza.
+        const firstUrl = args.content.match(/https?:\/\/[^\s]+/)?.[0];
+        if (firstUrl) {
+            await ctx.scheduler.runAfter(0, internal.social.linkPreview.internalFetchLinkPreview, {
+                url: firstUrl,
             });
         }
 
@@ -576,7 +637,22 @@ export const deletePost = mutation({
         if (!post) throw new Error('Post no encontrado.');
         const isAuthor = post.authorUserId === actor.idString;
         const isAdmin = actor.role === 'admin' || actor.role === 'developer';
-        if (!isAuthor && !isAdmin) throw new Error('No autorizado.');
+        // B4 (moderación de mods): un owner/admin de la comunidad puede
+        // borrar cualquier post SCOPEADO A ESA comunidad — no le da poder
+        // sobre nada fuera de ella.
+        let isCommunityMod = false;
+        if (!isAuthor && !isAdmin && post.communityId) {
+            const membership = await ctx.db
+                .query('communityMembers')
+                .withIndex('by_community_user', (q: any) =>
+                    q.eq('communityId', post.communityId).eq('userId', actor.idString),
+                )
+                .first();
+            isCommunityMod = Boolean(
+                membership && membership.status === 'active' && (membership.role === 'owner' || membership.role === 'admin'),
+            );
+        }
+        if (!isAuthor && !isAdmin && !isCommunityMod) throw new Error('No autorizado.');
         await ctx.db.patch(args.postId, { deletedAt: NOW() });
 
         if (post.parentPostId) {
@@ -809,6 +885,46 @@ export const decoratePosts = async (
         }),
     );
 
+    // Sonidos reutilizables: sólo el nombre + autor del track, para que la
+    // píldora del feed no dependa de una query aparte por card. Batcheado
+    // igual que `authorMap` — no un `ctx.db.get` por post.
+    const trackIds = Array.from(
+        new Set(visible.map((p) => (p as any).audioTrackId).filter(Boolean)),
+    ) as any[];
+    const audioTrackMap = new Map<string, { name: string; authorUsername: string | null }>();
+    if (trackIds.length) {
+        const tracks = await Promise.all(trackIds.map((id) => ctx.db.get(id)));
+        await Promise.all(
+            tracks.map(async (t: any) => {
+                if (!t) return;
+                const trackAuthor = authorMap.get(String(t.authorId));
+                audioTrackMap.set(String(t._id), {
+                    name: t.name,
+                    authorUsername: trackAuthor?.username ?? null,
+                });
+            }),
+        );
+    }
+
+    // B3 (badge de comunidad): igual patrón que `audioTrackMap` — batch, no
+    // N+1. `communityId` viaja como string suelto (no `v.id`), de ahí el
+    // `normalizeId`.
+    const communityIds = Array.from(
+        new Set(visible.map((p) => (p as any).communityId).filter(Boolean)),
+    ) as string[];
+    const communityNameMap = new Map<string, string>();
+    if (communityIds.length) {
+        const communities = await Promise.all(
+            communityIds.map((id) => {
+                const nid = ctx.db.normalizeId('commercialCommunities', id);
+                return nid ? ctx.db.get(nid) : null;
+            }),
+        );
+        communities.forEach((c: any, i) => {
+            if (c) communityNameMap.set(communityIds[i], c.name);
+        });
+    }
+
     return await Promise.all(
         visible.map(async (post, i) => ({
             ...post,
@@ -824,86 +940,108 @@ export const decoratePosts = async (
                   }
                 : post.commercialProduct,
             author: authorMap.get(post.authorUserId) ?? null,
+            audioTrack: (post as any).audioTrackId
+                ? (audioTrackMap.get(String((post as any).audioTrackId)) ?? null)
+                : null,
+            communityName: (post as any).communityId
+                ? (communityNameMap.get((post as any).communityId) ?? null)
+                : null,
             isLikedByMe: Boolean(likeRows[i]),
             isSavedByMe: Boolean(saveRows[i]),
         })),
     );
 };
 
+// `scorePost`/`scoreLoop`/`applyDiversityCap` viven en `./social/scoring`
+// (funciones puras, sin `ctx`, testeadas en
+// `convex/__tests__/socialScoring.test.ts`) — importadas arriba.
+
 /**
- * Ranking v2 para "forYou". La v1 sólo tenía recencia + engagement +
- * afinidad + geo comercial. Esta suma las dos señales que le faltaban al
- * doc original (§5 y §3):
- *
- *   - **Watch-time**: la palanca real de TikTok. Un video que se mira
- *     completo pesa más que uno que se saltea, más allá de cuántos likes
- *     tenga — `avgCompletionPct` se actualiza incrementalmente en `addView`.
- *   - **Conversión comercial**: el "Zero-Penalty Algorithm" que el doc
- *     promete en §3 ("el algoritmo premia los posts que generan
- *     transacciones") y que la v1 nunca implementó.
- *
- * Más dos frenos que la v1 tampoco tenía: penalizar autores marcados
- * "No me interesa" y penalizar posts que el viewer ya vio (sin esto el feed
- * repite contenido entre refrescos).
+ * Bump incremental de `socialAuthorAffinity` (Fase 1.1 del plan de ranking).
+ * Se llama desde el EVENTO (like, comentario, DM, watch-time≥80%), nunca se
+ * recalcula en batch. No-op si viewer===author (no tiene sentido tener
+ * afinidad con uno mismo).
  */
-const scorePost = (
-    post: any,
-    opts: {
-        affinityAuthors: Set<string>;
-        viewerCountry?: string;
-        nowMs: number;
-        notInterestedAuthors: Set<string>;
-        alreadyViewedIds: Set<string>;
-    },
-) => {
-    const ageHours = Math.max(0, (opts.nowMs - Date.parse(post.createdAt)) / 3_600_000);
-    // Half-life of ~18h keeps the feed fresh without burying the first page.
-    let score = 100 / (1 + ageHours / 18);
-
-    const engagement = (post.likeCount ?? 0) * 2 + (post.commentCount ?? 0) * 3;
-    score += Math.log1p(engagement) * 6;
-
-    if (opts.affinityAuthors.has(post.authorUserId)) score += 25;
-
-    if (post.commercialProduct) {
-        const sameCountry =
-            opts.viewerCountry && post.geoCountry
-                ? post.geoCountry === opts.viewerCountry
-                : true; // unknown geo → neither boosted nor punished
-        score += sameCountry ? 15 : -40;
+export const bumpAuthorAffinity = async (
+    ctx: any,
+    viewerUserId: string,
+    authorUserId: string,
+    weight: number,
+): Promise<void> => {
+    if (viewerUserId === authorUserId) return;
+    const now = NOW();
+    const existing = await ctx.db
+        .query('socialAuthorAffinity')
+        .withIndex('by_viewer_author', (q: any) =>
+            q.eq('viewerUserId', viewerUserId).eq('authorUserId', authorUserId),
+        )
+        .first();
+    if (existing) {
+        const hoursSince = Math.max(0, (Date.now() - Date.parse(existing.lastEventAt)) / 3_600_000);
+        await ctx.db.patch(existing._id, {
+            score: decayedAffinity(existing.score, hoursSince, AUTHOR_AFFINITY_HALFLIFE_HOURS, weight),
+            lastEventAt: now,
+            updatedAt: now,
+        });
+    } else {
+        await ctx.db.insert('socialAuthorAffinity', {
+            viewerUserId,
+            authorUserId,
+            score: Math.min(AFFINITY_CAP, weight),
+            lastEventAt: now,
+            updatedAt: now,
+        });
     }
-
-    // Watch-time: sólo cuenta con muestra real, para no castigar un video
-    // recién publicado que todavía no tiene reproducciones.
-    if ((post.watchSampleCount ?? 0) > 0) {
-        score += ((post.avgCompletionPct ?? 0.5) - 0.5) * 40;
-    }
-
-    // Conversión: log1p para que la 1ª venta pese mucho y la 50ª ya no tanto.
-    if (post.salesCount) score += Math.log1p(post.salesCount) * 15;
-
-    if (opts.notInterestedAuthors.has(post.authorUserId)) score -= 60;
-    if (opts.alreadyViewedIds.has(String(post._id))) score -= 80;
-
-    return score;
 };
 
 /**
- * Cap de diversidad: máximo 2 posts del mismo autor por página. Sin esto un
- * creador prolífico monopoliza el feed y perjudica el retention — 5 líneas
- * que valen más que la mitad de los pesos del ranker.
+ * Bump incremental de `socialTagAffinity` (Fase 2.3). SOLO se llama desde
+ * eventos de Loops (posts de video) — nunca desde el Feed — para mantener
+ * los dos grafos de personalización genuinamente separados.
  */
-const applyAuthorDiversityCap = (ranked: any[], cap: number, perAuthor = 2): any[] => {
-    const counts = new Map<string, number>();
-    const kept: any[] = [];
-    for (const post of ranked) {
-        const n = counts.get(post.authorUserId) ?? 0;
-        if (n >= perAuthor) continue;
-        counts.set(post.authorUserId, n + 1);
-        kept.push(post);
-        if (kept.length >= cap) break;
+export const bumpTagAffinity = async (
+    ctx: any,
+    viewerUserId: string,
+    tag: string,
+    weight: number,
+): Promise<void> => {
+    const now = NOW();
+    const existing = await ctx.db
+        .query('socialTagAffinity')
+        .withIndex('by_viewer_tag', (q: any) => q.eq('viewerUserId', viewerUserId).eq('tag', tag))
+        .first();
+    if (existing) {
+        const hoursSince = Math.max(0, (Date.now() - Date.parse(existing.lastEventAt)) / 3_600_000);
+        await ctx.db.patch(existing._id, {
+            score: decayedAffinity(existing.score, hoursSince, TAG_AFFINITY_HALFLIFE_HOURS, weight),
+            lastEventAt: now,
+            updatedAt: now,
+        });
+    } else {
+        await ctx.db.insert('socialTagAffinity', {
+            viewerUserId,
+            tag,
+            score: Math.min(AFFINITY_CAP, weight),
+            lastEventAt: now,
+            updatedAt: now,
+        });
     }
-    return kept;
+};
+
+/** Aplica `bumpTagAffinity` a los (hasta 10) tags de un post de video. */
+export const bumpTagAffinityForPost = async (
+    ctx: any,
+    viewerUserId: string,
+    post: any,
+    weight: number,
+): Promise<void> => {
+    const tags = await ctx.db
+        .query('socialPostTags')
+        .withIndex('by_post', (q: any) => q.eq('postId', String(post._id)))
+        .take(10);
+    for (const t of tags) {
+        await bumpTagAffinity(ctx, viewerUserId, t.tag, weight);
+    }
 };
 
 const FOLLOW_FANOUT_CAP = 200;
@@ -940,20 +1078,26 @@ export const getFeed = query({
         const viewerId = actor.idString;
         const cap = Math.min(args.limit ?? 20, 50);
         const cursor = args.cursor ?? undefined;
-        // DEFAULT CRONOLÓGICO (decisión de producto, 2026-08-18).
+        // DEFAULT ALGORÍTMICO — reversión deliberada de E-080 (2026-08-18,
+        // ver bitácora E-085). E-080 había puesto 'recent' (cronológico
+        // puro) como default porque con un catálogo chico el ranker
+        // escondía posts recién subidos. La decisión de producto de esta
+        // sesión es alinear el Feed con cómo funcionan X/Instagram HOY: la
+        // pestaña algorítmica ("Para ti") ES el default, con una pestaña
+        // cronológica explícita ("Siguiendo", `mode:'following'`) como
+        // alternativa — no "cronológico con opción de rankear", al revés.
         //
-        // El feed sale por **orden de subida**: lo más nuevo primero, sin
-        // reordenar. `forYou` (el ranker de `scorePost`: watch-time,
-        // conversión, afinidad, geo) sigue existiendo pero SÓLO si el cliente
-        // lo pide explícitamente con `mode: 'forYou'` — ya no es el default.
+        // El riesgo que motivó E-080 NO se da por resuelto acá, sólo se
+        // mitiga: oversample (`FORYOU_OVERSAMPLE`) + diversity cap por autor
+        // (Fase 1.6) para que un catálogo chico no vuelva a esconder un post
+        // nuevo. Queda como riesgo abierto explícito — ver tabla de riesgos
+        // del plan de ranking ("Cold-start injusto").
         //
-        // Esto reemplaza lo que §5 del doc de arquitectura describía como
-        // motor de recomendación por defecto. El motivo práctico: con un
-        // catálogo chico de posts, un feed rankeado hace que una publicación
-        // recién subida no aparezca arriba (o que el cap de diversidad por
-        // autor directamente la saque de la página), y se lee como que la
-        // app "perdió" el post.
-        const mode = args.mode ?? 'recent';
+        // `mode:'recent'` sigue disponible (ya no default) como fallback/
+        // debug; el cliente pasa `mode` explícito en vez de depender de este
+        // default, para que el switch de tabs sea trivial y la reversión
+        // sea auditable por grep.
+        const mode = args.mode ?? 'forYou';
 
         // Every mode uses the same `createdAt` cursor so the client paginates
         // identically regardless of which tab it is on.
@@ -989,16 +1133,128 @@ export const getFeed = query({
             oldestRawCreatedAt = raw.length ? raw[raw.length - 1].createdAt : null;
             candidates = raw.filter((p: any) => p.communityId === undefined).slice(0, cap);
         } else if (mode === 'videos') {
-            rawTakeSize = cap * 2;
-            const raw = await ctx.db
+            // Loops (Fase 2/3 del plan de ranking): scoring por tasas
+            // (`scoreLoop`) + exploración/graduación por etapas, en vez del
+            // orden cronológico puro que había antes. La selección de
+            // candidatos sigue siendo `by_type_created`; sólo se le agrega
+            // scoring in-place — una query nueva duplicaría
+            // `loadViewerModerationSets`/`decoratePosts`/paginación que
+            // `getFeed` ya comparte bien.
+            rawTakeSize = Math.min(cap * FORYOU_OVERSAMPLE, FORYOU_POOL_CAP);
+            const rawPool = await ctx.db
                 .query('socialPosts')
                 .withIndex('by_type_created', (q: any) => olderThan(q.eq('type', 'video')))
                 .order('desc')
                 .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
                 .take(rawTakeSize);
-            rawCount = raw.length;
-            oldestRawCreatedAt = raw.length ? raw[raw.length - 1].createdAt : null;
-            candidates = raw.filter(isGlobalFeedEligible).slice(0, cap);
+            rawCount = rawPool.length;
+            oldestRawCreatedAt = rawPool.length ? rawPool[rawPool.length - 1].createdAt : null;
+            const pool = rawPool.filter(isGlobalFeedEligible);
+
+            // Afinidad por tag (Fase 2.3) — la "segmentación" pedida por el
+            // usuario. Sólo se alimenta de eventos de Loops (nunca del
+            // Feed), así que es un grafo de personalización genuinamente
+            // separado del de `socialAuthorAffinity`.
+            const tagAffinityRows = await ctx.db
+                .query('socialTagAffinity')
+                .withIndex('by_viewer', (q: any) => q.eq('viewerUserId', viewerId))
+                .take(300);
+            const tagAffinity = new Map<string, number>(tagAffinityRows.map((r: any) => [r.tag, r.score]));
+
+            // Tags por post, en batch (cap chico por post: `by_post` no
+            // debería tener decenas de filas por publicación real).
+            const postTagsMap = new Map<string, string[]>();
+            await Promise.all(
+                pool.map(async (p: any) => {
+                    const rows = await ctx.db
+                        .query('socialPostTags')
+                        .withIndex('by_post', (q: any) => q.eq('postId', String(p._id)))
+                        .take(10);
+                    postTagsMap.set(String(p._id), rows.map((r: any) => r.tag));
+                }),
+            );
+
+            const recentViews = await ctx.db
+                .query('socialPostViews')
+                .withIndex('by_viewer_created', (q: any) => q.eq('viewerUserId', viewerId))
+                .order('desc')
+                .take(200);
+            const alreadyViewedIds = new Set<string>(recentViews.map((v: any) => v.postId));
+
+            const nowMs = Date.now();
+
+            // Cold-start (Fase 3): un post sin tier asignado ('exploring'
+            // implícito) NO compite contra la población general — con
+            // `views` chico cualquier like dispara una tasa sin sentido
+            // (1 view + 1 like = likeRate:1.0). Sólo compite por su slot
+            // garantizado, ordenado por menos-visto-primero (no random) para
+            // que cada post avance monótonamente hacia el umbral del cron de
+            // graduación (`social/loopsTiering.ts`) en vez de depender de
+            // suerte.
+            const exploring: any[] = [];
+            const graded: any[] = [];
+            for (const p of pool) {
+                if (!p.loopsTier || p.loopsTier === 'exploring') exploring.push(p);
+                else graded.push(p);
+            }
+            exploring.sort((a: any, b: any) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+
+            const scored = graded
+                .map((p: any) => {
+                    let score = scoreLoop(p, {
+                        tagAffinity,
+                        postTags: postTagsMap.get(String(p._id)) ?? [],
+                        nowMs,
+                        notInterestedAuthors: moderation.notInterestedAuthors,
+                        alreadyViewedIds,
+                    });
+                    // Lookup de tier, nunca recomputo en vivo: 'graduated'
+                    // sube, 'suppressed' baja SIN llegar a cero (un post con
+                    // mala suerte en su muestra chica sigue circulando a
+                    // volumen reducido en vez de quedar invisible siempre).
+                    if (p.loopsTier === 'graduated') score *= 1.15;
+                    else if (p.loopsTier === 'suppressed') score *= 0.4;
+                    return { post: p, score };
+                })
+                .sort((a, b) => b.score - a.score)
+                .map((x) => x.post);
+
+            const explorationSlots = Math.round(cap * EXPLORATION_SLOT_FRACTION);
+            const reserved = exploring.slice(0, explorationSlots);
+            const rest = scored.slice(0, Math.max(0, cap - reserved.length));
+
+            // Interleave: uno de exploración cada ~N posiciones, para que no
+            // quede todo apilado arriba (invisible bajo el scroll) ni abajo
+            // (nunca visto) de la página.
+            const merged: any[] = [];
+            const stride = reserved.length ? Math.max(1, Math.floor(rest.length / reserved.length)) : Infinity;
+            let ri = 0;
+            for (let si = 0; si < rest.length; si++) {
+                merged.push(rest[si]);
+                if (ri < reserved.length && (si + 1) % stride === 0) merged.push(reserved[ri++]);
+            }
+            while (ri < reserved.length) merged.push(reserved[ri++]);
+
+            // Diversity cap por el hashtag de mayor afinidad del viewer para
+            // ese post (fallback: primer tag del post, o autor si no tiene
+            // tags) — el eje de diversidad de Loops es contenido, no autor,
+            // a pedido explícito del usuario ("depende MENOS del grafo
+            // social").
+            const diversityKeyOf = (p: any) => {
+                const tags = postTagsMap.get(String(p._id)) ?? [];
+                if (!tags.length) return p.authorUserId;
+                let best = tags[0];
+                let bestScore = -Infinity;
+                for (const t of tags) {
+                    const s = tagAffinity.get(t) ?? 0;
+                    if (s > bestScore) {
+                        bestScore = s;
+                        best = t;
+                    }
+                }
+                return best;
+            };
+            candidates = applyDiversityCap(merged, cap, diversityKeyOf);
         } else if (mode === 'following') {
             const follows = await ctx.db
                 .query('socialFollows')
@@ -1033,21 +1289,17 @@ export const getFeed = query({
             oldestRawCreatedAt = rawPool.length ? rawPool[rawPool.length - 1].createdAt : null;
             const pool = rawPool.filter(isGlobalFeedEligible);
 
-            const recentLikes = await ctx.db
-                .query('socialLikes')
-                .withIndex('by_user_target', (q: any) =>
-                    q.eq('userId', viewerId).eq('targetType', 'post'),
-                )
-                .order('desc')
-                .take(50);
-            const likedPosts = await Promise.all(
-                recentLikes.map((l: any) => {
-                    const id = ctx.db.normalizeId('socialPosts', l.targetId);
-                    return id ? ctx.db.get(id) : null;
-                }),
-            );
-            const affinityAuthors = new Set<string>(
-                likedPosts.filter(Boolean).map((p: any) => p.authorUserId),
+            // Afinidad graduada (Fase 1.1): una query indexada sobre la
+            // tabla EMA persistida, en vez del scan de "últimos 50 likes +
+            // hasta 50 ctx.db.get extra" que había antes — más barato Y
+            // gradual (score continuo) en vez de un booleano "le gustó
+            // alguna vez sí/no".
+            const affinityRows = await ctx.db
+                .query('socialAuthorAffinity')
+                .withIndex('by_viewer', (q: any) => q.eq('viewerUserId', viewerId))
+                .take(200);
+            const affinityScores = new Map<string, number>(
+                affinityRows.map((r: any) => [r.authorUserId, r.score]),
             );
 
             const recentViews = await ctx.db
@@ -1068,7 +1320,7 @@ export const getFeed = query({
                 .map((p: any) => ({
                     post: p,
                     score: scorePost(p, {
-                        affinityAuthors,
+                        affinityScores,
                         viewerCountry,
                         nowMs,
                         notInterestedAuthors: moderation.notInterestedAuthors,
@@ -1104,16 +1356,25 @@ export const getFeed = query({
     },
 });
 
+/** Debajo de esto + poco visto, cuenta como "salió rápido" (Loops). */
+const QUICK_SKIP_DWELL_MS = 1500;
+const QUICK_SKIP_COMPLETION = 0.25;
+/** A partir de acá, "lo miró completo" alimenta afinidad (Feed y Loops). */
+const HIGH_COMPLETION_THRESHOLD = 0.8;
+
 /**
- * Idempotent impression counter — Y la fuente de la señal de watch-time
- * (Fase 5). El cliente manda `dwellMs`/`completionPct` al SALIR de cada
- * ítem (no al entrar): `onViewableItemsChanged` dispara cuando un post deja
- * de estar en pantalla, con lo que estuvo visible.
+ * Idempotent impression counter — Y la fuente de watch-time/skip/rewatch
+ * para los dos rankers (Feed y Loops, plan de ranking dual). El cliente
+ * manda `dwellMs`/`completionPct`/`quickSkip`/`loopCount` al SALIR de cada
+ * ítem (no al entrar): `onViewableItemsChanged`/el efecto de "isActive→false"
+ * de `LoopItem` disparan cuando un post deja de estar en pantalla, con lo
+ * que estuvo visible.
  *
  * `avgCompletionPct` se actualiza con una media incremental
  * (`avg' = avg + (x - avg) / n`) para no tener que releer ni promediar todas
  * las vistas del post en cada request — el costo es O(1) por vista, no
- * O(vistas totales).
+ * O(vistas totales). `quickSkipCount`/`totalLoopCount` son denormalizados
+ * igual, mismo motivo.
  */
 export const addView = mutation({
     args: {
@@ -1124,13 +1385,18 @@ export const addView = mutation({
             postId: v.id('socialPosts'),
             dwellMs: v.optional(v.number()),
             completionPct: v.optional(v.number()),
+            // Loops (Fase 0.2/0.3 del plan de ranking): "salió rápido y sin
+            // ver casi nada" y cuántas vueltas de más reprodujo (rewatch).
+            quickSkip: v.optional(v.boolean()),
+            loopCount: v.optional(v.number()),
         }))),
     },
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        const watchByPost = new Map<string, { dwellMs?: number; completionPct?: number }>(
-            (args.watch ?? []).map((w) => [String(w.postId), w]),
-        );
+        const watchByPost = new Map<
+            string,
+            { dwellMs?: number; completionPct?: number; quickSkip?: boolean; loopCount?: number }
+        >((args.watch ?? []).map((w) => [String(w.postId), w]));
 
         let counted = 0;
         for (const postId of args.postIds.slice(0, 50)) {
@@ -1139,6 +1405,7 @@ export const addView = mutation({
                 typeof watch?.completionPct === 'number'
                     ? Math.max(0, Math.min(1, watch.completionPct))
                     : undefined;
+            const loopCount = Math.max(0, watch?.loopCount ?? 0);
 
             const existing = await ctx.db
                 .query('socialPostViews')
@@ -1153,16 +1420,52 @@ export const addView = mutation({
             if (existing) {
                 // Re-vio el mismo post (scroll de vuelta): actualiza SU fila
                 // de watch-time si vio más esta vez, pero no vuelve a contar
-                // la impresión ni a bumpear `viewCount`.
+                // la impresión ni a bumpear `viewCount`. `loopCount` toma el
+                // máximo; `quickSkip` se recalcula del estado COMBINADO (si
+                // esta vez miró completo, deja de contar como skip) — no se
+                // hace OR de flags viejos contra nuevos.
+                const bestCompletion =
+                    clampedCompletion !== undefined
+                        ? Math.max(existing.completionPct ?? 0, clampedCompletion)
+                        : existing.completionPct;
+                const bestLoopCount = Math.max(existing.loopCount ?? 0, loopCount);
+                const loopDelta = bestLoopCount - (existing.loopCount ?? 0);
+                const combinedQuickSkip =
+                    (watch?.dwellMs ?? Infinity) < QUICK_SKIP_DWELL_MS &&
+                    (bestCompletion ?? 0) < QUICK_SKIP_COMPLETION;
+
+                const viewPatch: any = {};
                 if (clampedCompletion !== undefined && (existing.completionPct ?? 0) < clampedCompletion) {
-                    await ctx.db.patch(existing._id, {
-                        completionPct: clampedCompletion,
-                        dwellMs: watch?.dwellMs,
-                        updatedAt: NOW(),
-                    });
+                    viewPatch.completionPct = clampedCompletion;
+                    viewPatch.dwellMs = watch?.dwellMs;
+                }
+                if (loopDelta > 0) viewPatch.loopCount = bestLoopCount;
+                if ((existing.quickSkip ?? false) !== combinedQuickSkip) {
+                    viewPatch.quickSkip = combinedQuickSkip;
+                }
+                if (Object.keys(viewPatch).length) {
+                    await ctx.db.patch(existing._id, { ...viewPatch, updatedAt: NOW() });
+                }
+
+                const postPatch: any = {};
+                if (loopDelta > 0) postPatch.totalLoopCount = (post.totalLoopCount ?? 0) + loopDelta;
+                if ((existing.quickSkip ?? false) !== combinedQuickSkip) {
+                    postPatch.quickSkipCount = Math.max(
+                        0,
+                        (post.quickSkipCount ?? 0) + (combinedQuickSkip ? 1 : -1),
+                    );
+                }
+                if (Object.keys(postPatch).length) await ctx.db.patch(postId, postPatch);
+
+                if (loopDelta > 0 && post.type === 'video' && post.authorUserId !== actor.idString) {
+                    await bumpTagAffinityForPost(ctx, actor.idString, post, 1.0);
                 }
                 continue;
             }
+
+            const quickSkip =
+                (watch?.dwellMs ?? Infinity) < QUICK_SKIP_DWELL_MS &&
+                (clampedCompletion ?? 0) < QUICK_SKIP_COMPLETION;
 
             await ctx.db.insert('socialPostViews', {
                 postId: String(postId),
@@ -1170,8 +1473,14 @@ export const addView = mutation({
                 createdAt: NOW(),
                 dwellMs: watch?.dwellMs,
                 completionPct: clampedCompletion,
+                quickSkip,
+                loopCount,
             });
-            await ctx.db.patch(postId, { viewCount: (post.viewCount ?? 0) + 1 });
+
+            const insertPatch: any = { viewCount: (post.viewCount ?? 0) + 1 };
+            if (quickSkip) insertPatch.quickSkipCount = (post.quickSkipCount ?? 0) + 1;
+            if (loopCount > 0) insertPatch.totalLoopCount = (post.totalLoopCount ?? 0) + loopCount;
+            await ctx.db.patch(postId, insertPatch);
             counted += 1;
 
             if (clampedCompletion !== undefined) {
@@ -1179,6 +1488,15 @@ export const addView = mutation({
                 const prevAvg = post.avgCompletionPct ?? 0.5;
                 const nextAvg = prevAvg + (clampedCompletion - prevAvg) / (n + 1);
                 await ctx.db.patch(postId, { avgCompletionPct: nextAvg, watchSampleCount: n + 1 });
+            }
+
+            if (post.authorUserId !== actor.idString) {
+                if (clampedCompletion !== undefined && clampedCompletion >= HIGH_COMPLETION_THRESHOLD) {
+                    await bumpAuthorAffinity(ctx, actor.idString, post.authorUserId, 0.5);
+                    if (post.type === 'video') await bumpTagAffinityForPost(ctx, actor.idString, post, 1.5);
+                } else if (quickSkip && post.type === 'video') {
+                    await bumpTagAffinityForPost(ctx, actor.idString, post, -1.0);
+                }
             }
         }
         return { counted };
@@ -1331,6 +1649,11 @@ export const addComment = mutation({
         });
         if (parentComment) {
             await ctx.db.patch(parentComment._id, { replyCount: (parentComment.replyCount ?? 0) + 1 });
+        }
+
+        // Ranking (Fase 1.1): comentar señala más interés que un like.
+        if (post.authorUserId !== actor.idString) {
+            await bumpAuthorAffinity(ctx, actor.idString, post.authorUserId, 2.0);
         }
 
         if (textVerdict.verdict === 'flag') {
@@ -1548,6 +1871,15 @@ export const toggleLike = mutation({
             try {
                 const post = await ctx.db.get(args.targetId as any);
                 if (post && (post as any).authorUserId !== actor.idString) {
+                    // Ranking (Fase 1.1/2.3): un like es la señal de afinidad
+                    // más barata que existe. Sube autor siempre; sube tag
+                    // sólo si es un video (Loops), para no mezclar los dos
+                    // grafos de personalización.
+                    await bumpAuthorAffinity(ctx, actor.idString, (post as any).authorUserId, 1.0);
+                    if ((post as any).type === 'video') {
+                        await bumpTagAffinityForPost(ctx, actor.idString, post, 1.0);
+                    }
+
                     await recordActivity(ctx, {
                         userId: (post as any).authorUserId,
                         type: 'like',
@@ -1591,6 +1923,14 @@ export const toggleLike = mutation({
                 }
             } catch (e) {
                 console.warn('[social.like] push lookup failed', e);
+            }
+        } else if (args.targetType === 'story') {
+            // Ranking del tray (A1): un like a una historia pesa igual que
+            // un like a un post — mismo motor de afinidad, sin duplicar
+            // pesos aparte para historias.
+            const story = await ctx.db.get(args.targetId as any);
+            if (story && (story as any).authorUserId !== actor.idString) {
+                await bumpAuthorAffinity(ctx, actor.idString, (story as any).authorUserId, 1.0);
             }
         }
 
@@ -1847,28 +2187,59 @@ export const isFollowing = query({
 // Stories
 // ---------------------------------------------------------------------------
 
+// Sticker de historia recibido del cliente — mismo shape que `storySticker`
+// en el schema, repetido acá porque los validadores de mutation no pueden
+// importar la unión del schema directamente (Convex no expone sus
+// sub-validadores). Mantener los dos en sync a mano si se agrega un tipo.
+const storyStickerArg = {
+    id: v.string(),
+    x: v.number(),
+    y: v.number(),
+    rotation: v.optional(v.number()),
+    scale: v.optional(v.number()),
+};
+const storyStickerValidator = v.union(
+    v.object({ ...storyStickerArg, type: v.literal('text'), content: v.string(), color: v.optional(v.string()) }),
+    v.object({ ...storyStickerArg, type: v.literal('poll'), question: v.string(), options: v.array(v.string()) }),
+    v.object({ ...storyStickerArg, type: v.literal('question'), prompt: v.string() }),
+    v.object({ ...storyStickerArg, type: v.literal('countdown'), title: v.string(), endsAt: v.string() }),
+    v.object({ ...storyStickerArg, type: v.literal('slider'), emoji: v.string(), question: v.optional(v.string()) }),
+    v.object({ ...storyStickerArg, type: v.literal('mention'), userId: v.string(), username: v.string() }),
+    v.object({ ...storyStickerArg, type: v.literal('location'), placeId: v.optional(v.string()), name: v.string(), address: v.optional(v.string()) }),
+    v.object({ ...storyStickerArg, type: v.literal('hashtag'), tag: v.string() }),
+    v.object({ ...storyStickerArg, type: v.literal('music'), audioTrackId: v.id('audioTracks') }),
+);
+
 export const createStory = mutation({
     args: {
         sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
-        type: v.union(v.literal('image'), v.literal('video')),
-        url: v.string(),
+        type: v.union(v.literal('image'), v.literal('video'), v.literal('text')),
+        // Requerido salvo para `type:'text'` (fondo de color, sin media).
+        url: v.optional(v.string()),
+        backgroundColor: v.optional(v.string()),
         durationSec: v.optional(v.number()),
         /** 'close_friends' (Fase 7) la esconde de todos salvo `socialCloseFriends`. */
         audience: v.optional(v.union(v.literal('everyone'), v.literal('close_friends'))),
+        stickers: v.optional(v.array(storyStickerValidator)),
     },
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken, { write: 'createStory' });
+        if (args.type !== 'text' && !args.url) {
+            throw new ConvexError({ code: 'BAD_REQUEST', message: 'Falta el archivo de la historia.' });
+        }
         const now = NOW();
         const expiresAt = new Date(Date.now() + STORY_TTL_MS).toISOString();
         const storyId = await ctx.db.insert('socialStories', {
             authorUserId: actor.idString,
             type: args.type,
             url: args.url,
+            backgroundColor: args.backgroundColor,
             durationSec: args.durationSec ?? 5,
             viewCount: 0,
             expiresAt,
             audience: args.audience,
+            stickers: args.stickers,
             createdAt: now,
         });
         await awardSocialAction(ctx, actor.idString, 'sp_story', String(storyId));
@@ -1915,6 +2286,9 @@ export const viewStory = mutation({
         const story = await ctx.db.get(args.storyId);
         if (story) {
             await ctx.db.patch(args.storyId, { viewCount: story.viewCount + 1 });
+            // Ranking del tray (A1): mirar es señal débil comparado con un
+            // comentario/reply, por eso el peso más bajo del sistema.
+            await bumpAuthorAffinity(ctx, actor.idString, story.authorUserId, 0.3);
         }
     },
 });
@@ -1939,7 +2313,16 @@ export const getStoriesForFollowing = query({
         const targetIds = [actor.idString, ...followIds];
         const now = NOW();
 
-        const groups: Array<{ author: any; stories: any[] }> = [];
+        // Ranking del tray (A1): una sola query para "qué ya vi" y otra
+        // para afinidad, en vez de N por historia/autor.
+        const [viewedRows, affinityRows] = await Promise.all([
+            ctx.db.query('socialStoryViews').withIndex('by_viewer', (q: any) => q.eq('viewerUserId', actor.idString)).collect(),
+            ctx.db.query('socialAuthorAffinity').withIndex('by_viewer', (q: any) => q.eq('viewerUserId', actor.idString)).collect(),
+        ]);
+        const viewedStoryIds = new Set(viewedRows.map((v: any) => v.storyId));
+        const affinityByAuthor = new Map(affinityRows.map((a: any) => [a.authorUserId, a.score]));
+
+        const groups: Array<{ author: any; stories: any[]; hasUnseen: boolean; affinityScore: number; lastCreatedAt: string }> = [];
         for (const userId of targetIds) {
             const stories = await ctx.db
                 .query('socialStories')
@@ -1985,16 +2368,37 @@ export const getStoriesForFollowing = query({
                 }
             }
             const resolvedActive = await Promise.all(active.map(async (s: any) => {
+                const viewedByMe = viewedStoryIds.has(String(s._id));
                 const raw = s.url || s.imageUrl;
                 if (raw && raw.startsWith('convex-storage:')) {
                     const resolved = await ctx.storage.getUrl(raw.replace('convex-storage:', ''));
-                    if (resolved) return { ...s, url: resolved, imageUrl: resolved };
+                    if (resolved) return { ...s, url: resolved, imageUrl: resolved, viewedByMe };
                 }
-                return { ...s, imageUrl: s.url };
+                return { ...s, imageUrl: s.url, viewedByMe };
             }));
-            groups.push({ author: author || { userId, displayName: 'Usuario', username: 'user' }, stories: resolvedActive });
+            groups.push({
+                author: author || { userId, displayName: 'Usuario', username: 'user' },
+                stories: resolvedActive,
+                hasUnseen: resolvedActive.some((s: any) => !s.viewedByMe),
+                affinityScore: userId === actor.idString ? Infinity : (affinityByAuthor.get(userId) ?? 0),
+                lastCreatedAt: resolvedActive[resolvedActive.length - 1]?.createdAt ?? '',
+            });
         }
-        return groups;
+
+        // Uno mismo siempre primero (afinidad Infinity lo gana todo); dentro
+        // del resto, no-vistas antes que vistas, y adentro de cada bucket por
+        // afinidad descendente — mismo motor (`socialAuthorAffinity`) que
+        // ordena Feed/Loops, no un sistema de ranking aparte.
+        groups.sort((a, b) => {
+            if (a.affinityScore === Infinity || b.affinityScore === Infinity) {
+                return (b.affinityScore === Infinity ? 1 : 0) - (a.affinityScore === Infinity ? 1 : 0);
+            }
+            if (a.hasUnseen !== b.hasUnseen) return a.hasUnseen ? -1 : 1;
+            if (a.affinityScore !== b.affinityScore) return b.affinityScore - a.affinityScore;
+            return b.lastCreatedAt.localeCompare(a.lastCreatedAt);
+        });
+
+        return groups.map(({ author, stories, hasUnseen }) => ({ author, stories, hasUnseen }));
     },
 });
 
@@ -2059,10 +2463,244 @@ export const getStoryViewers = query({
         if (story.authorUserId !== actor.idString) {
             throw new Error('Solo el autor puede ver la lista de visualizaciones.');
         }
-        return await ctx.db
+        const rows = await ctx.db
             .query('socialStoryViews')
             .withIndex('by_story', (q) => q.eq('storyId', String(args.storyId)))
             .collect();
+        // A4: antes devolvía filas crudas (sin avatar/username) y no lo
+        // consumía ninguna pantalla — se hidrata acá, mismo patrón liviano
+        // que `listCloseFriends`, no el batching completo de `decoratePosts`
+        // porque el volumen de una historia es chico.
+        const media = createMediaResolver(ctx);
+        const profiles = await Promise.all(
+            rows.map((r: any) =>
+                ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', r.viewerUserId)).first(),
+            ),
+        );
+        return await Promise.all(
+            rows.map(async (r: any, i: number) => {
+                const p = profiles[i];
+                return {
+                    viewerUserId: r.viewerUserId,
+                    viewedAt: r.viewedAt,
+                    username: p?.username ?? null,
+                    displayName: p?.displayName ?? null,
+                    avatar: p?.avatar ? await media(p.avatar) : null,
+                };
+            }),
+        );
+    },
+});
+
+/**
+ * Respuesta a un sticker interactivo (poll/question/slider) — upsert
+ * idempotente por `(storyId, stickerId, viewerUserId)`. No valida que el
+ * `stickerId` exista de verdad en `story.stickers` (el cliente ya sólo
+ * puede tocar los que están renderizados) — mantiene la mutation liviana.
+ */
+export const respondToStorySticker = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        storyId: v.id('socialStories'),
+        stickerId: v.string(),
+        type: v.union(v.literal('poll'), v.literal('question'), v.literal('slider')),
+        optionIndex: v.optional(v.number()),
+        text: v.optional(v.string()),
+        sliderValue: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        const existing = await ctx.db
+            .query('socialStoryStickerResponses')
+            .withIndex('by_story_sticker_viewer', (q: any) =>
+                q.eq('storyId', args.storyId).eq('stickerId', args.stickerId).eq('viewerUserId', actor.idString),
+            )
+            .first();
+        const payload = {
+            type: args.type,
+            optionIndex: args.optionIndex,
+            text: args.text,
+            sliderValue: args.sliderValue,
+        };
+        if (existing) {
+            await ctx.db.patch(existing._id, payload);
+        } else {
+            await ctx.db.insert('socialStoryStickerResponses', {
+                storyId: args.storyId,
+                stickerId: args.stickerId,
+                viewerUserId: actor.idString,
+                createdAt: NOW(),
+                ...payload,
+            });
+        }
+        return { success: true };
+    },
+});
+
+/**
+ * Resultados de un sticker interactivo, agregados AL LEER (ver comentario
+ * de `socialStoryStickerResponses` en el schema — sin contador
+ * denormalizado, el volumen de 24h no lo justifica todavía). Sólo el autor
+ * de la historia puede verlos, mismo criterio que `getStoryViewers`.
+ */
+export const getStoryStickerResults = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        storyId: v.id('socialStories'),
+        stickerId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        const story = await ctx.db.get(args.storyId);
+        if (!story || story.authorUserId !== actor.idString) return null;
+        const responses = await ctx.db
+            .query('socialStoryStickerResponses')
+            .withIndex('by_story_sticker', (q: any) => q.eq('storyId', args.storyId).eq('stickerId', args.stickerId))
+            .collect();
+        const optionCounts: Record<number, number> = {};
+        const sliderValues: number[] = [];
+        for (const r of responses) {
+            if (typeof r.optionIndex === 'number') optionCounts[r.optionIndex] = (optionCounts[r.optionIndex] ?? 0) + 1;
+            if (typeof r.sliderValue === 'number') sliderValues.push(r.sliderValue);
+        }
+        return {
+            totalResponses: responses.length,
+            optionCounts,
+            sliderAverage: sliderValues.length ? sliderValues.reduce((a, b) => a + b, 0) / sliderValues.length : null,
+        };
+    },
+});
+
+// ---------------------------------------------------------------------------
+// Debug interno del ranker (Fase 4.4 del plan de ranking) — NO público, a
+// propósito (lección de E-048 sobre endpoints de dev accidentalmente
+// públicos). Corre la misma selección + scoring que `getFeed` para un
+// `viewerUserId` y devuelve el desglose, para verificar a ojo que los pesos
+// producen un orden sensato antes de exponer un cambio a usuarios reales.
+//
+//   npx convex run social:debugScoreFeed '{"viewerUserId":"..."}'
+//   npx convex run social:debugScoreLoops '{"viewerUserId":"..."}'
+// ---------------------------------------------------------------------------
+
+export const debugScoreFeed = internalQuery({
+    args: { viewerUserId: v.string(), limit: v.optional(v.number()) },
+    handler: async (ctx, args) => {
+        const limit = Math.min(args.limit ?? 20, 50);
+        const moderation = await loadViewerModerationSets(ctx, args.viewerUserId);
+        const rawPool = await ctx.db
+            .query('socialPosts')
+            .withIndex('by_created', (q: any) => q)
+            .order('desc')
+            .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+            .take(Math.min(limit * FORYOU_OVERSAMPLE, FORYOU_POOL_CAP));
+        const pool = rawPool.filter(isGlobalFeedEligible);
+
+        const affinityRows = await ctx.db
+            .query('socialAuthorAffinity')
+            .withIndex('by_viewer', (q: any) => q.eq('viewerUserId', args.viewerUserId))
+            .take(200);
+        const affinityScores = new Map<string, number>(affinityRows.map((r: any) => [r.authorUserId, r.score]));
+
+        const recentViews = await ctx.db
+            .query('socialPostViews')
+            .withIndex('by_viewer_created', (q: any) => q.eq('viewerUserId', args.viewerUserId))
+            .order('desc')
+            .take(200);
+        const alreadyViewedIds = new Set<string>(recentViews.map((v: any) => v.postId));
+
+        const viewer = await ctx.db
+            .query('socialUsers')
+            .withIndex('by_user', (q: any) => q.eq('userId', args.viewerUserId))
+            .first();
+        const nowMs = Date.now();
+
+        return pool
+            .map((p: any) => ({
+                postId: String(p._id),
+                authorUserId: p.authorUserId,
+                content: (p.content ?? '').slice(0, 60),
+                createdAt: p.createdAt,
+                affinity: affinityScores.get(p.authorUserId) ?? 0,
+                score: scorePost(p, {
+                    affinityScores,
+                    viewerCountry: (viewer as any)?.country,
+                    nowMs,
+                    notInterestedAuthors: moderation.notInterestedAuthors,
+                    alreadyViewedIds,
+                }),
+            }))
+            .sort((a: any, b: any) => b.score - a.score)
+            .slice(0, limit);
+    },
+});
+
+export const debugScoreLoops = internalQuery({
+    args: { viewerUserId: v.string(), limit: v.optional(v.number()) },
+    handler: async (ctx, args) => {
+        const limit = Math.min(args.limit ?? 20, 50);
+        const moderation = await loadViewerModerationSets(ctx, args.viewerUserId);
+        const rawPool = await ctx.db
+            .query('socialPosts')
+            .withIndex('by_type_created', (q: any) => q.eq('type', 'video'))
+            .order('desc')
+            .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+            .take(Math.min(limit * FORYOU_OVERSAMPLE, FORYOU_POOL_CAP));
+        const pool = rawPool.filter(isGlobalFeedEligible);
+
+        const tagAffinityRows = await ctx.db
+            .query('socialTagAffinity')
+            .withIndex('by_viewer', (q: any) => q.eq('viewerUserId', args.viewerUserId))
+            .take(300);
+        const tagAffinity = new Map<string, number>(tagAffinityRows.map((r: any) => [r.tag, r.score]));
+
+        const postTagsMap = new Map<string, string[]>();
+        await Promise.all(
+            pool.map(async (p: any) => {
+                const rows = await ctx.db
+                    .query('socialPostTags')
+                    .withIndex('by_post', (q: any) => q.eq('postId', String(p._id)))
+                    .take(10);
+                postTagsMap.set(String(p._id), rows.map((r: any) => r.tag));
+            }),
+        );
+
+        const recentViews = await ctx.db
+            .query('socialPostViews')
+            .withIndex('by_viewer_created', (q: any) => q.eq('viewerUserId', args.viewerUserId))
+            .order('desc')
+            .take(200);
+        const alreadyViewedIds = new Set<string>(recentViews.map((v: any) => v.postId));
+        const nowMs = Date.now();
+
+        return pool
+            .map((p: any) => {
+                const postTags = postTagsMap.get(String(p._id)) ?? [];
+                let score = scoreLoop(p, {
+                    tagAffinity,
+                    postTags,
+                    nowMs,
+                    notInterestedAuthors: moderation.notInterestedAuthors,
+                    alreadyViewedIds,
+                });
+                const tier = p.loopsTier ?? 'exploring';
+                if (tier === 'graduated') score *= 1.15;
+                else if (tier === 'suppressed') score *= 0.4;
+                return {
+                    postId: String(p._id),
+                    authorUserId: p.authorUserId,
+                    tags: postTags,
+                    tier,
+                    viewCount: p.viewCount ?? 0,
+                    avgCompletionPct: p.avgCompletionPct ?? null,
+                    quickSkipCount: p.quickSkipCount ?? 0,
+                    shareCount: p.shareCount ?? 0,
+                    score,
+                };
+            })
+            .sort((a: any, b: any) => b.score - a.score)
+            .slice(0, limit);
     },
 });
 
@@ -2078,6 +2716,9 @@ export const internalExpireStories = internalMutation({
         let count = 0;
         for (const story of expired) {
             if (story.deletedAt) continue;
+            // A3: una historia guardada en un highlight sobrevive a su
+            // propio vencimiento — el highlight es justamente eso.
+            if (story.isHighlighted) continue;
             await ctx.db.patch(story._id, { deletedAt: now });
             count++;
         }
@@ -2470,13 +3111,15 @@ export const addHighlight = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        return await ctx.db.insert('socialHighlights', {
+        const highlightId = await ctx.db.insert('socialHighlights', {
             userId: actor.idString,
             title: args.title,
             coverImage: args.coverImage,
             storyIds: args.storyIds,
             createdAt: NOW(),
         });
+        await markStoriesHighlighted(ctx, args.storyIds);
+        return highlightId;
     },
 });
 
@@ -2489,6 +3132,101 @@ export const getHighlights = query({
             .query('socialHighlights')
             .withIndex('by_user', (q) => q.eq('userId', args.userId))
             .collect();
+    },
+});
+
+/** Marca `isHighlighted:true` en cada storyId — el cron de expiración
+ *  (`internalExpireStories`) las salta. `ctx.db.normalizeId` porque
+ *  `storyIds` viaja como `string[]` (mismo motivo que otras referencias
+ *  cruzadas del módulo social), no como `Id<'socialStories'>[]`. */
+const markStoriesHighlighted = async (ctx: any, storyIds: string[]) => {
+    for (const raw of storyIds) {
+        const id = ctx.db.normalizeId('socialStories', raw);
+        if (id) await ctx.db.patch(id, { isHighlighted: true });
+    }
+};
+
+/** A3: `addHighlight` sólo crea con un set fijo — esto agrega una historia
+ *  a una destacada YA existente (autor-only). */
+export const addStoryToHighlight = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        highlightId: v.id('socialHighlights'),
+        storyId: v.id('socialStories'),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        const highlight = await ctx.db.get(args.highlightId);
+        if (!highlight || highlight.userId !== actor.idString) throw new Error('No autorizado.');
+        if (highlight.storyIds.includes(String(args.storyId))) return { success: true };
+        await ctx.db.patch(args.highlightId, { storyIds: [...highlight.storyIds, String(args.storyId)] });
+        await markStoriesHighlighted(ctx, [String(args.storyId)]);
+        return { success: true };
+    },
+});
+
+export const removeStoryFromHighlight = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        highlightId: v.id('socialHighlights'),
+        storyId: v.id('socialStories'),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        const highlight = await ctx.db.get(args.highlightId);
+        if (!highlight || highlight.userId !== actor.idString) throw new Error('No autorizado.');
+        await ctx.db.patch(args.highlightId, {
+            storyIds: highlight.storyIds.filter((id: string) => id !== String(args.storyId)),
+        });
+        // `isHighlighted` no se recalcula acá a propósito (ver comentario del
+        // schema) — caso borde aceptado, no reference-counting completo.
+        return { success: true };
+    },
+});
+
+export const deleteHighlight = mutation({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        highlightId: v.id('socialHighlights'),
+    },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, (args as any).sessionToken);
+        const highlight = await ctx.db.get(args.highlightId);
+        if (!highlight || highlight.userId !== actor.idString) throw new Error('No autorizado.');
+        await ctx.db.delete(args.highlightId);
+        return { success: true };
+    },
+});
+
+/** Resuelve las historias de una destacada — a diferencia del tray, NO
+ *  filtra por `expiresAt` (esa es exactamente la idea de un highlight). Sí
+ *  respeta `deletedAt` (borrado explícito del autor). */
+export const getHighlightStories = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        actorId: v.optional(v.any()),
+        highlightId: v.id('socialHighlights'),
+    },
+    handler: async (ctx, args) => {
+        await assertSocialActor(ctx, (args as any).sessionToken);
+        const highlight = await ctx.db.get(args.highlightId);
+        if (!highlight) return null;
+        const media = createMediaResolver(ctx);
+        const stories = await Promise.all(
+            highlight.storyIds.map((id: string) => {
+                const nid = ctx.db.normalizeId('socialStories', id);
+                return nid ? ctx.db.get(nid) : null;
+            }),
+        );
+        const resolved = await Promise.all(
+            stories
+                .filter((s: any) => s && !s.deletedAt)
+                .map(async (s: any) => ({ ...s, url: s.url ? await media(s.url) : s.url })),
+        );
+        return { title: highlight.title, coverImage: highlight.coverImage, stories: resolved };
     },
 });
 

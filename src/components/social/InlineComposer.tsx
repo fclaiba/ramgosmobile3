@@ -4,7 +4,7 @@ import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import { X, Camera, Tag, ShoppingBag, Plus, Video, Image as ImageIcon, Send } from 'lucide-react-native';
+import { X, Camera, Tag, ShoppingBag, Plus, Video, Image as ImageIcon, Send, Type } from 'lucide-react-native';
 import { CommerceLinker } from './CommerceLinker';
 import { Radius, colors } from '../../theme/tokens';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -14,7 +14,16 @@ import { uploadLocalImageToConvex } from '../../utils/uploadToConvexStorage';
 
 const MAX_IMAGES = 10;
 
-export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }) {
+interface InlineComposerProps {
+    onPostCreated?: () => void;
+    /** B1: postear DENTRO de una comunidad — el chip "Publicando en: X" se
+     *  muestra cuando viene seteado. El backend ya valida membresía activa
+     *  (`createPostImpl`, `social.ts`), acá sólo se manda el id. */
+    communityId?: string;
+    communityName?: string;
+}
+
+export function InlineComposer({ onPostCreated, communityId, communityName }: InlineComposerProps) {
     const { sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const { show } = useToast();
@@ -23,6 +32,12 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [images, setImages] = useState<string[]>([]);
+    /** Texto alternativo por imagen, mismo índice que `images` (accesibilidad
+     *  para lectores de pantalla). El campo `imageAlts` ya existía en el
+     *  schema y se renderiza en `PostImageCarousel`; esto era lo único que
+     *  faltaba: la UI para cargarlo al publicar. */
+    const [imageAlts, setImageAlts] = useState<string[]>([]);
+    const [editingAltIndex, setEditingAltIndex] = useState<number | null>(null);
     const [videoUri, setVideoUri] = useState<string | null>(null);
     const [caption, setCaption] = useState('');
     const [attachedProduct, setAttachedProduct] = useState<{ listingId: string, name: string, price: number, imageUrl?: string } | null>(null);
@@ -52,6 +67,7 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
 
         setVideoUri(null);
         setImages((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, MAX_IMAGES));
+        setImageAlts((prev) => [...prev, ...result.assets.map(() => '')].slice(0, MAX_IMAGES));
         setIsExpanded(true);
     };
 
@@ -69,6 +85,8 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
 
     const removeImage = (index: number) => {
         setImages((prev) => prev.filter((_, i) => i !== index));
+        setImageAlts((prev) => prev.filter((_, i) => i !== index));
+        setEditingAltIndex(null);
     };
 
     const handlePublish = async () => {
@@ -123,8 +141,13 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
                 content: caption,
                 videoUrl: uploadedVideo,
                 images: uploadedImages.length > 0 ? uploadedImages : undefined,
+                imageAlts:
+                    uploadedImages.length > 0 && imageAlts.some((a) => a.trim().length > 0)
+                        ? uploadedImages.map((_, i) => imageAlts[i]?.trim() ?? '')
+                        : undefined,
                 commercialProduct,
                 ...(listingId ? { attachedListingId: listingId as any } : {}),
+                ...(communityId ? { communityId: communityId as any } : {}),
             });
 
             show('¡Publicado con éxito!', 'success');
@@ -140,6 +163,8 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
 
     const resetAndClose = () => {
         setImages([]);
+        setImageAlts([]);
+        setEditingAltIndex(null);
         setVideoUri(null);
         setCaption('');
         setAttachedProduct(null);
@@ -155,6 +180,11 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
 
     return (
         <View style={[styles.container, { backgroundColor: c.glass, borderColor: c.border }]}>
+            {communityId && communityName && (
+                <View style={styles.communityChip}>
+                    <Text style={styles.communityChipText}>Publicando en: {communityName}</Text>
+                </View>
+            )}
             <TextInput
                 style={[styles.input, { color: c.text, minHeight: isExpanded ? 80 : 40 }]}
                 placeholder="¿Qué estás pensando?"
@@ -182,6 +212,19 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
                                 {images.map((uri, i) => (
                                     <View key={`${uri}-${i}`} style={styles.thumbWrapper}>
                                         <Image source={{ uri }} style={styles.thumbnail} />
+                                        {imageAlts[i]?.trim() ? (
+                                            <View style={styles.altBadgeSet} pointerEvents="none">
+                                                <Text style={styles.altBadgeText}>ALT</Text>
+                                            </View>
+                                        ) : null}
+                                        <TouchableOpacity
+                                            style={styles.altThumbBtn}
+                                            onPress={() => setEditingAltIndex(editingAltIndex === i ? null : i)}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Texto alternativo de la imagen ${i + 1}`}
+                                        >
+                                            <Type size={12} color="#fff" />
+                                        </TouchableOpacity>
                                         <TouchableOpacity style={styles.removeThumbBtn} onPress={() => removeImage(i)}>
                                             <X size={14} color="#fff" />
                                         </TouchableOpacity>
@@ -195,6 +238,33 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
                             </View>
                         )}
                     </View>
+
+                    {editingAltIndex !== null && images[editingAltIndex] && (
+                        <View style={[styles.altEditor, { borderColor: c.border }]}>
+                            <Text style={[styles.altEditorLabel, { color: c.textMuted }]}>
+                                Descripción de la imagen {editingAltIndex + 1} (para lectores de pantalla)
+                            </Text>
+                            <TextInput
+                                style={[styles.altEditorInput, { color: c.text, borderColor: c.border }]}
+                                placeholder="Ej: Foto de un par de zapatillas rojas sobre fondo blanco"
+                                placeholderTextColor={c.textMuted}
+                                value={imageAlts[editingAltIndex] ?? ''}
+                                onChangeText={(text) =>
+                                    setImageAlts((prev) => {
+                                        const next = [...prev];
+                                        next[editingAltIndex] = text;
+                                        return next;
+                                    })
+                                }
+                                maxLength={200}
+                                multiline
+                                autoFocus
+                            />
+                            <TouchableOpacity onPress={() => setEditingAltIndex(null)} style={styles.altEditorDone}>
+                                <Text style={styles.altEditorDoneText}>Listo</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             )}
 
@@ -272,6 +342,20 @@ export function InlineComposer({ onPostCreated }: { onPostCreated?: () => void }
 }
 
 const styles = StyleSheet.create({
+    communityChip: {
+        alignSelf: 'flex-start',
+        marginTop: 10,
+        marginLeft: 16,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: Radius.full,
+        backgroundColor: 'rgba(167,139,250,0.15)',
+    },
+    communityChipText: {
+        color: '#A78BFA',
+        fontSize: 12,
+        fontWeight: '600',
+    },
     container: {
         marginBottom: 16,
         borderRadius: Radius.lg,
@@ -319,6 +403,58 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.6)',
         borderRadius: Radius.full,
         padding: 4,
+    },
+    altThumbBtn: {
+        position: 'absolute',
+        top: 4,
+        left: 4,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        borderRadius: Radius.full,
+        padding: 4,
+    },
+    altBadgeSet: {
+        position: 'absolute',
+        bottom: 4,
+        left: 4,
+        backgroundColor: 'rgba(37,99,235,0.85)',
+        borderRadius: Radius.sm,
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+    },
+    altBadgeText: {
+        color: '#fff',
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    altEditor: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        padding: 10,
+        borderWidth: 1,
+        borderRadius: Radius.md,
+        gap: 6,
+    },
+    altEditorLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    altEditorInput: {
+        borderWidth: 1,
+        borderRadius: Radius.sm,
+        padding: 8,
+        fontSize: 13,
+        minHeight: 44,
+        textAlignVertical: 'top',
+    },
+    altEditorDone: {
+        alignSelf: 'flex-end',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    altEditorDoneText: {
+        color: '#4F46E5',
+        fontWeight: '700',
+        fontSize: 13,
     },
     addThumbBtn: {
         width: 70,

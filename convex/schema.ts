@@ -1,6 +1,31 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Sticker de una historia (estilo Instagram) — unión discriminada por
+// `type`. Convex no tiene intersection types para `v.union`, así que los
+// campos comunes (id/posición/rotación/escala) se repiten en cada variante.
+const storyStickerBase = {
+    id: v.string(),
+    x: v.number(),
+    y: v.number(),
+    rotation: v.optional(v.number()),
+    scale: v.optional(v.number()),
+};
+const storySticker = v.union(
+    // Texto libre ("Aa") — también lo que permite una historia sin
+    // foto/video (fondo de color, ver `socialStories.backgroundColor`).
+    v.object({ ...storyStickerBase, type: v.literal('text'), content: v.string(), color: v.optional(v.string()) }),
+    v.object({ ...storyStickerBase, type: v.literal('poll'), question: v.string(), options: v.array(v.string()) }),
+    v.object({ ...storyStickerBase, type: v.literal('question'), prompt: v.string() }),
+    v.object({ ...storyStickerBase, type: v.literal('countdown'), title: v.string(), endsAt: v.string() }),
+    v.object({ ...storyStickerBase, type: v.literal('slider'), emoji: v.string(), question: v.optional(v.string()) }),
+    v.object({ ...storyStickerBase, type: v.literal('mention'), userId: v.string(), username: v.string() }),
+    v.object({ ...storyStickerBase, type: v.literal('location'), placeId: v.optional(v.string()), name: v.string(), address: v.optional(v.string()) }),
+    v.object({ ...storyStickerBase, type: v.literal('hashtag'), tag: v.string() }),
+    // Reusa el sistema de Sonidos de Loops — cero infraestructura nueva.
+    v.object({ ...storyStickerBase, type: v.literal('music'), audioTrackId: v.id('audioTracks') }),
+);
+
 export default defineSchema({
     users: defineTable({
         uid: v.string(), // Ext auth ID? or just internal ID
@@ -289,7 +314,15 @@ export default defineSchema({
         .index("by_slug", ["slug"]) // PHASE 2
         .index("by_category", ["category"]) // PHASE 2
         .index("by_created", ["createdAt"]) // PHASE 2
-        .index("by_created_by_influencer", ["createdByInfluencerId"]),
+        .index("by_created_by_influencer", ["createdByInfluencerId"])
+        // Discovery unificado (personas + productos, ver `convex/discovery.ts`):
+        // antes `searchListings` escaneaba TODAS las publicaciones activas y
+        // filtraba `title`/`description` a mano en el servidor — funcional
+        // pero no escala. Este índice reemplaza ese `.collect()` + `.filter`.
+        .searchIndex('search_title', {
+            searchField: 'title',
+            filterFields: ['status', 'category', 'type'],
+        }),
 
     orders: defineTable({
         userId: v.string(), // Buyer
@@ -964,6 +997,35 @@ export default defineSchema({
         // Implementa el "Zero-Penalty Algorithm" del doc: los posts que
         // convierten suben en el ranking.
         salesCount: v.optional(v.number()),
+        // ── Señales del ranker de Loops (plan de ranking dual, E-085/E-086) ──
+        // Compartidos reales (sólo desde `sharePostInChat`/`shareToUser`, el
+        // único funnel que no se puede falsear sin mandar un mensaje real).
+        shareCount: v.optional(v.number()),
+        // Viewers distintos que abandonaron rápido y sin ver casi nada
+        // (`dwellMs<1500 && completionPct<0.25`) — bounce rate de Loops.
+        quickSkipCount: v.optional(v.number()),
+        // Suma de "vueltas" reproducidas de más (detectado por el wrap del
+        // player en loop) — señal de rewatch, difícil de fakear.
+        totalLoopCount: v.optional(v.number()),
+        // Exploración/graduación por etapas de Loops ("bandit-lite", Fase 3).
+        // Ausente = 'exploring' implícito. El cron
+        // `social/loopsTiering.ts` lo gradúa por percentil una vez que el
+        // post junta suficientes vistas.
+        loopsTier: v.optional(v.union(
+            v.literal('exploring'),
+            v.literal('graduated'),
+            v.literal('suppressed'),
+        )),
+        loopsTierDecidedAt: v.optional(v.string()),
+        // Cuántas veces pasó por el cron de graduación sin cruzar ningún
+        // corte — al llegar a un tope gradúa por default en vez de quedar
+        // en 'exploring' para siempre.
+        loopsTierCycles: v.optional(v.number()),
+        // ── Sonidos reutilizables (estilo Reels/TikTok) ─────────────────────
+        // Ausente = post viejo, pre-feature (no se hace backfill: campo
+        // puramente aditivo). Presente en TODO video nuevo, sea original
+        // (se le crea su propio `audioTracks`) o reusando un sonido ajeno.
+        audioTrackId: v.optional(v.id('audioTracks')),
         deletedAt: v.optional(v.string()),
         createdAt: v.string(),
     })
@@ -975,10 +1037,30 @@ export default defineSchema({
         .index('by_parent_created', ['parentPostId', 'createdAt'])
         // Feed de una comunidad.
         .index('by_community_created', ['communityId', 'createdAt'])
+        // Videos que usan un sonido dado, para `getPostsByAudioTrack`.
+        .index('by_audioTrack', ['audioTrackId', 'createdAt'])
         .searchIndex('search_content', {
             searchField: 'content',
             filterFields: ['type'],
         }),
+
+    // audioTracks — un "sonido" reutilizable (estilo Reels/TikTok). Se crea
+    // uno por CADA video original subido (aunque nadie lo reuse nunca), más
+    // uno reusado cuando alguien graba con "Usar este sonido". `storageId`
+    // apunta a un archivo de AUDIO SOLO (extraído client-side con
+    // ffmpeg-expo), nunca al video. `originalPostId` es sólo atribución: no
+    // cascadea, así que borrar ese post no rompe el sonido para quien ya lo
+    // usó (igual que en Instagram/TikTok real).
+    audioTracks: defineTable({
+        name: v.string(),
+        authorId: v.id('users'),
+        originalPostId: v.id('socialPosts'),
+        storageId: v.id('_storage'),
+        usageCount: v.number(),
+    })
+        .index('by_author', ['authorId'])
+        // Picker de música para historias (`searchAudioTracks`).
+        .searchIndex('search_name', { searchField: 'name' }),
 
     // socialComments — comentarios con UN nivel de respuesta (estilo IG: el
     // tercer nivel se aplana contra el padre, así el árbol nunca se
@@ -1029,11 +1111,15 @@ export default defineSchema({
         .index('by_pair', ['followerUserId', 'followeeUserId']),
 
     // socialStories — 24-hour ephemeral content. Soft-deleted by the
-    // `expireStories` cron in convex/crons.ts.
+    // `expireStories` cron in convex/crons.ts — SALVO que `isHighlighted`,
+    // en cuyo caso sobrevive a su propio vencimiento (ver highlights abajo).
     socialStories: defineTable({
         authorUserId: v.string(),
-        type: v.union(v.literal('image'), v.literal('video')),
-        url: v.string(),
+        // 'text' = historia sin foto/video, sólo fondo de color + sticker
+        // de texto — por eso `url` es opcional.
+        type: v.union(v.literal('image'), v.literal('video'), v.literal('text')),
+        url: v.optional(v.string()),
+        backgroundColor: v.optional(v.string()),
         durationSec: v.number(),
         viewCount: v.number(),
         expiresAt: v.string(),
@@ -1041,11 +1127,35 @@ export default defineSchema({
         // historias viejas). 'close_friends' la esconde de todos salvo los
         // que el autor agregó a `socialCloseFriends`.
         audience: v.optional(v.union(v.literal('everyone'), v.literal('close_friends'))),
+        stickers: v.optional(v.array(storySticker)),
+        // true si está guardada en AL MENOS un highlight — el cron de
+        // expiración la salta. Nunca vuelve a `false` sola al sacarla de
+        // todos los highlights (caso borde de bajo impacto, aceptado a
+        // propósito: evita reference-counting completo).
+        isHighlighted: v.optional(v.boolean()),
         deletedAt: v.optional(v.string()),
         createdAt: v.string(),
     })
         .index('by_author', ['authorUserId'])
         .index('by_expires', ['expiresAt']),
+
+    // socialStoryStickerResponses — respuestas a stickers interactivos
+    // (poll/question/slider). Los resultados (barras de encuesta, promedio
+    // del slider) se agregan AL LEER desde acá, sin contador denormalizado
+    // — una historia de 24h no junta volumen como para justificarlo todavía.
+    socialStoryStickerResponses: defineTable({
+        storyId: v.id('socialStories'),
+        stickerId: v.string(),
+        viewerUserId: v.string(),
+        type: v.union(v.literal('poll'), v.literal('question'), v.literal('slider')),
+        optionIndex: v.optional(v.number()),
+        text: v.optional(v.string()),
+        sliderValue: v.optional(v.number()),
+        createdAt: v.string(),
+    })
+        .index('by_story_sticker', ['storyId', 'stickerId'])
+        // Idempotencia: un viewer, una respuesta por sticker.
+        .index('by_story_sticker_viewer', ['storyId', 'stickerId', 'viewerUserId']),
 
     // socialCloseFriends — lista de "mejores amigos" de UN usuario, para
     // segmentar el `audience` de las historias.
@@ -1064,7 +1174,11 @@ export default defineSchema({
         viewedAt: v.string(),
     })
         .index('by_story', ['storyId'])
-        .index('by_story_viewer', ['storyId', 'viewerUserId']),
+        .index('by_story_viewer', ['storyId', 'viewerUserId'])
+        // Todas las vistas de UN viewer en una sola query — así el tray
+        // (`getStoriesForFollowing`) arma el bucket "no vistas primero" sin
+        // una query por historia.
+        .index('by_viewer', ['viewerUserId']),
 
     // socialChats — DM threads, 1:1 or group.
     socialChats: defineTable({
@@ -1288,6 +1402,11 @@ export default defineSchema({
         // del clip vio. El cliente los manda al SALIR del ítem, no al entrar.
         dwellMs: v.optional(v.number()),
         completionPct: v.optional(v.number()),
+        // Loops (plan de ranking dual): salió rápido y sin ver casi nada, y
+        // cuántas vueltas de más reprodujo (rewatch). Ambos alimentan los
+        // contadores denormalizados de `socialPosts` (ver `addView`).
+        quickSkip: v.optional(v.boolean()),
+        loopCount: v.optional(v.number()),
         updatedAt: v.optional(v.string()),
     })
         .index('by_post_viewer', ['postId', 'viewerUserId'])
@@ -1346,6 +1465,11 @@ export default defineSchema({
         visibility: v.union(v.literal('public'), v.literal('private')),
         location: v.optional(v.string()),
         memberCount: v.number(),
+        // Twitter-Communities-style: reglas mostradas en el detalle (sin
+        // gate de aceptación obligatoria — fricción mínima) y post fijado
+        // por los mods, mismo patrón que `socialUsers.pinnedPostId`.
+        rules: v.optional(v.array(v.string())),
+        pinnedPostId: v.optional(v.id('socialPosts')),
         createdAt: v.string(),
         deletedAt: v.optional(v.string()),
     })
@@ -1712,6 +1836,51 @@ export default defineSchema({
     })
         .index('by_user_created', ['mentionedUserId', 'createdAt'])
         .index('by_source', ['sourceType', 'sourceId']),
+
+    // ── Ranking dual: Feed/Loops (E-085/E-086) ──────────────────────────────
+
+    // socialAuthorAffinity — EMA persistida de "cuánto le interesa a este
+    // viewer el contenido de este autor", actualizada incrementalmente en el
+    // evento (like, comentario, DM, watch-time≥80%). Reemplaza el scan de
+    // "últimos 50 likes" que `getFeed` hacía en cada request. Media vida de
+    // 14 días — una afinidad no se evapora en un fin de semana.
+    socialAuthorAffinity: defineTable({
+        viewerUserId: v.string(),
+        authorUserId: v.string(),
+        score: v.number(),
+        lastEventAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_viewer', ['viewerUserId'])
+        .index('by_viewer_author', ['viewerUserId', 'authorUserId']),
+
+    // socialTagAffinity — misma mecánica que `socialAuthorAffinity` pero por
+    // hashtag/interés, media vida de 4 días (el interés por un tipo de
+    // contenido cambia más rápido que una relación social) y alimentada
+    // ÚNICAMENTE por eventos de Loops (nunca por likes del Feed) — mantiene
+    // los dos grafos genuinamente separados, como pidió el usuario.
+    socialTagAffinity: defineTable({
+        viewerUserId: v.string(),
+        tag: v.string(),
+        score: v.number(),
+        lastEventAt: v.string(),
+        updatedAt: v.string(),
+    })
+        .index('by_viewer', ['viewerUserId'])
+        .index('by_viewer_tag', ['viewerUserId', 'tag']),
+
+    // socialLinkPreviews — cache de metadata OpenGraph por URL, compartido
+    // por todos los posts que linkean la misma página (una fila por URL, no
+    // por post). Ver `convex/social/linkPreview.ts`.
+    socialLinkPreviews: defineTable({
+        url: v.string(),
+        title: v.optional(v.string()),
+        description: v.optional(v.string()),
+        imageUrl: v.optional(v.string()),
+        siteName: v.optional(v.string()),
+        status: v.union(v.literal('ok'), v.literal('failed')),
+        fetchedAt: v.string(),
+    }).index('by_url', ['url']),
 
     // socialActivity — bandeja de "Actividad" real. NO se deriva de
     // `pushDeliveries` (eso es un log de auditoría de envíos, no un feed: si

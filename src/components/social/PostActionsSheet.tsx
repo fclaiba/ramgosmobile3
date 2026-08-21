@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Flag, EyeOff, VolumeX, Pin } from 'lucide-react-native';
+import { Flag, EyeOff, VolumeX, Pin, Trash2 } from 'lucide-react-native';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,6 +15,15 @@ interface PostActionsSheetProps {
     onClose: () => void;
     postId: string;
     authorUserId: string;
+    /** true si el viewer es owner/admin de la comunidad a la que pertenece
+     *  este post (B4, moderación de mods) — lo calcula el caller, que es
+     *  quien sabe si el post está scopeado a una comunidad y con qué rol.
+     *  El global admin/developer y el propio autor ya pueden borrar sin
+     *  esto (`deletePost` los autoriza igual). */
+    canModerate?: boolean;
+    /** Comunidad a la que pertenece este post — necesario para "Fijar en la
+     *  comunidad" (B4). Ausente si el post no está scopeado a ninguna. */
+    communityId?: string;
 }
 
 /**
@@ -22,7 +31,7 @@ interface PostActionsSheetProps {
  * Antes de la Fase 2 esto no existía — no había ninguna forma de reportar
  * contenido ni de dejar de ver a alguien sin bloquearlo del todo.
  */
-export const PostActionsSheet = ({ visible, onClose, postId, authorUserId }: PostActionsSheetProps) => {
+export const PostActionsSheet = ({ visible, onClose, postId, authorUserId, canModerate, communityId }: PostActionsSheetProps) => {
     const { sessionToken, user } = useAuth();
     const { show } = useToast();
     const { colorScheme } = useTheme();
@@ -34,8 +43,39 @@ export const PostActionsSheet = ({ visible, onClose, postId, authorUserId }: Pos
     const hidePost = useMutation(api.social.moderation.hidePost);
     const muteUser = useMutation(api.social.moderation.muteUser);
     const pinPost = useMutation(api.social.pinPost);
+    const deletePost = useMutation(api.social.deletePost);
+    const pinCommunityPost = useMutation(api.social.communities.pinCommunityPost);
+
+    const handlePinToCommunity = async () => {
+        if (!sessionToken || !communityId) return;
+        try {
+            await pinCommunityPost({ sessionToken, communityId: communityId as any, postId: postId as any });
+            show('Post fijado en la comunidad', 'success');
+        } catch (e: any) {
+            show(e?.data?.message ?? 'No se pudo fijar', 'error');
+        } finally {
+            onClose();
+        }
+    };
 
     const isOwnPost = user?.id === authorUserId;
+    // `AuthUserRole` (cliente) no incluye 'developer' — sólo el backend lo
+    // conoce. `deletePost` ya autoriza a los dos igual; acá sólo decide si
+    // MOSTRAR el botón, así que 'admin' alcanza para el caso común.
+    const isGlobalAdmin = user?.role === 'admin';
+    const canDelete = isOwnPost || isGlobalAdmin || canModerate;
+
+    const handleDelete = async () => {
+        if (!sessionToken) return;
+        try {
+            await deletePost({ sessionToken, postId: postId as any });
+            show('Post eliminado', 'success');
+        } catch (e: any) {
+            show(e?.data?.message ?? 'No se pudo eliminar', 'error');
+        } finally {
+            onClose();
+        }
+    };
 
     const handlePin = async () => {
         if (!sessionToken) return;
@@ -97,6 +137,13 @@ export const PostActionsSheet = ({ visible, onClose, postId, authorUserId }: Pos
                             </TouchableOpacity>
                         )}
 
+                        {canModerate && communityId && (
+                            <TouchableOpacity style={styles.row} onPress={handlePinToCommunity}>
+                                <Pin size={20} color={isDark ? '#fff' : '#111827'} />
+                                <Text style={styles.rowText}>Fijar en la comunidad</Text>
+                            </TouchableOpacity>
+                        )}
+
                         {!isOwnPost && (
                             <TouchableOpacity
                                 style={styles.row}
@@ -107,6 +154,13 @@ export const PostActionsSheet = ({ visible, onClose, postId, authorUserId }: Pos
                             >
                                 <Flag size={20} color="#EF4444" />
                                 <Text style={[styles.rowText, { color: '#EF4444' }]}>Reportar</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {canDelete && (
+                            <TouchableOpacity style={styles.row} onPress={handleDelete}>
+                                <Trash2 size={20} color="#EF4444" />
+                                <Text style={[styles.rowText, { color: '#EF4444' }]}>Eliminar</Text>
                             </TouchableOpacity>
                         )}
                     </View>

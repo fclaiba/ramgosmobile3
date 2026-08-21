@@ -10,6 +10,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { glassShadow, colors, Radius } from '../../theme/tokens';
 import { CommerceTag } from './CommerceTag';
 import { PostImageCarousel } from './PostImageCarousel';
+import { LinkPreviewCard } from './LinkPreviewCard';
+import { SoundPill } from './SoundPill';
+import { CommunityBadge } from './CommunityBadge';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,6 +47,12 @@ export interface PostCardProps {
         likesCount: number;
         commentsCount: number;
         hasLiked?: boolean;
+        /** Sonidos reutilizables — ausente en posts viejos, pre-feature. */
+        audioTrackId?: Id<'audioTracks'>;
+        audioTrack?: { name: string; authorUsername: string | null } | null;
+        /** B3 — ausente = post del feed global. */
+        communityId?: Id<'commercialCommunities'>;
+        communityName?: string | null;
     };
     author: {
         name: string;
@@ -177,12 +186,28 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
     // Render del fondo visual dependiendo del tipo de post
     const renderMedia = () => {
         if (post.type === 'video' && post.videoUrl) {
+            // Mismo tratamiento que las imágenes (`PostImageCarousel`): el
+            // video se ve COMPLETO (`contain`), nunca recortado. El relleno
+            // de las bandas es una segunda `VideoView` del MISMO `player`
+            // (expo-video soporta más de una vista por reproductor) en
+            // `cover` + blur, para no tener que decodificar el video dos
+            // veces ni desincronizar el audio.
             return (
                 <View style={StyleSheet.absoluteFill}>
                     <VideoView
                         style={StyleSheet.absoluteFill}
                         player={player}
                         contentFit="cover"
+                        nativeControls={false}
+                        pointerEvents="none"
+                    />
+                    <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+                    <View style={styles.videoBackdropTint} pointerEvents="none" />
+                    <VideoView
+                        style={StyleSheet.absoluteFill}
+                        player={player}
+                        contentFit="contain"
+                        nativeControls={false}
                     />
                 </View>
             );
@@ -252,9 +277,27 @@ export const PostCard = React.memo(({ post, author, onLike, onComment, onCommerc
                 </View>
 
                 {/* Post Text Content */}
+                {post.communityId && post.communityName && (
+                    <View style={styles.soundRow}>
+                        <CommunityBadge communityId={post.communityId} name={post.communityName} />
+                    </View>
+                )}
+
                 {post.content ? (
                     <Text style={styles.content} numberOfLines={3}>{post.content}</Text>
                 ) : null}
+
+                {post.audioTrackId && (
+                    <View style={styles.soundRow}>
+                        <SoundPill
+                            trackId={post.audioTrackId}
+                            name={post.audioTrack?.name}
+                            authorUsername={post.audioTrack?.authorUsername}
+                        />
+                    </View>
+                )}
+
+                {post.type === 'text' && <LinkPreviewCard content={post.content} />}
 
                 {post.type === 'poll' && post.poll && (
                     <PollCard poll={post.poll} currentUserId={currentUserId} onVote={onVotePoll} />
@@ -324,6 +367,11 @@ const styles = StyleSheet.create({
         height: '50%',
         pointerEvents: 'none',
     },
+    videoBackdropTint: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.35)',
+    },
     hudContainer: {
         padding: 16,
         paddingBottom: 32, // Espacio para el bottom tab
@@ -376,6 +424,9 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0,0,0,0.6)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
+    },
+    soundRow: {
+        marginBottom: 12,
     },
     
     // Commerce Tag Liquid Glass

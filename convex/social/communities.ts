@@ -9,9 +9,17 @@
  *     y mute/archive de `social/dm.ts` (1700+ líneas) gratis.
  *   - El catálogo (`communityListings`) no duplica `listings`; sólo
  *     referencia cuáles decidió mostrar la comunidad.
- *   - Los "convenios" (`communityAgreements`, comisiones cruzadas entre
- *     miembros) quedan FUERA de este corte — están en el diseño pero no
- *     implementados; ver la nota al final del archivo.
+ *   - **Sin reparto de comisiones entre miembros, a propósito.** Una
+ *     comunidad es un nicho compartido donde varios vendedores postean y
+ *     COMPITEN por vender más de ese rubro — no un vehículo para que un
+ *     miembro cobre comisión de las ventas de otro. La única figura que
+ *     puede cobrar comisión de una venta en toda la app es un usuario
+ *     `role: 'influencer'` promocionando vía campaña (`campaigns.ts`,
+ *     `internalResolveCartAttribution`), nunca un miembro de comunidad como
+ *     tal. Este archivo tuvo en algún momento un sistema de "convenios"
+ *     (`communityAgreements`) para comisión cruzada entre miembros — se
+ *     eliminó por completo (código + tabla del schema) por decisión de
+ *     producto; no quedó ni a medio implementar.
  */
 
 import { v, ConvexError } from 'convex/values';
@@ -22,6 +30,8 @@ import { assertSocialActor, assertSocialRate, paginateQuery, socialViewer } from
 import { awardSocialAction } from './gamification';
 import { recordActivity } from './activity';
 import { createMediaResolver } from '../mediaUrl';
+import { loadViewerModerationSets } from '../social';
+import { scoreLoop, applyAuthorDiversityCap } from './scoring';
 
 const NOW = () => new Date().toISOString();
 
@@ -99,6 +109,44 @@ export const updateCommunity = mutation({
         if (args.visibility !== undefined) patch.visibility = args.visibility;
         if (args.location !== undefined) patch.location = args.location;
         if (Object.keys(patch).length) await ctx.db.patch(args.communityId, patch);
+        return { success: true };
+    },
+});
+
+/** B4: reglas de la comunidad (estilo Twitter Communities) — se muestran
+ *  en el detalle, sin gate de aceptación obligatoria (fricción mínima). */
+export const setCommunityRules = mutation({
+    args: { sessionToken: v.optional(v.string()), communityId: v.id('commercialCommunities'), rules: v.array(v.string()) },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.sessionToken);
+        await requireOwnerOrAdmin(ctx, String(args.communityId), actor.idString);
+        await ctx.db.patch(args.communityId, { rules: args.rules.map((r) => r.trim()).filter(Boolean) });
+        return { success: true };
+    },
+});
+
+/** B4: post fijado — mismo patrón exacto que `socialUsers.pinnedPostId`
+ *  (`social.ts`, `pinPost`/`unpinPost` de perfil). */
+export const pinCommunityPost = mutation({
+    args: { sessionToken: v.optional(v.string()), communityId: v.id('commercialCommunities'), postId: v.id('socialPosts') },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.sessionToken);
+        await requireOwnerOrAdmin(ctx, String(args.communityId), actor.idString);
+        const post = await ctx.db.get(args.postId);
+        if (!post || post.communityId !== String(args.communityId)) {
+            throw new ConvexError({ code: 'BAD_REQUEST', message: 'El post no pertenece a esta comunidad.' });
+        }
+        await ctx.db.patch(args.communityId, { pinnedPostId: args.postId });
+        return { success: true };
+    },
+});
+
+export const unpinCommunityPost = mutation({
+    args: { sessionToken: v.optional(v.string()), communityId: v.id('commercialCommunities') },
+    handler: async (ctx, args) => {
+        const actor = await assertSocialActor(ctx, args.sessionToken);
+        await requireOwnerOrAdmin(ctx, String(args.communityId), actor.idString);
+        await ctx.db.patch(args.communityId, { pinnedPostId: undefined });
         return { success: true };
     },
 });
@@ -409,6 +457,9 @@ export const getCommunityFeed = query({
         communityId: v.id('commercialCommunities'),
         cursor: v.optional(v.string()),
         limit: v.optional(v.number()),
+        // B2: ausente = mixto (comportamiento de siempre, tab "Feed").
+        // `'video'` = sólo Loops de esta comunidad (tab "Loops" nuevo).
+        type: v.optional(v.literal('video')),
     },
     handler: async (ctx, args): Promise<any> => {
         const actor = await socialViewer(ctx, args.sessionToken);
@@ -439,10 +490,45 @@ export const getCommunityFeed = query({
                 .order('desc')
                 .filter((q: any) => q.eq(q.field('deletedAt'), undefined)),
             args.cursor,
-            args.limit ?? 20,
+            args.limit ?? (args.type === 'video' ? 30 : 20),
         );
 
-        return { items: page.items, nextCursor: page.nextCursor };
+        if (args.type !== 'video') {
+            return { items: page.items, nextCursor: page.nextCursor };
+        }
+
+        // Tab Loops de la comunidad: rankea con `scoreLoop`, versión
+        // simplificada de la que usa `getFeed({mode:'videos'})` — sin
+        // exploración/graduación por etapas (ese mecanismo existe para el
+        // cold-start del catálogo GLOBAL; el pool de video de una comunidad
+        // es chico, no vale la pena duplicar esa máquina acá) y diversidad
+        // por AUTOR en vez de por tag (más simple, misma idea).
+        const videos = page.items.filter((p: any) => p.type === 'video');
+        const moderation = await loadViewerModerationSets(ctx, actor.idString);
+        const recentViews = await ctx.db
+            .query('socialPostViews')
+            .withIndex('by_viewer_created', (q: any) => q.eq('viewerUserId', actor.idString))
+            .order('desc')
+            .take(200);
+        const alreadyViewedIds = new Set<string>(recentViews.map((v: any) => v.postId));
+        const nowMs = Date.now();
+
+        const scored = videos
+            .map((p: any) => ({
+                post: p,
+                score: scoreLoop(p, {
+                    tagAffinity: new Map(),
+                    postTags: [],
+                    nowMs,
+                    notInterestedAuthors: moderation.notInterestedAuthors,
+                    alreadyViewedIds,
+                }),
+            }))
+            .sort((a, b) => b.score - a.score)
+            .map((x) => x.post);
+
+        const capped = applyAuthorDiversityCap(scored, args.limit ?? 30);
+        return { items: capped, nextCursor: page.nextCursor };
     },
 });
 
@@ -572,14 +658,3 @@ export const getOrCreateCommunityChat = mutation({
         return chatId;
     },
 });
-
-// ---------------------------------------------------------------------------
-// NOTA DE ALCANCE
-// ---------------------------------------------------------------------------
-// `communityAgreements` (convenios de comisión cruzada entre miembros: "si
-// B vende algo promocionado por A dentro del pasillo, A cobra X%") está en
-// el diseño (§6 de la arquitectura) pero NO tiene tabla ni lógica en este
-// corte. El catálogo compartido y el chat ya dan el valor central de
-// "digitalizar el pasillo comercial"; los convenios quedan para una fase
-// posterior porque tocan el split de pagos real (`socialPostSales`,
-// `commerce.ts`) y merecen su propia revisión de seguridad.

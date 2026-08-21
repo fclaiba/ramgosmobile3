@@ -273,7 +273,7 @@ export default function HomeScreen({ navigation, route }: any) {
                 {activeTab === 'home' && (
                     <>
                         <MobileHeader
-                            logo={Platform.OS !== 'web'}
+                            logo={true}
                             title={t('home.title', { defaultValue: 'Descubre' })}
                             subtitle={t('home.subtitle', { defaultValue: 'Descubre oportunidades' })}
                             onMenuPress={() => setIsSidebarOpen(true)}
@@ -387,16 +387,8 @@ export default function HomeScreen({ navigation, route }: any) {
                                         })}
                                     </View>
 
-                                    {/* Discover Submenu Grid */}
-                                    <View style={[styles.sectionHeader, { marginTop: 24, marginBottom: 12, flexDirection: 'column', alignItems: 'flex-start' }]}>
-                                        <Image 
-                                            source={require('../../logo.png')} 
-                                            style={{ width: 120, height: 40, marginBottom: 4 }} 
-                                            resizeMode="contain" 
-                                        />
-                                        <Text style={{ fontSize: 15, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280' }}>Descubre oportunidades</Text>
-                                    </View>
-                                    <View style={styles.grid2}>
+
+                                    <View style={[styles.grid2, { marginTop: 24 }]}>
                                         {mainCategories.map((card) => (
                                             <TouchableOpacity
                                                 key={card.id}

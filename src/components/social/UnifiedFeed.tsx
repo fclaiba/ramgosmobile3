@@ -6,13 +6,16 @@ import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { useNavigation } from '@react-navigation/native';
-import { PostCard, PostCardProps } from './PostCard';
+import { PostCard } from './PostCard';
 import { PostCommentsModal } from './PostCommentsModal';
 import { PostActionsSheet } from './PostActionsSheet';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useCart } from '../../contexts/CartContext';
+import { useTheme } from '../../contexts/ThemeContext';
+import { colors } from '../../theme/tokens';
 import { useSocialFeed, SocialFeedMode } from '../../hooks/useSocialFeed';
+import { mapPostToCardProps } from '../../utils/mapPostToCard';
 
 const { height } = Dimensions.get('window');
 
@@ -26,17 +29,32 @@ export interface UnifiedFeedProps {
     /** Restricts the feed to one author — used by profile screens. */
     authorUserId?: string;
     mode?: UnifiedFeedMode;
+    /** Cambiar este valor fuerza un refresh del feed (ej: se creó un post
+     *  nuevo desde un composer montado por el caller, fuera de este componente). */
+    refreshKey?: string | number;
+    /** Header de la lista — ej. `StoriesBar` + `InlineComposer` en `SocialScreen`. */
+    listHeaderComponent?: React.ReactElement | null;
+    /** B2: tab "Feed" de `CommunityDetailScreen` — anula `authorUserId`/`mode`. */
+    communityId?: string;
+    /** B4: el caller (`CommunityDetailScreen`) ya sabe si el viewer es
+     *  owner/admin de ESA comunidad — se lo pasa acá en vez de que
+     *  `PostActionsSheet` intente resolverlo de nuevo. */
+    canModerate?: boolean;
 }
 
-export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
+export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponent, communityId, canModerate }: UnifiedFeedProps = {}) => {
     const { sessionToken, user } = useAuth();
     const { show } = useToast();
     const navigation = useNavigation<any>();
+    const isDark = useTheme().colorScheme === 'dark';
+    const tint = colors(isDark).primary;
 
     const { posts, isLoadingFirstPage, loadMore, refresh, viewedIds } = useSocialFeed({
         authorUserId,
         mode,
         pageSize: PAGE_SIZE,
+        refreshKey,
+        communityId,
     });
     const [refreshing, setRefreshing] = useState(false);
 
@@ -155,21 +173,7 @@ export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
 
     const renderItem = useCallback(
         ({ item }: ListRenderItemInfo<any>) => {
-            // Field names here must track convex/social.ts `decoratePosts`.
-            const mappedPost: PostCardProps['post'] = {
-                _id: item._id,
-                authorUserId: item.authorUserId,
-                type: item.type,
-                content: item.content,
-                images: item.images,
-                imageAlts: item.imageAlts,
-                videoUrl: item.videoUrl,
-                commercialProduct: item.commercialProduct,
-                poll: item.poll,
-                likesCount: item.likeCount ?? 0,
-                commentsCount: item.commentCount ?? 0,
-                hasLiked: item.isLikedByMe ?? false,
-            };
+            const mappedPost = mapPostToCardProps(item);
 
             const authorInfo = item.author
                 ? {
@@ -205,7 +209,7 @@ export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
     if (isLoadingFirstPage) {
         return (
             <View style={[styles.container, styles.center]}>
-                <ActivityIndicator color="#FFF" />
+                <ActivityIndicator color={tint} />
             </View>
         );
     }
@@ -223,6 +227,7 @@ export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
                 showsVerticalScrollIndicator={false}
                 onEndReached={loadMore}
                 onEndReachedThreshold={0.5}
+                ListHeaderComponent={listHeaderComponent ?? undefined}
                 onViewableItemsChanged={onViewableItemsChanged as any}
                 viewabilityConfig={{
                     itemVisiblePercentThreshold: 70,
@@ -231,7 +236,7 @@ export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor="#ffffff"
+                        tintColor={tint}
                     />
                 }
             />
@@ -247,6 +252,8 @@ export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
                 onClose={() => setActionsPost(null)}
                 postId={actionsPost?.id ?? ''}
                 authorUserId={actionsPost?.authorUserId ?? ''}
+                canModerate={canModerate}
+                communityId={communityId}
             />
         </View>
     );
@@ -255,7 +262,11 @@ export const UnifiedFeed = ({ authorUserId, mode }: UnifiedFeedProps = {}) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000', // El feed de videos siempre es negro de fondo
+        // Transparente: el caller (ej. `SocialScreen`'s gradient de fondo)
+        // decide el color. Antes era negro fijo, pensado para un feed de
+        // videos a pantalla completa — pero este componente ahora también
+        // sirve el tab "Feed" (texto/imagen) sobre fondo claro u oscuro.
+        backgroundColor: 'transparent',
     },
     center: {
         justifyContent: 'center',

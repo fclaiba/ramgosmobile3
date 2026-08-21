@@ -285,7 +285,11 @@ export const UserProfile = ({ userId, onBack }: UserProfileProps) => {
                         <View style={styles.highlightsSection}>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.highlightsContent}>
                                 {highlights.map((h) => (
-                                    <TouchableOpacity key={h.id} style={styles.highlightItem}>
+                                    <TouchableOpacity
+                                        key={h._id}
+                                        style={styles.highlightItem}
+                                        onPress={() => navigation.navigate('HighlightViewer', { highlightId: h._id })}
+                                    >
                                         <View style={styles.highlightCircle}>
                                             <View style={styles.highlightInnerParams}>
                                                 <Image source={{ uri: h.coverImage }} style={styles.highlightImage} />

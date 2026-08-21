@@ -77,23 +77,36 @@ export const StoriesBar = ({ onStoryClick, onAddStory }: StoriesBarProps) => {
                             ? group.stories[0].imageUrl
                             : avatarUrl;
 
+                        // A1: anillo con gradiente sólo si queda algo sin ver
+                        // — antes todos los anillos eran iguales, ordenados
+                        // sólo por lista de seguidos.
+                        const ring = group.hasUnseen ? (
+                            <LinearGradient colors={['#4FC3F7', '#EC4899', '#F59E0B']} style={styles.gradientRing}>
+                                <View style={styles.imageBorder}>
+                                    <Avatar style={styles.avatar}>
+                                        <AvatarImage src={fallbackImg} />
+                                        <AvatarFallback>{displayName[0]}</AvatarFallback>
+                                    </Avatar>
+                                </View>
+                            </LinearGradient>
+                        ) : (
+                            <View style={styles.noStoryRing}>
+                                <View style={styles.imageBorder}>
+                                    <Avatar style={styles.avatar}>
+                                        <AvatarImage src={fallbackImg} />
+                                        <AvatarFallback>{displayName[0]}</AvatarFallback>
+                                    </Avatar>
+                                </View>
+                            </View>
+                        );
+
                         return (
                             <TouchableOpacity
                                 key={author.userId}
                                 style={styles.storyItem}
                                 onPress={() => onStoryClick(author.userId)}
                             >
-                                <LinearGradient
-                                    colors={['#4FC3F7', '#EC4899', '#F59E0B']}
-                                    style={styles.gradientRing}
-                                >
-                                    <View style={styles.imageBorder}>
-                                        <Avatar style={styles.avatar}>
-                                            <AvatarImage src={fallbackImg} />
-                                            <AvatarFallback>{displayName[0]}</AvatarFallback>
-                                        </Avatar>
-                                    </View>
-                                </LinearGradient>
+                                {ring}
                                 <Text style={styles.name} numberOfLines={1}>{displayName.split(' ')[0]}</Text>
                             </TouchableOpacity>
                         );

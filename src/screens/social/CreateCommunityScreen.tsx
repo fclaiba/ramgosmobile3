@@ -22,9 +22,13 @@ export default function CreateCommunityScreen({ navigation }: any) {
     const [location, setLocation] = useState('');
     const [kind, setKind] = useState<'business' | 'user'>(user?.role === 'business' ? 'business' : 'user');
     const [visibility, setVisibility] = useState<'public' | 'private'>('public');
+    // B4: reglas estilo Twitter Communities — una por línea, sin gate de
+    // aceptación obligatoria (fricción mínima).
+    const [rulesText, setRulesText] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     const createCommunity = useMutation(api.social.communities.createCommunity);
+    const setCommunityRules = useMutation(api.social.communities.setCommunityRules);
 
     const handleCreate = async () => {
         if (!sessionToken || name.trim().length < 3) {
@@ -41,6 +45,10 @@ export default function CreateCommunityScreen({ navigation }: any) {
                 kind,
                 visibility,
             });
+            const rules = rulesText.split('\n').map((r) => r.trim()).filter(Boolean);
+            if (rules.length) {
+                await setCommunityRules({ sessionToken, communityId, rules }).catch(() => {});
+            }
             navigation.replace('CommunityDetail', { communityId });
         } catch (e: any) {
             show(e?.data?.message ?? 'No se pudo crear la comunidad', 'error');
@@ -97,6 +105,16 @@ export default function CreateCommunityScreen({ navigation }: any) {
                     </TouchableOpacity>
                 ))}
             </View>
+
+            <Text style={styles.label}>Reglas (opcional, una por línea)</Text>
+            <TextInput
+                style={[styles.input, styles.multiline]}
+                value={rulesText}
+                onChangeText={setRulesText}
+                placeholder={'Ej: Sólo productos del rubro\nNada de spam'}
+                placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
+                multiline
+            />
 
             <TouchableOpacity
                 style={[styles.submitBtn, (submitting || name.trim().length < 3) && styles.submitBtnDisabled]}

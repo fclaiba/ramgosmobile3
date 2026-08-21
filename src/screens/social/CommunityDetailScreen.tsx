@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, MessageCircle, Users, ShoppingBag, Check, X } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, ShoppingBag, Check, X, Plus, Video, Pin, PinOff, Info } from 'lucide-react-native';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,12 +9,16 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
 import { colors, Radius } from '../../theme/tokens';
+import { UnifiedFeed } from '../../components/social/UnifiedFeed';
+import { LoopFeed } from '../../components/social/LoopFeed';
+import { InlineComposer } from '../../components/social/InlineComposer';
 
-type Tab = 'feed' | 'catalog' | 'members' | 'requests';
+type Tab = 'feed' | 'loops' | 'catalog' | 'members' | 'requests';
 
 export default function CommunityDetailScreen({ route, navigation }: any) {
     const communityId = route?.params?.communityId;
     const insets = useSafeAreaInsets();
+    const { height: windowHeight } = useWindowDimensions();
     const { sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -22,14 +26,20 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
     const { show } = useToast();
 
     const [tab, setTab] = useState<Tab>('feed');
+    const [showComposer, setShowComposer] = useState(false);
+    const [showRules, setShowRules] = useState(false);
 
     const community = useQuery(
         api.social.communities.getCommunity,
         sessionToken && communityId ? { sessionToken, communityId } : 'skip',
     );
-    const feed = useQuery(
+    const loopsFeed = useQuery(
         api.social.communities.getCommunityFeed,
-        sessionToken && communityId && tab === 'feed' ? { sessionToken, communityId, limit: 20 } : 'skip',
+        sessionToken && communityId && tab === 'loops' ? { sessionToken, communityId, type: 'video', limit: 30 } : 'skip',
+    );
+    const pinnedPost = useQuery(
+        api.social.getPostById,
+        sessionToken && community?.pinnedPostId ? { sessionToken, postId: community.pinnedPostId } : 'skip',
     );
     const catalog = useQuery(
         api.social.communities.listCommunityCatalog,
@@ -51,9 +61,15 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
     const approveMember = useMutation(api.social.communities.approveMember);
     const rejectMember = useMutation(api.social.communities.rejectMember);
     const getOrCreateChat = useMutation(api.social.communities.getOrCreateCommunityChat);
+    const unpinCommunityPost = useMutation(api.social.communities.unpinCommunityPost);
 
     const isMember = community?.myMembership?.status === 'active';
     const isAdmin = community?.myMembership?.role === 'owner' || community?.myMembership?.role === 'admin';
+
+    // Debajo de header + botón unirse/salir + tabs — el paging de LoopFeed
+    // necesita el alto REAL de su contenedor, no el de la pantalla entera
+    // (ver comentario en `LoopFeed.tsx`).
+    const loopsContainerHeight = Math.max(200, windowHeight - insets.top - 180);
 
     const handleJoin = async () => {
         if (!sessionToken) return;
@@ -86,6 +102,15 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
         }
     };
 
+    const handleUnpin = async () => {
+        if (!sessionToken) return;
+        try {
+            await unpinCommunityPost({ sessionToken, communityId });
+        } catch (e: any) {
+            show(e?.data?.message ?? 'No se pudo desfijar', 'error');
+        }
+    };
+
     if (community === undefined) {
         return (
             <View style={[styles.container, styles.center, { paddingTop: insets.top }]}>
@@ -108,13 +133,20 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                     <ArrowLeft size={22} color={isDark ? '#fff' : '#111827'} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle} numberOfLines={1}>{community.name}</Text>
-                {isMember ? (
-                    <TouchableOpacity onPress={handleOpenChat} style={styles.iconBtn}>
-                        <MessageCircle size={22} color={colors(isDark).primary} />
-                    </TouchableOpacity>
-                ) : (
-                    <View style={{ width: 22 }} />
-                )}
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {Boolean(community.rules?.length) && (
+                        <TouchableOpacity onPress={() => setShowRules(true)} style={styles.iconBtn}>
+                            <Info size={20} color={isDark ? '#fff' : '#111827'} />
+                        </TouchableOpacity>
+                    )}
+                    {isMember ? (
+                        <TouchableOpacity onPress={handleOpenChat} style={styles.iconBtn}>
+                            <MessageCircle size={22} color={colors(isDark).primary} />
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={{ width: 22 }} />
+                    )}
+                </View>
             </View>
 
             {!isMember && (
@@ -135,10 +167,10 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
             )}
 
             <View style={styles.tabs}>
-                {(['feed', 'catalog', 'members', ...(isAdmin ? ['requests' as const] : [])] as Tab[]).map((t) => (
+                {(['feed', 'loops', 'catalog', 'members', ...(isAdmin ? ['requests' as const] : [])] as Tab[]).map((t) => (
                     <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
                         <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                            {t === 'feed' ? 'Feed' : t === 'catalog' ? 'Catálogo' : t === 'members' ? 'Miembros' : 'Solicitudes'}
+                            {t === 'feed' ? 'Feed' : t === 'loops' ? 'Loops' : t === 'catalog' ? 'Catálogo' : t === 'members' ? 'Miembros' : 'Solicitudes'}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -147,20 +179,44 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
             {tab === 'feed' && (
                 !isMember ? (
                     <View style={styles.empty}><Text style={styles.emptyText}>Unite para ver el feed de la comunidad.</Text></View>
-                ) : feed === undefined ? (
-                    <ActivityIndicator style={{ marginTop: 24 }} color={colors(isDark).primary} />
                 ) : (
-                    <FlatList
-                        data={feed.items}
-                        keyExtractor={(item: any) => String(item._id)}
-                        contentContainerStyle={{ padding: 16, gap: 12 }}
-                        renderItem={({ item }: any) => (
-                            <TouchableOpacity style={styles.postCard} onPress={() => navigation.navigate('PostDetail', { postId: item._id })}>
-                                <Text style={styles.postText} numberOfLines={3}>{item.content}</Text>
-                            </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                        {pinnedPost && (
+                            <View style={styles.pinnedWrap}>
+                                <View style={styles.pinnedHeaderRow}>
+                                    <Pin size={14} color={colors(isDark).primary} />
+                                    <Text style={styles.pinnedLabel}>Fijado</Text>
+                                    {isAdmin && (
+                                        <TouchableOpacity onPress={handleUnpin} style={{ marginLeft: 'auto' }}>
+                                            <PinOff size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                                <TouchableOpacity onPress={() => navigation.navigate('PostDetail', { postId: pinnedPost._id })}>
+                                    <Text style={styles.postText} numberOfLines={3}>{pinnedPost.content}</Text>
+                                </TouchableOpacity>
+                            </View>
                         )}
-                        ListEmptyComponent={<Text style={styles.emptyText}>Todavía no hay posts en esta comunidad.</Text>}
-                    />
+                        <UnifiedFeed communityId={String(communityId)} canModerate={isAdmin} />
+                    </View>
+                )
+            )}
+
+            {tab === 'loops' && (
+                !isMember ? (
+                    <View style={styles.empty}><Text style={styles.emptyText}>Unite para ver los Loops de la comunidad.</Text></View>
+                ) : loopsFeed === undefined ? (
+                    <ActivityIndicator style={{ marginTop: 24 }} color={colors(isDark).primary} />
+                ) : loopsFeed.items.length === 0 ? (
+                    <View style={styles.empty}><Text style={styles.emptyText}>Todavía no hay Loops en esta comunidad.</Text></View>
+                ) : (
+                    <View style={{ height: loopsContainerHeight }}>
+                        <LoopFeed
+                            posts={loopsFeed.items}
+                            onUserClick={(userId) => navigation.navigate('CommercialProfile', { userId })}
+                            itemHeight={loopsContainerHeight}
+                        />
+                    </View>
                 )
             )}
 
@@ -244,6 +300,58 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                     />
                 )
             )}
+
+            {/* B1: puntos de entrada para postear DENTRO de la comunidad — hoy
+                no existía ninguno en ningún lado de la app. */}
+            {isMember && (tab === 'feed' || tab === 'loops') && (
+                <View style={styles.fabRow}>
+                    <TouchableOpacity
+                        style={[styles.fab, { backgroundColor: colors(isDark).primary }]}
+                        onPress={() => navigation.navigate('CreateReel', { communityId: String(communityId), communityName: community.name })}
+                        accessibilityLabel="Grabar Loop"
+                    >
+                        <Video size={22} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.fab, { backgroundColor: colors(isDark).primary }]}
+                        onPress={() => setShowComposer(true)}
+                        accessibilityLabel="Postear"
+                    >
+                        <Plus size={24} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            <Modal visible={showComposer} animationType="slide" transparent onRequestClose={() => setShowComposer(false)}>
+                <View style={styles.composerOverlay}>
+                    <View style={{ marginTop: insets.top + 40, paddingHorizontal: 16 }}>
+                        <View style={styles.composerCloseRow}>
+                            <TouchableOpacity onPress={() => setShowComposer(false)}>
+                                <X size={24} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                        <InlineComposer
+                            communityId={String(communityId)}
+                            communityName={community.name}
+                            onPostCreated={() => setShowComposer(false)}
+                        />
+                    </View>
+                </View>
+            </Modal>
+
+            <Modal visible={showRules} animationType="fade" transparent onRequestClose={() => setShowRules(false)}>
+                <View style={styles.composerOverlay}>
+                    <View style={styles.rulesCard}>
+                        <Text style={styles.rulesTitle}>Reglas de la comunidad</Text>
+                        {(community.rules ?? []).map((r: string, i: number) => (
+                            <Text key={i} style={styles.rulesItem}>{i + 1}. {r}</Text>
+                        ))}
+                        <TouchableOpacity style={styles.approveBtn} onPress={() => setShowRules(false)}>
+                            <Text style={{ color: isDark ? '#fff' : '#111827', fontWeight: '700' }}>Cerrar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -264,13 +372,22 @@ const getStyles = (isDark: boolean) =>
         tabActive: { backgroundColor: colors(isDark).primary },
         tabText: { fontSize: 12, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
         tabTextActive: { color: '#fff' },
-        postCard: { padding: 14, borderRadius: Radius.md, backgroundColor: isDark ? '#18181B' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#27272A' : '#E5E7EB' },
         postText: { fontSize: 14, color: isDark ? '#fff' : '#111827' },
         catalogRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? '#18181B' : '#F9FAFB' },
         cardMeta: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
         memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
         avatar: { width: 36, height: 36 },
-        approveBtn: { padding: 6, borderRadius: Radius.full ?? 999, backgroundColor: isDark ? '#27272A' : '#F3F4F6' },
+        approveBtn: { padding: 6, borderRadius: Radius.full ?? 999, backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center' },
         empty: { paddingTop: 40, alignItems: 'center' },
         emptyText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', paddingHorizontal: 40 },
+        pinnedWrap: { marginHorizontal: 16, marginBottom: 8, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? '#18181B' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#27272A' : '#E5E7EB' },
+        pinnedHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+        pinnedLabel: { fontSize: 12, fontWeight: '700', color: colors(isDark).primary },
+        fabRow: { position: 'absolute', right: 16, bottom: 24, gap: 12 },
+        fab: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+        composerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+        composerCloseRow: { alignItems: 'flex-end', marginBottom: 8 },
+        rulesCard: { margin: 24, marginTop: 'auto', marginBottom: 'auto', padding: 20, borderRadius: Radius.lg, backgroundColor: isDark ? '#18181B' : '#fff', gap: 10 },
+        rulesTitle: { fontSize: 16, fontWeight: '700', color: isDark ? '#fff' : '#111827', marginBottom: 4 },
+        rulesItem: { fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 20 },
     });

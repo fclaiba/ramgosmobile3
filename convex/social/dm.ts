@@ -25,6 +25,9 @@ import { assertSocialActor, assertNotBlocked } from './_helpers';
 import { resolveMediaUrl } from '../mediaUrl';
 import { toUserCard, socialProfileOf } from '../userCard';
 import { assertTextAllowed } from './moderationText';
+// Ranking dual (plan de ranking Feed/Loops, E-085/E-086): mensajear a
+// alguien y compartir un post son señales de afinidad/viralidad reales.
+import { bumpAuthorAffinity, bumpTagAffinityForPost } from '../social';
 
 const NOW = () => new Date().toISOString();
 const sortedKey = (ids: string[]) => [...ids].sort().join(':');
@@ -869,6 +872,13 @@ const deliverMessage = async (
         for (const participantId of chat.participantIds) {
             if (participantId === actor.idString) continue;
 
+            // Ranking (Fase 1.1): escribirle a alguien —o responderle una
+            // historia, que reusa este mismo camino— señala interés real,
+            // más que un like. Sube la afinidad del EMISOR hacia el
+            // destinatario (no al revés: que te escriban no implica que a
+            // vos te interese esa persona).
+            await bumpAuthorAffinity(ctx, actor.idString, participantId, 2.5);
+
             let member = await getMembership(ctx, args.chatId, participantId);
             if (!member) {
                 // Primer mensaje del hilo: acá se decide bandeja vs solicitud.
@@ -997,6 +1007,15 @@ const buildPostAttachment = async (ctx: any, actorId: string, postId: string) =>
     const post: any = postRef ? await ctx.db.get(postRef) : null;
     if (!post) throw authError('FORBIDDEN', 'Esa publicación no existe.');
 
+    // Ranking de Loops (Fase 0.4/2.3): `shareCount` es el término de mayor
+    // peso de `scoreLoop` — el único funnel de "compartir" que no se puede
+    // falsear sin mandar un mensaje real. Riesgo de gaming (compartir-y-
+    // desenviar en loop) aceptado a propósito para v1, ver plan de ranking.
+    await ctx.db.patch(post._id, { shareCount: (post.shareCount ?? 0) + 1 });
+    if (post.type === 'video' && post.authorUserId !== actorId) {
+        await bumpTagAffinityForPost(ctx, actorId, post, 2.0);
+    }
+
     const authorProfile = await profileOf(ctx, post.authorUserId);
     const rawImage = post.images?.[0] ?? post.commercialProduct?.image;
     const text = (post.content ?? '').trim();
@@ -1071,12 +1090,20 @@ export const shareStoryInChat = mutation({
     handler: async (ctx, args): Promise<string> => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
         await requireMembership(ctx, args.chatId, actor.idString);
-        return await deliverMessage(ctx, actor, {
+        const messageId = await deliverMessage(ctx, actor, {
             chatId: args.chatId,
             body: args.note ?? '',
             clientId: args.clientId,
             attachments: [await buildStoryAttachment(ctx, actor.idString, args.storyId)],
         });
+        // Ranking del tray (A1): responder una historia es una señal fuerte
+        // — mismo peso que un comentario, más que un simple view.
+        const nid = ctx.db.normalizeId('socialStories', args.storyId);
+        const story = nid ? await ctx.db.get(nid) : null;
+        if (story && story.authorUserId !== actor.idString) {
+            await bumpAuthorAffinity(ctx, actor.idString, story.authorUserId, 2.0);
+        }
+        return messageId;
     },
 });
 

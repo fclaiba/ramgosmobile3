@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, Animated, Platform } from 'react-native';
-import { Heart, MessageCircle, Share2, Music2, ShoppingBag, MoreVertical } from 'lucide-react-native';
+import { Heart, MessageCircle, Share2, ShoppingBag, MoreVertical } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, VideoPlayer } from 'expo-video';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
@@ -14,23 +14,30 @@ import { glassSurface } from '../../utils/glass';
 import { PostCommentsModal } from './PostCommentsModal';
 import { SharePostModal } from './SharePostModal';
 import { SocialFollowButton } from './SocialFollowButton';
+import { SoundPill } from './SoundPill';
+import { CommunityBadge } from './CommunityBadge';
 
 interface LoopItemProps {
     post: any;
     isActive: boolean;
+    /** Reproductor asignado por el pool de `LoopFeed` (`useVideoPlayerPool`).
+     *  `null` el primer frame antes de que el pool le asigne uno. */
+    player?: VideoPlayer | null;
     onUserClick: (userId: string) => void;
     onCommercePress?: (listingId: string, postId: string) => void;
+    /** Ver `LoopFeed`'s `itemHeight` — mismo motivo (tab Loops de comunidad
+     *  embebido debajo de un header, no pantalla completa). */
+    itemHeight?: number;
 }
 
-export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopItemProps) => {
-    const { height, width } = useWindowDimensions();
-    const videoRef = useRef<Video>(null);
+export const LoopItem = ({ post, isActive, player, onUserClick, onCommercePress, itemHeight }: LoopItemProps) => {
+    const { height: windowHeight, width } = useWindowDimensions();
+    const height = itemHeight ?? windowHeight;
     const isDark = useTheme().colorScheme === 'dark';
     const { sessionToken } = useAuth();
 
     const postId = post._id || post.id;
 
-    const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
     const [liked, setLiked] = useState(Boolean(post.isLikedByMe ?? post.likedByUser));
     const [likes, setLikes] = useState(post.likeCount || 0);
     const [showComments, setShowComments] = useState(false);
@@ -39,7 +46,12 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
 
     const toggleLike = useMutation(api.social.toggleLike);
     const addView = useMutation(api.social.addView);
-    const viewCounted = useRef(false);
+    // Cuándo entró este loop en foco (para `dwellMs`) y cuántas vueltas
+    // completas dio (`player.loop = true`, ver `useVideoPlayerPool`) — señal
+    // de rewatch, imposible de fakear sin tiempo real de reproducción.
+    const startedAtRef = useRef<number | null>(null);
+    const loopCountRef = useRef(0);
+    const sentRef = useRef(false);
 
     // Server state wins when the feed refetches (another device, cache hydrate).
     useEffect(() => {
@@ -48,24 +60,61 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
     }, [post.isLikedByMe, post.likedByUser, post.likeCount]);
 
     useEffect(() => {
-        if (!videoRef.current) return;
+        if (!player) return;
         if (isActive) {
-            videoRef.current.playAsync().catch(() => {});
+            player.play();
         } else {
-            videoRef.current.pauseAsync().catch(() => {});
+            player.pause();
         }
-    }, [isActive]);
+    }, [isActive, player]);
 
-    // Impressions are what pay creators for reach, so count one the first time
-    // this loop actually becomes the active item. The mutation is idempotent
-    // per (post, viewer), so a re-scroll is silently free.
+    // `playToEnd` dispara cada vez que el player llega al final ANTES de
+    // hacer loop (loop=true) — un conteo exacto de "vueltas completas".
     useEffect(() => {
-        if (!isActive || viewCounted.current || !sessionToken || !postId) return;
-        viewCounted.current = true;
-        addView({ sessionToken, postIds: [postId] }).catch(() => {
-            viewCounted.current = false;
+        if (!player) return;
+        const sub = player.addListener('playToEnd', () => {
+            loopCountRef.current += 1;
         });
-    }, [isActive, sessionToken, postId, addView]);
+        return () => sub.remove();
+    }, [player]);
+
+    /**
+     * Watch-time real (Fase 0.2 del plan de ranking): se manda al SALIR
+     * (`isActive: true → false`), no al entrar — mismo criterio que
+     * `UnifiedFeed`/`useSocialFeed`. Completion, skip rápido y rewatch
+     * viajan en un solo `addView` extendido (Fase 0.3), no una mutation por
+     * evento.
+     */
+    useEffect(() => {
+        if (isActive) {
+            startedAtRef.current = Date.now();
+            loopCountRef.current = 0;
+            sentRef.current = false;
+            return;
+        }
+        if (sentRef.current || !sessionToken || !postId || !startedAtRef.current) return;
+        sentRef.current = true;
+
+        const dwellMs = Date.now() - startedAtRef.current;
+        const loopCount = loopCountRef.current;
+        // Si ya dio al menos una vuelta completa, lo vio entero aunque
+        // `currentTime` haya vuelto cerca de 0 por el loop automático.
+        const completionPct =
+            loopCount > 0
+                ? 1
+                : player && player.duration > 0
+                  ? Math.min(1, player.currentTime / player.duration)
+                  : 0;
+        const quickSkip = dwellMs < 1500 && completionPct < 0.25;
+
+        addView({
+            sessionToken,
+            postIds: [postId],
+            watch: [{ postId, dwellMs, completionPct, quickSkip, loopCount }],
+        }).catch(() => {
+            sentRef.current = false;
+        });
+    }, [isActive, sessionToken, postId, addView, player]);
 
     useEffect(() => {
         Animated.loop(
@@ -101,15 +150,12 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
     return (
         <View style={[styles.container, { width, height }]}>
             <View style={styles.videoCentering}>
-                {hasVideo ? (
-                    <Video
-                        ref={videoRef}
+                {hasVideo && player ? (
+                    <VideoView
                         style={styles.video}
-                        source={{ uri: post.videoUrl }}
-                        resizeMode={ResizeMode.COVER}
-                        isLooping
-                        shouldPlay={isActive}
-                        onPlaybackStatusUpdate={status => setStatus(() => status)}
+                        player={player}
+                        contentFit="cover"
+                        nativeControls={false}
                     />
                 ) : (
                     <ImageWithFallback src={post.images?.[0]} style={styles.video} resizeMode="contain" />
@@ -149,11 +195,20 @@ export const LoopItem = ({ post, isActive, onUserClick, onCommercePress }: LoopI
                     </View>
                     
                     <Text style={styles.content} numberOfLines={2}>{post.content}</Text>
-                    
-                    <View style={styles.musicRow}>
-                        <Music2 size={12} color="#fff" style={styles.iconShadow as any} />
-                        <Text style={styles.musicText}>Sonido original - {post.author?.username}</Text>
-                    </View>
+
+                    {post.communityId && post.communityName && (
+                        <View style={{ marginBottom: 6 }}>
+                            <CommunityBadge communityId={post.communityId} name={post.communityName} />
+                        </View>
+                    )}
+
+                    {post.audioTrackId && (
+                        <SoundPill
+                            trackId={post.audioTrackId}
+                            name={post.audioTrack?.name}
+                            authorUsername={post.audioTrack?.authorUsername}
+                        />
+                    )}
                 </View>
 
                 <View style={styles.actionSection}>
@@ -314,21 +369,6 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0,0,0,0.5)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
-    },
-    musicRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-        alignSelf: 'flex-start',
-    },
-    musicText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: '500',
     },
     iconShadow: {
         textShadowColor: 'rgba(0,0,0,0.5)',

@@ -130,6 +130,12 @@ import GamesScreen from './src/screens/GamesScreen';
 import MapExplorerScreen from './src/screens/MapExplorerScreen';
 import CommercialProfileScreen from './src/screens/CommercialProfileScreen';
 import PostDetailScreen from './src/screens/social/PostDetailScreen';
+import SoundDetailsScreen from './src/screens/social/SoundDetailsScreen';
+import CreateReelScreen from './src/screens/social/CreateReelScreen';
+import StoryComposerScreen from './src/screens/social/StoryComposerScreen';
+import HighlightViewerScreen from './src/screens/social/HighlightViewerScreen';
+import StoryViewersScreen from './src/screens/social/StoryViewersScreen';
+import HashtagFeedScreen from './src/screens/social/HashtagFeedScreen';
 import ActivityScreen from './src/screens/social/ActivityScreen';
 import SavedPostsScreen from './src/screens/social/SavedPostsScreen';
 import SocialPrivacyScreen from './src/screens/social/SocialPrivacyScreen';
@@ -324,6 +330,12 @@ const AppNavigator = () => {
                     <Stack.Screen name="Chat" component={ChatScreen} />
                     <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
                     <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+                    <Stack.Screen name="SoundDetails" component={SoundDetailsScreen} />
+                    <Stack.Screen name="CreateReel" component={CreateReelScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="StoryComposer" component={StoryComposerScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="HighlightViewer" component={HighlightViewerScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="StoryViewers" component={StoryViewersScreen} />
+                    <Stack.Screen name="HashtagFeed" component={HashtagFeedScreen} />
                     <Stack.Screen name="Activity" component={ActivityScreen} />
                     <Stack.Screen name="SavedPosts" component={SavedPostsScreen} />
                     <Stack.Screen name="SocialPrivacy" component={SocialPrivacyScreen} />

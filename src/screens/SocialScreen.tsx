@@ -1,10 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    FlatList,
     useWindowDimensions,
     Platform,
     ActivityIndicator,
@@ -25,12 +24,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { useToast } from '../contexts/ToastContext';
 import {
-    Post,
     LoopFeed,
     StoriesBar,
     StoryViewer,
-    CreateStory,
     UserSearch,
+    UnifiedFeed,
 } from '../components/social';
 import { InlineComposer } from '../components/social/InlineComposer';
 
@@ -61,49 +59,18 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
     const { openCart, items: cartItems, addPostProduct } = useCart();
 
     const [activeTab, setActiveTab] = useState<'feed' | 'reels'>('feed');
+    // Paridad X/Instagram (plan de ranking, E-085): "Para ti" (algorítmico,
+    // `scorePost`) es el default; "Siguiendo" es el tab cronológico puro.
+    const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
     const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
-    const [showCreateStory, setShowCreateStory] = useState(false);
     const [showSearch, setShowSearch] = useState(false);
 
     const { show } = useToast();
     const [addingToCart, setAddingToCart] = useState(false);
 
-    const [feedCursor, setFeedCursor] = useState<string | null>(null);
-    const [accumulatedPosts, setAccumulatedPosts] = useState<any[]>([]);
-    const [loadingMore, setLoadingMore] = useState(false);
-
-    const postsResult = useQuery(
-        api.social.getFeed,
-        sessionToken
-            ? {
-                  limit: 20,
-                  sessionToken,
-                  ...(feedCursor ? { cursor: feedCursor } : {}),
-              }
-            : 'skip',
-    );
-
-    useEffect(() => {
-        if (!postsResult?.items) return;
-        if (!feedCursor) {
-            setAccumulatedPosts(postsResult.items);
-            return;
-        }
-        setAccumulatedPosts((prev) => {
-            const ids = new Set(prev.map((p) => String(p._id)));
-            const next = postsResult.items.filter((p: any) => !ids.has(String(p._id)));
-            return next.length ? [...prev, ...next] : prev;
-        });
-        setLoadingMore(false);
-    }, [postsResult, feedCursor]);
-
-    const posts = accumulatedPosts;
-    const nextCursor = postsResult?.nextCursor ?? null;
-
-    const feedPosts = useMemo(
-        () => posts.filter((p: any) => p.type !== 'video'),
-        [posts],
-    );
+    // Fuerza un refresh del `UnifiedFeed` (posteo nuevo desde el composer,
+    // que vive en el header de la lista, fuera del componente del feed).
+    const [feedRefreshKey, setFeedRefreshKey] = useState(0);
 
     // Los loops NO se derivan del feed general: el ranking "forYou" puede no
     // traer ningún video en las primeras páginas y la pestaña quedaba vacía
@@ -150,11 +117,26 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
         [sessionToken, addingToCart, addPostProduct, navigation, show],
     );
 
-    const loadMore = () => {
-        if (!nextCursor || loadingMore || postsResult === undefined) return;
-        setLoadingMore(true);
-        setFeedCursor(nextCursor);
-    };
+    const renderFeedModeTabs = () => (
+        <View style={styles.feedModeRow}>
+            <TouchableOpacity
+                style={[styles.feedModeBtn, feedMode === 'forYou' && styles.feedModeBtnActive]}
+                onPress={() => setFeedMode('forYou')}
+            >
+                <Text style={[styles.feedModeText, feedMode === 'forYou' && styles.feedModeTextActive]}>
+                    Para ti
+                </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={[styles.feedModeBtn, feedMode === 'following' && styles.feedModeBtnActive]}
+                onPress={() => setFeedMode('following')}
+            >
+                <Text style={[styles.feedModeText, feedMode === 'following' && styles.feedModeTextActive]}>
+                    Siguiendo
+                </Text>
+            </TouchableOpacity>
+        </View>
+    );
 
     const renderTabs = () => (
         <View style={[styles.tabContainer, activeTab === 'reels' && styles.tabContainerAbsolute]}>
@@ -244,61 +226,29 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
             )}
 
             {renderTabs()}
+            {activeTab === 'feed' && renderFeedModeTabs()}
 
             {activeTab === 'feed' ? (
-                <FlatList
-                    data={feedPosts}
-                    keyExtractor={(item) => item._id || item.id}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-                    onEndReached={loadMore}
-                    onEndReachedThreshold={0.4}
-                    renderItem={({ item }) => (
-                        <Post
-                            post={item}
-                            onUserClick={handleUserClick}
-                            onCommercePress={handleCommercePress}
-                        />
-                    )}
-                    ListHeaderComponent={
+                // Migrado a `UnifiedFeed`/`useSocialFeed` (Fase 0.1 del plan
+                // de ranking): antes esta pantalla hacía su propia query
+                // manual a `api.social.getFeed` y no mandaba NINGUNA señal de
+                // vista (`addView`) — la pantalla que el usuario realmente ve
+                // no alimentaba ni Feed ni Loops. `UnifiedFeed` ya trackea
+                // dwell/completion al salir de cada post y tiene el wiring de
+                // "No me interesa"/silenciar (`PostActionsSheet`).
+                <UnifiedFeed
+                    mode={feedMode}
+                    refreshKey={feedRefreshKey}
+                    listHeaderComponent={
                         <View>
                             <StoriesBar
                                 onStoryClick={(id) => setSelectedStoryId(id)}
-                                onAddStory={() => setShowCreateStory(true)}
+                                onAddStory={() => navigation.navigate('StoryComposer')}
                             />
-                            <InlineComposer 
-                                onPostCreated={() => {
-                                    setFeedCursor(null);
-                                    setAccumulatedPosts([]);
-                                }} 
+                            <InlineComposer
+                                onPostCreated={() => setFeedRefreshKey((k) => k + 1)}
                             />
                         </View>
-                    }
-                    ListEmptyComponent={
-                        postsResult === undefined ? (
-                            <ActivityIndicator
-                                style={{ marginTop: 40 }}
-                                color={colors(isDark).primary}
-                            />
-                        ) : (
-                            <Text
-                                style={{
-                                    textAlign: 'center',
-                                    color: 'gray',
-                                    marginTop: 40,
-                                }}
-                            >
-                                No hay publicaciones aún. ¡Sé el primero!
-                            </Text>
-                        )
-                    }
-                    ListFooterComponent={
-                        loadingMore ? (
-                            <ActivityIndicator
-                                style={{ marginVertical: 16 }}
-                                color={colors(isDark).primary}
-                            />
-                        ) : null
                     }
                 />
             ) : (
@@ -343,9 +293,6 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                 />
             )}
 
-            {showCreateStory && (
-                <CreateStory onClose={() => setShowCreateStory(false)} />
-            )}
             {showSearch && (
                 <UserSearch
                     onClose={() => setShowSearch(false)}
@@ -441,6 +388,31 @@ const getStyles = (isDark: boolean) => {
             color: c.textMuted,
         },
         tabTextActive: {
+            color: c.text,
+            fontWeight: '700',
+        },
+
+        feedModeRow: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 20,
+            paddingBottom: 8,
+        },
+        feedModeBtn: {
+            paddingVertical: 4,
+            paddingHorizontal: 4,
+            borderBottomWidth: 2,
+            borderBottomColor: 'transparent',
+        },
+        feedModeBtnActive: {
+            borderBottomColor: c.primary,
+        },
+        feedModeText: {
+            fontSize: 14,
+            fontWeight: '600',
+            color: c.textMuted,
+        },
+        feedModeTextActive: {
             color: c.text,
             fontWeight: '700',
         },

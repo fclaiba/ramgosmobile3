@@ -90,4 +90,15 @@ crons.daily(
     {},
 );
 
+// Ranking dual (Fase 3, E-086): gradúa/suprime videos de Loops por
+// percentil una vez que juntan suficientes vistas ("bandit-lite" sin ML
+// real todavía). Cada 2h porque el volumen de vistas nuevas por hora no
+// justifica correrlo más seguido.
+crons.interval(
+    "loops-tiering",
+    { hours: 2 },
+    internal.social.loopsTiering.internalGradeLoopsTier,
+    {},
+);
+
 export default crons;
