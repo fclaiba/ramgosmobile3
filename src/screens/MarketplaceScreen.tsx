@@ -35,6 +35,7 @@ import { DesktopSidebar } from '../components/DesktopSidebar';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
+import { openUserProfile } from '../navigation/openUserProfile';
 
 type ViewMode = 'grid' | 'list' | 'map';
 type ItemType = 'products' | 'bonos' | 'events' | 'services' | 'businesses';
@@ -438,7 +439,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
     const openFeedItem = (item: MarketplaceFeedItem) => {
         if (Platform.OS !== 'web') Haptics.selectionAsync();
         if (item.type === 'business') {
-            navigation.navigate('CommercialProfile', { sellerId: String(item.sellerId || item.id) });
+            openUserProfile(navigation, String(item.sellerId || item.id));
             return;
         }
         navigation.navigate('ItemDetail', { itemId: item.id, itemData: item });

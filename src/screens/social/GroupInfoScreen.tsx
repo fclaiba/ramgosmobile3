@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar'
 import { useDebouncedSearchTerm } from '../../hooks/useDebounce';
 import { toUserMessage } from '../../utils/errors';
 import { colors, Radius } from '../../theme/tokens';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 /**
  * Info del grupo. Las mutations de administración (`addGroupMembers`,
@@ -180,22 +181,33 @@ export default function GroupInfoScreen({ route, navigation }: any) {
                     const adding = !!term;
                     return (
                         <View style={styles.memberRow}>
-                            <Avatar size="md">
-                                <AvatarImage src={item.avatar ?? undefined} />
-                                <AvatarFallback>
-                                    {(item.displayName ?? '?').charAt(0)}
-                                </AvatarFallback>
-                            </Avatar>
-                            <View style={styles.memberInfo}>
-                                <Text style={styles.memberName} numberOfLines={1}>
-                                    {item.displayName}
-                                </Text>
-                                {!!item.username && (
-                                    <Text style={styles.memberHandle} numberOfLines={1}>
-                                        @{item.username}
+                            {/* En modo búsqueda la fila sirve para AGREGAR a
+                                alguien, así que ahí no se navega al perfil. */}
+                            <TouchableOpacity
+                                style={styles.memberIdentity}
+                                activeOpacity={0.7}
+                                disabled={adding}
+                                onPress={() => openUserProfile(navigation, item.userId)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Ver el perfil de ${item.displayName}`}
+                            >
+                                <Avatar size="md">
+                                    <AvatarImage src={item.avatar ?? undefined} />
+                                    <AvatarFallback>
+                                        {(item.displayName ?? '?').charAt(0)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <View style={styles.memberInfo}>
+                                    <Text style={styles.memberName} numberOfLines={1}>
+                                        {item.displayName}
                                     </Text>
-                                )}
-                            </View>
+                                    {!!item.username && (
+                                        <Text style={styles.memberHandle} numberOfLines={1}>
+                                            @{item.username}
+                                        </Text>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
                             {isOwner && (
                                 <TouchableOpacity
                                     disabled={busy}
@@ -326,6 +338,12 @@ const getStyles = (isDark: boolean) => {
             gap: 12,
             paddingHorizontal: 16,
             paddingVertical: 9,
+        },
+        memberIdentity: {
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
         },
         memberInfo: { flex: 1 },
         memberName: { fontSize: 15, fontWeight: '600', color: c.text },

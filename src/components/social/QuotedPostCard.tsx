@@ -43,9 +43,12 @@ export interface QuotedPost {
 export const QuotedPostCard = React.memo(({
     quoted,
     onPress,
+    onUserPress,
 }: {
     quoted: QuotedPost | null;
     onPress?: (postId: string) => void;
+    /** Tocar el autor abre su perfil; tocar el resto abre el post citado. */
+    onUserPress?: (userId: string) => void;
 }) => {
     const isDark = useTheme().colorScheme === 'dark';
     const c = colors(isDark);
@@ -62,6 +65,10 @@ export const QuotedPostCard = React.memo(({
 
     const name = quoted.author?.displayName || quoted.author?.username || 'Usuario';
     const thumb = quoted.images?.[0];
+    const openAuthorProfile =
+        onUserPress && quoted.authorUserId
+            ? () => onUserPress(String(quoted.authorUserId))
+            : undefined;
 
     return (
         <TouchableOpacity
@@ -73,12 +80,21 @@ export const QuotedPostCard = React.memo(({
             accessibilityLabel={`Ver publicación de ${name}`}
         >
             <View style={styles.header}>
-                <Avatar size="sm" style={styles.avatar}>
-                    {quoted.author?.avatar ? <AvatarImage src={quoted.author.avatar} /> : null}
-                    <AvatarFallback size="sm">{name[0]?.toUpperCase()}</AvatarFallback>
-                </Avatar>
+                <TouchableOpacity
+                    onPress={openAuthorProfile}
+                    disabled={!openAuthorProfile}
+                    activeOpacity={0.7}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver el perfil de ${name}`}
+                >
+                    <Avatar size="sm" style={styles.avatar}>
+                        {quoted.author?.avatar ? <AvatarImage src={quoted.author.avatar} /> : null}
+                        <AvatarFallback size="sm">{name[0]?.toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                </TouchableOpacity>
                 <Text style={styles.name} numberOfLines={1}>
-                    {name}
+                    <Text onPress={openAuthorProfile} suppressHighlighting>{name}</Text>
                     {quoted.author?.username ? (
                         <Text style={styles.handle}> @{quoted.author.username}</Text>
                     ) : null}

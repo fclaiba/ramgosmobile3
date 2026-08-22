@@ -22,6 +22,8 @@ import { Sheet, SheetContent, SheetDragArea } from '../ui/sheet';
 import { colors, Elevation } from '../../theme/tokens';
 import { formatRelativeTime } from '../../utils/formatters';
 import { usePostComments } from '../../hooks/usePostComments';
+import { useNavigation } from '@react-navigation/native';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 /**
  * Ventana para deshacer un borrado, al estilo de Instagram.
@@ -73,6 +75,7 @@ const CommentRow = ({
     onToggleExpand,
     onDelete,
     onReply,
+    onUserPress,
 }: {
     item: any;
     isReply?: boolean;
@@ -84,6 +87,7 @@ const CommentRow = ({
     onToggleExpand?: () => void;
     onDelete: (commentId: string) => void;
     onReply: (target: ReplyTarget) => void;
+    onUserPress?: (userId: string) => void;
 }) => {
     const [liked, setLiked] = useState(Boolean(item.hasLiked));
     const [likeCount, setLikeCount] = useState(item.likeCount ?? 0);
@@ -101,6 +105,8 @@ const CommentRow = ({
     const authorAvatar = author?.avatar;
     const isMine = Boolean(myId) && item.authorUserId === myId;
     const replyCount = item.replyCount ?? 0;
+    const openAuthorProfile =
+        onUserPress && item.authorUserId ? () => onUserPress(String(item.authorUserId)) : undefined;
 
     const handleLike = () => {
         if (!sessionToken) return;
@@ -130,17 +136,25 @@ const CommentRow = ({
     return (
         <View style={isReply ? styles.replyWrapper : styles.commentWrapper}>
             <View style={[styles.row, isReply && styles.replyRow]}>
-                <Avatar size={isReply ? 'sm' : 'md'} style={styles.rowAvatar}>
-                    {authorAvatar ? <AvatarImage src={authorAvatar} /> : null}
-                    <AvatarFallback size={isReply ? 'sm' : 'md'}>
-                        {(authorName || 'U')[0]?.toUpperCase()}
-                    </AvatarFallback>
-                </Avatar>
+                <TouchableOpacity
+                    onPress={openAuthorProfile}
+                    disabled={!openAuthorProfile}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver el perfil de ${authorName}`}
+                >
+                    <Avatar size={isReply ? 'sm' : 'md'} style={styles.rowAvatar}>
+                        {authorAvatar ? <AvatarImage src={authorAvatar} /> : null}
+                        <AvatarFallback size={isReply ? 'sm' : 'md'}>
+                            {(authorName || 'U')[0]?.toUpperCase()}
+                        </AvatarFallback>
+                    </Avatar>
+                </TouchableOpacity>
 
                 <View style={styles.body}>
                     <View style={styles.bodyHeader}>
                         <Text style={styles.authorName} numberOfLines={1}>
-                            {authorName}
+                            <Text onPress={openAuthorProfile} suppressHighlighting>{authorName}</Text>
                             <Text style={styles.timestamp}>{'  '}{formatRelativeTime(item.createdAt)}</Text>
                         </Text>
                         {isMine && (
@@ -212,6 +226,7 @@ const CommentRow = ({
                     styles={styles}
                     onDelete={onDelete}
                     onReply={onReply}
+                    onUserPress={onUserPress}
                 />
             )}
         </View>
@@ -228,6 +243,7 @@ const CommentReplies = ({
     styles,
     onDelete,
     onReply,
+    onUserPress,
 }: {
     commentId: string;
     sessionToken: string | null | undefined;
@@ -236,6 +252,7 @@ const CommentReplies = ({
     styles: Styles;
     onDelete: (commentId: string) => void;
     onReply: (target: ReplyTarget) => void;
+    onUserPress?: (userId: string) => void;
 }) => {
     const replies = useQuery(
         api.social.getCommentReplies,
@@ -263,6 +280,7 @@ const CommentReplies = ({
                     styles={styles}
                     onDelete={onDelete}
                     onReply={onReply}
+                    onUserPress={onUserPress}
                 />
             ))}
         </>
@@ -270,7 +288,17 @@ const CommentReplies = ({
 };
 
 export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModalProps) => {
+    const navigation = useNavigation<any>();
     const { user: authUser, sessionToken } = useAuth();
+
+    /** El modal tapa el screen: hay que cerrarlo antes de empujar el perfil. */
+    const handleUserPress = useCallback(
+        (userId: string) => {
+            onClose();
+            openUserProfile(navigation, userId);
+        },
+        [navigation, onClose],
+    );
     const { show } = useToast();
     const [commentText, setCommentText] = useState('');
     const [sending, setSending] = useState(false);
@@ -474,6 +502,7 @@ export const PostCommentsModal = ({ postId, visible, onClose }: PostCommentsModa
                                 onToggleExpand={() => toggleExpanded(String(item._id))}
                                 onDelete={handleDelete}
                                 onReply={handleReply}
+                                onUserPress={handleUserPress}
                             />
                         )}
                         contentContainerStyle={[

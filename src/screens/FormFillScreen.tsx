@@ -21,7 +21,15 @@ const QUERY_TYPES = [
     { id: 'support', label: 'Soporte', icon: LifeBuoy },
 ];
 
-export default function FormFillScreen({ businessId: propBusinessId, businessName: propBusinessName, formId: propFormId, onClose }: any) {
+export default function FormFillScreen({
+    businessId: propBusinessId,
+    businessName: propBusinessName,
+    formId: propFormId,
+    /** `'visit'` entra derecho al selector de día/horario, salteando el paso 1.
+     *  Es lo que usa el CTA "Agendar cita" del perfil comercial. */
+    initialQueryType: propInitialQueryType,
+    onClose,
+}: any) {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const navigation = useNavigation<any>();
@@ -33,6 +41,7 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
     const businessId = propBusinessId || params.businessId;
     const businessName = propBusinessName || params.businessName;
     const initialFormId = propFormId || params.formId;
+    const initialQueryType = propInitialQueryType || params.initialQueryType;
 
     const { user, sessionToken } = useAuth();
     const { show } = useToast();
@@ -44,12 +53,12 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
     const submitLead = useMutation(api.businessForms.submitLead);
 
     // States
-    const [step, setStep] = useState(initialFormId ? 2 : 1);
+    const [step, setStep] = useState(initialFormId || initialQueryType ? 2 : 1);
     const [selectedForm, setSelectedForm] = useState<any>(null); // from publicForms
     
     // User Inputs
     const [message, setMessage] = useState('');
-    const [queryType, setQueryType] = useState('general');
+    const [queryType, setQueryType] = useState(initialQueryType || 'general');
 
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [selectedTime, setSelectedTime] = useState<string>('');
@@ -123,7 +132,7 @@ export default function FormFillScreen({ businessId: propBusinessId, businessNam
             onClose ? onClose() : navigation.goBack();
             return;
         }
-        if (step === 2 && !initialFormId) {
+        if (step === 2 && !initialFormId && !initialQueryType) {
             setStep(1);
             setSelectedForm(null);
             setSelectedDate('');

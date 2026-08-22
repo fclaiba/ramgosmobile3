@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { colors } from '../../theme/tokens';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 /** A4: `getStoryViewers` ya existía y funcionaba, pero ninguna pantalla lo
  *  consumía — el viewer (`StoryViewer.tsx`) ya tiene su propio modal
@@ -43,13 +44,19 @@ export default function StoryViewersScreen({ route, navigation }: any) {
                     keyExtractor={(v: any) => v.viewerUserId}
                     contentContainerStyle={{ padding: 16, gap: 8 }}
                     renderItem={({ item }: any) => (
-                        <View style={styles.row}>
+                        <TouchableOpacity
+                            style={styles.row}
+                            activeOpacity={0.7}
+                            onPress={() => openUserProfile(navigation, item.viewerUserId)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Ver el perfil de ${item.displayName ?? item.username ?? 'este usuario'}`}
+                        >
                             <Avatar style={{ width: 36, height: 36 }}>
                                 <AvatarImage src={item.avatar} />
                                 <AvatarFallback>{(item.displayName ?? '?')[0]}</AvatarFallback>
                             </Avatar>
                             <Text style={{ color: c.text, fontSize: 14 }}>{item.displayName ?? item.username ?? 'Usuario'}</Text>
-                        </View>
+                        </TouchableOpacity>
                     )}
                     ListEmptyComponent={<Text style={{ color: c.textSecondary, padding: 16 }}>Nadie vio esta historia todavía.</Text>}
                 />

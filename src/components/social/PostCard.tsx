@@ -93,6 +93,9 @@ export interface PostCardProps {
     onVotePoll?: (optionId: string) => void;
     /** Id del usuario actual, para saber si ya votó y mostrar resultados. */
     currentUserId?: string;
+    /** Abre el perfil de un usuario. Sin esto la cabecera queda inerte, que es
+     *  como estuvo hasta ahora: el avatar y el nombre del feed no navegaban. */
+    onUserPress?: (userId: string) => void;
 }
 
 /**
@@ -191,7 +194,7 @@ const pollStyles = StyleSheet.create({
  * barra lateral flotante de acciones (estilo TikTok). Ese formato se quedó
  * sólo en `LoopItem`, que sí es un feed de video.
  */
-export const PostCard = React.memo(({ post, author, repostedBy, onLike, onComment, onCommercePress, isFocused = true, onOpenActions, onVotePoll, currentUserId, onOpenRepostMenu, onToggleRepost, onOpenQuoted }: PostCardProps) => {
+export const PostCard = React.memo(({ post, author, repostedBy, onLike, onComment, onCommercePress, isFocused = true, onOpenActions, onVotePoll, currentUserId, onOpenRepostMenu, onToggleRepost, onOpenQuoted, onUserPress }: PostCardProps) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const c = colors(isDark);
@@ -302,6 +305,11 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
     const roleLabel =
         author?.role === 'business' ? 'Negocio' : author?.role === 'influencer' ? 'Creador' : null;
 
+    /** `post.authorUserId` siempre viaja desde `decoratePosts`, así que la
+     *  cabecera puede navegar aunque `author` venga en null (autor borrado). */
+    const openAuthorProfile =
+        onUserPress && post.authorUserId ? () => onUserPress(String(post.authorUserId)) : undefined;
+
     /**
      * Media encuadrada. Se mantiene la regla de `PostImageCarousel`: el
      * contenido se ve COMPLETO (`contain`) y las bandas se rellenan con una
@@ -373,38 +381,55 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                 —el servidor ya sustituyó el espejo—, así que todo lo que
                 hagas acá (like, comentar, guardar) impacta el original. */}
             {repostedBy && (
-                <View style={styles.repostBanner}>
+                <TouchableOpacity
+                    style={styles.repostBanner}
+                    onPress={onUserPress && repostedBy.userId ? () => onUserPress(repostedBy.userId) : undefined}
+                    disabled={!onUserPress || !repostedBy.userId}
+                    activeOpacity={0.7}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver el perfil de ${repostedBy.name}`}
+                >
                     <Repeat2 size={14} color={c.textMuted} />
                     <Text style={styles.repostBannerText} numberOfLines={1}>
                         {repostedBy.name} reposteó
                     </Text>
-                </View>
+                </TouchableOpacity>
             )}
 
             {/* Cabecera: autor, hora relativa y "⋯" (Twitter/IG) */}
             <View style={styles.header}>
-                <Avatar size="md">
-                    {author?.avatar ? <AvatarImage src={author.avatar} /> : null}
-                    <AvatarFallback size="md">{(author?.name || 'U')[0]?.toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <View style={styles.headerText}>
-                    <View style={styles.nameRow}>
-                        <Text style={styles.authorName} numberOfLines={1}>
-                            {author?.name || 'Usuario'}
-                        </Text>
-                        {post.createdAt ? (
-                            <Text style={styles.timestamp} numberOfLines={1}>
-                                {' · '}
-                                {formatRelativeTime(post.createdAt)}
+                <TouchableOpacity
+                    style={styles.headerIdentity}
+                    onPress={openAuthorProfile}
+                    disabled={!openAuthorProfile}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ver el perfil de ${author?.name || 'este usuario'}`}
+                >
+                    <Avatar size="md">
+                        {author?.avatar ? <AvatarImage src={author.avatar} /> : null}
+                        <AvatarFallback size="md">{(author?.name || 'U')[0]?.toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <View style={styles.headerText}>
+                        <View style={styles.nameRow}>
+                            <Text style={styles.authorName} numberOfLines={1}>
+                                {author?.name || 'Usuario'}
                             </Text>
-                        ) : null}
+                            {post.createdAt ? (
+                                <Text style={styles.timestamp} numberOfLines={1}>
+                                    {' · '}
+                                    {formatRelativeTime(post.createdAt)}
+                                </Text>
+                            ) : null}
+                        </View>
+                        {(author?.username || roleLabel) && (
+                            <Text style={styles.authorMeta} numberOfLines={1}>
+                                {author?.username ? `@${author.username}` : roleLabel}
+                            </Text>
+                        )}
                     </View>
-                    {(author?.username || roleLabel) && (
-                        <Text style={styles.authorMeta} numberOfLines={1}>
-                            {author?.username ? `@${author.username}` : roleLabel}
-                        </Text>
-                    )}
-                </View>
+                </TouchableOpacity>
                 {onOpenActions && (
                     <TouchableOpacity
                         onPress={onOpenActions}
@@ -465,7 +490,7 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
             {/* Cita: el post original embebido, debajo del texto y la media
                 propias. Un repost simple nunca llega acá — viene sustituido. */}
             {post.quotedPost !== undefined && post.quotedPost !== null && (
-                <QuotedPostCard quoted={post.quotedPost} onPress={onOpenQuoted} />
+                <QuotedPostCard quoted={post.quotedPost} onPress={onOpenQuoted} onUserPress={onUserPress} />
             )}
 
             {post.audioTrackId && (
@@ -594,6 +619,11 @@ const getStyles = (isDark: boolean) => {
             flexDirection: 'row',
             alignItems: 'center',
             marginBottom: 10,
+        },
+        headerIdentity: {
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
         },
         headerText: {
             flex: 1,

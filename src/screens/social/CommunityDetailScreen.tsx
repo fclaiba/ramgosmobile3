@@ -12,6 +12,7 @@ import { colors, Radius } from '../../theme/tokens';
 import { UnifiedFeed } from '../../components/social/UnifiedFeed';
 import { LoopFeed } from '../../components/social/LoopFeed';
 import { InlineComposer } from '../../components/social/InlineComposer';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 type Tab = 'feed' | 'loops' | 'catalog' | 'members' | 'requests';
 
@@ -213,7 +214,7 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                     <View style={{ height: loopsContainerHeight }}>
                         <LoopFeed
                             posts={loopsFeed.items}
-                            onUserClick={(userId) => navigation.navigate('CommercialProfile', { userId })}
+                            onUserClick={(userId) => openUserProfile(navigation, userId)}
                             itemHeight={loopsContainerHeight}
                         />
                     </View>
@@ -254,14 +255,20 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                         keyExtractor={(item: any) => String(item._id)}
                         contentContainerStyle={{ padding: 16, gap: 8 }}
                         renderItem={({ item }: any) => (
-                            <View style={styles.memberRow}>
+                            <TouchableOpacity
+                                style={styles.memberRow}
+                                activeOpacity={0.7}
+                                onPress={() => openUserProfile(navigation, item.userId)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Ver el perfil de ${item.user?.displayName ?? 'este miembro'}`}
+                            >
                                 <Avatar style={styles.avatar}>
                                     <AvatarImage src={item.user?.avatar} />
                                     <AvatarFallback>{(item.user?.displayName ?? '?')[0]}</AvatarFallback>
                                 </Avatar>
                                 <Text style={styles.postText}>{item.user?.displayName ?? item.userId}</Text>
                                 {item.role !== 'member' && <Text style={styles.cardMeta}>{item.role}</Text>}
-                            </View>
+                            </TouchableOpacity>
                         )}
                     />
                 )
@@ -277,11 +284,24 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                         contentContainerStyle={{ padding: 16, gap: 8 }}
                         renderItem={({ item }: any) => (
                             <View style={styles.memberRow}>
-                                <Avatar style={styles.avatar}>
-                                    <AvatarImage src={item.user?.avatar} />
-                                    <AvatarFallback>{(item.user?.displayName ?? '?')[0]}</AvatarFallback>
-                                </Avatar>
-                                <Text style={[styles.postText, { flex: 1 }]}>{item.user?.displayName ?? item.userId}</Text>
+                                <TouchableOpacity
+                                    onPress={() => openUserProfile(navigation, item.userId)}
+                                    activeOpacity={0.7}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Ver el perfil de ${item.user?.displayName ?? 'este usuario'}`}
+                                >
+                                    <Avatar style={styles.avatar}>
+                                        <AvatarImage src={item.user?.avatar} />
+                                        <AvatarFallback>{(item.user?.displayName ?? '?')[0]}</AvatarFallback>
+                                    </Avatar>
+                                </TouchableOpacity>
+                                <Text
+                                    style={[styles.postText, { flex: 1 }]}
+                                    onPress={() => openUserProfile(navigation, item.userId)}
+                                    suppressHighlighting
+                                >
+                                    {item.user?.displayName ?? item.userId}
+                                </Text>
                                 <TouchableOpacity
                                     style={styles.approveBtn}
                                     onPress={() => sessionToken && approveMember({ sessionToken, communityId, userId: item.userId })}

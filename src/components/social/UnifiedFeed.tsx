@@ -19,6 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { colors } from '../../theme/tokens';
 import { useSocialFeed, SocialFeedMode } from '../../hooks/useSocialFeed';
 import { mapPostToCardProps } from '../../utils/mapPostToCard';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 const PAGE_SIZE = 10;
 
@@ -217,6 +218,7 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                     onOpenRepostMenu={() => setRepostTargetId(String(mappedPost._id))}
                     onToggleRepost={() => handleToggleRepost(mappedPost._id)}
                     onOpenQuoted={(postId) => navigation.navigate('PostDetail', { postId })}
+                    onUserPress={(userId) => openUserProfile(navigation, userId)}
                 />
             );
         },

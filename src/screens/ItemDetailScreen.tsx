@@ -56,6 +56,7 @@ import * as Haptics from 'expo-haptics';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { Radius, colors } from '../theme/tokens';
 import { webPath, productShareLink } from '../config/appOrigin';
+import { openUserProfile } from '../navigation/openUserProfile';
 
 
 const { width } = Dimensions.get('window');
@@ -310,7 +311,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
         if (!item) return;
         if (item.type === 'business') {
             const businessId = item.seller?.id || item.sellerId || item.id;
-            navigation.navigate('CommercialProfile', { sellerId: String(businessId) });
+            openUserProfile(navigation, businessId);
             return;
         }
         void handleAddToCart();
@@ -350,6 +351,10 @@ export default function ItemDetailScreen({ route, navigation }: any) {
         item.seller?.username ||
         sellerName.toLowerCase().replace(/\s/g, '');
     const sellerRole = sellerProfile?.role || item.seller?.type || 'individual';
+    /** El rating venía hardcodeado ("4.9 · 120 ventas") en la tarjeta que ahora
+     *  lleva al perfil. Si el backend no lo hidrata, mejor no mostrar nada que
+     *  mostrar un número inventado. */
+    const sellerRating = item.seller?.rating ?? (item as any).sellerRating ?? null;
     const isOutOfStock = item.type === 'product' && item.stock <= 0;
     const isListingActive = !item.status || item.status === 'active';
     const canPurchase = item.type !== 'business' && !isOutOfStock && isListingActive;
@@ -613,7 +618,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                     <TouchableOpacity
                         style={styles.sellerCard}
                         activeOpacity={0.8}
-                        onPress={() => sellerId && navigation.navigate('CommercialProfile', { sellerId })}
+                        onPress={() => openUserProfile(navigation, sellerId)}
                     >
                         <View style={styles.sellerAvatarWrap}>
                             {sellerProfile?.avatar ? (
@@ -633,10 +638,14 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                             <Text style={styles.sellerHandle}>
                                 @{String(sellerHandle).replace(/^@/, '')}
                             </Text>
-                            <View style={styles.sellerRating}>
-                                <Star size={12} color={styles.star.color} fill={styles.star.color} />
-                                <Text style={styles.sellerRatingText}>4.9 • 120 ventas</Text>
-                            </View>
+                            {sellerRating != null && (
+                                <View style={styles.sellerRating}>
+                                    <Star size={12} color={styles.star.color} fill={styles.star.color} />
+                                    <Text style={styles.sellerRatingText}>
+                                        {Number(sellerRating).toFixed(1)}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                         <ChevronLeft size={20} color={isDark ? '#6B7280' : '#9CA3AF'} style={{ transform: [{ rotate: '180deg' }] }} />
                     </TouchableOpacity>

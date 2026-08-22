@@ -9,6 +9,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { colors } from '../../theme/tokens';
 import { PostCard } from '../../components/social/PostCard';
 import { mapPostToCardProps } from '../../utils/mapPostToCard';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 /**
  * A2: destino del sticker `hashtag` de historias — `getPostsByTag`
@@ -75,6 +76,7 @@ export default function HashtagFeedScreen({ route, navigation }: any) {
                             onLike={() => sessionToken && toggleLike({ sessionToken, targetType: 'post', targetId: item._id }).catch(() => {})}
                             onComment={() => navigation.navigate('PostDetail', { postId: item._id })}
                             onCommercePress={() => {}}
+                            onUserPress={(userId) => openUserProfile(navigation, userId)}
                         />
                     )}
                     ListEmptyComponent={<Text style={{ color: c.textSecondary, padding: 24, textAlign: 'center' }}>Todavía no hay posts con #{tag}.</Text>}

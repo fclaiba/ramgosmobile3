@@ -8,6 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Post } from '../../components/social/Post';
 import { Radius, colors } from '../../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 export default function PostDetailScreen({ route, navigation }: any) {
     const { postId } = route.params;
@@ -24,7 +25,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
     });
 
     const handleUserClick = (userId: string) => {
-        navigation.navigate('CommercialProfile', { userId });
+        openUserProfile(navigation, userId);
     };
 
     const handleCommercePress = (listingId: string) => {

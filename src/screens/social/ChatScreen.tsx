@@ -34,6 +34,7 @@ import { uploadLocalImageToConvex } from '../../utils/uploadToConvexStorage';
 import { formatLastSeen } from '../../utils/formatters';
 import { toUserMessage } from '../../utils/errors';
 import { colors, Radius } from '../../theme/tokens';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 const PAGE_SIZE = 30;
 
@@ -255,7 +256,7 @@ export default function ChatScreen({ route, navigation }: any) {
         if (header.kind === 'group') {
             navigation.navigate('GroupInfo', { chatId });
         } else if (header.participants?.[0]?.userId) {
-            navigation.navigate('CommercialProfile', { userId: header.participants[0].userId });
+            openUserProfile(navigation, header.participants[0].userId);
         }
     };
 
@@ -299,7 +300,7 @@ export default function ChatScreen({ route, navigation }: any) {
                 listingStateById={listingStateById}
                 isGroup={header?.kind === 'group'}
                 onOpenProfile={(userId: string) =>
-                    navigation.navigate('CommercialProfile', { userId })
+                    openUserProfile(navigation, userId)
                 }
             />
         ),

@@ -6,6 +6,7 @@ import { Music2, MapPin, Hash } from 'lucide-react-native';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Radius } from '../../theme/tokens';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 /** Ver `storySticker` en `convex/schema.ts` — mismo shape. */
 export type StickerData =
@@ -153,7 +154,7 @@ export const StorySticker = ({ sticker: s, storyId, isAuthor, onPause, onResume 
                 <View style={wrapperStyle(s) as any}>
                     <TouchableOpacity
                         style={styles.chip}
-                        onPress={() => navigation.navigate('CommercialProfile', { userId: s.userId })}
+                        onPress={() => openUserProfile(navigation, s.userId)}
                     >
                         <Text style={styles.chipText}>@{s.username}</Text>
                     </TouchableOpacity>

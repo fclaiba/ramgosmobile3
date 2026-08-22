@@ -541,7 +541,14 @@ export const StorySlidesContent = ({
                     onOpenHighlightPicker={() => setHighlightPickerStoryId(String(currentStory._id))}
                 />
                 {viewersStoryId && (
-                    <StoryViewersInline storyId={viewersStoryId} onClose={() => setViewersStoryId(null)} />
+                    <StoryViewersInline
+                        storyId={viewersStoryId}
+                        onClose={() => setViewersStoryId(null)}
+                        onNavigateProfile={(viewerUserId) => {
+                            onClose();
+                            onNavigateProfile(viewerUserId);
+                        }}
+                    />
                 )}
                 <HighlightPickerModal
                     visible={highlightPickerStoryId !== null}
@@ -558,7 +565,15 @@ export const StorySlidesContent = ({
  *  ADENTRO de un `<Modal>` (navegar fuera de un Modal nativo es finicky en
  *  RN). `StoryViewersScreen.tsx` (A4) es la versión ruteada, para cuando se
  *  entra desde el perfil en vez de desde el viewer. */
-const StoryViewersInline = ({ storyId, onClose }: { storyId: string; onClose: () => void }) => {
+const StoryViewersInline = ({
+    storyId,
+    onClose,
+    onNavigateProfile,
+}: {
+    storyId: string;
+    onClose: () => void;
+    onNavigateProfile?: (userId: string) => void;
+}) => {
     const { sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -574,13 +589,23 @@ const StoryViewersInline = ({ storyId, onClose }: { storyId: string; onClose: ()
                         data={viewers ?? []}
                         keyExtractor={(v: any) => v.viewerUserId}
                         renderItem={({ item }: any) => (
-                            <View style={styles.menuRow}>
+                            <TouchableOpacity
+                                style={styles.menuRow}
+                                activeOpacity={0.7}
+                                disabled={!onNavigateProfile}
+                                onPress={() => {
+                                    onClose();
+                                    onNavigateProfile?.(String(item.viewerUserId));
+                                }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Ver el perfil de ${item.displayName ?? item.username ?? 'este usuario'}`}
+                            >
                                 <Avatar style={{ width: 28, height: 28 }}>
                                     <AvatarImage src={item.avatar} />
                                     <AvatarFallback>{(item.displayName ?? '?')[0]}</AvatarFallback>
                                 </Avatar>
                                 <Text style={styles.menuRowText}>{item.displayName ?? item.username ?? 'Usuario'}</Text>
-                            </View>
+                            </TouchableOpacity>
                         )}
                         ListEmptyComponent={<Text style={styles.menuEmptyText}>Nadie vio esta historia todavía.</Text>}
                     />

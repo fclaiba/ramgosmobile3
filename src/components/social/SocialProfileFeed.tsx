@@ -5,6 +5,7 @@ import { Post } from './Post';
 import { useNavigation } from '@react-navigation/native';
 import { Grid, List, ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { pushUserProfile } from '../../navigation/openUserProfile';
 
 interface SocialProfileFeedProps {
     authorUserId: string;
@@ -35,7 +36,7 @@ export const SocialProfileFeed: React.FC<SocialProfileFeedProps> = ({ authorUser
 
     const handleUserClick = (userId: string) => {
         if (userId !== authorUserId) {
-            navigation.push('CommercialProfile', { sellerId: userId });
+            pushUserProfile(navigation, userId);
         }
         setSelectedPostId(null);
     };

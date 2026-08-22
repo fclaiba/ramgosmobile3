@@ -40,6 +40,9 @@ import {
     Mail,
     Copy,
     SearchX,
+    FileText,
+    ArrowRight,
+    Pencil,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useQuery, useMutation } from 'convex/react';
@@ -144,7 +147,11 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     const [profileMode, setProfileMode] = useState<'social' | 'comercial'>('social');
     const [followLoading, setFollowLoading] = useState(false);
     const [contactLoading, setContactLoading] = useState(false);
-    const [formOpen, setFormOpen] = useState(false);
+    /** `null` = cerrado. Si no, con qué arranca `FormFillScreen`: un formulario
+     *  puntual del negocio (`formId`) o directo el selector de día/horario. */
+    const [formTarget, setFormTarget] = useState<
+        { formId?: string; initialQueryType?: 'visit' } | null
+    >(null);
 
 
     const listingsRaw = useQuery(
@@ -152,6 +159,18 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
         sellerId ? { sellerId: String(sellerId) } : "skip",
     );
     const listings = listingsRaw ?? [];
+
+    // Formularios publicados + agenda del negocio: son los que deciden si el
+    // CTA de cita tiene sentido, en vez de asumirlo sólo por el rol.
+    const publicForms = useQuery(
+        api.businessForms.getPublicForms,
+        sellerId ? { businessId: String(sellerId) } : "skip",
+    );
+    const businessSettings = useQuery(
+        api.businessSettings.getSettings,
+        sellerId ? { businessId: String(sellerId) } : "skip",
+    );
+    const forms = publicForms ?? [];
 
     const activeItems = useMemo(() => {
         return listings.filter((item: any) => (item.listingType || item.type || 'product') === activeTab);
@@ -164,6 +183,22 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const isBusiness = profile?.role === 'business';
     const isVerified = isBusiness || profile?.kycStatus === 'approved';
+    const isOwnProfile = Boolean(currentUserId && sellerId && String(currentUserId) === String(sellerId));
+
+    /** Pestaña Comercial: sólo si hay algo detrás. Un consumidor común no
+     *  necesita un toggle que lleva a una grilla vacía. */
+    const hasCommercialSide =
+        isBusiness || profile?.role === 'influencer' || listings.length > 0 || forms.length > 0;
+
+    /** Se puede agendar si el negocio configuró horarios, o si publicó algún
+     *  formulario de tipo visita. Sin eso el CTA llevaría a un callejón. */
+    const canBookAppointment = Boolean(
+        isBusiness && (businessSettings || forms.some((f: any) => f.type === 'visit')),
+    );
+
+    /** Si el toggle está oculto, el modo comercial no puede quedar "pegado"
+     *  de una visita anterior a otro perfil que sí lo tenía. */
+    const showCommercialTabs = hasCommercialSide && profileMode === 'comercial';
 
     const tabs: { id: TabType; label: string; icon: any }[] = [
         { id: 'product', label: 'Productos', icon: Package },
@@ -475,60 +510,92 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 </View>
 
                 {/* Actions */}
-                <View style={styles.actionRow}>
+                {isOwnProfile ? (
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity
+                            style={styles.secondaryBtn}
+                            onPress={() => navigation.navigate('Profile')}
+                        >
+                            <Pencil size={18} color={isDark ? '#F9FAFB' : '#111827'} />
+                            <Text style={styles.secondaryBtnText}>Editar perfil</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity
+                            style={[styles.primaryBtn, alreadyFollowing && styles.followingBtn]}
+                            onPress={handleToggleFollow}
+                            disabled={followLoading}
+                        >
+                            {followLoading ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : alreadyFollowing ? (
+                                <>
+                                    <UserCheck size={18} color={isDark ? '#F9FAFB' : '#111827'} />
+                                    <Text style={[styles.primaryBtnText, styles.followingBtnText]}>Siguiendo</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <UserPlus size={18} color="#FFFFFF" />
+                                    <Text style={styles.primaryBtnText}>Seguir</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.secondaryBtn}
+                            onPress={handleContact}
+                            disabled={contactLoading}
+                        >
+                            {contactLoading ? (
+                                <ActivityIndicator size="small" color={isDark ? '#F9FAFB' : '#111827'} />
+                            ) : (
+                                <>
+                                    <MessageCircle size={18} color={isDark ? '#F9FAFB' : '#111827'} />
+                                    <Text style={styles.secondaryBtnText}>Contactar</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Agendar cita: el CTA que el negocio realmente quiere arriba.
+                    Entra derecho al selector de día/horario de `FormFillScreen`,
+                    salteando el paso de "¿qué tipo de consulta?". */}
+                {!isOwnProfile && canBookAppointment && (
                     <TouchableOpacity
-                        style={[styles.primaryBtn, alreadyFollowing && styles.followingBtn]}
-                        onPress={handleToggleFollow}
-                        disabled={followLoading}
-                    >
-                        {followLoading ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : alreadyFollowing ? (
-                            <>
-                                <UserCheck size={18} color={isDark ? '#F9FAFB' : '#111827'} />
-                                <Text style={[styles.primaryBtnText, styles.followingBtnText]}>Siguiendo</Text>
-                            </>
-                        ) : (
-                            <>
-                                <UserPlus size={18} color="#FFFFFF" />
-                                <Text style={styles.primaryBtnText}>Seguir</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.secondaryBtn}
-                        onPress={handleContact}
-                        disabled={contactLoading}
-                    >
-                        {contactLoading ? (
-                            <ActivityIndicator size="small" color={isDark ? '#F9FAFB' : '#111827'} />
-                        ) : (
-                            <>
-                                <MessageCircle size={18} color={isDark ? '#F9FAFB' : '#111827'} />
-                                <Text style={styles.secondaryBtnText}>Contactar</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
-                </View>
-                {profile?.role === 'business' && (
-                    <TouchableOpacity
-                        style={{ marginTop: 16, width: '100%', overflow: 'hidden', borderRadius: Radius.xl }}
-                        onPress={() => setFormOpen(true)}
+                        style={styles.bookBtn}
+                        onPress={() => setFormTarget({ initialQueryType: 'visit' })}
                         activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Agendar una cita con ${profile?.name ?? 'este negocio'}`}
                     >
                         <LinearGradient
                             colors={isDark ? ['#3B82F6', '#1D4ED8'] : ['#60A5FA', '#2563EB']}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 10 }}
+                            style={styles.bookBtnInner}
                         >
-                            <Mail size={20} color="#FFFFFF" />
-                            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 }}>Solicitar Información</Text>
+                            <Calendar size={20} color="#FFFFFF" />
+                            <Text style={styles.bookBtnText}>Agendar cita</Text>
                         </LinearGradient>
+                    </TouchableOpacity>
+                )}
+
+                {!isOwnProfile && isBusiness && (
+                    <TouchableOpacity
+                        style={[styles.secondaryBtn, styles.inquiryBtn]}
+                        onPress={() => setFormTarget({})}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Enviar una consulta a ${profile?.name ?? 'este negocio'}`}
+                    >
+                        <Mail size={18} color={isDark ? '#F9FAFB' : '#111827'} />
+                        <Text style={styles.secondaryBtnText}>Enviar consulta</Text>
                     </TouchableOpacity>
                 )}
             </View>
 
-            {/* Profile Mode Toggle */}
+            {/* Profile Mode Toggle — sólo si hay un lado comercial que ver */}
+            {hasCommercialSide && (
             <View style={{ flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderRadius: Radius.lg, padding: 4, marginHorizontal: 20, marginBottom: 16 }}>
                 <TouchableOpacity
                     style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: Radius.md, gap: 8 }, profileMode === 'social' && { backgroundColor: isDark ? '#374151' : '#FFFFFF', ...glassShadow }]}
@@ -545,9 +612,45 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                     <Text style={[{ fontSize: 14, fontWeight: '600', color: isDark ? '#9CA3AF' : '#6B7280' }, profileMode === 'comercial' && { color: isDark ? '#F9FAFB' : '#111827' }]}>Comercial</Text>
                 </TouchableOpacity>
             </View>
+            )}
+
+            {/* Servicios y Contacto — una tarjeta por formulario publicado del
+                negocio, para entrar directo a ESE formulario en vez de tener que
+                elegirlo otra vez adentro. Estaba en el viejo BusinessProfileScreen
+                (borrado en ac34bfa) y se perdió al reemplazarlo por este screen. */}
+            {showCommercialTabs && forms.length > 0 && !isOwnProfile && (
+                <View style={styles.servicesSection}>
+                    <Text style={styles.servicesTitle}>Servicios y Contacto</Text>
+                    {forms.map((form: any) => (
+                        <TouchableOpacity
+                            key={String(form._id)}
+                            style={styles.formCard}
+                            activeOpacity={0.8}
+                            onPress={() => setFormTarget({ formId: String(form._id) })}
+                            accessibilityRole="button"
+                            accessibilityLabel={form.title}
+                        >
+                            <View style={styles.formIconBox}>
+                                {form.type === 'visit' ? (
+                                    <Calendar size={20} color="#3B82F6" />
+                                ) : (
+                                    <FileText size={20} color="#3B82F6" />
+                                )}
+                            </View>
+                            <View style={styles.formCardBody}>
+                                <Text style={styles.formTitle} numberOfLines={1}>{form.title}</Text>
+                                {form.description ? (
+                                    <Text style={styles.formDesc} numberOfLines={2}>{form.description}</Text>
+                                ) : null}
+                            </View>
+                            <ArrowRight size={20} color={isDark ? '#6B7280' : '#9CA3AF'} />
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
 
             {/* Tabs */}
-            {profileMode === 'comercial' && (
+            {showCommercialTabs && (
                 <View style={styles.tabsContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll} nestedScrollEnabled>
                     {tabs.map((tab) => {
@@ -623,7 +726,7 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 </View>
             </Animated.View>
 
-            {profileMode === 'comercial' ? (
+            {showCommercialTabs ? (
                 <FlatList
                     data={activeItems}
                     keyExtractor={(item: any) => (item._id || item.id).toString()}
@@ -680,13 +783,23 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                 </View>
             </View>
 
-            {/* FormFill Modal */}
-            <Modal visible={formOpen} animationType="slide" onRequestClose={() => setFormOpen(false)}>
-                <FormFillScreen 
-                    businessId={sellerId} 
-                    businessName={profile?.name} 
-                    onClose={() => setFormOpen(false)} 
-                />
+            {/* FormFill Modal — `key` fuerza un remount por target, si no el
+                screen conserva el paso/fecha de la apertura anterior. */}
+            <Modal
+                visible={formTarget !== null}
+                animationType="slide"
+                onRequestClose={() => setFormTarget(null)}
+            >
+                {formTarget !== null && (
+                    <FormFillScreen
+                        key={formTarget.formId ?? formTarget.initialQueryType ?? 'inquiry'}
+                        businessId={sellerId}
+                        businessName={profile?.name}
+                        formId={formTarget.formId}
+                        initialQueryType={formTarget.initialQueryType}
+                        onClose={() => setFormTarget(null)}
+                    />
+                )}
             </Modal>
         </View>
     );
@@ -902,6 +1015,74 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             gap: 12,
             width: '100%',
+        },
+        bookBtn: {
+            marginTop: 12,
+            width: '100%',
+            overflow: 'hidden',
+            borderRadius: Radius.xl,
+            ...glassShadow,
+        },
+        bookBtnInner: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 16,
+            gap: 10,
+        },
+        bookBtnText: {
+            color: '#FFFFFF',
+            fontWeight: '800',
+            fontSize: 16,
+            letterSpacing: 0.5,
+        },
+        inquiryBtn: {
+            marginTop: 10,
+            flex: undefined,
+            width: '100%',
+        },
+        servicesSection: {
+            paddingHorizontal: 20,
+            marginBottom: 20,
+            gap: 10,
+        },
+        servicesTitle: {
+            fontSize: 16,
+            fontWeight: '800',
+            color: text,
+            marginBottom: 2,
+        },
+        formCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: surface,
+            borderRadius: Radius.lg,
+            borderWidth: 1,
+            borderColor: border,
+            paddingVertical: 14,
+            paddingHorizontal: 14,
+            gap: 12,
+        },
+        formIconBox: {
+            width: 40,
+            height: 40,
+            borderRadius: Radius.md,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: isDark ? 'rgba(59,130,246,0.16)' : 'rgba(59,130,246,0.1)',
+        },
+        formCardBody: {
+            flex: 1,
+        },
+        formTitle: {
+            fontSize: 15,
+            fontWeight: '700',
+            color: text,
+        },
+        formDesc: {
+            fontSize: 13,
+            color: muted,
+            marginTop: 2,
         },
         primaryBtn: {
             flex: 1,

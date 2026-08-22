@@ -23,6 +23,7 @@ import { useFavorites } from '../../hooks/useFavorites';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
 import { webPath, productShareLink } from '../../config/appOrigin';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 export default function ProductDetailScreen({ route, navigation }: any) {
     const { colorScheme } = useTheme();
@@ -230,12 +231,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                         style={styles.sellerRow}
                         activeOpacity={0.8}
                         disabled={!product.seller?.id}
-                        onPress={() =>
-                            product.seller?.id &&
-                            navigation.navigate('CommercialProfile', {
-                                sellerId: String(product.seller.id),
-                            })
-                        }
+                        onPress={() => openUserProfile(navigation, product.seller?.id)}
                     >
                         <Image source={{ uri: product.seller?.avatar || 'https://placehold.co/100x100.png' }} style={styles.sellerAvatar} />
                         <View>

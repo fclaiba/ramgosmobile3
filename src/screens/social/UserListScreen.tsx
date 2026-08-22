@@ -8,6 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { UserListItem } from '../../components/social/UserListItem';
 import { MobileHeader } from '../../components/MobileHeader';
 import { colors } from '../../theme/tokens';
+import { openUserProfile } from '../../navigation/openUserProfile';
 
 export default function UserListScreen() {
     const route = useRoute<any>();
@@ -59,11 +60,7 @@ export default function UserListScreen() {
                 renderItem={({ item }) => (
                     <UserListItem
                         user={item}
-                        onPress={() =>
-                            navigation.navigate('CommercialProfile', {
-                                userId: item.id,
-                            })
-                        }
+                        onPress={() => openUserProfile(navigation, item.id)}
                     />
                 )}
                 contentContainerStyle={styles.list}

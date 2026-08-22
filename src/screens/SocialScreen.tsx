@@ -38,6 +38,7 @@ import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
 import { Radius, colors, glassShadow } from '../theme/tokens';
 import { glassSurface } from '../utils/glass';
+import { openUserProfile } from '../navigation/openUserProfile';
 
 export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMode }: any) {
     // En modo tab (HomeScreen monta esta pantalla sin props de navegación)
@@ -86,7 +87,7 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
         (userId: string) => {
             if (!userId) return;
             // Social hub → hybrid profile (feed + catálogo + bonos)
-            navigation.navigate('CommercialProfile', { userId: String(userId) });
+            openUserProfile(navigation, userId);
         },
         [navigation],
     );
