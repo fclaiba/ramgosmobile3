@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'reac
 import { useNavigation } from '@react-navigation/native';
 import { Music2 } from 'lucide-react-native';
 import { glassChip } from '../../utils/glass';
+import { useTheme } from '../../contexts/ThemeContext';
+import { colors } from '../../theme/tokens';
 import { Id } from '../../../convex/_generated/dataModel';
 
 interface SoundPillProps {
@@ -11,6 +13,9 @@ interface SoundPillProps {
      *  no una query aparte por card). */
     name?: string | null;
     authorUsername?: string | null;
+    /** `overlay` (default) = blanco fijo, para el HUD sobre video de `LoopItem`.
+     *  `surface` = sigue el tema, para la tarjeta de feed de `PostCard`. */
+    variant?: 'overlay' | 'surface';
 }
 
 const MARQUEE_THRESHOLD = 22; // caracteres a partir de los cuales anima
@@ -22,9 +27,12 @@ const MARQUEE_THRESHOLD = 22; // caracteres a partir de los cuales anima
  * `TouchableOpacity` en vez de confiar en el `onPress` de `GlassSurface`
  * (su wiring interno no está confirmado).
  */
-export const SoundPill = ({ trackId, name, authorUsername }: SoundPillProps) => {
+export const SoundPill = ({ trackId, name, authorUsername, variant = 'overlay' }: SoundPillProps) => {
     const navigation = useNavigation<any>();
     const translateX = useRef(new Animated.Value(0)).current;
+    const isDark = useTheme().colorScheme === 'dark';
+    const onSurface = variant === 'surface';
+    const fg = onSurface ? colors(isDark).textSecondary : '#fff';
 
     const label = `🎵 ${name || 'Sonido original'}${authorUsername ? ` - @${authorUsername}` : ''}`;
     const shouldMarquee = label.length > MARQUEE_THRESHOLD;
@@ -54,16 +62,17 @@ export const SoundPill = ({ trackId, name, authorUsername }: SoundPillProps) => 
 
     return (
         <TouchableOpacity
-            style={styles.chip}
+            style={[styles.chip, onSurface && glassChip(isDark)]}
             onPress={() => navigation.navigate('SoundDetails', { trackId })}
             accessibilityRole="button"
             accessibilityLabel={`Ver sonido: ${label}`}
         >
-            <Music2 size={12} color="#fff" style={styles.iconShadow} />
+            <Music2 size={12} color={fg} style={onSurface ? undefined : styles.iconShadow} />
             <View style={styles.textClip}>
                 <Animated.Text
                     style={[
                         styles.text,
+                        onSurface && { color: fg },
                         shouldMarquee && {
                             transform: [
                                 {

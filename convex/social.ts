@@ -686,6 +686,32 @@ export const deletePost = mutation({
             await ctx.db.delete(row._id);
         }
 
+        // Si lo que se borra es un espejo de repost, hay que revertir la fila
+        // de join y el contador del original: si no, el usuario queda con el
+        // botón de repost "activo" sobre un espejo que ya no existe y sin
+        // forma de des-repostear.
+        //
+        // El caso inverso (borran el ORIGINAL y quedan espejos huérfanos) NO
+        // se cascadea a propósito: serían writes no acotados dentro de una
+        // mutation. `decoratePosts` ya los descarta al no poder hidratar el
+        // citado, así que no se ven en ningún lado.
+        if (isPureRepost(post)) {
+            const row = await ctx.db
+                .query('socialRetweets')
+                .withIndex('by_user_post', (q: any) =>
+                    q.eq('userId', post.authorUserId).eq('postId', post.quotedPostId!),
+                )
+                .first();
+            if (row) await ctx.db.delete(row._id);
+            const originalId = ctx.db.normalizeId('socialPosts', post.quotedPostId!);
+            const original = originalId ? await ctx.db.get(originalId) : null;
+            if (original) {
+                await ctx.db.patch(original._id, {
+                    retweetCount: Math.max(0, (original as any).retweetCount - 1),
+                });
+            }
+        }
+
         // Clawback anti-abuso (Fase 3): "publicar → cobrar → borrar →
         // repetir" sólo se cierra si borrar dentro de las 24h revierte el
         // punto. Fuera de esa ventana, se asume que el punto ya "se ganó" de
@@ -801,6 +827,98 @@ const isModeratedOut = (
     return false;
 };
 
+/**
+ * `true` si el post es un REPOST PURO: un espejo sin contenido propio, cuyo
+ * único fin es traer el post citado al feed de los seguidores del que
+ * reposteó (el modelo del RT de Twitter).
+ *
+ * Una CITA también tiene `quotedPostId`, pero además tiene texto propio, así
+ * que es un post de pleno derecho y no entra acá.
+ */
+export const isPureRepost = (post: any): boolean =>
+    Boolean(post?.quotedPostId) && !String(post?.content ?? '').trim();
+
+/**
+ * Cambia cada espejo de repost por el post ORIGINAL, y devuelve aparte quién
+ * lo reposteó (mapa `originalId -> reposterUserId`).
+ *
+ * Corre ANTES de `decoratePosts` por dos motivos, y el segundo es el
+ * importante:
+ *  1. El original llega decorado ENTERO (like, guardado, encuesta, comercio,
+ *     sonido), no con el shape reducido que `quotedPost` usa para las citas.
+ *  2. El `_id` de la tarjeta pasa a ser el del original, así que dar like,
+ *     comentar o guardar desde un repost impacta el post original. Si la
+ *     tarjeta conservara el id del espejo, los likes quedarían repartidos
+ *     entre el original y cada espejo, con los contadores partidos.
+ */
+export const substituteReposts = async (
+    ctx: any,
+    posts: any[],
+): Promise<{ posts: any[]; attribution: Map<string, string> }> => {
+    const mirrors = posts.filter(isPureRepost);
+    const attribution = new Map<string, string>();
+    if (mirrors.length === 0) return { posts, attribution };
+
+    const originals = await Promise.all(
+        mirrors.map((m) => {
+            const id = ctx.db.normalizeId('socialPosts', m.quotedPostId);
+            return id ? ctx.db.get(id) : null;
+        }),
+    );
+    const byMirrorId = new Map<string, any>();
+    mirrors.forEach((m, i) => byMirrorId.set(String(m._id), originals[i]));
+
+    const out: any[] = [];
+    for (const p of posts) {
+        if (!isPureRepost(p)) {
+            out.push(p);
+            continue;
+        }
+        const original = byMirrorId.get(String(p._id));
+        // Original borrado ⇒ el repost no tiene nada que mostrar.
+        if (!original || original.deletedAt) continue;
+        attribution.set(String(original._id), p.authorUserId);
+        out.push(original);
+    }
+    return { posts: out, attribution };
+};
+
+/** Pega `repostedBy` (perfil del que reposteó) a los items ya decorados. */
+export const attachRepostAttribution = async (
+    ctx: any,
+    items: any[],
+    attribution: Map<string, string>,
+) => {
+    if (attribution.size === 0) return items;
+    const reposterIds = Array.from(new Set(attribution.values()));
+    const profiles = await Promise.all(
+        reposterIds.map((id) =>
+            ctx.db
+                .query('socialUsers')
+                .withIndex('by_user', (q: any) => q.eq('userId', id))
+                .first(),
+        ),
+    );
+    const profileMap = new Map<string, any>();
+    profiles.forEach((p: any, i) => {
+        if (p) profileMap.set(reposterIds[i], p);
+    });
+
+    return items.map((item: any) => {
+        const reposterId = attribution.get(String(item._id));
+        if (!reposterId) return item;
+        const prof = profileMap.get(reposterId);
+        return {
+            ...item,
+            repostedBy: {
+                userId: reposterId,
+                name: prof?.displayName ?? prof?.username ?? 'Alguien',
+                username: prof?.username ?? null,
+            },
+        };
+    });
+};
+
 // Exportado para que `social/hashtags.ts` (`getPostsByTag`) hidrate posts sin
 // duplicar la resolución de media ni el filtro de moderación/mute.
 export const decoratePosts = async (
@@ -811,7 +929,35 @@ export const decoratePosts = async (
 ) => {
     if (posts.length === 0) return [];
 
-    const authorIds = Array.from(new Set(posts.map((p) => p.authorUserId))) as string[];
+    // Quote-repost: los posts citados se resuelven ANTES que los perfiles
+    // para que sus autores entren en el MISMO batch de `socialUsers` de
+    // abajo (si no, serían N lecturas extra y los avatares se resolverían
+    // dos veces). Un solo nivel: el shape del citado no anida otro citado,
+    // así que la recursión se corta estructuralmente, no con un contador.
+    const quotedIds = Array.from(
+        new Set(posts.map((p) => p.quotedPostId).filter(Boolean)),
+    ) as string[];
+    const quotedDocs = new Map<string, any>();
+    if (quotedIds.length) {
+        const docs = await Promise.all(
+            quotedIds.map((id) => {
+                const nid = ctx.db.normalizeId('socialPosts', id);
+                return nid ? ctx.db.get(nid) : null;
+            }),
+        );
+        docs.forEach((d: any, i) => {
+            if (d && !d.deletedAt && d.moderationStatus !== 'removed') {
+                quotedDocs.set(quotedIds[i], d);
+            }
+        });
+    }
+
+    const authorIds = Array.from(
+        new Set([
+            ...posts.map((p) => p.authorUserId),
+            ...Array.from(quotedDocs.values()).map((q: any) => q.authorUserId),
+        ]),
+    ) as string[];
     const authorProfiles = await Promise.all(
         authorIds.map((id) =>
             ctx.db
@@ -849,7 +995,17 @@ export const decoratePosts = async (
             ),
     );
 
-    const [likeRows, saveRows] = await Promise.all([
+    // Ids sobre los que hay que saber si el viewer ya reposteó: el propio
+    // post y, si es un espejo/cita, también el citado — la tarjeta de un
+    // repost muestra el botón del ORIGINAL, no el del espejo.
+    const retweetTargets = Array.from(
+        new Set([
+            ...visible.map((p) => String(p._id)),
+            ...visible.map((p) => p.quotedPostId).filter(Boolean),
+        ]),
+    ) as string[];
+
+    const [likeRows, saveRows, retweetRows] = await Promise.all([
         Promise.all(
             visible.map((p) =>
                 ctx.db
@@ -873,7 +1029,22 @@ export const decoratePosts = async (
                     .first(),
             ),
         ),
+        Promise.all(
+            retweetTargets.map((id) =>
+                ctx.db
+                    .query('socialRetweets')
+                    .withIndex('by_user_post', (q: any) =>
+                        q.eq('userId', viewerId).eq('postId', id),
+                    )
+                    .first(),
+            ),
+        ),
     ]);
+
+    const retweetedIds = new Set<string>();
+    retweetRows.forEach((r: any, i) => {
+        if (r) retweetedIds.add(retweetTargets[i]);
+    });
 
     // Memoizado por request: la misma referencia de storage (un avatar
     // repetido, una imagen compartida) se resuelve una sola vez por página
@@ -925,7 +1096,42 @@ export const decoratePosts = async (
         });
     }
 
-    return await Promise.all(
+    // Post citado, hidratado y con la media resuelta por el mismo `media()`
+    // memoizado. El shape es deliberadamente PLANO y reducido: no lleva
+    // `quotedPost` propio, y eso es lo que impide que una cita de una cita
+    // encadene lecturas sin fin.
+    const quotedMap = new Map<string, any>();
+    await Promise.all(
+        Array.from(quotedDocs.entries()).map(async ([id, q]: [string, any]) => {
+            // Una cita no puede ser un bypass del mute/bloqueo: si el viewer
+            // silenció al autor del citado o escondió ese post, no lo ve.
+            const moderatedOut = isModeratedOut(
+                { ...q, authorShadowbanned: shadowbannedAuthors.has(q.authorUserId) },
+                viewerId,
+                moderation,
+            );
+            if (moderatedOut) return;
+            quotedMap.set(id, {
+                _id: q._id,
+                authorUserId: q.authorUserId,
+                type: q.type,
+                content: q.content,
+                images: q.images
+                    ? await Promise.all(q.images.map((img: string) => media(img)))
+                    : q.images,
+                imageAlts: q.imageAlts,
+                videoUrl: await media(q.videoUrl),
+                createdAt: q.createdAt,
+                likeCount: q.likeCount ?? 0,
+                commentCount: q.commentCount ?? 0,
+                retweetCount: q.retweetCount ?? 0,
+                isRetweetedByMe: retweetedIds.has(id),
+                author: authorMap.get(q.authorUserId) ?? null,
+            });
+        }),
+    );
+
+    const decorated = await Promise.all(
         visible.map(async (post, i) => ({
             ...post,
             viewCount: post.viewCount ?? 0,
@@ -948,8 +1154,19 @@ export const decoratePosts = async (
                 : null,
             isLikedByMe: Boolean(likeRows[i]),
             isSavedByMe: Boolean(saveRows[i]),
+            isRetweetedByMe: retweetedIds.has(String(post._id)),
+            quotedPost: post.quotedPostId ? (quotedMap.get(post.quotedPostId) ?? null) : null,
+            // El front no re-deriva la regla: si la calculara por su cuenta
+            // podría desincronizarse de la del servidor.
+            isRepost: isPureRepost(post),
         })),
     );
+
+    // Un repost puro sin nada que mostrar (borraron el original, o el viewer
+    // silenció a su autor) es una tarjeta vacía: se cae acá, no en el front.
+    // Una CITA con el citado ausente sí sobrevive — tiene texto propio, y la
+    // UI dibuja "publicación no disponible" en el hueco.
+    return decorated.filter((p: any) => !(p.isRepost && !p.quotedPost));
 };
 
 // `scorePost`/`scoreLoop`/`applyDiversityCap` viven en `./social/scoring`
@@ -1346,7 +1563,26 @@ export const getFeed = query({
             candidates = raw.filter(isGlobalFeedEligible).slice(0, cap);
         }
 
-        const items = await decoratePosts(ctx, candidates, viewerId, moderation);
+        // Dedupe de reposts: si en la misma página vienen el original Y un
+        // espejo del original (o dos espejos del mismo original), sobra el
+        // espejo. Va acá y no en `decoratePosts` porque ese helper lo comparten
+        // 5 call-sites, y en el PERFIL sí querés ver las dos cosas: si alguien
+        // posteó algo y después lo reposteó, en su perfil van los dos.
+        // No afecta la paginación: `rawCount`/`oldestRawCreatedAt` salen del
+        // lote crudo, antes de todos los filtros (ver comentario de abajo).
+        const idsInPage = new Set(candidates.map((p: any) => String(p._id)));
+        const seenQuoted = new Set<string>();
+        candidates = candidates.filter((p: any) => {
+            if (!isPureRepost(p)) return true;
+            const q = String(p.quotedPostId);
+            if (idsInPage.has(q) || seenQuoted.has(q)) return false;
+            seenQuoted.add(q);
+            return true;
+        });
+
+        const { posts: resolved, attribution } = await substituteReposts(ctx, candidates);
+        const decorated = await decoratePosts(ctx, resolved, viewerId, moderation);
+        const items = await attachRepostAttribution(ctx, decorated, attribution);
         // "Se acabó" se decide con el lote crudo: si vino más chico que lo
         // pedido, no hay nada más atrás. Si vino lleno, puede haber más
         // aunque el filtro haya dejado `candidates` por debajo de `cap`.
@@ -1539,12 +1775,16 @@ export const getPostsByUser = query({
             .order('desc')
             .take(cap);
         const moderation = await loadViewerModerationSets(ctx, actor.idString);
-        const items = await decoratePosts(
+        // Igual que el feed: los reposts del perfil se muestran como el post
+        // original con la atribución arriba. Acá NO se deduplica — si alguien
+        // posteó algo y después lo reposteó, en su perfil van los dos, como
+        // en Twitter.
+        const { posts: resolved, attribution } = await substituteReposts(
             ctx,
             posts.filter((p: any) => !p.deletedAt),
-            actor.idString,
-            moderation,
         );
+        const decorated = await decoratePosts(ctx, resolved, actor.idString, moderation);
+        const items = await attachRepostAttribution(ctx, decorated, attribution);
 
         // Post fijado primero, si lo hay y sigue en esta página.
         const profile = await ctx.db
@@ -1760,11 +2000,13 @@ export const getCommentsForPost = query({
         limit: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        let actor;
         try {
-            await assertSocialActor(ctx, (args as any).sessionToken);
+            actor = await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return { items: [], nextCursor: null };
         }
+        const viewerId = actor.idString;
         const cap = Math.min(args.limit ?? 50, 100);
         const result = await ctx.db
             .query('socialComments')
@@ -1779,19 +2021,36 @@ export const getCommentsForPost = query({
             (c: any) => !c.deletedAt && c.moderationStatus !== 'removed' && !c.parentCommentId,
         );
         const authorIds = Array.from(new Set(visible.map((c: any) => c.authorUserId)));
-        const authors = await Promise.all(
-            authorIds.map((id: string) =>
-                ctx.db
-                    .query('socialUsers')
-                    .withIndex('by_user', (q: any) => q.eq('userId', id))
-                    .first(),
+        const [authors, likeRows] = await Promise.all([
+            Promise.all(
+                authorIds.map((id: string) =>
+                    ctx.db
+                        .query('socialUsers')
+                        .withIndex('by_user', (q: any) => q.eq('userId', id))
+                        .first(),
+                ),
             ),
-        );
+            // `hasLiked` viewer-scoped — mismo patrón batcheado que `getFeed`.
+            Promise.all(
+                visible.map((c: any) =>
+                    ctx.db
+                        .query('socialLikes')
+                        .withIndex('by_user_target', (q: any) =>
+                            q.eq('userId', viewerId).eq('targetType', 'comment').eq('targetId', String(c._id)),
+                        )
+                        .first(),
+                ),
+            ),
+        ]);
         const map = new Map<string, any>();
         authors.forEach((a, i) => { if (a) map.set(authorIds[i], a); });
 
         return {
-            items: visible.map((c: any) => ({ ...c, author: map.get(c.authorUserId) })),
+            items: visible.map((c: any, i: number) => ({
+                ...c,
+                author: map.get(c.authorUserId),
+                hasLiked: Boolean(likeRows[i]),
+            })),
             nextCursor: result.isDone ? null : result.continueCursor,
         };
     },
@@ -1801,11 +2060,13 @@ export const getCommentsForPost = query({
 export const getCommentReplies = query({
     args: { sessionToken: v.optional(v.string()), commentId: v.id('socialComments'), limit: v.optional(v.number()) },
     handler: async (ctx, args) => {
+        let actor;
         try {
-            await assertSocialActor(ctx, (args as any).sessionToken);
+            actor = await assertSocialActor(ctx, (args as any).sessionToken);
         } catch {
             return [];
         }
+        const viewerId = actor.idString;
         const cap = Math.min(args.limit ?? 50, 100);
         const replies = await ctx.db
             .query('socialComments')
@@ -1814,14 +2075,30 @@ export const getCommentReplies = query({
             .take(cap);
         const visible = replies.filter((c: any) => !c.deletedAt && c.moderationStatus !== 'removed');
         const authorIds = Array.from(new Set(visible.map((c: any) => c.authorUserId)));
-        const authors = await Promise.all(
-            authorIds.map((id: string) =>
-                ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', id)).first(),
+        const [authors, likeRows] = await Promise.all([
+            Promise.all(
+                authorIds.map((id: string) =>
+                    ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', id)).first(),
+                ),
             ),
-        );
+            Promise.all(
+                visible.map((c: any) =>
+                    ctx.db
+                        .query('socialLikes')
+                        .withIndex('by_user_target', (q: any) =>
+                            q.eq('userId', viewerId).eq('targetType', 'comment').eq('targetId', String(c._id)),
+                        )
+                        .first(),
+                ),
+            ),
+        ]);
         const map = new Map<string, any>();
         authors.forEach((a, i) => { if (a) map.set(authorIds[i], a); });
-        return visible.map((c: any) => ({ ...c, author: map.get(c.authorUserId) }));
+        return visible.map((c: any, i: number) => ({
+            ...c,
+            author: map.get(c.authorUserId),
+            hasLiked: Boolean(likeRows[i]),
+        }));
     },
 });
 
@@ -3043,38 +3320,120 @@ export const toggleRetweet = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await assertSocialActor(ctx, (args as any).sessionToken);
-        const post = await ctx.db.get(args.postId);
+        let post = await ctx.db.get(args.postId);
         if (!post || post.deletedAt) throw new Error('Post no encontrado.');
+
+        // Repostear un espejo redirige al ORIGINAL (lo mismo que hace
+        // Twitter). Sin esto se encadenan espejos de espejos sin fondo.
+        let targetId: Id<'socialPosts'> = args.postId;
+        if (isPureRepost(post)) {
+            const originalId = ctx.db.normalizeId('socialPosts', post.quotedPostId!);
+            const original = originalId ? await ctx.db.get(originalId) : null;
+            if (!original || original.deletedAt) throw new Error('Post no encontrado.');
+            targetId = original._id;
+            post = original;
+        }
+
+        // Un post de comunidad NO se puede repostear: el espejo no heredaría
+        // el `communityId`, y `isGlobalFeedEligible` sólo excluye del feed
+        // global a los posts QUE LO TIENEN — o sea que el espejo filtraría
+        // contenido privado de la comunidad al feed público.
+        if (post.communityId) {
+            throw new ConvexError({
+                code: 'FORBIDDEN',
+                message: 'Los posts de una comunidad no se pueden repostear.',
+            });
+        }
 
         const existing = await ctx.db
             .query('socialRetweets')
             .withIndex('by_user_post', (q) =>
-                q.eq('userId', actor.idString).eq('postId', String(args.postId))
+                q.eq('userId', actor.idString).eq('postId', String(targetId))
             )
             .first();
 
         if (existing) {
+            // Soft delete del espejo, igual que `deletePost` — borrarlo de
+            // verdad dejaría colgando cualquier referencia (un comentario
+            // sobre el espejo, un share).
+            if (existing.repostPostId) {
+                const mirror = await ctx.db.get(existing.repostPostId);
+                if (mirror && !mirror.deletedAt) {
+                    await ctx.db.patch(mirror._id, { deletedAt: NOW() });
+                }
+            }
             await ctx.db.delete(existing._id);
-            await ctx.db.patch(args.postId, { retweetCount: Math.max(0, post.retweetCount - 1) });
-            return { retweeted: false };
+            await ctx.db.patch(targetId, { retweetCount: Math.max(0, post.retweetCount - 1) });
+            return { retweeted: false, repostPostId: null };
         }
+
+        // El espejo se inserta a mano y NO por `createPostImpl`: ese camino
+        // corre el filtro de texto sobre un string vacío, bumpea `postCount`
+        // del perfil, extrae hashtags/menciones, dispara link preview y
+        // evalúa recompensas. Nada de eso aplica a un repost sin texto, y un
+        // `postCount` inflado por reposts sería un bug de producto.
+        const authorProfile = await ctx.db
+            .query('socialUsers')
+            .withIndex('by_user', (q: any) => q.eq('userId', actor.idString))
+            .first();
+        const mirrorId = await ctx.db.insert('socialPosts', {
+            authorUserId: actor.idString,
+            type: 'text',
+            content: '',
+            likeCount: 0,
+            commentCount: 0,
+            retweetCount: 0,
+            viewCount: 0,
+            replyCount: 0,
+            moderationStatus: 'visible',
+            quotedPostId: String(targetId),
+            geoCountry: (authorProfile as any)?.country ?? undefined,
+            createdAt: NOW(),
+        });
 
         await ctx.db.insert('socialRetweets', {
             userId: actor.idString,
-            postId: String(args.postId),
+            postId: String(targetId),
+            repostPostId: mirrorId,
             createdAt: NOW(),
         });
-        await ctx.db.patch(args.postId, { retweetCount: post.retweetCount + 1 });
+        await ctx.db.patch(targetId, { retweetCount: post.retweetCount + 1 });
+
         if (post.authorUserId !== actor.idString) {
             await recordActivity(ctx, {
                 userId: post.authorUserId,
                 type: 'repost',
                 actorUserId: actor.idString,
                 targetType: 'post',
-                targetId: String(args.postId),
+                targetId: String(targetId),
             });
+
+            // Mismos efectos que un like/comentario. Va en try/catch como en
+            // `toggleLike`: que falle un push no puede abortar el repost.
+            try {
+                // Peso 2.0, igual que un comentario: repostear es poner tu
+                // nombre sobre el contenido de otro, señal mucho más fuerte
+                // que un like (1.0).
+                await bumpAuthorAffinity(ctx, actor.idString, post.authorUserId, 2.0);
+                if (post.type === 'video') {
+                    await bumpTagAffinityForPost(ctx, actor.idString, post, 2.0);
+                }
+                // Sin el throttle que usan los likes: un repost es un evento
+                // raro y significativo, no llega en ráfagas.
+                await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                    sendEmail: true,
+                    userId: post.authorUserId,
+                    title: 'Republicaron tu post',
+                    body: 'Mirá quién compartió tu publicación.',
+                    category: 'social',
+                    data: { type: 'repost', targetType: 'post', targetId: String(targetId) },
+                });
+            } catch (e) {
+                console.warn('[social.repost] side-effects failed', e);
+            }
         }
-        return { retweeted: true };
+
+        return { retweeted: true, repostPostId: mirrorId };
     },
 });
 

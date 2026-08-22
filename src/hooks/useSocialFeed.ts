@@ -80,6 +80,11 @@ export const useSocialFeed = ({ authorUserId, mode, pageSize = 20, refreshKey, c
         if (!page.nextCursor) setExhausted(true);
     }, [page, cursor]);
 
+    // El dedupe por `_id` cubre además los reposts entre páginas sin lógica
+    // extra: el servidor sustituye el espejo por el post ORIGINAL, así que un
+    // repost llega con el `_id` del original y colisiona solo con él si los
+    // dos caen en la misma lista (ej. el original en la página 1 y el repost
+    // en la 2). El servidor ya deduplica dentro de cada página.
     const posts = useMemo(() => {
         const livePage = cursor ? [] : page?.items ?? [];
         const tail = olderPages.flatMap((p) => p.items);

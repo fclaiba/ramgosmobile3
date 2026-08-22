@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ShoppingCart, Ticket } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Radius } from '../../theme/tokens';
+import { Radius, colors } from '../../theme/tokens';
 import { GlassSurface } from '../ui/GlassSurface';
 
 export interface CommerceTagProduct {
@@ -43,6 +43,11 @@ export const CommerceTag = React.memo(({ product, onPress, variant = 'full' }: C
     const discount = product.discountPercent ?? 0;
     const hasDiscount = discount > 0;
     const accent = isDark ? '#FCD34D' : '#D97706';
+    // El tag ya no vive sólo sobre video oscuro: desde el rediseño del feed
+    // se apoya en una tarjeta que sigue el tema, donde el texto blanco fijo
+    // era ilegible en claro (`surface3` en light es casi blanco).
+    const fg = colors(isDark).text;
+    const priceColor = isDark ? '#10B981' : '#047857';
 
     const handlePress = () => {
         if (!product.listingId) return;
@@ -71,7 +76,7 @@ export const CommerceTag = React.memo(({ product, onPress, variant = 'full' }: C
                     <GlassSurface intensity="prominent" style={styles.compactInner} specular>
                         <View style={styles.compact}>
                             {hasDiscount ? <Ticket size={14} color={accent} /> : <ShoppingCart size={14} color={accent} />}
-                            <Text style={styles.compactText} numberOfLines={1}>
+                            <Text style={[styles.compactText, { color: fg }]} numberOfLines={1}>
                                 {hasDiscount ? `${Math.round(discount)}% OFF` : `$${product.price ?? ''}`}
                             </Text>
                         </View>
@@ -100,18 +105,22 @@ export const CommerceTag = React.memo(({ product, onPress, variant = 'full' }: C
                         {hasDiscount ? <Ticket size={16} color={accent} /> : <ShoppingCart size={16} color={accent} />}
 
                         <View style={styles.info}>
-                            <Text style={styles.name} numberOfLines={1}>
+                            <Text style={[styles.name, { color: fg }]} numberOfLines={1}>
                                 {product.name}
                             </Text>
                             {hasDiscount ? (
                                 <View style={styles.priceRow}>
-                                    <Text style={styles.discountBadge}>{Math.round(discount)}% OFF</Text>
+                                    <Text style={[styles.discountBadge, { color: accent }]}>
+                                        {Math.round(discount)}% OFF
+                                    </Text>
                                     {product.price !== undefined && (
-                                        <Text style={styles.price}>${product.price}</Text>
+                                        <Text style={[styles.price, { color: priceColor }]}>${product.price}</Text>
                                     )}
                                 </View>
                             ) : (
-                                product.price !== undefined && <Text style={styles.price}>${product.price}</Text>
+                                product.price !== undefined && (
+                                    <Text style={[styles.price, { color: priceColor }]}>${product.price}</Text>
+                                )
                             )}
                         </View>
 

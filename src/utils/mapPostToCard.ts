@@ -21,6 +21,15 @@ export function mapPostToCardProps(item: any): PostCardProps['post'] {
         likesCount: item.likeCount ?? 0,
         commentsCount: item.commentCount ?? 0,
         hasLiked: item.isLikedByMe ?? false,
+        hasSaved: item.isSavedByMe ?? false,
+        sharesCount: item.shareCount ?? 0,
+        repostsCount: item.retweetCount ?? 0,
+        hasReposted: item.isRetweetedByMe ?? false,
+        // Sólo presente en las CITAS. Los reposts simples ya vienen
+        // sustituidos por el original desde el servidor (`substituteReposts`),
+        // así que llegan acá como un post normal + `repostedBy`.
+        quotedPost: item.quotedPost ?? null,
+        createdAt: item.createdAt,
         audioTrackId: item.audioTrackId,
         audioTrack: item.audioTrack,
         communityId: item.communityId,

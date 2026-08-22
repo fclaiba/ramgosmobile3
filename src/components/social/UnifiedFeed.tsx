@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Dimensions, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { ViewToken } from 'react-native';
 import { FlashList, ListRenderItemInfo } from '@shopify/flash-list';
 import { useMutation } from 'convex/react';
@@ -9,6 +9,9 @@ import { useNavigation } from '@react-navigation/native';
 import { PostCard } from './PostCard';
 import { PostCommentsModal } from './PostCommentsModal';
 import { PostActionsSheet } from './PostActionsSheet';
+import { RepostSheet } from './RepostSheet';
+import { QuoteComposerModal } from './QuoteComposerModal';
+import { QuotedPost } from './QuotedPostCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useCart } from '../../contexts/CartContext';
@@ -17,10 +20,6 @@ import { colors } from '../../theme/tokens';
 import { useSocialFeed, SocialFeedMode } from '../../hooks/useSocialFeed';
 import { mapPostToCardProps } from '../../utils/mapPostToCard';
 
-const { height } = Dimensions.get('window');
-
-// Restamos el área del botttom tab aprox (ajustable según el layout padre)
-const ITEM_HEIGHT = height - 85;
 const PAGE_SIZE = 10;
 
 export type UnifiedFeedMode = SocialFeedMode;
@@ -66,8 +65,13 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
     const [addingToCart, setAddingToCart] = useState(false);
     const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
     const [actionsPost, setActionsPost] = useState<{ id: string; authorUserId: string } | null>(null);
+    // Un solo sheet/composer para toda la lista, no uno por tarjeta — mismo
+    // patrón que `PostCommentsModal`/`PostActionsSheet` acá abajo.
+    const [repostTargetId, setRepostTargetId] = useState<string | null>(null);
+    const [quoteTarget, setQuoteTarget] = useState<QuotedPost | null>(null);
 
     const toggleLike = useMutation(api.social.toggleLike);
+    const toggleRetweet = useMutation(api.social.toggleRetweet);
     const votePoll = useMutation(api.social.votePoll);
     const addView = useMutation(api.social.addView);
 
@@ -90,6 +94,16 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
     const handleComment = useCallback((postId: string) => {
         setCommentsPostId(postId);
     }, []);
+
+    const handleToggleRepost = useCallback(
+        (postId: Id<'socialPosts'>) => {
+            if (!sessionToken) return;
+            toggleRetweet({ sessionToken, postId }).catch((e: any) => {
+                show(e?.data?.message || e?.message || 'No se pudo repostear', 'error');
+            });
+        },
+        [sessionToken, toggleRetweet, show],
+    );
 
     const handleVotePoll = useCallback(
         (postId: Id<'socialPosts'>, optionId: string) => {
@@ -180,31 +194,56 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                       name: item.author.displayName || item.author.username || 'Usuario',
                       avatar: item.author.avatar,
                       role: item.author.isInfluencer ? 'influencer' : undefined,
+                      username: item.author.username,
                   }
                 : null;
 
             return (
-                <View style={{ height: ITEM_HEIGHT }}>
-                    <PostCard
-                        post={mappedPost}
-                        author={authorInfo}
-                        onLike={() => handleLike(mappedPost._id)}
-                        onComment={() => handleComment(String(mappedPost._id))}
-                        onCommercePress={(lId) =>
-                            handleCommercePress(lId, String(mappedPost._id))
-                        }
-                        isFocused={focusedIds.has(String(item._id))}
-                        onOpenActions={() =>
-                            setActionsPost({ id: String(mappedPost._id), authorUserId: item.authorUserId })
-                        }
-                        onVotePoll={(optionId) => handleVotePoll(mappedPost._id, optionId)}
-                        currentUserId={user?.id}
-                    />
-                </View>
+                <PostCard
+                    post={mappedPost}
+                    author={authorInfo}
+                    repostedBy={item.repostedBy ?? null}
+                    onLike={() => handleLike(mappedPost._id)}
+                    onComment={() => handleComment(String(mappedPost._id))}
+                    onCommercePress={(lId) =>
+                        handleCommercePress(lId, String(mappedPost._id))
+                    }
+                    isFocused={focusedIds.has(String(item._id))}
+                    onOpenActions={() =>
+                        setActionsPost({ id: String(mappedPost._id), authorUserId: item.authorUserId })
+                    }
+                    onVotePoll={(optionId) => handleVotePoll(mappedPost._id, optionId)}
+                    currentUserId={user?.id}
+                    onOpenRepostMenu={() => setRepostTargetId(String(mappedPost._id))}
+                    onToggleRepost={() => handleToggleRepost(mappedPost._id)}
+                    onOpenQuoted={(postId) => navigation.navigate('PostDetail', { postId })}
+                />
             );
         },
-        [focusedIds, handleLike, handleComment, handleCommercePress, handleVotePoll, user?.id],
+        [focusedIds, handleLike, handleComment, handleCommercePress, handleVotePoll, handleToggleRepost, navigation, user?.id],
     );
+
+    /** El post sobre el que está abierto el menú de repost, como cita. */
+    const repostTargetAsQuoted = useMemo((): QuotedPost | null => {
+        if (!repostTargetId) return null;
+        const item = posts.find((p: any) => String(p._id) === repostTargetId);
+        if (!item) return null;
+        return {
+            _id: item._id,
+            authorUserId: item.authorUserId,
+            type: item.type,
+            content: item.content,
+            images: item.images,
+            imageAlts: item.imageAlts,
+            videoUrl: item.videoUrl,
+            createdAt: item.createdAt,
+            likeCount: item.likeCount ?? 0,
+            commentCount: item.commentCount ?? 0,
+            retweetCount: item.retweetCount ?? 0,
+            isRetweetedByMe: item.isRetweetedByMe ?? false,
+            author: item.author ?? null,
+        };
+    }, [repostTargetId, posts]);
 
     if (isLoadingFirstPage) {
         return (
@@ -220,17 +259,19 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                 data={posts}
                 renderItem={renderItem}
                 keyExtractor={(item) => String(item._id ?? item.id)}
-                // v2 de FlashList estima el tamaño automáticamente; ITEM_HEIGHT
-                // fijo en el wrapper de cada celda sigue siendo lo que da el
-                // efecto "un post por pantalla" del scroll paginado.
-                pagingEnabled
+                // Lista vertical normal (Twitter/IG): las tarjetas miden lo que
+                // mide su contenido y v2 de FlashList estima el tamaño solo.
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.listContent}
                 onEndReached={loadMore}
                 onEndReachedThreshold={0.5}
                 ListHeaderComponent={listHeaderComponent ?? undefined}
                 onViewableItemsChanged={onViewableItemsChanged as any}
                 viewabilityConfig={{
-                    itemVisiblePercentThreshold: 70,
+                    // Con scroll libre (ya no paginado) hay varias tarjetas a la
+                    // vez: media tarjeta visible ya cuenta como "en foco" para
+                    // el autoplay y el watch-time.
+                    itemVisiblePercentThreshold: 50,
                 }}
                 refreshControl={
                     <RefreshControl
@@ -255,6 +296,23 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                 canModerate={canModerate}
                 communityId={communityId}
             />
+
+            <RepostSheet
+                visible={repostTargetId !== null}
+                onClose={() => setRepostTargetId(null)}
+                onRepost={() => {
+                    if (repostTargetId) handleToggleRepost(repostTargetId as any);
+                }}
+                onQuote={() => setQuoteTarget(repostTargetAsQuoted)}
+            />
+
+            <QuoteComposerModal
+                visible={quoteTarget !== null}
+                onClose={() => setQuoteTarget(null)}
+                quoted={quoteTarget}
+                // Refresca para que la cita recién publicada aparezca arriba.
+                onPosted={refresh}
+            />
         </View>
     );
 };
@@ -267,6 +325,10 @@ const styles = StyleSheet.create({
         // videos a pantalla completa — pero este componente ahora también
         // sirve el tab "Feed" (texto/imagen) sobre fondo claro u oscuro.
         backgroundColor: 'transparent',
+    },
+    listContent: {
+        paddingHorizontal: 12,
+        paddingBottom: 24,
     },
     center: {
         justifyContent: 'center',

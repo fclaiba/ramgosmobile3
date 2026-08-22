@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
 import { useMutation, useQuery } from 'convex/react';
@@ -9,9 +9,6 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { colors } from '../../theme/tokens';
 import { PostCard } from '../../components/social/PostCard';
 import { mapPostToCardProps } from '../../utils/mapPostToCard';
-
-const { height } = Dimensions.get('window');
-const ITEM_HEIGHT = height - 85;
 
 /**
  * A2: destino del sticker `hashtag` de historias — `getPostsByTag`
@@ -70,16 +67,15 @@ export default function HashtagFeedScreen({ route, navigation }: any) {
                     keyExtractor={(item: any) => String(item._id)}
                     onEndReached={loadMore}
                     onEndReachedThreshold={0.5}
+                    contentContainerStyle={styles.listContent}
                     renderItem={({ item }) => (
-                        <View style={{ height: ITEM_HEIGHT }}>
-                            <PostCard
-                                post={mapPostToCardProps(item)}
-                                author={item.author ? { name: item.author.displayName || item.author.username, avatar: item.author.avatar } : null}
-                                onLike={() => sessionToken && toggleLike({ sessionToken, targetType: 'post', targetId: item._id }).catch(() => {})}
-                                onComment={() => navigation.navigate('PostDetail', { postId: item._id })}
-                                onCommercePress={() => {}}
-                            />
-                        </View>
+                        <PostCard
+                            post={mapPostToCardProps(item)}
+                            author={item.author ? { name: item.author.displayName || item.author.username, avatar: item.author.avatar, username: item.author.username } : null}
+                            onLike={() => sessionToken && toggleLike({ sessionToken, targetType: 'post', targetId: item._id }).catch(() => {})}
+                            onComment={() => navigation.navigate('PostDetail', { postId: item._id })}
+                            onCommercePress={() => {}}
+                        />
                     )}
                     ListEmptyComponent={<Text style={{ color: c.textSecondary, padding: 24, textAlign: 'center' }}>Todavía no hay posts con #{tag}.</Text>}
                 />
@@ -90,6 +86,7 @@ export default function HashtagFeedScreen({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    listContent: { paddingHorizontal: 12, paddingBottom: 24 },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(150,150,150,0.2)' },
     backBtn: { padding: 4, marginRight: 16 },
     headerTitle: { fontSize: 18, fontWeight: '700' },

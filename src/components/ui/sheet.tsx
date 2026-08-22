@@ -1,13 +1,46 @@
 import * as React from "react"
-import { View, Text, Modal, TouchableOpacity, StyleSheet, Platform } from "react-native"
+import { View, Text, Modal, TouchableOpacity, StyleSheet, Platform, Animated, PanResponder, Dimensions, LayoutChangeEvent } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { useTheme } from "../../contexts/ThemeContext"
 import { colors, Radius, Type, Space, Elevation } from "../../theme/tokens"
 import { glassSheet } from "../../utils/glass"
 
+/* ─── Drag to dismiss ────────────────────────────────────────────────
+ * Los bottom sheets se cierran arrastrando la barra hacia abajo. Va con
+ * `PanResponder` (RN core) y no con `react-native-gesture-handler`: la
+ * app no monta `GestureHandlerRootView`, así que RNGH no tendría dónde
+ * engancharse, y `PanResponder` además funciona igual en web.
+ */
+
+/** Fracción del alto del sheet que hay que arrastrar para que se cierre. */
+const DISMISS_RATIO = 0.25;
+/** Velocidad de flick que cierra aunque no se haya llegado al umbral. */
+const DISMISS_VELOCITY = 0.7;
+/** Recorrido de referencia para desvanecer el fondo mientras se arrastra. */
+const BACKDROP_FADE_DISTANCE = 320;
+
+// `useNativeDriver` no está soportado por react-native-web.
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+
+type SheetCtx = {
+    onOpenChange: (v: boolean) => void;
+    dragY: Animated.Value;
+};
+
+const SheetContext = React.createContext<SheetCtx | null>(null);
+
+/**
+ * Handlers de arrastre del bottom sheet, para que el contenido pueda sumar
+ * su propia zona de agarre (típicamente su encabezado) además de la barra.
+ * Devuelve `{}` fuera de un bottom sheet, así el spread es siempre seguro.
+ */
+const SheetDragContext = React.createContext<any>(null);
+export const useSheetDragHandlers = () => React.useContext(SheetDragContext) ?? {};
+
 const Sheet = ({ open, onOpenChange, children, animationType = 'slide' }: any) => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    const dragY = React.useRef(new Animated.Value(0)).current;
 
     React.useEffect(() => {
         if (!open || Platform.OS !== 'web') return;
@@ -16,7 +49,22 @@ const Sheet = ({ open, onOpenChange, children, animationType = 'slide' }: any) =
         active?.blur?.();
     }, [open]);
 
+    // Cada apertura arranca sin desplazamiento: si el sheet anterior se
+    // cerró arrastrando, `dragY` quedó en el alto del sheet.
+    React.useEffect(() => {
+        if (open) dragY.setValue(0);
+    }, [open, dragY]);
+
+    const ctx = React.useMemo(() => ({ onOpenChange, dragY }), [onOpenChange, dragY]);
+
     if (!open) return null;
+
+    const backdropOpacity = dragY.interpolate({
+        inputRange: [0, BACKDROP_FADE_DISTANCE],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+    });
+
     return (
         <Modal
             transparent
@@ -25,10 +73,19 @@ const Sheet = ({ open, onOpenChange, children, animationType = 'slide' }: any) =
             animationType={animationType}
             accessibilityViewIsModal
         >
-            <View style={styles.overlay}>
-                <TouchableOpacity style={styles.backdrop} onPress={() => onOpenChange(false)} />
-                {children}
-            </View>
+            <SheetContext.Provider value={ctx}>
+                <View style={styles.overlay}>
+                    <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+                        <TouchableOpacity
+                            style={StyleSheet.absoluteFill}
+                            onPress={() => onOpenChange(false)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cerrar"
+                        />
+                    </Animated.View>
+                    {children}
+                </View>
+            </SheetContext.Provider>
         </Modal>
     )
 }
@@ -39,33 +96,125 @@ const SheetContent = ({ children, side = "right", className, style }: any) => {
     const c = colors(isDark);
     const gs = glassSheet(isDark);
     const s = getStyles(isDark, c, gs);
+    const ctx = React.useContext(SheetContext);
+
+    const isBottom = side === "bottom";
+    const dragY = ctx?.dragY;
+    // El alto real se mide al montar; hasta entonces, una estimación
+    // razonable para no dividir por cero en el umbral de cierre.
+    const heightRef = React.useRef(Dimensions.get('window').height * 0.85);
+
+    const onLayout = (e: LayoutChangeEvent) => {
+        const h = e.nativeEvent.layout.height;
+        if (h > 0) heightRef.current = h;
+    };
+
+    const panResponder = React.useMemo(() => {
+        if (!isBottom || !dragY || !ctx) return null;
+        return PanResponder.create({
+            // `false` a propósito: un toque simple sigue llegando a los hijos
+            // (`SheetDragArea` puede envolver contenido con botones), y el
+            // gesto se reclama recién cuando hay arrastre real.
+            onStartShouldSetPanResponder: () => false,
+            // Sólo hacia abajo: hacia arriba el sheet no se estira.
+            onMoveShouldSetPanResponder: (_, g) => g.dy > 2 && Math.abs(g.dy) > Math.abs(g.dx),
+            // Que un scroll padre no nos robe el gesto una vez empezado.
+            onPanResponderTerminationRequest: () => false,
+            onPanResponderMove: (_, g) => {
+                dragY.setValue(Math.max(0, g.dy));
+            },
+            onPanResponderRelease: (_, g) => {
+                const height = heightRef.current;
+                const shouldClose = g.dy > height * DISMISS_RATIO || g.vy > DISMISS_VELOCITY;
+                if (shouldClose) {
+                    Animated.timing(dragY, {
+                        toValue: height,
+                        duration: 160,
+                        useNativeDriver: USE_NATIVE_DRIVER,
+                    }).start(() => {
+                        ctx.onOpenChange(false);
+                        // Dejarlo en cero acá y no sólo al abrir: si no, la
+                        // próxima apertura pinta un frame con el sheet
+                        // todavía desplazado fuera de pantalla.
+                        dragY.setValue(0);
+                    });
+                } else {
+                    Animated.spring(dragY, {
+                        toValue: 0,
+                        bounciness: 4,
+                        speed: 16,
+                        useNativeDriver: USE_NATIVE_DRIVER,
+                    }).start();
+                }
+            },
+            onPanResponderTerminate: () => {
+                Animated.spring(dragY, {
+                    toValue: 0,
+                    bounciness: 4,
+                    speed: 16,
+                    useNativeDriver: USE_NATIVE_DRIVER,
+                }).start();
+            },
+        });
+    }, [isBottom, dragY, ctx]);
 
     const contentStyle = [
         s.content,
         side === "left" && s.left,
         side === "right" && s.right,
         side === "top" && s.top,
-        side === "bottom" && s.bottom,
-        style
+        isBottom && s.bottom,
+        style,
+        isBottom && dragY ? { transform: [{ translateY: dragY }] } : null,
     ];
 
+    const Container: any = isBottom && dragY ? Animated.View : View;
+
     return (
-        <View style={contentStyle}>
-            {/* Handle bar for bottom sheets */}
-            {side === "bottom" && (
-                <View style={s.handleWrap}>
-                    <View style={[s.handle, { backgroundColor: gs.handleColor }]} />
-                </View>
-            )}
-            {/* Specular rim */}
-            {(side === "bottom" || side === "top") && (
-                <LinearGradient
-                    colors={[gs.specular, 'transparent']}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    style={s.specular}
-                />
-            )}
+        <SheetDragContext.Provider value={panResponder?.panHandlers ?? null}>
+            <Container style={contentStyle} onLayout={isBottom ? onLayout : undefined}>
+                {/* Handle bar for bottom sheets — es la zona de arrastre.
+                    El `zIndex` no es decorativo: varios sheets montan un
+                    `BlurView` con `absoluteFill` como primer hijo, que al ir
+                    después en el orden de pintado tapaba la barra y se comía
+                    el gesto. */}
+                {isBottom && (
+                    <View
+                        style={s.handleWrap}
+                        {...(panResponder ? panResponder.panHandlers : {})}
+                        accessibilityRole="adjustable"
+                        accessibilityLabel="Deslizá hacia abajo para cerrar"
+                    >
+                        {/* Área táctil generosa: la barra visible mide 4px de
+                            alto, agarrarla sin este colchón es una lotería. */}
+                        <View style={[s.handle, { backgroundColor: gs.handleColor }]} />
+                    </View>
+                )}
+                {/* Specular rim */}
+                {(isBottom || side === "top") && (
+                    <LinearGradient
+                        colors={[gs.specular, 'transparent']}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                        style={s.specular}
+                    />
+                )}
+                {children}
+            </Container>
+        </SheetDragContext.Provider>
+    )
+}
+
+/**
+ * Zona extra de arrastre dentro de un bottom sheet. Se usa para que el
+ * encabezado del contenido también cierre el sheet al deslizarlo, no sólo
+ * la barra. Tiene que renderizarse DENTRO de `SheetContent` para ver el
+ * contexto; fuera de un bottom sheet es un `View` común.
+ */
+const SheetDragArea = ({ children, style }: any) => {
+    const dragHandlers = useSheetDragHandlers();
+    return (
+        <View style={style} {...dragHandlers}>
             {children}
         </View>
     )
@@ -174,8 +323,12 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>, gs: ReturnType
         },
         handleWrap: {
             alignItems: 'center',
+            justifyContent: 'center',
+            // Zona de agarre alta aunque la barra visible sea fina.
             paddingTop: 10,
-            paddingBottom: 4,
+            paddingBottom: 10,
+            minHeight: 34,
+            zIndex: 2,
         },
         handle: {
             width: 40,
@@ -232,6 +385,7 @@ const styles = StyleSheet.create({
 export {
     Sheet,
     SheetContent,
+    SheetDragArea,
     SheetHeader,
     SheetFooter,
     SheetTitle,

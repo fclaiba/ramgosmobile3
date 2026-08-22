@@ -1377,6 +1377,12 @@ export default defineSchema({
     socialRetweets: defineTable({
         userId: v.string(),
         postId: v.string(),
+        // Post espejo que representa este repost en los feeds: un
+        // `socialPosts` con `quotedPostId` = postId y `content` vacío.
+        // Guardarlo acá permite borrarlo al des-repostear con un `get`
+        // directo, en vez de escanear los posts del usuario (no hay índice
+        // por `quotedPostId`). Opcional: aditivo, sin backfill.
+        repostPostId: v.optional(v.id('socialPosts')),
         createdAt: v.string(),
     })
         .index('by_user_post', ['userId', 'postId'])
