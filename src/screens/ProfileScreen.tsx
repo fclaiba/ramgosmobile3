@@ -22,6 +22,7 @@ import { MobileNav } from '../components/MobileNav';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
 import { formatReferralAlias, LIMITS } from '../utils/inputLimits';
+import { uploadLocalImageToConvex } from '../utils/uploadToConvexStorage';
 
 
 interface UserProfile {
@@ -89,6 +90,7 @@ function ProfileScreen({ navigation }: any) {
 
     const updateProfileMutation = useMutation(api.users.updateProfile);
     const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+    const registerUpload = useMutation(api.files.registerUpload);
 
     const rawStats = useQuery(api.users.getUserActivityStats, user?.id ? { sessionToken: sessionToken || '' } : "skip");
     const stats = rawStats || {
@@ -110,36 +112,29 @@ function ProfileScreen({ navigation }: any) {
         }
         
         let finalAvatarUrl = editedProfile.avatarUrl;
-        if (finalAvatarUrl && finalAvatarUrl.startsWith('file:/')) {
+        if (finalAvatarUrl) {
             try {
-                const uploadUrl = await generateUploadUrl({ sessionToken: sessionToken || '', actorId: (user as any)?.id });
-                let blob;
-                try {
-                    const fetchResponse = await fetch(finalAvatarUrl);
-                    blob = await fetchResponse.blob();
-                } catch (err) {
-                    blob = await new Promise<Blob>((resolve, reject) => {
-                        const xhr = new XMLHttpRequest();
-                        xhr.onload = function() { resolve(xhr.response); };
-                        xhr.onerror = function() { reject(new TypeError('Network request failed')); };
-                        xhr.responseType = 'blob';
-                        xhr.open('GET', finalAvatarUrl, true);
-                        xhr.send(null);
-                    });
-                }
-                const response = await fetch(uploadUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'image/jpeg' },
-                    body: blob,
+                // Usa el helper compartido en vez de subir a mano. El código
+                // anterior sólo subía si la URI empezaba con `file:/`, y en web
+                // el image picker devuelve `blob:` o `data:` — así que la web
+                // guardaba la URI local literal en `users.avatar` y la foto
+                // moría al recargar. (De ahí `convex/cleanAvatars.ts`, un
+                // barrendero de avatares `blob:` que ya no debería hacer falta.)
+                // Además registra el upload, cosa que el camino manual no hacía.
+                finalAvatarUrl = await uploadLocalImageToConvex({
+                    uri: finalAvatarUrl,
+                    generateUploadUrl,
+                    registerUpload,
+                    purpose: 'avatar',
+                    sessionToken: sessionToken || undefined,
+                    actorId: (user as any)?.id,
                 });
-                const { storageId } = await response.json();
-                finalAvatarUrl = `convex-storage:${storageId}`;
             } catch (error) {
                 show(t('profile.imageUploadError', { defaultValue: 'Error al subir la imagen' }), 'error');
                 return;
             }
         }
-        
+
         try {
             await updateProfileMutation({
                 id: (user as any)?.id,
@@ -152,7 +147,11 @@ function ProfileScreen({ navigation }: any) {
                 }
             });
             await refreshActiveSession();
-            setProfile({ ...editedProfile, avatarUrl: finalAvatarUrl });
+            // No pisamos `avatarUrl` con la referencia cruda `convex-storage:<id>`:
+            // no es una URL cargable, así que el avatar se vería roto hasta que la
+            // query reactiva de AuthContext propagara la URL firmada. Conservamos
+            // la que ya se está mostrando y dejamos que la query la reemplace.
+            setProfile((prev) => ({ ...editedProfile, avatarUrl: prev.avatarUrl }));
             setIsEditing(false);
             show(t('profile.updated', { defaultValue: 'Perfil actualizado correctamente' }), 'success');
         } catch (error: any) {
@@ -833,7 +832,9 @@ const getStyles = (isDark: boolean) => {
 
     profileHeader: { alignItems: 'center', width: '100%' },
     avatarWrapper: { marginBottom: 12, position: 'relative' },
-    avatar: { width: 140, height: 140, borderRadius: Radius.full, borderWidth: 4, borderColor: 'rgba(255,255,255,0.35)' },
+    // Foto de perfil grande y con marco marcado: es el elemento que identifica
+    // la cuenta y hasta ahora se renderizaba a 40px por el bug de `Avatar`.
+    avatar: { width: 164, height: 164, borderRadius: Radius.full, borderWidth: 5, borderColor: 'rgba(255,255,255,0.45)' },
     cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.72)', padding: 8, borderRadius: Radius.xl },
     cameraBtnGlass: {
         position: 'absolute', bottom: -4, right: -4, borderRadius: Radius.full, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.5)',

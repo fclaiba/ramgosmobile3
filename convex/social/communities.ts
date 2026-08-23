@@ -28,10 +28,29 @@ import { api } from '../_generated/api';
 import { requireActor } from '../authHelpers';
 import { assertSocialActor, assertSocialRate, paginateQuery, socialViewer } from './_helpers';
 import { awardSocialAction } from './gamification';
+
 import { recordActivity } from './activity';
 import { createMediaResolver } from '../mediaUrl';
 import { loadViewerModerationSets } from '../social';
 import { scoreLoop, applyAuthorDiversityCap } from './scoring';
+
+/**
+ * Adjunta a cada fila de membresía su perfil social con el avatar resuelto.
+ * Sin esto se devolvía el documento crudo con `convex-storage:<id>`, que el
+ * cliente no puede cargar: la lista de miembros salía sin fotos.
+ */
+async function withResolvedUsers(ctx: any, rows: any[], users: any[]) {
+    const resolve = createMediaResolver(ctx);
+    return await Promise.all(
+        rows.map(async (row: any, i: number) => {
+            const user = users[i];
+            return {
+                ...row,
+                user: user ? { ...user, avatar: await resolve(user.avatar) } : null,
+            };
+        }),
+    );
+}
 
 const NOW = () => new Date().toISOString();
 
@@ -277,7 +296,7 @@ export const listPendingRequests = query({
                 ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', m.userId)).first(),
             ),
         );
-        return pending.map((m: any, i: number) => ({ ...m, user: users[i] ?? null }));
+        return await withResolvedUsers(ctx, pending, users);
     },
 });
 
@@ -296,7 +315,7 @@ export const listMembers = query({
                 ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', m.userId)).first(),
             ),
         );
-        return active.map((m: any, i: number) => ({ ...m, user: users[i] ?? null }));
+        return await withResolvedUsers(ctx, active, users);
     },
 });
 

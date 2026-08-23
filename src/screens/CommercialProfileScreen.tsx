@@ -197,7 +197,11 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
     const isBusiness = profile?.role === 'business';
     const isInfluencer = profile?.role === 'influencer';
-    const isVerified = isBusiness || profile?.kycStatus === 'approved';
+    // `isVerified` lo deriva el backend; `kycStatus` es el fallback para el
+    // caso en que el perfil venga del camino autenticado (uno mismo).
+    const isVerified = isBusiness
+        || (profile as any)?.isVerified === true
+        || (profile as any)?.kycStatus === 'approved';
     const isOwnProfile = Boolean(currentUserId && sellerId && String(currentUserId) === String(sellerId));
 
     /** Puntaje de vendedor: lo tiene cualquiera que haya vendido y recibido

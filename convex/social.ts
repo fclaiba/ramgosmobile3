@@ -183,7 +183,11 @@ export const lookupUserSocial = query({
                 .withIndex('by_username', (q) => q.eq('username', args.username!.toLowerCase()))
                 .first();
         }
-        return profile ?? null;
+        if (!profile) return null;
+
+        // Devolver el documento crudo dejaba el avatar del perfil social sin
+        // resolver (`convex-storage:<id>`), o sea roto en toda la pantalla.
+        return { ...profile, avatar: await resolveMediaUrl(ctx, profile.avatar) };
     },
 });
 
@@ -923,6 +927,31 @@ export const attachRepostAttribution = async (
             },
         };
     });
+};
+
+/**
+ * Mapa userId → perfil social con el avatar YA resuelto.
+ *
+ * Los avatares se guardan como `convex-storage:<id>`, una referencia interna
+ * que el cliente no puede cargar. Varias queries devolvían el documento de
+ * `socialUsers` tal cual y dejaban la foto rota en comentarios, seguidores y
+ * actividad. `createMediaResolver` memoiza por request, así que resolver el
+ * mismo avatar en veinte comentarios cuesta una sola lectura.
+ */
+export const buildAuthorMap = async (
+    ctx: any,
+    ids: string[],
+    docs: any[],
+): Promise<Map<string, any>> => {
+    const resolve = createMediaResolver(ctx);
+    const map = new Map<string, any>();
+    await Promise.all(
+        docs.map(async (doc, i) => {
+            if (!doc) return;
+            map.set(ids[i], { ...doc, avatar: await resolve(doc.avatar) });
+        }),
+    );
+    return map;
 };
 
 // Exportado para que `social/hashtags.ts` (`getPostsByTag`) hidrate posts sin
@@ -2048,8 +2077,10 @@ export const getCommentsForPost = query({
                 ),
             ),
         ]);
-        const map = new Map<string, any>();
-        authors.forEach((a, i) => { if (a) map.set(authorIds[i], a); });
+        // El avatar se guarda como `convex-storage:<id>`, que no es una URL
+        // cargable: hay que resolverlo antes de mandarlo. Devolver el documento
+        // crudo dejaba los avatares de los comentarios rotos.
+        const map = await buildAuthorMap(ctx, authorIds, authors);
 
         return {
             items: visible.map((c: any, i: number) => ({
@@ -2098,8 +2129,7 @@ export const getCommentReplies = query({
                 ),
             ),
         ]);
-        const map = new Map<string, any>();
-        authors.forEach((a, i) => { if (a) map.set(authorIds[i], a); });
+        const map = await buildAuthorMap(ctx, authorIds, authors);
         return visible.map((c: any, i: number) => ({
             ...c,
             author: map.get(c.authorUserId),
@@ -2398,15 +2428,21 @@ const followList = async (
         ),
     );
 
+    // `p.avatar` es `convex-storage:<id>`: sin resolver, la lista de seguidores
+    // mostraba iniciales en vez de fotos.
+    const resolve = createMediaResolver(ctx);
+
     return {
-        items: profiles.map((p: any, i: number) => ({
-            userId: otherIds[i],
-            username: p?.username ?? 'usuario',
-            displayName: p?.displayName ?? 'Usuario',
-            avatar: p?.avatar,
-            verified: p?.verified ?? false,
-            isInfluencer: p?.isInfluencer ?? false,
-        })),
+        items: await Promise.all(
+            profiles.map(async (p: any, i: number) => ({
+                userId: otherIds[i],
+                username: p?.username ?? 'usuario',
+                displayName: p?.displayName ?? 'Usuario',
+                avatar: await resolve(p?.avatar),
+                verified: p?.verified ?? false,
+                isInfluencer: p?.isInfluencer ?? false,
+            })),
+        ),
         nextCursor: page.nextCursor,
     };
 };
@@ -2644,11 +2680,14 @@ export const getStoriesForFollowing = query({
                         username: mainUser.username || mainUser.email?.split('@')[0] || 'usuario',
                         avatar: mainUser.avatar,
                     };
-                    if (author.avatar && author.avatar.startsWith('convex-storage:')) {
-                        const resolved = await ctx.storage.getUrl(author.avatar.replace('convex-storage:', ''));
-                        if (resolved) author.avatar = resolved;
-                    }
                 }
+            }
+            // El avatar se resuelve para las DOS ramas. Antes sólo lo hacía el
+            // fallback a `users`, así que el camino normal (que es el que corre
+            // casi siempre) devolvía `convex-storage:<id>` y la barra de
+            // historias mostraba círculos vacíos.
+            if (author?.avatar) {
+                author = { ...author, avatar: await resolveMediaUrl(ctx, author.avatar) };
             }
             const resolvedActive = await Promise.all(active.map(async (s: any) => {
                 const viewedByMe = viewedStoryIds.has(String(s._id));

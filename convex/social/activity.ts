@@ -10,6 +10,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from '../_generated/server';
 import { assertSocialActor, paginateQuery, socialViewer } from './_helpers';
+import { createMediaResolver } from '../mediaUrl';
 
 const NOW = () => new Date().toISOString();
 
@@ -130,7 +131,18 @@ export const listActivity = query({
                 ctx.db.query('socialUsers').withIndex('by_user', (q: any) => q.eq('userId', id)).first(),
             ),
         );
-        const actorMap = new Map(actorIds.map((id, i) => [id, actors[i]]));
+        // El avatar viene como `convex-storage:<id>` y hay que resolverlo antes
+        // de mandarlo: devolver el documento crudo dejaba la pantalla de
+        // actividad sin fotos.
+        const resolve = createMediaResolver(ctx);
+        const actorMap = new Map(
+            await Promise.all(
+                actorIds.map(async (id, i) => {
+                    const doc = actors[i];
+                    return [id, doc ? { ...doc, avatar: await resolve(doc.avatar) } : null] as const;
+                }),
+            ),
+        );
 
         return {
             items: items.map((i: any) => ({ ...i, actor: i.actorUserId ? actorMap.get(i.actorUserId) ?? null : null })),

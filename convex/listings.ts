@@ -3,6 +3,7 @@ import { internalQuery, mutation, query } from "./_generated/server";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 import { assertBonoEconomics } from "./bonoEconomics";
 import { eligibleBusinessIdsFor } from "./promotionEligibility";
+import { resolveMediaUrl } from "./mediaUrl";
 
 /** Influencer may create a bono only for a business with active campaign or whitelist. */
 async function assertInfluencerCanIssueBonoForBusiness(
@@ -81,7 +82,7 @@ export const getFeed = query({
                             id: String(seller._id),
                             name: seller.name || seller.nickname || 'Vendedor',
                             username: seller.username || seller.nickname,
-                            avatar: seller.avatar,
+                            avatar: await resolveMediaUrl(ctx, seller.avatar),
                             type: seller.role || 'individual',
                             sellerRating: seller.sellerRating || 0,
                         }
@@ -149,7 +150,7 @@ export const getListing = query({
                     id: String(seller._id),
                     name: seller.name || seller.nickname || 'Vendedor',
                     username: seller.username || seller.nickname,
-                    avatar: seller.avatar,
+                    avatar: await resolveMediaUrl(ctx, seller.avatar),
                     type: seller.role || 'individual',
                     sellerRating: seller.sellerRating || 0,
                 }
@@ -189,7 +190,7 @@ export const getPublicListingsBySeller = query({
                         id: sellerId,
                         name: sellerName,
                         username: sellerDoc?.username || sellerDoc?.nickname,
-                        avatar: sellerDoc?.avatar,
+                        avatar: await resolveMediaUrl(ctx, sellerDoc?.avatar),
                         type: sellerDoc?.role || "individual",
                     },
                 };
@@ -723,7 +724,7 @@ export const getListingBySlug = query({
                     id: String(seller._id),
                     name: seller.name || seller.nickname || 'Vendedor',
                     username: seller.username || seller.nickname,
-                    avatar: seller.avatar,
+                    avatar: await resolveMediaUrl(ctx, seller.avatar),
                     type: seller.role || 'individual',
                     sellerRating: seller.sellerRating || 0,
                 }

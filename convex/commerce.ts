@@ -36,6 +36,7 @@ import {
 import { internal } from './_generated/api';
 import { requireActor, authError } from './authHelpers';
 import { applyAddToCart } from './cart';
+import { resolveMediaUrl } from './mediaUrl';
 
 const NOW = () => new Date().toISOString();
 
@@ -114,7 +115,7 @@ export const getPostCommerceOffer = query({
                       userId: post.authorUserId,
                       username: creatorProfile.username,
                       displayName: creatorProfile.displayName,
-                      avatar: creatorProfile.avatar,
+                      avatar: await resolveMediaUrl(ctx, creatorProfile.avatar),
                       verified: creatorProfile.verified === true,
                   }
                 : null,

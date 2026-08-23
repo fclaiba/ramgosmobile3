@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireActor, getActorOrNull } from "./authHelpers";
+import { resolveMediaUrl } from "./mediaUrl";
 import {
     displayUsernameForUser,
     findUserByHandleOrCode,
@@ -117,7 +118,7 @@ export const getWhitelist = query({
                     influencerId: item.influencerId,
                     name: userObj?.name || "Usuario",
                     username: username || "",
-                    avatar: userObj?.avatar || social?.avatar || "",
+                    avatar: (await resolveMediaUrl(ctx, userObj?.avatar || social?.avatar)) || "",
                     addedAt: item.createdAt,
                 };
             }),

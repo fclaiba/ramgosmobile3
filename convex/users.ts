@@ -629,21 +629,60 @@ export const changePassword = mutation({
     },
 });
 
+/**
+ * Subconjunto público de un usuario: lo que se puede mostrar de un tercero.
+ *
+ * `getUser` sólo aplicaba el chequeo de identidad SI venía `sessionToken`, así
+ * que llamarla sin token con el id de cualquiera devolvía su `email`,
+ * `phoneNumber`, `balance` y `kycStatus`. El perfil comercial la llama
+ * justamente así. Ahora esa rama pasa por acá.
+ */
+const sanitizePublicUser = async (ctx: any, user: any) => {
+    // Misma FORMA que `sanitizeUser` con los campos privados vacíos, en vez de
+    // un objeto más chico: así el tipo de retorno de `getUser` es uno solo y
+    // los consumidores que leen su propio perfil siguen compilando.
+    const full = await sanitizeUser(ctx, user);
+    return {
+        ...full,
+        email: undefined,
+        uid: undefined,
+        phoneNumber: undefined,
+        emailVerified: undefined,
+        balance: undefined,
+        tier: undefined,
+        subscriptionStatus: undefined,
+        subscriptionTier: undefined,
+        termsAcceptedVersion: undefined,
+        referralAlias: undefined,
+        referredByUserId: undefined,
+        isBanned: undefined,
+        // Booleano derivado en vez del `kycStatus` crudo: para pintar la
+        // insignia alcanza con saber que está verificado; que un tercero lea si
+        // tu KYC está pendiente o rechazado no le sirve a nadie.
+        kycStatus: undefined,
+        isVerified: full.kycStatus === 'approved',
+    };
+};
+
 export const getUser = query({
     args: { id: v.id("users"), sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         try {
+            const user = await ctx.db.get(args.id);
+            if (!user) return null;
+
             if (args.sessionToken) {
                  // `allowBanned`: es la query con la que el cliente lee su
                  // propio perfil. Si devolviera null para un baneado,
                  // `BannedUserScreen` no tendría qué mostrar.
                  const actor = await getActorOrNull(ctx, args.sessionToken, { allowBanned: true });
-                 if (!actor || actor.idString !== args.id) {
-                     return null;
+                 if (actor && actor.idString === args.id) {
+                     return await sanitizeUser(ctx, user);
                  }
             }
-            const user = await ctx.db.get(args.id);
-            return user ? await sanitizeUser(ctx, user) : null;
+
+            // Sin sesión, o mirando a otro: sólo datos públicos.
+            return await sanitizePublicUser(ctx, user);
         } catch (e) {
             return null;
         }
