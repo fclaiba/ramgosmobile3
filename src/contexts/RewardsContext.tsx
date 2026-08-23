@@ -207,6 +207,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         spendGameCoins: spendCoinsRemote,
         unlockHat,
         equipHat,
+        petConfig,
         spinLuckyWheel: spinWheelRemote,
         wheelClaimDate,
     } = usePoints();
@@ -683,10 +684,10 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         totalPoints: referralState.totalPointsAwarded.registration + referralState.totalPointsAwarded.purchase,
     }), [referralState]);
 
-    const petConfig = useMemo(
-        () => ({ activeHat: 'none', unlockedHats: ['none'] as string[] }),
-        []
-    );
+    // Viene de PointsContext (que lo lee de Convex). Antes estaba hardcodeado a
+    // `{activeHat:'none', unlockedHats:['none']}`, así que cualquier consumidor
+    // de `useRewards().petConfig` veía siempre "nada desbloqueado" por más
+    // sombreros que hubiera comprado.
 
     const unlockAccessory = useCallback(
         async (_type: string, id: string, cost: number) => unlockHat(id, cost),

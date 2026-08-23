@@ -11,6 +11,13 @@ import {
     weekKey,
 } from './economy/pointsState';
 import { awardPoints, buildEventKey, countDailyAwards } from './economy/pointsEngine';
+import {
+    decoratePetState,
+    EGG_CARE_BOOST,
+    EGG_DAILY_LOGIN_BOOST,
+    isEggStage,
+    settlePetState,
+} from './economy/petLifecycle';
 
 
 
@@ -62,7 +69,13 @@ export const getEconomyState = query({
             return null;
         }
 
-        return hydrateRewardsState(state.rewardsState);
+        // Las queries no escriben, así que la liquidación se calcula en memoria:
+        // el usuario SIEMPRE ve el estado correcto para el reloj de ahora, y la
+        // versión persistida se pone al día en la próxima mutation. Sin esto la
+        // mascota se vería congelada hasta que el usuario tocara algo.
+        const now = Date.now();
+        const settled = settlePetState(hydrateRewardsState(state.rewardsState), now);
+        return decoratePetState(settled.state, now);
     },
 });
 
@@ -110,12 +123,35 @@ export const updatePetState = mutation({
     },
 });
 
-async function internalUpdatePetState(ctx: any, args: { userId: string; updates: any }) {
-    const state = await ensureEconomyState(ctx, args);
-    const currentState = state!.rewardsState || DEFAULT_PET_STATE;
-    const newState = { ...currentState, petStats: { ...currentState.petStats, ...args.updates } };
+/**
+ * Carga el estado ya puesto al día contra el reloj.
+ *
+ * Toda mutation que toque la mascota tiene que entrar por acá: el desgaste y la
+ * incubación se derivan de timestamps (ver `economy/petLifecycle.ts`), así que
+ * "poner al día" es justamente lo que hace que el tiempo exista para la
+ * mascota. Es idempotente dentro de la misma transacción: la segunda llamada no
+ * encuentra horas nuevas que liquidar.
+ */
+async function settleAndLoad(ctx: any, userId: string) {
+    const doc = await ensureEconomyState(ctx, { userId });
+    const hydrated = hydrateRewardsState(doc!.rewardsState);
+    const { state, changed, hatched } = settlePetState(hydrated, Date.now());
 
-    await ctx.db.patch(state!._id, {
+    if (changed) {
+        await ctx.db.patch(doc!._id, {
+            rewardsState: state,
+            updatedAt: new Date().toISOString(),
+        });
+    }
+
+    return { doc: doc!, state, hatched };
+}
+
+async function internalUpdatePetState(ctx: any, args: { userId: string; updates: any }) {
+    const { doc, state } = await settleAndLoad(ctx, args.userId);
+    const newState = { ...state, petStats: { ...state.petStats, ...args.updates } };
+
+    await ctx.db.patch(doc._id, {
         rewardsState: newState,
         updatedAt: new Date().toISOString(),
     });
@@ -137,8 +173,7 @@ export const spendCoins = mutation({
 });
 
 async function internalSpendCoins(ctx: any, args: { userId: string; amount: number; reason: string }) {
-    const state = await ensureEconomyState(ctx, args);
-    const currentState = state!.rewardsState || DEFAULT_PET_STATE;
+    const { doc: state, state: currentState } = await settleAndLoad(ctx, args.userId);
 
     if (currentState.gameCoins < args.amount) {
         return { success: false, message: 'No tienes suficientes monedas' };
@@ -182,24 +217,15 @@ export const addCoins = mutation({
 });
 
 async function internalAddCoins(ctx: any, args: { userId: string; amount: number; reason: string }) {
-    const state = await ensureEconomyState(ctx, args);
-    const currentState = state!.rewardsState || DEFAULT_PET_STATE;
-    const petStats = { ...(currentState.petStats || DEFAULT_PET_STATE.petStats) };
-    const newCoins = currentState.gameCoins + args.amount;
+    const { doc: state, state: currentState } = await settleAndLoad(ctx, args.userId);
 
-    // "el huevo tiene que erosionar a la primera que juntas 100 monedas jugando"
-    if (newCoins >= 100 && petStats.level < 3) {
-        petStats.level = 3;
-        petStats.exp = 0;
-        petStats.happiness = 100;
-        petStats.hunger = 100;
-        petStats.energy = 100;
-    }
-
+    // La eclosión ya no depende de las monedas. Antes acá había un atajo —
+    // "≥100 monedas ⇒ el huevo nace"— que, como el estado por defecto arranca
+    // justo con 100 monedas, rompía el huevo con la primera moneda ganada.
+    // Ahora incuba por tiempo real en `settlePetState`.
     const newState = {
         ...currentState,
-        gameCoins: newCoins,
-        petStats: petStats,
+        gameCoins: currentState.gameCoins + args.amount,
     };
 
     await ctx.db.patch(state!._id, {
@@ -273,11 +299,15 @@ export const cleanVirtualPet = mutation({
         const res = await internalSpendCoins(ctx, { userId: args.userId, amount: cost, reason: 'Baniar mascota' });
         if (!res.success) return { status: 'error', message: res.message };
 
+        // El baño ahora sube `hygiene`, el stat que decae solo y que, cuando
+        // está bajo, acelera la caída de felicidad. Antes sólo sumaba felicidad
+        // directo, así que bañarla era redundante con jugar.
         const newState = await internalUpdatePetState(ctx, {
             userId: args.userId,
             updates: {
-                happiness: Math.min(100, res.state.petStats.happiness + 15),
-                exp: (res.state.petStats.exp || 0) + 20,
+                hygiene: Math.min(100, (res.state!.petStats.hygiene ?? 80) + 40),
+                happiness: Math.min(100, res.state!.petStats.happiness + 5),
+                exp: (res.state!.petStats.exp || 0) + 20,
             },
         });
         return { status: 'awarded', message: 'Que limpio!', state: newState };
@@ -298,7 +328,30 @@ export const playVirtualPet = mutation({
         });
         if (!spent.success) return { status: 'error', message: spent.message };
 
-        const energy = spent.state.petStats.energy;
+        // Sobre el huevo esta acción es "dar calor": acelera la incubación en
+        // vez de jugar. Un huevo no tiene energía que gastar ni felicidad que
+        // subir, pero sí es el único cuidado que admite, y es lo que hace que
+        // estar encima del huevo se note frente a sólo esperar.
+        if (isEggStage(spent.state)) {
+            const { doc, state } = await settleAndLoad(ctx, args.userId);
+            const boosted = {
+                ...state,
+                eggCareBoost: Math.min(100, (state.eggCareBoost || 0) + EGG_CARE_BOOST),
+            };
+            // Vuelve a liquidar: el boost puede ser justo lo que rompe el huevo.
+            const settled = settlePetState(boosted, Date.now());
+            await ctx.db.patch(doc._id, {
+                rewardsState: settled.state,
+                updatedAt: new Date().toISOString(),
+            });
+            return {
+                status: 'awarded',
+                message: settled.hatched ? '¡El huevo se rompió! 🐣' : 'Le diste calor al huevo 🔥',
+                state: settled.state,
+            };
+        }
+
+        const energy = spent.state!.petStats.energy;
         if (energy < 15) {
             // refund coins if too tired
             await internalAddCoins(ctx, { userId: args.userId, amount: cost, reason: 'Refund juego' });
@@ -308,9 +361,9 @@ export const playVirtualPet = mutation({
         const newState = await internalUpdatePetState(ctx, {
             userId: args.userId,
             updates: {
-                happiness: Math.min(100, spent.state.petStats.happiness + 20),
-                energy: Math.max(0, spent.state.petStats.energy - 15),
-                exp: (spent.state.petStats.exp || 0) + 25,
+                happiness: Math.min(100, spent.state!.petStats.happiness + 20),
+                energy: Math.max(0, spent.state!.petStats.energy - 15),
+                exp: (spent.state!.petStats.exp || 0) + 25,
             },
         });
         return { status: 'awarded', message: 'Diversion total!', state: newState };
@@ -844,8 +897,22 @@ export const claimDailyReward = mutation({
         // que el patch de la racha tiene que ir sobre el estado ya acreditado.
         const afterAward = await ensureEconomyState(ctx, { userId: args.userId });
         const settledState = hydrateRewardsState(afterAward!.rewardsState);
+
+        // Entrar todos los días acelera la incubación: es la promesa que el
+        // modal de guía venía haciendo desde siempre sin que el código la
+        // cumpliera (la racha no se leía en ninguna parte).
+        const withStreak = {
+            ...settledState,
+            loginStreak,
+            dailyClaimDate: todayKey,
+            ...(isEggStage(settledState)
+                ? { eggCareBoost: Math.min(100, (settledState.eggCareBoost || 0) + EGG_DAILY_LOGIN_BOOST) }
+                : {}),
+        };
+        const settled = settlePetState(withStreak, Date.now());
+
         await ctx.db.patch(afterAward!._id, {
-            rewardsState: { ...settledState, loginStreak, dailyClaimDate: todayKey },
+            rewardsState: settled.state,
             updatedAt: new Date().toISOString(),
         });
 

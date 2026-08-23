@@ -32,8 +32,17 @@ export const DEFAULT_PET_STATE = {
     loginStreak: 0,
     dailyClaimDate: null as string | null,
     wheelClaimDate: null as string | null,
-    petStats: { happiness: 80, hunger: 60, energy: 70, level: 1, exp: 0 },
+    petStats: { happiness: 80, hunger: 60, energy: 70, hygiene: 80, level: 1, exp: 0 },
     petConfig: { activeHat: 'none', unlockedHats: ['none'] },
+    /**
+     * Reloj de la mascota. Los tres son null al crear el documento a propósito:
+     * la incubación arranca la primera vez que el usuario abre la app, no
+     * cuando se registra, y el desgaste sólo corre después de nacer.
+     * Ver `convex/economy/petLifecycle.ts`.
+     */
+    eggStartedAt: null as string | null,
+    eggCareBoost: 0,
+    lastTickAt: null as string | null,
     challenges: {
         daily_browse: { current: 0, claimed: false, dayKey: '' },
         weekly_purchase: { current: 0, claimed: false, weekKey: '' },
@@ -82,6 +91,12 @@ export function hydrateRewardsState(raw: any) {
         dailyClaimDate: base.dailyClaimDate ?? null,
         wheelClaimDate: base.wheelClaimDate ?? null,
         petStats: { ...DEFAULT_PET_STATE.petStats, ...(base.petStats || {}) },
+        // Campos del reloj de la mascota: los estados guardados antes de que
+        // existieran no los traen, y `hydrateRewardsState` es el único lugar
+        // que puede rellenarlos sin migrar la tabla (rewardsState es v.any()).
+        eggStartedAt: base.eggStartedAt ?? null,
+        eggCareBoost: Number.isFinite(base.eggCareBoost) ? base.eggCareBoost : 0,
+        lastTickAt: base.lastTickAt ?? null,
         petConfig: {
             activeHat: base.petConfig?.activeHat || 'none',
             unlockedHats: Array.isArray(base.petConfig?.unlockedHats)

@@ -37,8 +37,11 @@ const CHALLENGE_META: Omit<DailyChallenge, 'current' | 'claimed'>[] = [
 ];
 
 
-type PetStats = { happiness: number; hunger: number; energy: number; level: number; exp: number };
+type PetStats = { happiness: number; hunger: number; energy: number; hygiene: number; level: number; exp: number };
 type PetConfig = { activeHat: string; unlockedHats: string[] };
+
+/** Qué necesita la mascota ahora — lo decide el servidor, ver petLifecycle.ts. */
+export type PetNeed = 'hungry' | 'dirty' | 'sleepy' | null;
 
 type PointsContextValue = {
     points: number;
@@ -46,6 +49,10 @@ type PointsContextValue = {
     gameCoins: number;
     petStats: PetStats;
     petConfig: PetConfig;
+    /** Progreso de incubación 0..100. 100 = ya nació. */
+    eggProgress: number;
+    isEgg: boolean;
+    primaryNeed: PetNeed;
     transactions: any[];
     lastEarnTransactionId: string | null;
     currentTier: MembershipTier;
@@ -86,7 +93,7 @@ type PointsContextValue = {
     ready: boolean;
 };
 
-const DEFAULT_PET_STATS: PetStats = { happiness: 80, hunger: 60, energy: 70, level: 1, exp: 0 };
+const DEFAULT_PET_STATS: PetStats = { happiness: 80, hunger: 60, energy: 70, hygiene: 80, level: 1, exp: 0 };
 const DEFAULT_PET_CONFIG: PetConfig = { activeHat: 'none', unlockedHats: ['none'] };
 
 const DEFAULT_CONTEXT: PointsContextValue = {
@@ -95,6 +102,9 @@ const DEFAULT_CONTEXT: PointsContextValue = {
     gameCoins: 0,
     petStats: DEFAULT_PET_STATS,
     petConfig: DEFAULT_PET_CONFIG,
+    eggProgress: 0,
+    isEgg: true,
+    primaryNeed: null,
     transactions: [],
     lastEarnTransactionId: null,
     currentTier: MEMBERSHIP_TIERS[0],
@@ -168,6 +178,13 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const wheelClaimDate: string | null = economyState?.wheelClaimDate ?? null;
     const petStats: PetStats = economyState?.petStats ?? DEFAULT_PET_STATS;
     const petConfig: PetConfig = economyState?.petConfig ?? DEFAULT_PET_CONFIG;
+    // Derivados del ciclo de vida: los calcula el servidor contra su reloj, no
+    // el cliente (acá la hora del dispositivo puede estar corrida a propósito).
+    const eggProgress: number = Number.isFinite(economyState?.eggProgress)
+        ? (economyState!.eggProgress as number)
+        : 0;
+    const isEgg: boolean = economyState?.isEgg ?? (petStats.level < 3);
+    const primaryNeed: PetNeed = economyState?.primaryNeed ?? null;
     const challengeState = economyState?.challenges;
 
     // El tier se mide sobre `lifetimePoints` (acumulado histórico, nunca baja), no
@@ -427,6 +444,9 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             gameCoins,
             petStats,
             petConfig,
+            eggProgress,
+            isEgg,
+            primaryNeed,
             transactions,
             lastEarnTransactionId,
             currentTier,
@@ -459,6 +479,9 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             gameCoins,
             petStats,
             petConfig,
+            eggProgress,
+            isEgg,
+            primaryNeed,
             transactions,
             lastEarnTransactionId,
             currentTier,

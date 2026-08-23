@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Modal, Image, ImageBackground, Platform } from 'react-native';
-import { Heart, Utensils, Zap, Sparkles, Moon, Play, Coins, ArrowRight, Trophy, Gamepad2, Info, Check, Shirt, HelpCircle, X } from 'lucide-react-native';
+import { Heart, Utensils, Zap, Sparkles, Moon, Play, Coins, ArrowRight, Trophy, Gamepad2, Info, Check, Shirt, HelpCircle, X, Droplets, Egg } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,11 +34,26 @@ interface PetStats {
     happiness: number;
     hunger: number;
     energy: number;
+    /** Baja sola con el tiempo; si queda baja, acelera la caída de felicidad. */
+    hygiene: number;
     level: number;
     exp: number;
 }
 
-type PetMood = 'happy' | 'normal' | 'sad' | 'sleeping' | 'playing' | 'eating';
+type PetMood = 'happy' | 'normal' | 'sad' | 'sleeping' | 'playing' | 'eating' | 'dirty' | 'hungry';
+
+/** Lo que dice la burbuja de estado. Nombra la necesidad, no un ánimo vago:
+ *  "Con hambre" le dice al usuario qué botón tocar; "Normal" no dice nada. */
+const MOOD_LABEL: Record<PetMood, string> = {
+    happy: 'Muy Feliz',
+    normal: 'Normal',
+    sad: 'Triste',
+    sleeping: 'Con sueño',
+    playing: 'Jugando',
+    eating: 'Comiendo',
+    dirty: 'Sucio',
+    hungry: 'Con hambre',
+};
 type GameType = 'fruit' | 'duck' | 'memory' | 'dino' | 'flappy' | null;
 
 const GAMES = [
@@ -74,6 +89,8 @@ export function MiMascotaView({ navigation }: any) {
         gameCoins,
         petStats,
         petConfig: economyPetConfig,
+        eggProgress,
+        primaryNeed,
         feedPet,
         sleepPet: sleepPetRemote,
         cleanPet: cleanPetRemote,
@@ -93,7 +110,7 @@ export function MiMascotaView({ navigation }: any) {
     const [stats, setStats] = useState<PetStats>(petStats);
     useEffect(() => {
         setStats(petStats);
-    }, [petStats.happiness, petStats.hunger, petStats.energy, petStats.level, petStats.exp]);
+    }, [petStats.happiness, petStats.hunger, petStats.energy, petStats.hygiene, petStats.level, petStats.exp]);
     const petStage = stats.level < 3 ? 'EGG' : stats.level < 8 ? 'BABY' : stats.level < 30 ? 'YOUNG' : 'ADULT';
     const [currentGame, setCurrentGame] = useState<GameType>(null);
     const [petMood, setPetMood] = useState<PetMood>('happy');
@@ -137,18 +154,10 @@ export function MiMascotaView({ navigation }: any) {
         });
     }, []);
 
-    // Decay Loop
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setStats(prev => ({
-                ...prev,
-                happiness: Math.max(0, prev.happiness - 0.042),
-                hunger: Math.max(0, prev.hunger - 0.042),
-                energy: Math.max(0, prev.energy - 0.02),
-            }));
-        }, 30000);
-        return () => clearInterval(interval);
-    }, []);
+    // El desgaste lo deriva el servidor a partir de timestamps
+    // (`convex/economy/petLifecycle.ts`). Acá había un `setInterval` que bajaba
+    // los stats sólo en memoria: se perdía al cerrar la pantalla y lo pisaba el
+    // siguiente update de Convex, así que cerrar la app congelaba la mascota.
 
     // Level Up Logic
     useEffect(() => {
@@ -165,13 +174,17 @@ export function MiMascotaView({ navigation }: any) {
         }
     }, [stats.exp, stats.level, show, updatePetState]);
 
-    // Mood Logic
+    // Humor: la necesidad urgente manda sobre el ánimo general, así el usuario
+    // ve QUÉ le falta a la mascota y no sólo que "está triste". `primaryNeed`
+    // lo decide el servidor con los mismos umbrales que aplica el desgaste.
     useEffect(() => {
-        if (stats.energy < 20) setPetMood('sleeping');
+        if (primaryNeed === 'hungry') setPetMood('hungry');
+        else if (primaryNeed === 'dirty') setPetMood('dirty');
+        else if (primaryNeed === 'sleepy' || stats.energy < 20) setPetMood('sleeping');
         else if (stats.happiness > 70 && stats.hunger > 50) setPetMood('happy');
-        else if (stats.happiness < 30 || stats.hunger < 20) setPetMood('sad');
+        else if (stats.happiness < 30) setPetMood('sad');
         else setPetMood('normal');
-    }, [stats]);
+    }, [stats, primaryNeed]);
 
     // --- Animation ---
     const catScale = useSharedValue(1);
@@ -212,6 +225,8 @@ export function MiMascotaView({ navigation }: any) {
         // Baby Logic
         switch (petMood) {
             case 'happy': return '😺';
+            case 'hungry': return '🙀';
+            case 'dirty': return '😾';
             case 'sad': return '😿';
             case 'sleeping': return '😴';
             default: return '😺';
@@ -232,9 +247,22 @@ export function MiMascotaView({ navigation }: any) {
     };
 
     const playWithPet = async () => {
-        if (petStage === 'EGG') return show('¡Le diste calorcito al huevo! 🥚❤️', 'success');
+        if (gameCoins < 2) return show('Necesitas 2 monedas 🪙', 'error');
+
+        // Sobre el huevo la acción es "dar calor" y sí llama al backend: acelera
+        // la incubación. Antes sólo mostraba un toast simpático sin hacer nada,
+        // así que cuidar el huevo no servía para nada.
+        if (petStage === 'EGG') {
+            const result = await playPetRemote();
+            if (!result.success) return show(result.message, 'error');
+            setIsAnimating(true);
+            animateCat('shake');
+            show(result.message || 'Le diste calor al huevo 🔥', 'success');
+            setTimeout(() => setIsAnimating(false), 1000);
+            return;
+        }
+
         if (stats.energy < 15) return show('Está muy cansado 😿', 'error');
-        if (gameCoins < 2) return show('Necesitas 2 monedas para jugar 🪙', 'error');
         const result = await playPetRemote();
         if (!result.success) return show(result.message, 'error');
         setIsAnimating(true);
@@ -263,7 +291,7 @@ export function MiMascotaView({ navigation }: any) {
         if (!result.success) return show(result.message, 'error');
         setIsAnimating(true);
         animateCat('shake');
-        show('¡Baño completado! +15 Felicidad, +20 XP 🛁', 'success');
+        show('¡Baño completado! +40 Higiene, +20 XP 🛁', 'success');
         setTimeout(() => setIsAnimating(false), 1000);
     };
 
@@ -413,7 +441,11 @@ export function MiMascotaView({ navigation }: any) {
                 <BlurView intensity={20} style={StyleSheet.absoluteFill} />
                 <View style={styles.guideCard}>
                     <Text style={styles.guideTitle}>Guía de Evolución</Text>
-                    <Text style={styles.guideText}>Tu mascota evoluciona manteniendo tu Racha Diaria (Login).</Text>
+                    <Text style={styles.guideText}>
+                        El huevo incuba solo: tarda unas 48 horas. Darle calor y entrar cada
+                        día lo acelera. Después de nacer, tu mascota sube de nivel con la
+                        experiencia que gana cada vez que la cuidás.
+                    </Text>
 
                     <View style={styles.stageRow}>
                         <Text style={{ fontSize: 24 }}>🥚</Text>
@@ -425,10 +457,23 @@ export function MiMascotaView({ navigation }: any) {
                         <Text style={{ fontSize: 24 }}>🦁</Text>
                     </View>
 
+                    {/* Los números son de NIVEL, no de días de racha: eso decía
+                        antes esta lista y nunca fue cierto — la racha no
+                        intervenía en la evolución por ningún lado. */}
                     <View style={styles.reqList}>
-                        <Text style={styles.reqItem}>• Bebé: 3 Días de Racha</Text>
-                        <Text style={styles.reqItem}>• Joven: 8 Días de Racha</Text>
-                        <Text style={styles.reqItem}>• Adulto: 30 Días de Racha</Text>
+                        <Text style={styles.reqItem}>• Huevo: ~48 h de incubación</Text>
+                        <Text style={styles.reqItem}>• Bebé: al nacer (nivel 3)</Text>
+                        <Text style={styles.reqItem}>• Joven: nivel 8</Text>
+                        <Text style={styles.reqItem}>• Adulto: nivel 30</Text>
+                    </View>
+
+                    <View style={styles.reqList}>
+                        <Text style={styles.reqItem}>
+                            🍖 Comer +30 hambre · 🛁 Baño +40 higiene · 💤 Dormir +40 energía
+                        </Text>
+                        <Text style={styles.reqItem}>
+                            Si queda sucia o con hambre, pierde felicidad al doble.
+                        </Text>
                     </View>
 
                     <TouchableOpacity style={styles.closeGuideBtn} onPress={() => setShowGuide(false)}>
@@ -514,17 +559,30 @@ export function MiMascotaView({ navigation }: any) {
                                 <Text style={styles.bubbleLabel}>Nivel {stats.level}</Text>
                             </View>
                             <View style={[styles.bubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)' }]}>
-                                <Text style={styles.bubbleLabel}>{petMood === 'happy' ? 'Muy Feliz' : 'Normal'}</Text>
+                                <Text style={styles.bubbleLabel}>{MOOD_LABEL[petMood]}</Text>
                             </View>
                         </View>
                     </LinearGradient>
 
-                    {/* Stats Grid */}
-                    <View style={styles.statsGrid}>
-                        {renderProgressBar(stats.happiness, '#EC4899', <Heart size={14} color="#EC4899" fill="#EC4899" />)}
-                        {renderProgressBar(stats.hunger, '#F97316', <Utensils size={14} color="#F97316" />)}
-                        {renderProgressBar(stats.energy, '#EAB308', <Zap size={14} color="#EAB308" fill="#EAB308" />)}
-                    </View>
+                    {/* Stats Grid — el huevo no tiene stats que mostrar; en su
+                        lugar va la incubación, que es lo único que avanza. */}
+                    {petStage === 'EGG' ? (
+                        <View style={styles.statsGrid}>
+                            {renderProgressBar(eggProgress, '#F59E0B', <Egg size={14} color="#F59E0B" />)}
+                            <Text style={styles.eggHint}>
+                                {eggProgress >= 95
+                                    ? '¡Está por romperse!'
+                                    : 'Incuba solo con el tiempo. Dale calor y entrá cada día para acelerarlo.'}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.statsGrid}>
+                            {renderProgressBar(stats.happiness, '#EC4899', <Heart size={14} color="#EC4899" fill="#EC4899" />)}
+                            {renderProgressBar(stats.hunger, '#F97316', <Utensils size={14} color="#F97316" />)}
+                            {renderProgressBar(stats.energy, '#EAB308', <Zap size={14} color="#EAB308" fill="#EAB308" />)}
+                            {renderProgressBar(stats.hygiene, '#38BDF8', <Droplets size={14} color="#38BDF8" />)}
+                        </View>
+                    )}
                 </View>
 
                 {/* Evolution Progress */}
@@ -686,6 +744,12 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         padding: 16,
         gap: 12,
         backgroundColor: colors(isDark).glass,
+    },
+    eggHint: {
+        fontSize: 12,
+        lineHeight: 17,
+        color: isDark ? '#A1A1AA' : '#6B7280',
+        textAlign: 'center',
     },
     statRow: {
         flexDirection: 'row',
