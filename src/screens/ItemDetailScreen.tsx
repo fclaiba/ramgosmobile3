@@ -119,8 +119,24 @@ const normalizeItem = (raw: any) => {
     const type = listingType(raw);
     const meta = typeMeta(type);
     const images = raw.images || (raw.image ? [{ url: raw.image }] : []);
-    const gallery = raw.gallery || images.map((img: any) => img.url || img).filter(Boolean);
-    const primaryImage = raw.image || images[0]?.url || gallery[0] || 'https://placehold.co/800x800.png';
+
+    // La galería junta TODAS las fuentes en vez de quedarse con la primera que
+    // exista: antes, si `raw.gallery` traía una sola URL ganaba y el resto de
+    // `raw.images` se perdía, así que un producto con varias fotos mostraba una.
+    // `isPrimary` manda el orden — es la foto que el vendedor eligió de portada.
+    const orderedImages = [...images].sort(
+        (a: any, b: any) => (b?.isPrimary ? 1 : 0) - (a?.isPrimary ? 1 : 0),
+    );
+    const gallery = Array.from(
+        new Set(
+            [
+                ...orderedImages.map((img: any) => (typeof img === 'string' ? img : img?.url)),
+                ...(Array.isArray(raw.gallery) ? raw.gallery : []),
+            ]
+                .filter((url: any): url is string => typeof url === 'string' && url.length > 0),
+        ),
+    );
+    const primaryImage = orderedImages[0]?.url || raw.image || gallery[0] || 'https://placehold.co/800x800.png';
     const seller = raw.seller || {
         id: raw.sellerId,
         name: raw.sellerName || raw.seller?.name || 'Vendedor Verificado',
@@ -181,7 +197,11 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const slug = route.params?.slug;
     const itemId = route.params?.itemId ?? route.params?.id;
     const referralCodeFromRoute =
-        typeof route.params?.referralCode === 'string' ? route.params.referralCode.trim() : '';
+        typeof route.params?.referralCode === 'string'
+            ? route.params.referralCode.trim()
+            : typeof route.params?.ref === 'string'
+              ? route.params.ref.trim()
+              : '';
     // Always subscribe when we have an id/slug — itemData is only a loading placeholder.
     const listingFromSlug = useQuery(api.listings.getListingBySlug, slug ? { slug } : "skip");
     const listingById = useQuery(
@@ -213,6 +233,13 @@ export default function ItemDetailScreen({ route, navigation }: any) {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const recordView = useMutation(api.listings.recordView);
     const insets = useSafeAreaInsets();
+
+    // ¿Este usuario puede compartir ESTE producto como referido? Decide si el
+    // enlace del botón compartir lleva `?ref=`.
+    const shareEligibility = useQuery(
+        api.campaigns.getMyShareEligibility,
+        sessionToken && item?.id ? { sessionToken, listingId: String(item.id) } : 'skip',
+    );
 
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -263,7 +290,13 @@ export default function ItemDetailScreen({ route, navigation }: any) {
         try {
             const handle = (item.seller as any)?.username || item.sellerUsername || item.sellerId || '';
             const pathKey = item.slug || item.id || '';
-            const url = productShareLink(handle, String(pathKey));
+            const base = productShareLink(handle, String(pathKey));
+            // El `?ref=` sólo se agrega si el checkout realmente va a pagarle
+            // comisión a quien comparte: influencer autorizado sobre un producto
+            // ajeno. Para el dueño el backend devuelve canRefer=false a propósito.
+            const url = base && shareEligibility?.canRefer && shareEligibility.shareCode
+                ? `${base}?ref=${encodeURIComponent(shareEligibility.shareCode)}`
+                : base;
             const message = url
                 ? `Mirá esto: ${item.name} - $${item.price}\n${url}`
                 : `Mirá esto: ${item.name} - $${item.price}`;
@@ -273,7 +306,7 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                 url: url || undefined,
             });
         } catch (e) { /* user cancelled */ }
-    }, [item]);
+    }, [item, shareEligibility]);
 
     const handleAddToCart = useCallback(async () => {
         if (!item || addingToCart) return;
@@ -388,7 +421,15 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                             pagingEnabled
                             showsHorizontalScrollIndicator={false}
                             scrollEventThrottle={16}
-                            onScroll={() => {}}
+                            // El índice se actualiza durante el arrastre, no recién
+                            // al terminar el momentum: así los dots y el contador
+                            // siguen el dedo en vez de saltar al final.
+                            onScroll={(e) => {
+                                const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                                if (idx !== currentImageIndex && idx >= 0 && idx < item.gallery.length) {
+                                    setCurrentImageIndex(idx);
+                                }
+                            }}
                             onMomentumScrollEnd={(e) => {
                                 const idx = Math.round(e.nativeEvent.contentOffset.x / width);
                                 setCurrentImageIndex(idx);
@@ -402,6 +443,13 @@ export default function ItemDetailScreen({ route, navigation }: any) {
                         </ScrollView>
                     </Animated.View>
                     <LinearGradient colors={['transparent', isDark ? '#09090B' : '#FAFAFA']} style={styles.heroGradient} />
+                    {item.gallery.length > 1 && (
+                        <View style={styles.imageCounter} pointerEvents="none">
+                            <Text style={styles.imageCounterText}>
+                                {currentImageIndex + 1}/{item.gallery.length}
+                            </Text>
+                        </View>
+                    )}
                     {item.gallery.length > 1 && (
                         <View style={styles.paginationRow}>
                             {item.gallery.map((_: any, index: number) => (
@@ -911,6 +959,22 @@ function getStyles(isDark: boolean, insets: any) {
             flexDirection: 'row',
             justifyContent: 'center',
             gap: 8,
+        },
+        imageCounter: {
+            // Abajo a la derecha: arriba están el botón de volver y el de
+            // compartir, y al centro los dots.
+            position: 'absolute',
+            bottom: 18,
+            right: 16,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: Radius.full,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+        },
+        imageCounterText: {
+            color: '#FFFFFF',
+            fontSize: 12,
+            fontWeight: '700',
         },
         paginationDot: {
             width: 8,

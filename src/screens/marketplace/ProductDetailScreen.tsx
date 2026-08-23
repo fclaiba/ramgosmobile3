@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     View,
     Text,
@@ -58,11 +58,23 @@ export default function ProductDetailScreen({ route, navigation }: any) {
     const product = useMemo(() => {
         const raw = listingBySlug || listingFromDb || feedProduct;
         if (!raw) return null;
-        const images = (raw as any).images?.length
-            ? (raw as any).images
+        // `isPrimary` primero: es la portada que eligió el vendedor.
+        const rawImages: any[] = (raw as any).images?.length
+            ? [...(raw as any).images].sort(
+                  (a: any, b: any) => (b?.isPrimary ? 1 : 0) - (a?.isPrimary ? 1 : 0),
+              )
             : (raw as any).image
                 ? [{ id: '1', url: (raw as any).image }]
                 : [];
+        // Une con `gallery` si el documento la trae, sin repetir URLs.
+        const seenUrls = new Set(rawImages.map((img: any) => img?.url).filter(Boolean));
+        const extraGallery = Array.isArray((raw as any).gallery) ? (raw as any).gallery : [];
+        const images = [
+            ...rawImages,
+            ...extraGallery
+                .filter((url: any) => typeof url === 'string' && url && !seenUrls.has(url))
+                .map((url: string, i: number) => ({ id: `g${i}`, url })),
+        ];
         return {
             id: String((raw as any)._id || (raw as any).id),
             slug: (raw as any).slug,
@@ -81,16 +93,31 @@ export default function ProductDetailScreen({ route, navigation }: any) {
             },
             type: (raw as any).type || 'product',
         };
-    }, [listingFromDb, feedProduct]);
+    }, [listingBySlug, listingFromDb, feedProduct]);
 
     const isSaved = product ? isFavorite(product.id) : false;
+    const [imageIndex, setImageIndex] = useState(0);
+
+    /** Código de referido que trajo al usuario hasta acá (enlace `?ref=`). */
+    const referralCodeFromRoute =
+        typeof route.params?.referralCode === 'string' ? route.params.referralCode.trim() : '';
+
+    const shareEligibility = useQuery(
+        api.campaigns.getMyShareEligibility,
+        sessionToken && product?.id ? { sessionToken, listingId: String(product.id) } : 'skip',
+    );
 
     const handleShare = useCallback(async () => {
         if (!product) return;
         try {
             const handle = (product.seller as any)?.username || (product.seller as any)?.name || product.seller?.id || '';
             const pathKey = (product as any)?.slug || product.id || '';
-            const url = productShareLink(handle, String(pathKey));
+            const base = productShareLink(handle, String(pathKey));
+            // Sólo lleva `?ref=` si el checkout le va a pagar comisión a quien
+            // comparte (influencer autorizado sobre producto ajeno).
+            const url = base && shareEligibility?.canRefer && shareEligibility.shareCode
+                ? `${base}?ref=${encodeURIComponent(shareEligibility.shareCode)}`
+                : base;
             await Share.share({
                 title: product.title,
                 message: `Mirá esto: ${product.title} - $${product.price}\n${url}`,
@@ -99,7 +126,7 @@ export default function ProductDetailScreen({ route, navigation }: any) {
         } catch {
             /* user cancelled */
         }
-    }, [product]);
+    }, [product, shareEligibility]);
 
     const handleToggleFavorite = useCallback(async () => {
         if (!product) return;
@@ -156,6 +183,8 @@ export default function ProductDetailScreen({ route, navigation }: any) {
                 shippingDimensionsCm: product.shippingProfile?.dimensionsCm,
                 distanceKm: product.location?.distanceKm,
                 quantity: 1,
+                // Conserva la atribución del enlace `?ref=` que abrió la pantalla.
+                ...(referralCodeFromRoute ? { referralCode: referralCodeFromRoute } : {}),
             });
             show('Producto agregado al carrito', 'success');
         } catch {
@@ -174,11 +203,42 @@ export default function ProductDetailScreen({ route, navigation }: any) {
         <View style={styles.container}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Image Carousel */}
-                <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carousel}>
-                    {product.images?.map((img: any) => (
-                        <Image key={img.id} source={{ uri: img.url }} style={[styles.productImage, { width }]} resizeMode="contain" />
-                    ))}
-                </ScrollView>
+                <View>
+                    <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.carousel}
+                        scrollEventThrottle={16}
+                        onScroll={(e) => {
+                            const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                            if (idx !== imageIndex && idx >= 0 && idx < (product.images?.length ?? 0)) {
+                                setImageIndex(idx);
+                            }
+                        }}
+                    >
+                        {product.images?.map((img: any, i: number) => (
+                            <Image key={img.id ?? i} source={{ uri: img.url }} style={[styles.productImage, { width }]} resizeMode="contain" />
+                        ))}
+                    </ScrollView>
+                    {(product.images?.length ?? 0) > 1 && (
+                        <>
+                            <View style={styles.imageCounter} pointerEvents="none">
+                                <Text style={styles.imageCounterText}>
+                                    {imageIndex + 1}/{product.images.length}
+                                </Text>
+                            </View>
+                            <View style={styles.paginationRow} pointerEvents="none">
+                                {product.images.map((_: any, i: number) => (
+                                    <View
+                                        key={i}
+                                        style={[styles.paginationDot, imageIndex === i && styles.paginationDotActive]}
+                                    />
+                                ))}
+                            </View>
+                        </>
+                    )}
+                </View>
 
                 <View style={styles.content}>
                     {/* Title & Price */}
@@ -340,6 +400,32 @@ const getStyles = (isDark: any) => StyleSheet.create({
     },
     carousel: { height: 350 },
     productImage: { height: 350 },
+    imageCounter: {
+        position: 'absolute',
+        bottom: 14,
+        right: 16,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: Radius.full,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+    },
+    imageCounterText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+    paginationRow: {
+        position: 'absolute',
+        bottom: 16,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    paginationDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: 'rgba(255,255,255,0.45)',
+    },
+    paginationDotActive: { backgroundColor: '#FFFFFF', width: 20 },
     content: { padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: -24, backgroundColor: colors(isDark).glass },
     title: { fontSize: 24, fontWeight: '400', color: isDark ? '#F9FAFB' : '#1F2937', marginBottom: 12 },
     price: { fontSize: 32, fontWeight: 'bold', color: isDark ? '#FAFAFA' : '#111827', marginBottom: 4 },
