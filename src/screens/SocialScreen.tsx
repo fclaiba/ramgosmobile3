@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -12,7 +12,7 @@ import {
 import { Search, Plus as PlusIcon, Send, Film, List, ShoppingCart, Bell, Users2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useConvex } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 import { MobileHeader } from '../components/MobileHeader';
@@ -81,7 +81,56 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
         api.social.getFeed,
         sessionToken ? { sessionToken, limit: 20, mode: 'videos' as const } : 'skip',
     );
-    const reelPosts = reelsResult?.items ?? [];
+
+    // Paginación de loops. La primera página es reactiva (`useQuery`), las
+    // siguientes se piden a demanda con el cursor y se acumulan: sin esto el
+    // scroll terminaba en el post 20 y no había forma de llegar a los
+    // anteriores, que es parte de por qué "desaparecían".
+    const convex = useConvex();
+    const [extraReels, setExtraReels] = useState<any[]>([]);
+    const [reelsCursor, setReelsCursor] = useState<string | null | undefined>(undefined);
+    const loadingMoreRef = useRef(false);
+
+    // Una página nueva de la query reactiva invalida lo acumulado.
+    useEffect(() => {
+        setExtraReels([]);
+        setReelsCursor(reelsResult?.nextCursor ?? null);
+    }, [reelsResult]);
+
+    const reelPosts = useMemo(
+        () => [...(reelsResult?.items ?? []), ...extraReels],
+        [reelsResult, extraReels],
+    );
+
+    const handleReelsEndReached = useCallback(async () => {
+        if (!sessionToken || !reelsCursor || loadingMoreRef.current) return;
+        loadingMoreRef.current = true;
+        try {
+            const page = await convex.query(api.social.getFeed, {
+                sessionToken,
+                limit: 20,
+                mode: 'videos' as const,
+                cursor: reelsCursor,
+            });
+            const items = page?.items ?? [];
+            if (items.length) {
+                // Dedupe por id: el ranking puede repetir un post entre páginas
+                // y FlatList necesita claves únicas.
+                setExtraReels((prev) => {
+                    const seen = new Set([
+                        ...(reelsResult?.items ?? []).map((p: any) => String(p._id)),
+                        ...prev.map((p: any) => String(p._id)),
+                    ]);
+                    return [...prev, ...items.filter((p: any) => !seen.has(String(p._id)))];
+                });
+            }
+            setReelsCursor(page?.nextCursor ?? null);
+        } catch {
+            // Sin más páginas o error de red: dejamos lo que ya está cargado.
+        } finally {
+            loadingMoreRef.current = false;
+        }
+    }, [convex, sessionToken, reelsCursor, reelsResult]);
 
     const handleUserClick = useCallback(
         (userId: string) => {
@@ -262,6 +311,7 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                         <LoopFeed
                             posts={reelPosts}
                             onUserClick={handleUserClick}
+                            onEndReached={handleReelsEndReached}
                             onCommercePress={handleCommercePress}
                         />
                     ) : (

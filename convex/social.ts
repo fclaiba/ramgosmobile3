@@ -48,6 +48,7 @@ import {
     AUTHOR_AFFINITY_HALFLIFE_HOURS,
     TAG_AFFINITY_HALFLIFE_HOURS,
     EXPLORATION_SLOT_FRACTION,
+    LOOPS_DIVERSITY_PER_KEY,
 } from './social/scoring';
 import { buildEventKey, revokePoints } from './economy/pointsEngine';
 import { assertCanPromoteListing } from './promotionEligibility';
@@ -1449,7 +1450,23 @@ export const getFeed = query({
                 if (!p.loopsTier || p.loopsTier === 'exploring') exploring.push(p);
                 else graded.push(p);
             }
-            exploring.sort((a: any, b: any) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+
+            // Con población graduada, el orden de exploración es
+            // menos-visto-primero (la regla de equidad de arriba). Sin ella —
+            // el caso de una app joven, donde NADIE llegó a las 200 vistas que
+            // pide el cron de graduación— la pestaña es de hecho "todo lo que
+            // hay", y ahí menos-visto-primero significa que cada loop nuevo
+            // (0 vistas) desplaza a los anteriores: el autor ve desaparecer lo
+            // que subió ayer. En ese caso ordenamos por recencia, que es lo que
+            // un feed chico tiene que mostrar.
+            const hasGradedPopulation = graded.length > 0;
+            if (hasGradedPopulation) {
+                exploring.sort((a: any, b: any) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+            } else {
+                exploring.sort((a: any, b: any) =>
+                    String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
+                );
+            }
 
             const scored = graded
                 .map((p: any) => {
@@ -1471,9 +1488,20 @@ export const getFeed = query({
                 .sort((a, b) => b.score - a.score)
                 .map((x) => x.post);
 
-            const explorationSlots = Math.round(cap * EXPLORATION_SLOT_FRACTION);
+            // Los slots de exploración son un PISO, no un techo: la fracción
+            // garantiza un mínimo, pero si no hay suficientes posts graduados
+            // para llenar la página, la exploración completa el resto.
+            //
+            // Sin este backfill la pestaña mostraba como mucho
+            // `round(cap * 0.2)` = 4 loops, para siempre: nada sale nunca de
+            // 'exploring' hasta que el cron de graduación lo ve con 200 vistas,
+            // así que `scored` está vacío en cualquier app que no tenga tráfico
+            // masivo. Ese techo de 4 es lo que se veía como "se borraron los
+            // loops anteriores cuando subí otros".
+            const minExplorationSlots = Math.round(cap * EXPLORATION_SLOT_FRACTION);
+            const rest = scored.slice(0, Math.max(0, cap - minExplorationSlots));
+            const explorationSlots = Math.max(minExplorationSlots, cap - rest.length);
             const reserved = exploring.slice(0, explorationSlots);
-            const rest = scored.slice(0, Math.max(0, cap - reserved.length));
 
             // Interleave: uno de exploración cada ~N posiciones, para que no
             // quede todo apilado arriba (invisible bajo el scroll) ni abajo
@@ -1506,7 +1534,15 @@ export const getFeed = query({
                 }
                 return best;
             };
-            candidates = applyDiversityCap(merged, cap, diversityKeyOf);
+            // Si el pool no alcanza a llenar la página, el cap de diversidad
+            // sólo puede quitar contenido que no tiene con qué reemplazar: un
+            // autor único vería sólo 2 de sus loops y el resto de la pantalla
+            // vacía. Con material de sobra sí se aplica, con un tope algo más
+            // holgado que el del feed general (4 en vez de 2) porque los loops
+            // sin hashtags caen a la clave "autor".
+            candidates = merged.length <= cap
+                ? merged
+                : applyDiversityCap(merged, cap, diversityKeyOf, LOOPS_DIVERSITY_PER_KEY);
         } else if (mode === 'following') {
             const follows = await ctx.db
                 .query('socialFollows')

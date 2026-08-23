@@ -17,8 +17,22 @@ export const AFFINITY_CAP = 8.0;
 export const AUTHOR_AFFINITY_HALFLIFE_HOURS = 336; // 14 días
 /** El interés por un tipo de contenido cambia más rápido que una relación. */
 export const TAG_AFFINITY_HALFLIFE_HOURS = 96; // 4 días
-/** ~1 de cada 5 slots de la página de Loops va a contenido en exploración. */
+/**
+ * Piso de slots de la página de Loops reservados a contenido en exploración:
+ * ~1 de cada 5. Es un mínimo garantizado, no un máximo — si no hay suficientes
+ * posts graduados, la exploración llena el resto de la página (ver la rama
+ * `mode === 'videos'` de `getFeed`).
+ */
 export const EXPLORATION_SLOT_FRACTION = 0.2;
+
+/**
+ * Tope de loops por clave de diversidad en una página.
+ *
+ * Más holgado que el 2 del feed general porque la clave de Loops es el hashtag
+ * y los loops casi nunca traen uno: sin tags la clave cae al autor, y con tope
+ * 2 una persona que sube seis loops sólo veía dos.
+ */
+export const LOOPS_DIVERSITY_PER_KEY = 4;
 
 /**
  * EMA con decaimiento por media vida: `old * 0.5^(horas/mediaVida) + peso`.
