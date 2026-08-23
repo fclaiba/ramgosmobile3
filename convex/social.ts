@@ -450,14 +450,27 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
 
         let finalCommercialProduct = args.commercialProduct;
 
-        if (args.attachedListingId) {
-            const listing = await ctx.db.get(args.attachedListingId);
+        // El listing etiquetado puede llegar por `attachedListingId` o dentro de
+        // `commercialProduct.listingId`. Los DOS caminos tienen que validarse:
+        // chequear sólo el primero dejaba que un cliente modificado etiquetara
+        // cualquier producto mandando el segundo.
+        const taggedListingId =
+            args.attachedListingId ??
+            (args.commercialProduct?.listingId
+                ? ctx.db.normalizeId('listings', args.commercialProduct.listingId)
+                : null);
+
+        if (taggedListingId) {
+            const listing = await ctx.db.get(taggedListingId);
             if (listing) {
                 // Un consumidor sólo etiqueta lo suyo; un influencer, además, lo
                 // de los negocios que lo autorizaron. Se valida acá y no sólo en
                 // el composer porque el cliente no es confiable.
                 await assertCanPromoteListing(ctx, actor, listing);
 
+                // El snapshot se arma desde la base, nunca desde lo que mandó el
+                // cliente: si no, el precio y el nombre del producto etiquetado
+                // los elegiría quien publica.
                 finalCommercialProduct = {
                     listingId: listing._id,
                     name: listing.title,
@@ -476,6 +489,10 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
                         : undefined,
                     discountPercent: listing.discountPercent,
                 };
+            } else {
+                // Referencia colgante: se descarta en vez de publicar una tarjeta
+                // de producto que no existe.
+                finalCommercialProduct = undefined;
             }
         }
 
@@ -1657,7 +1674,27 @@ export const getFeed = query({
         // "Se acabó" se decide con el lote crudo: si vino más chico que lo
         // pedido, no hay nada más atrás. Si vino lleno, puede haber más
         // aunque el filtro haya dejado `candidates` por debajo de `cap`.
-        const nextCursor = rawCount < rawTakeSize ? null : oldestRawCreatedAt;
+        const exhausted = rawCount < rawTakeSize;
+
+        // En Loops el cursor avanza hasta el ÚLTIMO POST DEVUELTO, no hasta el
+        // final del lote sobremuestreado. El lote trae hasta 4x lo que entra en
+        // una página, así que cortar por su extremo saltearía los ~60 loops que
+        // quedaron fuera de esta página y nunca se mostrarían. En los feeds
+        // rankeados eso es aceptable (el orden no es cronológico), pero acá el
+        // orden es por recencia y saltear equivale a perder contenido.
+        const oldestReturnedCreatedAt = items.length
+            ? items.reduce(
+                  (oldest: string | null, p: any) =>
+                      !oldest || String(p.createdAt) < oldest ? String(p.createdAt) : oldest,
+                  null as string | null,
+              )
+            : null;
+
+        const nextCursor = exhausted
+            ? null
+            : mode === 'videos'
+              ? oldestReturnedCreatedAt ?? oldestRawCreatedAt
+              : oldestRawCreatedAt;
 
         return { items, nextCursor };
     },

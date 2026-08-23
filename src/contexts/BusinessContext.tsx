@@ -52,9 +52,13 @@ function useBusinessState() {
 
     const [branches, setBranches] = useState<BranchInput[]>([]);
 
+    // Con `sessionToken`: es el propio negocio leyendo su perfil y necesita los
+    // campos privados (email de contacto, balance). Sin token, `getUser`
+    // devuelve sólo la proyección pública y el modal de edición pre-cargaría
+    // un email vacío que después se persiste.
     const businessUser = useQuery(
         api.users.getUser,
-        userId ? ({ id: userId as Id<'users'> }) : 'skip',
+        userId && sessionToken ? ({ id: userId as Id<'users'>, sessionToken }) : 'skip',
     );
 
     const metricsData = useQuery(

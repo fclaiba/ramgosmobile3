@@ -90,3 +90,39 @@ export function preferredShareCode(
     if (alias) return alias.toUpperCase();
     return (username || "").trim().toLowerCase();
 }
+
+/**
+ * Resuelve un código de referido a su usuario, probando las tres formas que
+ * conviven: handle (`@usuario`), alias vanity, y el `referralCode` legacy.
+ *
+ * Vive acá porque hay tres consumidores que TIENEN que coincidir: el registro
+ * (`users.redeemReferralCode`), el botón compartir (`preferredShareCode`, que
+ * emite alias o handle) y el motor de comisiones del checkout
+ * (`campaigns.internalResolveCartAttribution`). Ese último miraba sólo el
+ * índice legacy `by_referral_code`, así que un enlace compartido con el handle
+ * o el alias —que es lo que emite `preferredShareCode`— no atribuía nada.
+ */
+export async function findUserByReferralInput(ctx: any, rawInput?: string | null) {
+    if (!rawInput?.trim()) return null;
+    const normalized = normalizeReferralInput(rawInput);
+    if (!normalized) return null;
+
+    const byUsername = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q: any) => q.eq("username", normalized.toLowerCase()))
+        .first();
+    if (byUsername) return byUsername;
+
+    const aliasUpper = normalized.toUpperCase();
+    const byAlias = await ctx.db
+        .query("users")
+        .withIndex("by_referral_alias", (q: any) => q.eq("referralAlias", aliasUpper))
+        .first();
+    if (byAlias) return byAlias;
+
+    // Códigos de invitación legacy que todavía viven en `referralCode`.
+    return await ctx.db
+        .query("users")
+        .withIndex("by_referral_code", (q: any) => q.eq("referralCode", aliasUpper))
+        .first();
+}

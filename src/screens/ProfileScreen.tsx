@@ -112,7 +112,17 @@ function ProfileScreen({ navigation }: any) {
         }
         
         let finalAvatarUrl = editedProfile.avatarUrl;
-        if (finalAvatarUrl) {
+        // Sólo se sube lo que el usuario acaba de elegir del picker (una URI
+        // local). Si no tocó la foto, `avatarUrl` es la URL FIRMADA que devolvió
+        // la query — guardarla pisaría la referencia `convex-storage:<id>` con
+        // un enlace que caduca, y la foto desaparecería sola con el tiempo.
+        const pickedNewAvatar =
+            typeof finalAvatarUrl === 'string' &&
+            (finalAvatarUrl.startsWith('file:') ||
+                finalAvatarUrl.startsWith('blob:') ||
+                finalAvatarUrl.startsWith('data:'));
+
+        if (finalAvatarUrl && pickedNewAvatar) {
             try {
                 // Usa el helper compartido en vez de subir a mano. El código
                 // anterior sólo subía si la URI empezaba con `file:/`, y en web
@@ -143,7 +153,11 @@ function ProfileScreen({ navigation }: any) {
                     name: editedProfile.name,
                     username: editedProfile.username,
                     referralAlias: editedProfile.referralAlias,
-                    avatar: finalAvatarUrl,
+                    // `avatar` viaja SÓLO si se subió una foto nueva. Mandarlo
+                    // siempre guardaría la URL firmada que la query devolvió,
+                    // reemplazando la referencia de storage por un enlace que
+                    // caduca.
+                    ...(pickedNewAvatar ? { avatar: finalAvatarUrl } : {}),
                 }
             });
             await refreshActiveSession();

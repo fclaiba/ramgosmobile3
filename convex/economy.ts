@@ -924,7 +924,8 @@ export const claimDailyReward = mutation({
             claimedAt: new Date().toISOString(),
         });
 
-        return { success: true, points: outcome.balance + outcome.awarded, loginStreak };
+        // `outcome.balance` YA es el saldo posterior a la acreditación.
+        return { success: true, points: outcome.balance, loginStreak };
     }
 });
 
@@ -1048,7 +1049,7 @@ export const claimChallenge = mutation({
                 pointsAwarded: outcome.awarded,
                 claimedAt: new Date().toISOString(),
             });
-            return { success: true, points: outcome.balance + outcome.awarded, reward };
+            return { success: true, points: outcome.balance, reward };
         }
 
         const def = CHALLENGE_DEFS[args.challengeId];

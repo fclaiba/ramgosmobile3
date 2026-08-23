@@ -389,13 +389,30 @@ export const getBySeller = query({
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         );
 
-        const average = collected.length
+        // `total` y `average` salen de los acumuladores denormalizados del
+        // vendedor (`users.sellerReviewCount` / `sellerRating`), que los
+        // mantiene `updateListingRating` en cada alta de reseña. Calcularlos
+        // sobre `collected` daría un número acotado por los topes de lectura de
+        // arriba (100 listings × 20 reseñas) y lo mostraríamos como si fuera el
+        // total real del vendedor. Sólo se cae al conteo local si el vendedor
+        // todavía no tiene acumulador.
+        const sellerRef = ctx.db.normalizeId("users", args.sellerId);
+        const seller: any = sellerRef ? await ctx.db.get(sellerRef) : null;
+
+        const localAverage = collected.length
             ? collected.reduce((sum, r) => sum + (r.rating || 0), 0) / collected.length
             : 0;
 
+        const total = Number.isFinite(seller?.sellerReviewCount)
+            ? seller.sellerReviewCount
+            : collected.length;
+        const average = Number.isFinite(seller?.sellerRating) && seller.sellerRating > 0
+            ? seller.sellerRating
+            : localAverage;
+
         return {
             items: collected.slice(0, limit),
-            total: collected.length,
+            total,
             average: Math.round(average * 10) / 10,
         };
     }

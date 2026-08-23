@@ -91,11 +91,19 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
     const [reelsCursor, setReelsCursor] = useState<string | null | undefined>(undefined);
     const loadingMoreRef = useRef(false);
 
-    // Una página nueva de la query reactiva invalida lo acumulado.
+    // Se resetea sólo cuando cambia la COMPOSICIÓN de la primera página, no en
+    // cada actualización reactiva: un like sobre cualquier post del pool
+    // devuelve un objeto nuevo, y resetear por eso colapsaba el scroll infinito
+    // de vuelta a 20 items mientras el usuario estaba scrolleando.
+    const firstPageKey = useMemo(
+        () => (reelsResult?.items ?? []).map((p: any) => String(p._id)).join(','),
+        [reelsResult],
+    );
     useEffect(() => {
         setExtraReels([]);
         setReelsCursor(reelsResult?.nextCursor ?? null);
-    }, [reelsResult]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [firstPageKey]);
 
     const reelPosts = useMemo(
         () => [...(reelsResult?.items ?? []), ...extraReels],

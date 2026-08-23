@@ -49,9 +49,13 @@ const defaultMetrics: BusinessMetrics = {
 export function useBusiness(userId?: string) {
   const { sessionToken } = useAuth();
 
+  // Ver BusinessContext: sin `sessionToken` esto devuelve sólo campos públicos
+  // y el negocio perdería su propio email y balance.
   const businessUser = useQuery(
     api.users.getUser,
-    userId ? ({ id: userId } as { id: Id<"users"> }) : "skip",
+    userId && sessionToken
+      ? ({ id: userId, sessionToken } as { id: Id<"users">; sessionToken: string })
+      : "skip",
   );
 
   const metrics = useQuery(

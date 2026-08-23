@@ -45,7 +45,7 @@ import {
 } from './userLookup';
 import { toUserCardById } from './userCard';
 import { checkPromotionRights } from './promotionEligibility';
-import { preferredShareCode } from './referralHelpers';
+import { findUserByReferralInput, preferredShareCode } from './referralHelpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -644,13 +644,14 @@ export const internalResolveCartAttribution = internalQuery({
         for (const item of args.lineItems) {
             if (!item.referralCode || !item.sellerId || !item.listingId) continue;
             
-            const upperCode = item.referralCode.trim().toUpperCase();
-            const influencer = await ctx.db
-                .query('users')
-                .withIndex('by_referral_code', (q) => q.eq('referralCode', upperCode))
-                .first();
-                
-            if (!influencer || (influencer as any).role !== 'influencer') continue;
+            // Resuelve handle, alias vanity y código legacy — las tres formas
+            // que puede tomar un `?ref=`. Antes miraba sólo el índice legacy
+            // `by_referral_code`, así que un enlace compartido desde el botón
+            // de compartir (que emite alias o handle, ver `preferredShareCode`)
+            // no atribuía la venta a nadie.
+            const influencer: any = await findUserByReferralInput(ctx, item.referralCode);
+
+            if (!influencer || influencer.role !== 'influencer') continue;
 
             // 1. Try Custom Active Campaign first
             const campaigns = await ctx.db

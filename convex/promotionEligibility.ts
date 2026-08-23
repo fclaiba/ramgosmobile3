@@ -79,13 +79,39 @@ export async function checkPromotionRights(
         return { canPromote: false, canRefer: false, reason: 'not_influencer' };
     }
 
-    if (listing.openPromotion === true) {
-        return { canPromote: true, canRefer: true, reason: 'open_promotion' };
+    // Orden espejado de `internalResolveCartAttribution`, incluidas las
+    // condiciones sobre la tasa. Si acá dijéramos que sí donde el checkout
+    // paga cero, la app ofrecería un `?ref=` que no atribuye nada.
+    //
+    //   1. Campaña activa       → paga `campaign.commissionRate` (no depende
+    //                             de la tasa del listing).
+    //   2. `openCommissionRate > 0` y además:
+    //        a. promoción abierta   → paga
+    //        b. whitelist activa    → paga
+    const campaigns = await ctx.db
+        .query('influencerCampaigns')
+        .withIndex('by_influencer_business', (q: any) =>
+            q.eq('influencerId', actor.idString).eq('businessId', sellerId),
+        )
+        .collect();
+    if (campaigns.some((c: any) => c.status === 'active')) {
+        return { canPromote: true, canRefer: true, reason: 'campaign' };
     }
 
-    const eligible = await eligibleBusinessIdsFor(ctx, actor.idString);
-    if (eligible.has(sellerId)) {
-        return { canPromote: true, canRefer: true, reason: 'campaign' };
+    const openRate = Number(listing.openCommissionRate ?? 0);
+    if (openRate > 0) {
+        if (listing.openPromotion === true) {
+            return { canPromote: true, canRefer: true, reason: 'open_promotion' };
+        }
+        const whitelist = await ctx.db
+            .query('influencerWhitelists')
+            .withIndex('by_business_and_influencer', (q: any) =>
+                q.eq('businessId', sellerId).eq('influencerId', actor.idString),
+            )
+            .first();
+        if (whitelist?.status === 'active') {
+            return { canPromote: true, canRefer: true, reason: 'campaign' };
+        }
     }
 
     return { canPromote: false, canRefer: false, reason: 'not_authorized' };

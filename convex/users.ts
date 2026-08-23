@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import { hashPassword, verifyPassword } from "./passwordHelpers";
 import {
     aliasValidationMessage,
+    findUserByReferralInput,
     isAliasCooldownActive,
     normalizeReferralAlias,
     normalizeReferralInput,
@@ -68,30 +69,12 @@ const REFERRAL_HIGH_TICKET_BONUS = 25;
 const REFERRAL_HIGH_TICKET_THRESHOLD_USD = 100;
 
 /** Resolve invite code: handle (@username) → referralAlias → legacy referralCode. */
-async function resolveReferrerByInput(ctx: any, rawInput?: string) {
-    if (!rawInput?.trim()) return null;
-    const normalized = normalizeReferralInput(rawInput);
-    if (!normalized) return null;
-
-    const byUsername = await ctx.db
-        .query("users")
-        .withIndex("by_username", (q: any) => q.eq("username", normalized.toLowerCase()))
-        .first();
-    if (byUsername) return byUsername;
-
-    const aliasUpper = normalized.toUpperCase();
-    const byAlias = await ctx.db
-        .query("users")
-        .withIndex("by_referral_alias", (q: any) => q.eq("referralAlias", aliasUpper))
-        .first();
-    if (byAlias) return byAlias;
-
-    // Legacy unmigrated invite codes still stored on referralCode.
-    return await ctx.db
-        .query("users")
-        .withIndex("by_referral_code", (q: any) => q.eq("referralCode", aliasUpper))
-        .first();
-}
+/**
+ * Delegado a `referralHelpers.findUserByReferralInput`: la misma resolución la
+ * necesita el motor de comisiones del checkout, y tener dos copias es
+ * exactamente cómo se rompió antes (el checkout miraba sólo el índice legacy).
+ */
+const resolveReferrerByInput = findUserByReferralInput;
 
 async function assertReferralAliasAvailable(
     ctx: any,
