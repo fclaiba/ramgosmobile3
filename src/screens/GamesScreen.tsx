@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, 
 import { Gamepad2, Trophy, ArrowRight, Dna, Target, Grape, Brain, Bird, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MobileHeader } from '../components/MobileHeader';
-import { DailyChallenges } from '../components/games/DailyChallenges';
+import { DailyChallenges } from '../components/DailyChallenges';
 import { usePoints } from '../contexts/PointsContext';
 import { useRewards } from '../contexts/RewardsContext';
 import { useNavigation } from '@react-navigation/native';

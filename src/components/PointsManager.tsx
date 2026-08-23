@@ -4,7 +4,7 @@ import { Star, TrendingUp, Gift, Coins, Sparkles, Flame, CircleDollarSign, Gamep
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // NEW
-import { usePoints, MEMBERSHIP_TIERS, DISCOUNT_TIERS } from '../contexts/PointsContext';
+import { usePoints, MEMBERSHIP_TIERS } from '../contexts/PointsContext';
 import { DailyChallenges } from './DailyChallenges';
 import { useRewards } from '../contexts/RewardsContext';
 
@@ -172,12 +172,19 @@ export function PointsManager() {
                 {/* The Continuous Line */}
                 <View style={styles.roadmapLineBackground} />
                 <Animated.View style={[styles.roadmapLineFill, {
-                    width: Math.min((lifetimePoints / 100000) * (width * 1.5), width * 1.2) // Rough approximation for demo visual
+                    // La línea se llena contra el último umbral real de la tabla, no
+                    // contra un 100k inventado: así el relleno coincide con los nodos.
+                    width: Math.min(
+                        (lifetimePoints / (MEMBERSHIP_TIERS[MEMBERSHIP_TIERS.length - 1].minPoints || 1)) * (width * 1.2),
+                        width * 1.2,
+                    ),
                 }]} />
 
                 {MEMBERSHIP_TIERS.map((tier, index) => {
                     const isReached = lifetimePoints >= tier.minPoints;
-                    const isCurrent = currentTier?.label === tier.label;
+                    // Por `id`, no por `label`: cuando currentTier venía de otra tabla
+                    // los labels nunca coincidían y ningún nodo se marcaba como actual.
+                    const isCurrent = currentTier?.id === tier.id;
                     const isLocked = !isReached;
 
                     return (
@@ -385,14 +392,19 @@ export function PointsManager() {
                         <View style={styles.howItWorksDivider} />
 
                         {/* Quick reference table */}
-                        <Text style={styles.howItWorksSubTitle}>Tiers de Canje</Text>
+                        <Text style={styles.howItWorksSubTitle}>Tiers de Membresía</Text>
                         <View style={styles.discountTiersContainer}>
-                            {DISCOUNT_TIERS.slice(0, 4).map((tier, idx) => (
-                                <View key={idx} style={[styles.discountTierItem, idx === 0 && points >= tier.minPoints && styles.discountTierItemActive]}>
-                                    <Text style={[styles.discountTierPoints, idx === 0 && points >= tier.minPoints && styles.discountTierActive]}>{tier.minPoints} pts</Text>
-                                    <Text style={[styles.discountTierValue, idx === 0 && points >= tier.minPoints && styles.discountTierActive]}>+{tier.bonusMultiplier * 100}%</Text>
-                                </View>
-                            ))}
+                            {MEMBERSHIP_TIERS.map((tier) => {
+                                // Activo = el tier vigente del usuario, medido igual que el
+                                // resto de la pantalla (acumulado histórico).
+                                const isActive = currentTier?.id === tier.id;
+                                return (
+                                    <View key={tier.id} style={[styles.discountTierItem, isActive && styles.discountTierItemActive]}>
+                                        <Text style={[styles.discountTierPoints, isActive && styles.discountTierActive]}>{tier.minPoints} pts</Text>
+                                        <Text style={[styles.discountTierValue, isActive && styles.discountTierActive]}>+{Math.round(tier.bonusMultiplier * 100)}%</Text>
+                                    </View>
+                                );
+                            })}
                         </View>
                     </>
                 )}

@@ -14,13 +14,18 @@ import { awardPoints, buildEventKey, countDailyAwards } from './economy/pointsEn
 
 
 
-/** $1 cash spent = 5 base points. Tier bonus matches PointsContext DISCOUNT_TIERS. */
+/**
+ * $1 cash spent = 5 base points. Los umbrales y multiplicadores son el espejo
+ * server-side de MEMBERSHIP_TIERS (src/contexts/PointsContext.tsx), la tabla
+ * canónica de progresión. Si cambia una, tiene que cambiar la otra: el perk que
+ * la UI promete ("+5% puntos extra por compra" en Silver) se paga acá.
+ */
 export const POINTS_PER_USD = 5;
 const PURCHASE_TIERS = [
     { minPoints: 0, bonusMultiplier: 0 },
-    { minPoints: 100, bonusMultiplier: 0.05 },
-    { minPoints: 500, bonusMultiplier: 0.1 },
-    { minPoints: 1000, bonusMultiplier: 0.2 },
+    { minPoints: 1000, bonusMultiplier: 0.05 },
+    { minPoints: 5000, bonusMultiplier: 0.1 },
+    { minPoints: 15000, bonusMultiplier: 0.15 },
 ] as const;
 
 function purchaseBonusMultiplier(lifetimePoints: number): number {
@@ -816,36 +821,43 @@ export const claimDailyReward = mutation({
         if (!doc?.rewardsState) return { success: false, message: 'Usuario no encontrado' };
 
         const reward = 10;
-        const currentState = hydrateRewardsState(doc.rewardsState);
-        const loginStreak = (currentState.loginStreak || 0) + 1;
-        const newState = {
-            ...currentState,
-            points: (currentState.points || 0) + reward,
-            loginStreak,
-            dailyClaimDate: todayKey,
-        };
+        const loginStreak = (hydrateRewardsState(doc.rewardsState).loginStreak || 0) + 1;
 
-        await ctx.db.patch(doc._id, { rewardsState: newState, updatedAt: new Date().toISOString() });
-
-        await ctx.db.insert('rewardsClaims', {
-            userId: args.userId,
-            claimKey: `daily_${todayKey}`,
-            type: 'daily_login',
-            pointsAwarded: reward,
-            claimedAt: new Date().toISOString(),
-        });
-
-        await ctx.db.insert('pointsLedger', {
+        // Pasa por awardPoints (motor único): acredita `points` Y `lifetimePoints`
+        // e inserta el ledger de forma idempotente. Antes se patcheaba `points` a
+        // mano sin tocar `lifetimePoints`, así que la racha diaria subía el número
+        // grande pero la barra de progreso —que mide el acumulado— no se movía.
+        const outcome = await awardPoints(ctx, {
             userId: args.userId,
             eventKey: `daily_${todayKey}`,
             type: 'earn',
             source: 'bonus',
             amount: reward,
             description: `Racha diaria - Dia ${loginStreak}`,
-            createdAt: new Date().toISOString(),
         });
 
-        return { success: true, points: newState.points, loginStreak };
+        if (outcome.reason === 'duplicate') {
+            return { success: false, message: 'Ya reclamaste hoy' };
+        }
+
+        // Relectura obligatoria: awardPoints reescribe rewardsState completo, así
+        // que el patch de la racha tiene que ir sobre el estado ya acreditado.
+        const afterAward = await ensureEconomyState(ctx, { userId: args.userId });
+        const settledState = hydrateRewardsState(afterAward!.rewardsState);
+        await ctx.db.patch(afterAward!._id, {
+            rewardsState: { ...settledState, loginStreak, dailyClaimDate: todayKey },
+            updatedAt: new Date().toISOString(),
+        });
+
+        await ctx.db.insert('rewardsClaims', {
+            userId: args.userId,
+            claimKey: `daily_${todayKey}`,
+            type: 'daily_login',
+            pointsAwarded: outcome.awarded,
+            claimedAt: new Date().toISOString(),
+        });
+
+        return { success: true, points: outcome.balance + outcome.awarded, loginStreak };
     }
 });
 
@@ -932,34 +944,44 @@ export const claimChallenge = mutation({
             if (existing) return { success: false, message: 'Ya reclamaste hoy' };
 
             const doc = await ensureEconomyState(ctx, { userId: args.userId });
-            const current = doc!.rewardsState || DEFAULT_PET_STATE;
             const reward = CHALLENGE_DEFS.daily_login.reward;
-            const loginStreak = (current.loginStreak || 0) + 1;
-            const newState = {
-                ...current,
-                points: (current.points || 0) + reward,
-                loginStreak,
-                dailyClaimDate: today,
-                challenges: normalizeChallenges(current.challenges),
-            };
-            await ctx.db.patch(doc!._id, { rewardsState: newState, updatedAt: new Date().toISOString() });
-            await ctx.db.insert('rewardsClaims', {
-                userId: args.userId,
-                claimKey: `daily_${today}`,
-                type: 'daily_login',
-                pointsAwarded: reward,
-                claimedAt: new Date().toISOString(),
-            });
-            await ctx.db.insert('pointsLedger', {
+            const loginStreak = (hydrateRewardsState(doc!.rewardsState).loginStreak || 0) + 1;
+
+            // Mismo motor y mismo eventKey que claimDailyReward: los dos caminos
+            // acreditan la racha del día, así que comparten idempotencia.
+            const outcome = await awardPoints(ctx, {
                 userId: args.userId,
                 eventKey: `daily_${today}`,
                 type: 'earn',
                 source: 'bonus',
                 amount: reward,
                 description: `Racha diaria - Dia ${loginStreak}`,
-                createdAt: new Date().toISOString(),
             });
-            return { success: true, points: newState.points, reward };
+
+            if (outcome.reason === 'duplicate') {
+                return { success: false, message: 'Ya reclamaste hoy' };
+            }
+
+            const afterAward = await ensureEconomyState(ctx, { userId: args.userId });
+            const settledState = hydrateRewardsState(afterAward!.rewardsState);
+            await ctx.db.patch(afterAward!._id, {
+                rewardsState: {
+                    ...settledState,
+                    loginStreak,
+                    dailyClaimDate: today,
+                    challenges: normalizeChallenges(settledState.challenges),
+                },
+                updatedAt: new Date().toISOString(),
+            });
+
+            await ctx.db.insert('rewardsClaims', {
+                userId: args.userId,
+                claimKey: `daily_${today}`,
+                type: 'daily_login',
+                pointsAwarded: outcome.awarded,
+                claimedAt: new Date().toISOString(),
+            });
+            return { success: true, points: outcome.balance + outcome.awarded, reward };
         }
 
         const def = CHALLENGE_DEFS[args.challengeId];

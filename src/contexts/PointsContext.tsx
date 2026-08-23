@@ -3,13 +3,6 @@ import { useAuth } from './AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
-export const DISCOUNT_TIERS = [
-    { minPoints: 0, label: 'Bronce', bonusMultiplier: 0, perks: ['Acceso básico'] },
-    { minPoints: 100, label: 'Plata', bonusMultiplier: 0.05, perks: ['5% extra', 'Soporte prioritario'] },
-    { minPoints: 500, label: 'Oro', bonusMultiplier: 0.10, perks: ['10% extra', 'Soporte VIP', 'Envíos gratis'] },
-    { minPoints: 1000, label: 'Élite', bonusMultiplier: 0.20, perks: ['20% extra', 'Conserje personal', 'Envíos gratis', 'Regalos'] },
-];
-
 export interface MembershipTier {
     id: string;
     label: string;
@@ -55,8 +48,8 @@ type PointsContextValue = {
     petConfig: PetConfig;
     transactions: any[];
     lastEarnTransactionId: string | null;
-    currentTier: (typeof DISCOUNT_TIERS)[number];
-    nextTier: (typeof DISCOUNT_TIERS)[number] | null;
+    currentTier: MembershipTier;
+    nextTier: MembershipTier | null;
     challengeProgress: { loginStreak: number; dailyClaimDate: string | null };
     wheelClaimDate: string | null;
     conversionRate: number;
@@ -104,8 +97,8 @@ const DEFAULT_CONTEXT: PointsContextValue = {
     petConfig: DEFAULT_PET_CONFIG,
     transactions: [],
     lastEarnTransactionId: null,
-    currentTier: DISCOUNT_TIERS[0],
-    nextTier: DISCOUNT_TIERS[1],
+    currentTier: MEMBERSHIP_TIERS[0],
+    nextTier: MEMBERSHIP_TIERS[1],
     challengeProgress: { loginStreak: 0, dailyClaimDate: null },
     wheelClaimDate: null,
     conversionRate: 5,
@@ -177,12 +170,15 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const petConfig: PetConfig = economyState?.petConfig ?? DEFAULT_PET_CONFIG;
     const challengeState = economyState?.challenges;
 
-    let currentTier = DISCOUNT_TIERS[0];
-    let nextTier: (typeof DISCOUNT_TIERS)[number] | null = DISCOUNT_TIERS[1];
-    for (let i = 0; i < DISCOUNT_TIERS.length; i++) {
-        if (points >= DISCOUNT_TIERS[i].minPoints) {
-            currentTier = DISCOUNT_TIERS[i];
-            nextTier = DISCOUNT_TIERS[i + 1] || null;
+    // El tier se mide sobre `lifetimePoints` (acumulado histórico, nunca baja), no
+    // sobre `points` (saldo gastable). Si se midiera sobre el saldo, canjear puntos
+    // haría retroceder el tier y la barra de progreso quedaría clavada en 100%.
+    let currentTier = MEMBERSHIP_TIERS[0];
+    let nextTier: MembershipTier | null = MEMBERSHIP_TIERS[1] ?? null;
+    for (let i = 0; i < MEMBERSHIP_TIERS.length; i++) {
+        if (lifetimePoints >= MEMBERSHIP_TIERS[i].minPoints) {
+            currentTier = MEMBERSHIP_TIERS[i];
+            nextTier = MEMBERSHIP_TIERS[i + 1] || null;
         }
     }
 

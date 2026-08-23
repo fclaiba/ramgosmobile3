@@ -393,9 +393,9 @@ function ProfileScreen({ navigation }: any) {
                                 <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' }}>
                                     {nextTier ? `Próximo: ${nextTier.label}` : 'Nivel Máximo'}
                                 </Text>
-                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{(user as any)?.expProgress || 0}%</Text>
+                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>{Math.round(progressPercentage)}%</Text>
                             </View>
-                            {renderProgressBar((user as any)?.expProgress || 0)}
+                            {renderProgressBar(progressPercentage)}
                         </View>
                     </View>
                 </View>
