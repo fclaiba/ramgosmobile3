@@ -5,6 +5,7 @@ import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Radius, colors } from '../../theme/tokens';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -18,8 +19,15 @@ export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
     const [searchTerm, setSearchTerm] = useState('');
+    const { sessionToken } = useAuth();
 
-    const searchResults = useQuery(api.listings.searchListings, { query: searchTerm, limit: 10 });
+    // Sólo lo que este usuario tiene derecho a etiquetar: sus productos, y si es
+    // influencer también los de los negocios que lo autorizaron. Antes se listaba
+    // el catálogo entero y el backend rechazaba el post recién al publicar.
+    const searchResults = useQuery(
+        api.listings.getTaggableListings,
+        sessionToken ? { sessionToken, searchQuery: searchTerm, limit: 20 } : 'skip',
+    );
 
     const handleSelect = (item: any) => {
         const imageUrl = item.image || item.gallery?.[0] || item.images?.[0]?.url || item.images?.[0] || undefined;
@@ -54,7 +62,11 @@ export const CommerceLinker = ({ onClose, onSelect }: CommerceLinkerProps) => {
                     <ActivityIndicator style={{ marginTop: 40 }} color="#2196F3" />
                 ) : searchResults.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No se encontraron productos.</Text>
+                        <Text style={styles.emptyText}>
+                            {searchTerm
+                                ? 'No se encontraron productos.'
+                                : 'No tenés productos para etiquetar. Publicá los tuyos, o pedile a un negocio que te autorice como influencer.'}
+                        </Text>
                     </View>
                 ) : (
                     <FlatList

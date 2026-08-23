@@ -231,7 +231,18 @@ const AppNavigator = () => {
                     
                     // Parse canonical URLs: /{handle} and /{handle}/{slug}
                     try {
-                        const cleanPath = path.replace(/^https?:\/\/[^/]+/, '').split('?')[0].replace(/^\//, '');
+                        const withoutOrigin = path.replace(/^https?:\/\/[^/]+/, '');
+                        const [pathOnly, queryString = ''] = withoutOrigin.split('?');
+                        const cleanPath = pathOnly.replace(/^\//, '');
+                        // El `?ref=CODE` que agrega el botón compartir es lo que
+                        // atribuye la venta al influencer. Si se descarta acá, el
+                        // enlace abre el producto pero nadie cobra la comisión.
+                        const referralCode = queryString
+                            .split('&')
+                            .map((pair) => pair.split('='))
+                            .find(([key]) => key === 'ref')?.[1];
+                        const ref = referralCode ? decodeURIComponent(referralCode) : undefined;
+
                         if (cleanPath) {
                             const parts = cleanPath.split('/').filter(Boolean);
                             // Avoid matching known routes
@@ -243,7 +254,10 @@ const AppNavigator = () => {
                                     };
                                 } else if (parts.length === 2) {
                                     return {
-                                        routes: [{ name: 'ProductDetail', params: { handle: parts[0], slug: parts[1] } }]
+                                        routes: [{
+                                            name: 'ProductDetail',
+                                            params: { handle: parts[0], slug: parts[1], referralCode: ref },
+                                        }]
                                     };
                                 }
                             }

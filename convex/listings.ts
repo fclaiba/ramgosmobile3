@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authHelpers";
 import { assertBonoEconomics } from "./bonoEconomics";
+import { eligibleBusinessIdsFor } from "./promotionEligibility";
 
 /** Influencer may create a bono only for a business with active campaign or whitelist. */
 async function assertInfluencerCanIssueBonoForBusiness(
@@ -888,5 +889,80 @@ export const getListingAnalytics = query({
             averageRating: listing.averageRating || 0,
             reviewCount: listing.reviewCount || 0,
         };
+    },
+});
+
+/**
+ * Los listings que este usuario puede etiquetar en un post.
+ *
+ * Antes el composer usaba `searchListings` (todo el catálogo activo), así que
+ * ofrecía etiquetar productos que el usuario no tenía derecho a promocionar y
+ * el post terminaba rechazado —o peor, publicado con comisión cero sin avisar—.
+ * Devuelve exactamente lo que `promotionEligibility` deja publicar:
+ * los propios, y para influencers los de negocios que los autorizaron.
+ */
+export const getTaggableListings = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        searchQuery: v.optional(v.string()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const limit = Math.min(Math.max(args.limit ?? 30, 1), 60);
+
+        const collected: any[] = [];
+        const seen = new Set<string>();
+
+        const pushFrom = async (sellerId: string, cap: number) => {
+            const rows = await ctx.db
+                .query('listings')
+                .withIndex('by_seller', (q) => q.eq('sellerId', sellerId))
+                .take(cap);
+            for (const row of rows) {
+                if (row.status !== 'active') continue;
+                const key = String(row._id);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                collected.push(row);
+            }
+        };
+
+        // Propios primero: es el caso del 90% de los usuarios.
+        await pushFrom(actor.idString, 60);
+
+        if (actor.role === 'influencer') {
+            const eligible = await eligibleBusinessIdsFor(ctx, actor.idString);
+            // Acotado: un influencer con muchas campañas no puede volar la query.
+            let businessesRead = 0;
+            for (const businessId of eligible) {
+                if (businessesRead >= 15) break;
+                businessesRead++;
+                await pushFrom(businessId, 25);
+            }
+        }
+
+        const term = args.searchQuery?.trim().toLowerCase();
+        const filtered = term
+            ? collected.filter(
+                  (l) =>
+                      l.title?.toLowerCase().includes(term) ||
+                      l.description?.toLowerCase().includes(term),
+              )
+            : collected;
+
+        filtered.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+        const sliced = filtered.slice(0, limit);
+        const resolved = await Promise.all(sliced.map((l) => resolveListingUrls(ctx, l)));
+
+        // `isOwn` deja que el composer avise "vas a referir a otro" sin tener que
+        // volver a preguntar quién es el dueño.
+        return resolved.map((l: any) => ({
+            ...l,
+            isOwn: String(l.sellerId) === actor.idString,
+        }));
     },
 });

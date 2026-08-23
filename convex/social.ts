@@ -50,6 +50,7 @@ import {
     EXPLORATION_SLOT_FRACTION,
 } from './social/scoring';
 import { buildEventKey, revokePoints } from './economy/pointsEngine';
+import { assertCanPromoteListing } from './promotionEligibility';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -447,6 +448,11 @@ export const createPostImpl = async (ctx: any, actor: { idString: string; role: 
         if (args.attachedListingId) {
             const listing = await ctx.db.get(args.attachedListingId);
             if (listing) {
+                // Un consumidor sólo etiqueta lo suyo; un influencer, además, lo
+                // de los negocios que lo autorizaron. Se valida acá y no sólo en
+                // el composer porque el cliente no es confiable.
+                await assertCanPromoteListing(ctx, actor, listing);
+
                 finalCommercialProduct = {
                     listingId: listing._id,
                     name: listing.title,

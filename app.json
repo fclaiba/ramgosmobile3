@@ -6,9 +6,14 @@
     "orientation": "portrait",
     "icon": "./logo.png",
     "userInterfaceStyle": "light",
+    "scheme": "ramgos",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fclaiba.ramgosmobile",
+      "associatedDomains": [
+        "applinks:ramgos.app",
+        "applinks:www.ramgos.app"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -20,6 +25,17 @@
       },
       "versionCode": 1,
       "package": "com.fclaiba.ramgosmobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "ramgos.app" },
+            { "scheme": "https", "host": "www.ramgos.app" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "config": {
         "googleMaps": {
           "apiKey": "__SET_GOOGLE_MAPS_ANDROID_API_KEY__"

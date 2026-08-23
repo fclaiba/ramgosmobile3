@@ -28,6 +28,8 @@ export interface CartItem {
     distanceKm?: number;
     quantity: number;
     referralCode?: string;
+    /** Post que originó la venta, cuando el item entró desde el feed social. */
+    sourcePostId?: string;
 }
 
 export interface CartContextData {
@@ -146,6 +148,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                         distanceKm: item.distanceKm,
                         referralCode: item.referralCode,
                     },
+                    // El `snapshot` se descarta para listings reales (el servidor
+                    // lo reconstruye desde la DB), así que la atribución tiene que
+                    // viajar acá o se pierde. Es el camino del deep link
+                    // `/ref/CODE?bono=ID`: sin esto el influencer no cobraba.
+                    attribution: (item.referralCode || item.sourcePostId)
+                        ? {
+                              referralCode: item.referralCode,
+                              sourcePostId: item.sourcePostId,
+                          }
+                        : undefined,
                 });
             } catch (e) {
                 reportError(e, 'No se pudo agregar al carrito.');
