@@ -66,11 +66,16 @@ export const FlappyBird = (props: FlappyBirdProps) => {
     const gameStateRef = useRef<'IDLE' | 'PLAYING' | 'GAMEOVER'>('IDLE');
     const gameLoopRef = useRef<number | null>(null);
     const pipeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    /** Última acción del wrapper ya ejecutada, para no repetirla en cada render. */
+    const lastActionNonce = useRef<number | null>(null);
+    /** Espejo de `level` para leerlo desde callbacks sin recrearlos. */
+    const levelRef = useRef(1);
+    const progressRef = useRef(0);
     const pipeIdCounter = useRef(0);
     const gameAreaHeight = useRef(SCREEN_HEIGHT * 0.75);
 
     // Level system
-    const { level } = useGameLevel({
+    const { level, progress } = useGameLevel({
         mode: 'score',
         score,
         thresholds: GAME_LEVEL_THRESHOLDS['flappy'],
@@ -78,6 +83,8 @@ export const FlappyBird = (props: FlappyBirdProps) => {
 
     // Sync refs
     useEffect(() => { scoreRef.current = score; }, [score]);
+    useEffect(() => { levelRef.current = level; }, [level]);
+    useEffect(() => { progressRef.current = progress; }, [progress]);
     useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
     // Load high score
@@ -87,14 +94,17 @@ export const FlappyBird = (props: FlappyBirdProps) => {
         });
     }, []);
 
-    // Wrapper action signal
+    // Wrapper action signal — mismo patrón que los otros cuatro juegos: sólo
+    // escucha en modo wrapped, y deduplica por nonce para no re-ejecutar la
+    // acción en cada render (antes reiniciaba la partida de más).
     useEffect(() => {
-        if (!actionSignal) return;
+        if (uiMode !== 'wrapped' || !actionSignal) return;
+        if (actionSignal.nonce === lastActionNonce.current) return;
+        lastActionNonce.current = actionSignal.nonce;
         if (actionSignal.type === 'start' || actionSignal.type === 'restart') startGame();
-        if (actionSignal.type === 'pause' && gameStateRef.current === 'PLAYING') {
-            // No pause for flappy — just ignore
-        }
-    }, [actionSignal]);
+        // Flappy no tiene pausa: el vuelo no admite congelar sin romper la física.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [actionSignal, uiMode]);
 
     const emitEvent = useCallback((event: GameEvent) => {
         if (onEvent) onEvent(event);
@@ -185,7 +195,9 @@ export const FlappyBird = (props: FlappyBirdProps) => {
                         patch: {
                             score: scoreRef.current,
                             level,
-                            progressToNext: 0,
+                            // El wrapper dibuja la barra de nivel con esto; con
+                            // 0 fijo la barra quedaba siempre vacía.
+                            progressToNext: progressRef.current,
                             lives: 1,
                         },
                     });
@@ -221,14 +233,22 @@ export const FlappyBird = (props: FlappyBirdProps) => {
         }
 
         emitEvent({ type: 'status', status: 'gameover' });
-        if (onEnd) onEnd({ 
-            gameId: 'flappy', 
-            family: 'arcade', 
-            score: finalScore, 
-            finalMetrics: { score: finalScore, level: 1, progressToNext: 0, lives: 0 }, 
-            reason: 'crash' 
-        });
-        if (onGameEnd) onGameEnd(finalScore);
+
+        // Los dos caminos son excluyentes. Con el wrapper, `onEnd` deja el
+        // resultado pendiente y la acreditación ocurre recién al tocar
+        // "Guardar"; llamar además a `onGameEnd` acreditaría dos veces la misma
+        // partida. `onGameEnd` es sólo el camino legacy sin wrapper.
+        if (onEnd) {
+            onEnd({
+                gameId: 'flappy',
+                family: 'arcade',
+                score: finalScore,
+                finalMetrics: { score: finalScore, level: levelRef.current, progressToNext: 0, lives: 0 },
+                reason: 'crash',
+            });
+        } else if (onGameEnd) {
+            onGameEnd(finalScore);
+        }
     }, [highScore, emitEvent, onEnd, onGameEnd]);
 
     const flap = useCallback(() => {

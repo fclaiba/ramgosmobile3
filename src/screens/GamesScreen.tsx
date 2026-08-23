@@ -20,10 +20,9 @@ import { FlappyBird } from '../components/games/FlappyBird';
 import { GameWrapper } from '../components/games/GameWrapper';
 import type { GameId } from '../components/games/gameContracts';
 import { TierProgressBar } from '../components/ui/TierProgressBar';
+import { coinsForScore, isRewardGame } from '../components/games/arcadeRewards';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 
-
-const ARCADE_REWARD_GAMES = new Set(['dino', 'duck', 'fruit', 'memory', 'flappy']);
 
 const GAMES = [
     {
@@ -85,10 +84,10 @@ export default function GamesScreen() {
     const { show } = useToast();
 
     const rewardArcadeGame = (gameId: string, score: number) => {
-        if (!ARCADE_REWARD_GAMES.has(gameId)) {
+        if (!isRewardGame(gameId)) {
             return;
         }
-        const coins = Math.floor(score / 5);
+        const coins = coinsForScore(score);
         if (coins > 0) addGameCoins(coins);
         const outcome = registerArcadeReward(gameId, score);
         if (outcome.status === 'awarded') {
@@ -107,7 +106,7 @@ export default function GamesScreen() {
     };
 
     const handlePlay = (gameId: string) => {
-        if (ARCADE_REWARD_GAMES.has(gameId)) {
+        if (isRewardGame(gameId)) {
             const arcade = getArcadeStatus();
             if (arcade.remaining <= 0) {
                 show('Has usado tus 3 recompensas de Arcade por hoy. Vuelve mañana.', 'warning');
@@ -138,7 +137,7 @@ export default function GamesScreen() {
                             coins={0}
                             onClose={handleCloseGame}
                             onLegacyGameEnd={(value: number) => {
-                                if (ARCADE_REWARD_GAMES.has(game.id)) rewardArcadeGame(game.id, value);
+                                if (isRewardGame(game.id)) rewardArcadeGame(game.id, value);
                             }}
                             gameProps={{}}
                         />

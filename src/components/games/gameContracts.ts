@@ -211,16 +211,23 @@ const RADIUS = {
   pill: 999,
 } as const satisfies GameThemeTokens['radius'];
 
-const SHADOWS: GameThemeTokens['shadows'] = {
+/**
+ * Sombras por esquema. Estaban fijadas a `glassShadow(false)` (modo claro), así
+ * que en oscuro las tarjetas del HUD proyectaban una sombra pensada para fondo
+ * blanco: se veía como un halo sucio en vez de profundidad.
+ */
+const buildShadows = (isDark: boolean): GameThemeTokens['shadows'] => ({
   elev1: {
-    ...(glassShadow(false) as any), shadowOffset: { width: 0, height: 3 },
+    ...(glassShadow(isDark) as any), shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
   elev2: {
-    ...(glassShadow(false) as any), shadowOffset: { width: 0, height: 6 },
+    ...(glassShadow(isDark) as any), shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-};
+});
+
+const SHADOWS: GameThemeTokens['shadows'] = buildShadows(false);
 
 const TYPO_ARCADE: GameThemeTokens['typography'] = {
   display: { fontSize: 40, fontWeight: '900' },
@@ -362,9 +369,34 @@ export const GAME_FAMILY_BY_ID: Record<GameId, GameThemeFamily> = {
 };
 
 /**
+ * Nombre visible de cada juego. El wrapper mostraba `gameId.toUpperCase()` en
+ * la portada — o sea "FRUIT" y "FLAPPY", identificadores de código— cuando las
+ * dos pantallas que los lanzan ya tenían el nombre real en sus propias listas.
+ */
+export const GAME_DISPLAY_NAMES: Record<GameId, string> = {
+  fruit: 'Fruit Catcher',
+  duck: 'Duck Hunt',
+  memory: 'Memory Game',
+  dino: 'Dino Run',
+  flappy: 'Flappy Bird',
+};
+
+/** Una línea de qué hacer, para la portada. */
+export const GAME_TAGLINES: Record<GameId, string> = {
+  fruit: 'Atrapá frutas y esquivá las bombas',
+  duck: 'Apuntá y disparale a los patos',
+  memory: 'Encontrá los pares antes de quedarte sin vidas',
+  dino: 'Saltá los obstáculos todo lo que puedas',
+  flappy: 'Volá entre los tubos sin chocar',
+};
+
+/**
  * Utilidad: obtiene tokens por id.
  * (Mantener simple; el wrapper puede cachear/memoizar.)
  */
-export function getGameTheme(gameId: GameId): GameThemeTokens {
-  return GAME_THEMES[gameId];
+export function getGameTheme(gameId: GameId, isDark = false): GameThemeTokens {
+  const base = GAME_THEMES[gameId];
+  // Las sombras son lo único que depende del esquema del dispositivo; el resto
+  // de la paleta es la identidad del juego y no cambia con el tema de la app.
+  return isDark ? { ...base, shadows: buildShadows(true) } : base;
 }

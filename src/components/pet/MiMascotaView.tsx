@@ -20,6 +20,7 @@ import { DinoGame } from '../games/DinoGame';
 import { FlappyBird } from '../games/FlappyBird';
 import { GameWrapper } from '../games/GameWrapper';
 import type { GameId } from '../games/gameContracts';
+import { coinsForScore, isRewardGame } from '../games/arcadeRewards';
 import { Radius, colors } from '../../theme/tokens';
 
 
@@ -27,7 +28,6 @@ import { Radius, colors } from '../../theme/tokens';
 // Ver `src/components/games/gameContracts.ts` y `src/components/games/GAME_CONTRACT.md`.
 
 const { width } = Dimensions.get('window');
-const ARCADE_REWARD_GAMES = new Set(['fruit', 'duck', 'memory', 'dino']);
 
 // --- Types ---
 interface PetStats {
@@ -506,11 +506,14 @@ export function MiMascotaView({ navigation }: any) {
                         onClose={() => setCurrentGame(null)}
                         onLegacyGameEnd={(value: number) => {
                             const score = value;
-                            const coins = Math.floor(score / 5);
+                            const coins = coinsForScore(score);
                             if (coins > 0) addGameCoins(coins);
 
-                            // Arcade Reward Logic (Points)
-                            if (ARCADE_REWARD_GAMES.has(currentGame)) {
+                            // La lista de juegos con recompensa se comparte con
+                            // GamesScreen: acá faltaba `flappy`, así que jugarlo
+                            // desde la mascota no acreditaba puntos y desde Game
+                            // Center sí.
+                            if (isRewardGame(currentGame)) {
                                 const result = registerArcadeReward(currentGame, score);
                                 if (result.status === 'awarded') show(`+${result.pointsAwarded} Pts Ramgos`);
                             }

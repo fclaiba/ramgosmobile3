@@ -13,6 +13,8 @@ import {
   type GameStatus,
   getGameTheme,
   GAME_FAMILY_BY_ID,
+  GAME_DISPLAY_NAMES,
+  GAME_TAGLINES,
 } from './gameContracts';
 import { glassShadow, Radius } from '../../theme/tokens';
 
@@ -63,7 +65,7 @@ export function GameWrapper({
   const isDark = colorScheme === 'dark';
   const styles = getStyles(isDark);
   const family = GAME_FAMILY_BY_ID[gameId];
-  const theme = useMemo(() => getGameTheme(gameId), [gameId]);
+  const theme = useMemo(() => getGameTheme(gameId, isDark), [gameId, isDark]);
   const overlayBg =
     family === 'casino' ? 'rgba(0,0,0,0.75)' : 'rgba(15,23,42,0.6)';
   const overlayCardBg =
@@ -300,8 +302,18 @@ export function GameWrapper({
               },
             ]}
           >
-            <Text style={[styles.overlayTitle, { color: theme.colors.text }]}>{gameId.toUpperCase()}</Text>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: theme.colors.accent }]} onPress={handleStart}>
+            <Text style={[styles.overlayTitle, { color: theme.colors.text }]}>
+              {GAME_DISPLAY_NAMES[gameId] ?? gameId}
+            </Text>
+            <Text style={[styles.overlaySubtitle, { color: theme.colors.textMuted }]}>
+              {GAME_TAGLINES[gameId] ?? ''}
+            </Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: theme.colors.accent }]}
+              onPress={handleStart}
+              accessibilityRole="button"
+              accessibilityLabel={`Empezar a jugar ${GAME_DISPLAY_NAMES[gameId] ?? gameId}`}
+            >
               <Play size={20} color="#fff" />
               <Text style={styles.primaryBtnText}>Jugar</Text>
             </TouchableOpacity>
@@ -373,7 +385,18 @@ export function GameWrapper({
             ]}
           >
             <Text style={[styles.overlayTitle, { color: theme.colors.text }]}>Game Over</Text>
-            <Text style={{ color: theme.colors.textMuted, marginBottom: 14 }}>Puntos: {snapshot.metrics.score}</Text>
+
+            {/* El puntaje es el remate de la partida: va grande y solo, no
+                escondido en una línea de texto corrido. */}
+            <View style={styles.scorePanel}>
+              <Text style={[styles.scoreValue, { color: theme.colors.accent }]}>
+                {snapshot.metrics.score}
+              </Text>
+              <Text style={[styles.scoreLabel, { color: theme.colors.textMuted }]}>
+                {snapshot.metrics.score === 1 ? 'punto' : 'puntos'}
+                {(snapshot.metrics.level ?? 1) > 1 ? ` · nivel ${snapshot.metrics.level}` : ''}
+              </Text>
+            </View>
             <View style={{ gap: 10 }}>
               {onLegacyGameEnd ? (
                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: theme.colors.accent }]} onPress={handleSaveAndExit}>
@@ -453,6 +476,16 @@ const getStyles = (isDark: any) => StyleSheet.create({
     ...glassShadow(isDark),
   },
   overlayTitle: { fontSize: 28, fontWeight: '900', textAlign: 'center', marginBottom: 12 },
+  overlaySubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: -6,
+    marginBottom: 18,
+  },
+  scorePanel: { alignItems: 'center', marginBottom: 18, gap: 2 },
+  scoreValue: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
+  scoreLabel: { fontSize: 13, fontWeight: '600' },
   primaryBtn: {
     flexDirection: 'row',
     gap: 10,

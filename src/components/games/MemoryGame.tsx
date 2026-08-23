@@ -6,6 +6,7 @@ import Animated, { useAnimatedStyle, withSpring, useSharedValue, withTiming, int
 import { LinearGradient } from 'expo-linear-gradient';
 import type { GameActionSignal } from './GameWrapper';
 import type { GameAdapterProps, GameEndSummary, GameEvent, GameThemeTokens } from './gameContracts';
+import { getArcadeParams } from './gameDifficultyConfig';
 import { useTheme } from '../../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../../theme/tokens';
 
@@ -188,8 +189,16 @@ export const MemoryGame = (props: MemoryGameProps) => {
     }, [emitMetrics, level, onEvent, uiMode]);
 
     const startLevel = (lvl: number) => {
-        // Config
-        const pairCount = 2 + lvl; // Lvl 1: 3 pairs, Lvl 2: 4 pairs...
+        // La dificultad sale de `gameDifficultyConfig`, igual que en los otros
+        // cuatro juegos, en vez de constantes propias. El tablero crece con el
+        // nivel y el preview se ACORTA: antes se alargaba (`2000 + lvl*500`),
+        // así que el juego se volvía más fácil a medida que avanzabas.
+        const params = getArcadeParams('memory', lvl);
+        const gridPairs = params && params.gameId === 'memory'
+            ? Math.floor((params.grid.cols * params.grid.rows) / 2)
+            : 2 + lvl;
+        const pairCount = Math.max(3, Math.min(EMOJIS.length, gridPairs));
+        const previewMs = params && params.gameId === 'memory' ? params.previewMs : 2000;
         const selectedEmojis = EMOJIS.slice(0, pairCount);
 
         let deck: CardItem[] = [];
@@ -227,7 +236,7 @@ export const MemoryGame = (props: MemoryGameProps) => {
             setCards(prev => prev.map(c => ({ ...c, isFlipped: false })));
             setGameState('PLAYING');
             if (uiMode === 'wrapped') emitStatus('playing');
-        }, 2000 + (lvl * 500)); // Longer preview for higher levels
+        }, previewMs);
     };
 
     const startGame = () => {
