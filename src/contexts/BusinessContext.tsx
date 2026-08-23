@@ -67,10 +67,11 @@ function useBusinessState() {
         userId && sessionToken ? { sessionToken } : 'skip',
     ) ?? [];
 
-    const reviews = useQuery(
+    const reviewsResult = useQuery(
         api.reviews.getBySeller,
-        userId ? { sellerId: userId } : 'skip',
-    ) ?? [];
+        userId ? { sellerId: userId, limit: 50 } : 'skip',
+    );
+    const reviews = reviewsResult?.items ?? [];
 
     const updateProfileMutation = useMutation(api.users.updateProfile);
     const createListingMutation = useMutation(api.listings.createListing);

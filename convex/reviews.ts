@@ -239,8 +239,11 @@ export const getUserReviews = query({
 });
 
 export const markReviewHelpful = mutation({
-    args: { reviewId: v.id("reviews") },
+    args: { sessionToken: v.optional(v.string()), reviewId: v.id("reviews") },
     handler: async (ctx, args) => {
+        // Exige sesión: sin esto cualquiera podía inflar el contador sin límite.
+        await requireActor(ctx, args.sessionToken);
+
         const review = await ctx.db.get(args.reviewId);
         if (!review) throw new Error("Review no encontrado");
 
@@ -349,26 +352,51 @@ export const getReviewStats = query({
     },
 });
 
+/**
+ * Reseñas de todo lo que vende un usuario, para el perfil público.
+ *
+ * Lee por el índice `by_seller` de listings (antes era un `.filter()`, o sea un
+ * scan de la tabla entera) y acota tanto los listings como las reseñas por
+ * listing: un vendedor con catálogo grande no puede hacer explotar la query.
+ */
 export const getBySeller = query({
-    args: { sellerId: v.string() },
+    args: { sellerId: v.string(), limit: v.optional(v.number()) },
     handler: async (ctx, args) => {
+        const limit = Math.min(Math.max(args.limit ?? 20, 1), 50);
+
         const listings = await ctx.db
             .query("listings")
-            .filter(q => q.eq(q.field("sellerId"), args.sellerId))
-            .collect();
+            .withIndex("by_seller", (q) => q.eq("sellerId", args.sellerId))
+            .take(100);
 
-        const listingIds = listings.map(l => l._id.toString());
-        if (listingIds.length === 0) return [];
-
-        let allReviews: any[] = [];
-        for (const listingId of listingIds) {
-            const reviews = await ctx.db
-                .query("reviews")
-                .withIndex("by_listing", q => q.eq("listingId", listingId))
-                .collect();
-            allReviews = allReviews.concat(reviews);
+        if (listings.length === 0) {
+            return { items: [], total: 0, average: 0 };
         }
 
-        return allReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const collected: any[] = [];
+        for (const listing of listings) {
+            const reviews = await ctx.db
+                .query("reviews")
+                .withIndex("by_listing", (q) => q.eq("listingId", listing._id.toString()))
+                .order("desc")
+                .take(20);
+            for (const review of reviews) {
+                collected.push({ ...review, listingTitle: listing.title });
+            }
+        }
+
+        collected.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+        const average = collected.length
+            ? collected.reduce((sum, r) => sum + (r.rating || 0), 0) / collected.length
+            : 0;
+
+        return {
+            items: collected.slice(0, limit),
+            total: collected.length,
+            average: Math.round(average * 10) / 10,
+        };
     }
 });

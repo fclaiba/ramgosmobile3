@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Star } from 'lucide-react-native';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Radius, colors } from '../theme/tokens';
 
 
@@ -15,8 +16,14 @@ interface ReviewsListProps {
 }
 
 export const ReviewsList: React.FC<ReviewsListProps> = ({ listingId, onWriteReview }) => {
+    const { sessionToken } = useAuth();
     const reviews = useQuery(api.reviews.getListingReviews, { listingId, limit: 5 });
-    const reviewEligibility = useQuery(api.reviews.canReviewListing, { listingId });
+    // Sin `sessionToken` la query no puede identificar al actor y siempre respondía
+    // "Iniciá sesión", dejando el botón deshabilitado incluso para quien sí compró.
+    const reviewEligibility = useQuery(
+        api.reviews.canReviewListing,
+        sessionToken ? { listingId, sessionToken } : 'skip',
+    );
     const { theme, colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);

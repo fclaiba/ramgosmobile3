@@ -172,6 +172,20 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     );
     const forms = publicForms ?? [];
 
+    // Reseñas del vendedor (agregado + últimas). Es público: el puntaje y las
+    // opiniones son justamente lo que un comprador viene a mirar acá.
+    const sellerReviews = useQuery(
+        api.reviews.getBySeller,
+        sellerId ? { sellerId: String(sellerId), limit: 10 } : "skip",
+    );
+    const reviewItems = sellerReviews?.items ?? [];
+
+    // Marcas con las que colabora, sólo para influencers.
+    const collabs = useQuery(
+        api.campaigns.getPublicInfluencerCollabs,
+        sellerId && profile?.role === 'influencer' ? { influencerId: String(sellerId) } : "skip",
+    ) ?? [];
+
     const activeItems = useMemo(() => {
         return listings.filter((item: any) => (item.listingType || item.type || 'product') === activeTab);
     }, [listings, activeTab]);
@@ -182,8 +196,16 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
     });
 
     const isBusiness = profile?.role === 'business';
+    const isInfluencer = profile?.role === 'influencer';
     const isVerified = isBusiness || profile?.kycStatus === 'approved';
     const isOwnProfile = Boolean(currentUserId && sellerId && String(currentUserId) === String(sellerId));
+
+    /** Puntaje de vendedor: lo tiene cualquiera que haya vendido y recibido
+     *  reseñas, no sólo los negocios. Un influencer que vende sus propios
+     *  productos también acumula reputación. */
+    const reviewCount = sellerReviews?.total ?? profile?.sellerReviewCount ?? 0;
+    const ratingAverage = sellerReviews?.average || profile?.sellerRating || 0;
+    const showSellerStats = isBusiness || reviewCount > 0;
 
     /** Pestaña Comercial: sólo si hay algo detrás. Un consumidor común no
      *  necesita un toggle que lleva a una grilla vacía. */
@@ -448,14 +470,14 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
 
                 {/* Stats — followerCount = socialUsers (misma red social) */}
                 <View style={styles.statsContainer}>
-                    {isBusiness ? (
+                    {showSellerStats ? (
                         <>
                             <View style={styles.statBox}>
                                 <View style={styles.statValueRow}>
                                     <Star size={16} color="#F59E0B" fill="#F59E0B" />
-                                    <Text style={styles.statValue}>{profile?.sellerRating ? profile.sellerRating.toFixed(1) : '0.0'}</Text>
+                                    <Text style={styles.statValue}>{ratingAverage ? ratingAverage.toFixed(1) : '0.0'}</Text>
                                 </View>
-                                <Text style={styles.statLabel}>{profile?.sellerReviewCount || 0} reseñas</Text>
+                                <Text style={styles.statLabel}>{reviewCount} reseñas</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <TouchableOpacity
@@ -645,6 +667,87 @@ export default function CommercialProfileScreen({ navigation, route }: any) {
                             </View>
                             <ArrowRight size={20} color={isDark ? '#6B7280' : '#9CA3AF'} />
                         </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+
+            {/* Colaboraciones — las marcas que autorizaron a este influencer a
+                promocionar. Sale de campañas activas + whitelist, la misma regla
+                con la que el checkout decide si le paga comisión. */}
+            {showCommercialTabs && isInfluencer && collabs.length > 0 && (
+                <View style={styles.servicesSection}>
+                    <Text style={styles.servicesTitle}>Colabora con</Text>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
+                        nestedScrollEnabled
+                    >
+                        {collabs.map((collab: any) => (
+                            <TouchableOpacity
+                                key={collab.businessId}
+                                style={styles.collabCard}
+                                activeOpacity={0.85}
+                                onPress={() => navigation.push('CommercialProfile', { sellerId: collab.businessId })}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Ver perfil de ${collab.name}`}
+                            >
+                                {collab.avatar ? (
+                                    <ImageWithFallback src={collab.avatar} style={styles.collabAvatar} />
+                                ) : (
+                                    <View style={[styles.collabAvatar, styles.avatarPlaceholder]}>
+                                        <Building2 size={22} color={isDark ? '#9CA3AF' : '#6B7280'} />
+                                    </View>
+                                )}
+                                <Text style={styles.collabName} numberOfLines={1}>{collab.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
+            {/* Reseñas — puntaje y opiniones de compradores verificados. Sólo
+                escribe reseña quien compró: lo valida `reviews.addReview`. */}
+            {showCommercialTabs && reviewCount > 0 && (
+                <View style={styles.servicesSection}>
+                    <View style={styles.reviewsHeader}>
+                        <Text style={styles.servicesTitle}>Reseñas</Text>
+                        <View style={styles.ratingPill}>
+                            <Star size={14} color="#F59E0B" fill="#F59E0B" />
+                            <Text style={styles.ratingPillText}>
+                                {ratingAverage.toFixed(1)} · {reviewCount}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {reviewItems.map((review: any) => (
+                        <View key={String(review._id)} style={styles.reviewCard}>
+                            <View style={styles.reviewTop}>
+                                <Text style={styles.reviewAuthor} numberOfLines={1}>{review.userName}</Text>
+                                <View style={{ flexDirection: 'row', gap: 2 }}>
+                                    {[1, 2, 3, 4, 5].map((n) => (
+                                        <Star
+                                            key={n}
+                                            size={12}
+                                            color="#F59E0B"
+                                            fill={n <= (review.rating || 0) ? '#F59E0B' : 'transparent'}
+                                        />
+                                    ))}
+                                </View>
+                            </View>
+                            {review.listingTitle ? (
+                                <Text style={styles.reviewListing} numberOfLines={1}>{review.listingTitle}</Text>
+                            ) : null}
+                            {review.comment ? (
+                                <Text style={styles.reviewComment} numberOfLines={4}>{review.comment}</Text>
+                            ) : null}
+                            {review.verified && (
+                                <View style={styles.verifiedRow}>
+                                    <ShieldCheck size={12} color="#10B981" />
+                                    <Text style={styles.verifiedText}>Compra verificada</Text>
+                                </View>
+                            )}
+                        </View>
                     ))}
                 </View>
             )}
@@ -1083,6 +1186,85 @@ function getStyles(isDark: boolean, insets: any) {
             fontSize: 13,
             color: muted,
             marginTop: 2,
+        },
+        collabCard: {
+            width: 88,
+            alignItems: 'center',
+            gap: 8,
+        },
+        collabAvatar: {
+            width: 56,
+            height: 56,
+            borderRadius: Radius.full,
+            backgroundColor: surface,
+            borderWidth: 1,
+            borderColor: border,
+        },
+        collabName: {
+            fontSize: 12,
+            fontWeight: '600',
+            color: text,
+            textAlign: 'center',
+        },
+        reviewsHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+        },
+        ratingPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: Radius.full,
+            backgroundColor: isDark ? 'rgba(245,158,11,0.16)' : 'rgba(245,158,11,0.12)',
+        },
+        ratingPillText: {
+            fontSize: 12,
+            fontWeight: '800',
+            color: isDark ? '#FBBF24' : '#B45309',
+        },
+        reviewCard: {
+            backgroundColor: surface,
+            borderRadius: Radius.lg,
+            borderWidth: 1,
+            borderColor: border,
+            padding: 14,
+            gap: 6,
+        },
+        reviewTop: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+        },
+        reviewAuthor: {
+            fontSize: 14,
+            fontWeight: '700',
+            color: text,
+            flexShrink: 1,
+        },
+        reviewListing: {
+            fontSize: 12,
+            color: muted,
+            fontWeight: '600',
+        },
+        reviewComment: {
+            fontSize: 13,
+            color: muted,
+            lineHeight: 19,
+        },
+        verifiedRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            marginTop: 2,
+        },
+        verifiedText: {
+            fontSize: 11,
+            fontWeight: '700',
+            color: '#10B981',
         },
         primaryBtn: {
             flex: 1,

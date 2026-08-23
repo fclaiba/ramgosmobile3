@@ -43,6 +43,9 @@ import {
     isInfluencer,
     toInfluencerLookupDto,
 } from './userLookup';
+import { toUserCardById } from './userCard';
+import { checkPromotionRights } from './promotionEligibility';
+import { preferredShareCode } from './referralHelpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -871,5 +874,102 @@ export const seedBusinessInviteInfluencer1 = mutation({
             influencerEmail: (influencer as any).email,
             businessEmail: (business as any).email,
         };
+    },
+});
+
+/**
+ * Los negocios con los que un influencer colabora, para su perfil PÚBLICO.
+ *
+ * A diferencia de `getMyCampaigns` (que exige ser el propio influencer o admin),
+ * esta query la puede leer cualquiera: es la vitrina de "con qué marcas trabajo".
+ * Por eso devuelve sólo la tarjeta pública del negocio y NUNCA `commissionRate`
+ * ni `notes` — la letra chica del acuerdo es privada entre las dos partes.
+ *
+ * Unifica las dos vías de vínculo que reconoce el motor de comisiones
+ * (`internalResolveCartAttribution`): campaña activa y whitelist activa.
+ */
+export const getPublicInfluencerCollabs = query({
+    args: { influencerId: v.string() },
+    handler: async (ctx, args) => {
+        const campaigns = await ctx.db
+            .query('influencerCampaigns')
+            .withIndex('by_influencer', (q: any) => q.eq('influencerId', args.influencerId))
+            .take(100);
+
+        const whitelists = await ctx.db
+            .query('influencerWhitelists')
+            .withIndex('by_influencer', (q: any) => q.eq('influencerId', args.influencerId))
+            .take(100);
+
+        // Dedupe por negocio: si hay campaña y whitelist para el mismo business,
+        // gana la campaña (es el vínculo explícito y con fecha de inicio).
+        const byBusiness = new Map<string, { source: 'campaign' | 'whitelist'; since: string }>();
+
+        for (const wl of whitelists) {
+            if (wl.status !== 'active') continue;
+            byBusiness.set(String(wl.businessId), { source: 'whitelist', since: wl.createdAt });
+        }
+        for (const campaign of campaigns) {
+            if (campaign.status !== 'active') continue;
+            byBusiness.set(String(campaign.businessId), {
+                source: 'campaign',
+                since: campaign.startsAt || campaign.createdAt,
+            });
+        }
+
+        const items = [];
+        for (const [businessId, meta] of byBusiness) {
+            const card = await toUserCardById(ctx, businessId);
+            if (!card) continue;
+            items.push({
+                businessId,
+                name: card.displayName,
+                username: card.username,
+                avatar: card.avatar,
+                source: meta.source,
+                since: meta.since,
+            });
+        }
+
+        items.sort((a, b) => new Date(b.since).getTime() - new Date(a.since).getTime());
+        return items;
+    },
+});
+
+/**
+ * Elegibilidad para promocionar productos de terceros: vive en
+ * `convex/promotionEligibility.ts`, compartida con el etiquetado social y el
+ * share con `?ref=`.
+ */
+export { eligibleBusinessIdsFor } from './promotionEligibility';
+
+/**
+ * ¿Este usuario puede compartir ESTE producto como referido, y con qué código?
+ *
+ * La usa el botón "compartir" del detalle de producto para decidir si el enlace
+ * lleva `?ref=`. Devuelve `canRefer:false` para el dueño del listing a propósito:
+ * la autorreferencia no paga comisión, así que un `?ref=` propio sería un enlace
+ * que promete algo que el checkout no cumple.
+ */
+export const getMyShareEligibility = query({
+    args: { sessionToken: v.optional(v.string()), listingId: v.string() },
+    handler: async (ctx, args) => {
+        const actor = await getActorOrNull(ctx, args.sessionToken);
+        if (!actor) return { canRefer: false, shareCode: null };
+
+        const listingRef = ctx.db.normalizeId('listings', args.listingId);
+        const listing = listingRef ? await ctx.db.get(listingRef) : null;
+        if (!listing) return { canRefer: false, shareCode: null };
+
+        const check = await checkPromotionRights(ctx, actor, listing);
+        if (!check.canRefer) return { canRefer: false, shareCode: null };
+
+        const user = await ctx.db.get(actor.id);
+        const shareCode = preferredShareCode(
+            (user as any)?.username,
+            (user as any)?.referralAlias,
+        );
+
+        return { canRefer: Boolean(shareCode), shareCode: shareCode || null };
     },
 });
