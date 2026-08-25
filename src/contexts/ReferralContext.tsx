@@ -7,14 +7,20 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from './AuthContext';
 import { referralWebLink } from '../config/appOrigin';
 
-/** Business constants — locked by constitution.test.tsx */
-export const REFERRAL_REWARDS = {
-    REGISTER: 5,
-    FIRST_PURCHASE: 10,
-    HIGH_TICKET: 25,
-} as const;
+/**
+ * Montos de referido — re-exportados de la tabla única del servidor.
+ *
+ * Antes eran literales propios (5 / 10 / 25) que no coincidían con lo que el
+ * servidor acredita en `users.awardReferralOnSignup` (500 / 1000 / 2000). El
+ * usuario veía en pantalla un número cien veces menor al que cobraba.
+ */
+export { REFERRAL_REWARDS } from '../../convex/economy/_rewardRules';
 
-export const REFERRAL_WELCOME_BONUS = 10;
+/**
+ * Bono de bienvenida al usuario nuevo. Ya no se paga en el alta sino en su
+ * primera compra, que es donde el servidor lo acredita.
+ */
+export const REFERRAL_WELCOME_BONUS = 0;
 
 export interface ReferralStats {
     totalInvited: number;

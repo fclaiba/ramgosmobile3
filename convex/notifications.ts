@@ -91,9 +91,12 @@ export const sendOTP = action({
 
         const resendApiKey = process.env.RESEND_API_KEY;
         if (!resendApiKey) {
+            // `delivered: false` es lo que distingue "no salió" de "salió".
+            // Sin ese dato el llamador no puede saber que el mail no existe, y
+            // la UI le promete al usuario un código que nunca va a llegar.
             console.error("Missing RESEND_API_KEY environment variable");
             console.log(`[Development Mock] Se enviaría OTP a ${args.email}: Código ${args.code}`);
-            return { success: true, mocked: true };
+            return { success: true, delivered: false, mocked: true };
         }
 
         const resend = new Resend(resendApiKey);
@@ -155,12 +158,12 @@ export const sendOTP = action({
                 console.error("Resend delivery error:", error);
                 if (error.name === 'validation_error') {
                     console.log(`[Development Mock/Fallback] Se enviaría OTP a ${args.email}: Código ${args.code}`);
-                    return { success: true, mocked: true, fallback: true };
+                    return { success: true, delivered: false, mocked: true, fallback: true };
                 }
                 throw new Error(error.message);
             }
             console.log("Resend successfully dispatched OTP", data);
-            return { success: true, id: data?.id };
+            return { success: true, delivered: true, id: data?.id };
         } catch (error: any) {
             console.error("Resend error:", error);
             throw new Error(`Error enviando email: ${error.message}`);

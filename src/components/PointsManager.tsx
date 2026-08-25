@@ -11,10 +11,14 @@ import { useRewards } from '../contexts/RewardsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
+// Este archivo declaraba su propio `POINT_VALUE_USD`, que sombreaba al del
+// contexto cuando ese valía otra cosa. Que hubiera dos copias es la razón por
+// la que la divergencia contra el servidor pasó desapercibida tanto tiempo.
+import { POINT_VALUE_USD } from '../../convex/economy/_rewardRules';
+import { LuckyWheel } from './rewards/LuckyWheel';
 
 
 const { width } = Dimensions.get('window');
-const POINT_VALUE_USD = 0.001;
 
 // --- HAPTICS HELPER ---
 const triggerImpact = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
@@ -94,17 +98,23 @@ export function PointsManager() {
         show(ok ? '¡Racha reclamada! +10 puntos' : 'No se pudo reclamar la racha.', ok ? 'success' : 'error');
     };
 
-    const handleSpinWheel = async () => {
-        triggerImpact(Haptics.ImpactFeedbackStyle.Heavy);
-        if (!wheelAvailable) {
-            show('Ya giraste la rueda hoy. Vuelve mañana.', 'info');
-            return;
-        }
-        const result = await spinLuckyWheel();
+    /**
+     * Resultado del giro. El háptico y la llamada al servidor los maneja
+     * `LuckyWheel`; acá sólo se traduce el resultado a un toast, después de que
+     * la rueda frenó sobre el gajo correspondiente.
+     */
+    const handleWheelResult = (result: {
+        success: boolean;
+        pointsAwarded?: number;
+        message?: string;
+        alreadyClaimed?: boolean;
+    }) => {
         if (result.success) {
             show(result.message || `¡Ganaste ${result.pointsAwarded} puntos!`, 'success');
+        } else if (result.alreadyClaimed) {
+            show(result.message || 'Ya giraste la rueda hoy. Vuelve mañana.', 'info');
         } else {
-            show(result.message || 'No se pudo girar la rueda.', result.alreadyClaimed ? 'info' : 'error');
+            show(result.message || 'No se pudo girar la rueda.', 'error');
         }
     };
 
@@ -437,14 +447,22 @@ export function PointsManager() {
                         disabled={alreadyClaimedDaily}
                         onPress={handleClaimStreak}
                     />
-                    <GlassActionCard
-                        title="Ruleta de la Suerte"
-                        subtitle={wheelAvailable ? "Giro disponible" : "Vuelve mañana"}
-                        icon={CircleDollarSign}
-                        color="#D97706"
-                        buttonText={wheelAvailable ? "Girar" : "Esperar"}
-                        disabled={!wheelAvailable}
-                        onPress={handleSpinWheel}
+                </View>
+
+                {/* Ruleta de la Suerte. El premio lo decide el servidor; la
+                    rueda sólo lo representa. */}
+                <View style={styles.wheelSection}>
+                    <Text style={styles.sectionTitle}>Ruleta de la Suerte</Text>
+                    <Text style={styles.wheelHint}>
+                        {wheelAvailable
+                            ? 'Tenés un giro disponible hoy.'
+                            : 'Ya giraste hoy. Volvé mañana por otro giro.'}
+                    </Text>
+                    <LuckyWheel
+                        available={wheelAvailable}
+                        isDark={isDark}
+                        onSpin={spinLuckyWheel}
+                        onResult={handleWheelResult}
                     />
                 </View>
 
@@ -616,6 +634,23 @@ const getStyles = (isDark: boolean, insets: { top: number; bottom: number }) => 
         roadmapBox: {
             marginTop: 24,
             marginBottom: 24,
+        },
+        wheelSection: {
+            alignItems: 'center',
+            marginTop: 24,
+            paddingHorizontal: 24,
+            gap: 4,
+        },
+        sectionTitle: {
+            fontSize: 18,
+            fontWeight: '800',
+            color: isDark ? '#F9FAFB' : '#111827',
+        },
+        wheelHint: {
+            fontSize: 13,
+            color: isDark ? '#94A3B8' : '#64748B',
+            marginBottom: 12,
+            textAlign: 'center',
         },
         sectionHeaderLabel: {
             paddingHorizontal: 24,

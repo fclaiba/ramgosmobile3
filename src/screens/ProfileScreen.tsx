@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform , KeyboardAvoidingView, Image} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar, Platform , KeyboardAvoidingView, Image, Modal} from 'react-native';
 import { User, Mail, Phone, MapPin, Calendar, Camera, Edit2, Save, X, Award, TrendingUp, Heart, ShoppingBag, Ticket, PartyPopper, Shield, CreditCard, Bell, Settings, ChevronRight, LogOut, ArrowLeft, Users, Crown, AtSign, Hash, ListTodo, Lock, LayoutDashboard, CheckCircle2, QrCode, Tag, Trophy, Flame, Coins, Map, Gamepad2, Building, AlertCircle, Copy } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -58,6 +58,7 @@ function ProfileScreen({ navigation }: any) {
     const { unreadCount } = useNotifications();
     const { count: paymentMethodsCount } = useSavedPaymentMethods();
     const [isEditing, setIsEditing] = useState(false);
+    const [avatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
 
     // Initial State Mock
     const [profile, setProfile] = useState<UserProfile>({
@@ -173,8 +174,19 @@ function ProfileScreen({ navigation }: any) {
         }
     };
 
+    /**
+     * Tocar la foto de perfil.
+     *
+     * Editando abre el selector de imagen, como siempre. Fuera de edición antes
+     * no hacía nada: la foto se mostraba a 164px y no había forma de verla más
+     * grande. Ahora abre un visor a pantalla completa, que es lo que se espera
+     * al tocar una foto de perfil.
+     */
     const handleAvatarPress = async () => {
-        if (!isEditing) return;
+        if (!isEditing) {
+            if (profile.avatarUrl) setAvatarPreviewOpen(true);
+            return;
+        }
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'],
@@ -296,10 +308,12 @@ function ProfileScreen({ navigation }: any) {
 
                     {/* Profile Info */}
                     <View style={styles.profileHeader}>
-                        <TouchableOpacity 
-                            style={styles.avatarWrapper} 
+                        <TouchableOpacity
+                            style={styles.avatarWrapper}
                             onPress={handleAvatarPress}
-                            activeOpacity={isEditing ? 0.8 : 1}
+                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={isEditing ? 'Cambiar foto de perfil' : 'Ver foto de perfil en grande'}
                         >
                             <Avatar style={styles.avatar}>
                                 <AvatarImage src={isEditing ? editedProfile.avatarUrl : profile.avatarUrl} />
@@ -824,6 +838,32 @@ function ProfileScreen({ navigation }: any) {
 
 
 
+            {/* Visor de la foto de perfil a pantalla completa. */}
+            <Modal
+                visible={avatarPreviewOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setAvatarPreviewOpen(false)}
+                accessibilityViewIsModal
+            >
+                <TouchableOpacity
+                    style={styles.avatarPreviewBackdrop}
+                    activeOpacity={1}
+                    onPress={() => setAvatarPreviewOpen(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cerrar foto"
+                >
+                    <Image
+                        source={{ uri: profile.avatarUrl }}
+                        style={styles.avatarPreviewImage}
+                        resizeMode="contain"
+                    />
+                    <View style={styles.avatarPreviewClose}>
+                        <X size={24} color="#FFFFFF" />
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
             <MobileNav
                 activeSection={'home'}
                 onSectionChange={(section) => navigation.navigate('Home', { screen: 'HomeScreen', params: { initialTab: section } })}
@@ -849,6 +889,24 @@ const getStyles = (isDark: boolean) => {
     // Foto de perfil grande y con marco marcado: es el elemento que identifica
     // la cuenta y hasta ahora se renderizaba a 40px por el bug de `Avatar`.
     avatar: { width: 164, height: 164, borderRadius: Radius.full, borderWidth: 5, borderColor: 'rgba(255,255,255,0.45)' },
+    avatarPreviewBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.92)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarPreviewImage: { width: '100%', height: '80%' },
+    avatarPreviewClose: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 60 : 32,
+        right: 20,
+        width: 44,
+        height: 44,
+        borderRadius: Radius.full,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+    },
     cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.72)', padding: 8, borderRadius: Radius.xl },
     cameraBtnGlass: {
         position: 'absolute', bottom: -4, right: -4, borderRadius: Radius.full, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.5)',

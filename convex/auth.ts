@@ -26,16 +26,36 @@ export const saveOtp = internalMutation({
 // Enviar email de verificación
 export const sendVerificationEmail = action({
     args: { email: v.string() },
-    handler: async (ctx, args) => {
+    // El tipo de retorno va explícito porque el handler llama a
+    // `api.notifications.sendOTP`, y ese `api` se genera a partir de este mismo
+    // archivo: sin anotación, TypeScript entra en un ciclo de inferencia
+    // (TS7022) y termina tipando todo el `api` como `any`.
+    handler: async (ctx, args): Promise<{ success: boolean; delivered: boolean; message: string }> => {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         
         // Guardamos el OTP en la DB
         await ctx.runMutation(internal.auth.saveOtp, { email: args.email, code });
         
         // Enviamos el correo usando notifications.sendOTP
-        await ctx.runAction(api.notifications.sendOTP, { email: args.email, code, type: 'verification' });
-        
-        return { success: true, message: "Código enviado correctamente." };
+        const outcome = await ctx.runAction(api.notifications.sendOTP, {
+            email: args.email,
+            code,
+            type: 'verification',
+        });
+
+        // `sendOTP` cae a un mock de consola si falta `RESEND_API_KEY` o si
+        // Resend rechaza el destinatario. Antes se descartaba ese resultado y
+        // esto respondía "Código enviado correctamente" igual: el usuario
+        // quedaba esperando un mail que nunca salió, indistinguible de un
+        // problema de su casilla. Ahora el estado real viaja hasta la UI.
+        const delivered = outcome?.delivered !== false;
+        return {
+            success: true,
+            delivered,
+            message: delivered
+                ? "Código enviado correctamente."
+                : "No se pudo enviar el email. Revisá la configuración de envío.",
+        };
     }
 });
 

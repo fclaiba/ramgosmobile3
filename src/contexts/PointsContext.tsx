@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { MEMBERSHIP_TIERS as SHARED_TIERS } from '../../convex/economy/_rewardRules';
 
 export interface MembershipTier {
     id: string;
@@ -11,12 +12,23 @@ export interface MembershipTier {
     perks: string[];
 }
 
-export const MEMBERSHIP_TIERS: MembershipTier[] = [
-    { id: 'bronze', label: 'Bronze', minPoints: 0, bonusMultiplier: 0, perks: ['Acceso básico'] },
-    { id: 'silver', label: 'Silver', minPoints: 1000, bonusMultiplier: 0.05, perks: ['+5% puntos extra por compra'] },
-    { id: 'gold', label: 'Gold', minPoints: 5000, bonusMultiplier: 0.10, perks: ['+10% puntos extra', 'Sorteos VIP'] },
-    { id: 'platinum', label: 'Platinum', minPoints: 15000, bonusMultiplier: 0.15, perks: ['+15% puntos extra', 'Envíos selectos gratis'] },
-];
+/**
+ * Los umbrales y multiplicadores salen de la tabla única del servidor
+ * (`convex/economy/_rewardRules.ts`), que es la que efectivamente paga el
+ * bonus de compra. Acá sólo se le agregan los perks, que son texto de UI y no
+ * tienen efecto económico.
+ */
+const TIER_PERKS: Record<string, string[]> = {
+    bronze: ['Acceso básico'],
+    silver: ['+5% puntos extra por compra'],
+    gold: ['+10% puntos extra', 'Sorteos VIP'],
+    platinum: ['+15% puntos extra', 'Envíos selectos gratis'],
+};
+
+export const MEMBERSHIP_TIERS: MembershipTier[] = SHARED_TIERS.map((tier) => ({
+    ...tier,
+    perks: TIER_PERKS[tier.id] ?? [],
+}));
 
 export type DailyChallenge = {
     id: string;

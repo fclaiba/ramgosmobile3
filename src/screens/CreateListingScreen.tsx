@@ -157,12 +157,6 @@ export default function CreateListingScreen({ navigation, route }: any) {
     const publishBlock = getSellPublishWithdrawBlock();
     const canPublish = !publishBlock;
 
-    const BUSINESS_CATEGORIES = [
-        'Gastronomía', 'Indumentaria', 'Tecnología', 'Salud y Belleza',
-        'Hogar y Decoración', 'Servicios Profesionales', 'Entretenimiento',
-        'Educación', 'Automotriz', 'Deportes', 'Mascotas', 'Otros'
-    ];
-
     const calculateShipping = () => {
         if (!form.weight) return null;
         const weight = parseFloat(form.weight) || 1;

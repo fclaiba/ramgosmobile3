@@ -1001,17 +1001,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         const email = state.pendingVerification?.email || state.user?.email!;
-        
-        await sendOtpActionCall({ email }).catch(console.error);
+
+        // El `.catch(console.error)` de antes se tragaba el fallo y el toast
+        // decía "reenviado" igual. Sumado a que el servidor respondía siempre
+        // "enviado correctamente" aunque hubiera caído al mock de consola, un
+        // envío roto era indistinguible de uno exitoso desde la app.
+        const outcome = await sendOtpActionCall({ email });
 
         const pending: PendingVerificationState = {
             ...state.pendingVerification!,
             email,
             expiresAt: Date.now() + 10 * 60 * 1000,
         };
-        
+
         setState(prev => ({ ...prev, pendingVerification: pending }));
-        show('Código reenviado al email.', 'success');
+
+        if (outcome?.delivered === false) {
+            show(
+                outcome.message || 'No se pudo enviar el email. Avisale al soporte.',
+                'error',
+            );
+        } else {
+            show('Código reenviado al email.', 'success');
+        }
         return pending;
     };
     const loginWithSocial = async (

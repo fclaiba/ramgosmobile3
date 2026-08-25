@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, ScrollView, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { UserPlus, LogIn, UserCircle, Sparkles } from 'lucide-react-native';
 import { AuthBackground } from '../components/auth/AuthBackground';
+import { Logo } from '../components/ui/Logo';
 import { useAuth, getAuthDestination } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Radius, colors, Type, Space, Elevation } from '../theme/tokens';
@@ -105,11 +106,7 @@ export default function WelcomeScreen({ navigation }: any) {
 
                             {/* Logo Section */}
                             <Animated.View style={[styles.iconContainer, { transform: [{ scale: iconScale }] }]}>
-                                <Image
-                                    source={require('../../logo.png')}
-                                    style={styles.logoImage}
-                                    resizeMode="contain"
-                                />
+                                <Logo height={96} style={styles.logoImage} />
                             </Animated.View>
 
                             {/* Subtitle */}
@@ -227,7 +224,9 @@ const getStyles = (isDark: boolean, c: ReturnType<typeof colors>) => StyleSheet.
 
     // Logo
     iconContainer: { marginBottom: 24, alignItems: 'center', justifyContent: 'center', width: '100%' },
-    logoImage: { width: '100%', maxWidth: 280, height: 96 },
+    // El ancho lo calcula `Logo` a partir del alto y del aspecto real del
+    // archivo; acá sólo se centra.
+    logoImage: { alignSelf: 'center' },
 
     // Text
     subtitle: { ...Type.body, color: c.textMuted, textAlign: 'center', paddingHorizontal: 4 },

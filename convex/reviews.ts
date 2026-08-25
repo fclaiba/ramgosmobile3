@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 import { internal } from "./_generated/api";
+import { REVIEW_POINTS } from "./economy/_rewardRules";
 
 // PHASE 2: Reviews and Ratings
 
@@ -89,13 +90,14 @@ export const addReview = mutation({
         // Update listing's aggregated rating
         await updateListingRating(ctx, args.listingId);
 
-        // Award 5 R Coins for the review
+        // Recompensa por dejar una reseña. El monto sale de la tabla única
+        // (`economy/_rewardRules.ts`), no de un literal suelto.
         await ctx.runMutation(internal.economy.applyPointsEventInternal, {
             userId: targetUserId,
             eventKey: `review_${reviewId}`,
             type: "earn",
             source: "bonus",
-            amount: 5,
+            amount: REVIEW_POINTS,
             description: "Recompensa por dejar una reseña",
         });
 

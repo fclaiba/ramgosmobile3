@@ -98,7 +98,7 @@ export function MiMascotaView({ navigation }: any) {
         addGameCoins,
         updatePetState,
     } = usePoints();
-    const { registerArcadeReward, unlockAccessory, equipAccessory } = useRewards();
+    const { registerArcadeReward, unlockAccessory, equipAccessory, getPetCareStatus } = useRewards();
     const petConfig = economyPetConfig;
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
@@ -351,6 +351,40 @@ export function MiMascotaView({ navigation }: any) {
         );
     };
 
+    /**
+     * R Coins que genera la mascota.
+     *
+     * La pantalla mostraba nivel, EXP y monedas de juego, pero nada de los
+     * R Coins —que son los que tienen valor real y los que el usuario quiere
+     * ver. Sin esto, cuidar la mascota parecía no dar nada.
+     */
+    const renderPetRewards = () => {
+        const { claimedToday, dailyPoints } = getPetCareStatus();
+        return (
+            <View style={styles.rewardsCard}>
+                <View style={styles.rewardsHeader}>
+                    <Trophy size={16} color="#D97706" />
+                    <Text style={styles.rewardsTitle}>R Coins de tu mascota</Text>
+                </View>
+                <View style={styles.rewardsRow}>
+                    <Text style={styles.rewardsLabel}>Cuidado diario</Text>
+                    <Text style={[styles.rewardsValue, claimedToday && styles.rewardsValueDone]}>
+                        {claimedToday ? `✓ +${dailyPoints} hoy` : `+${dailyPoints} disponible`}
+                    </Text>
+                </View>
+                <View style={styles.rewardsRow}>
+                    <Text style={styles.rewardsLabel}>Monedas de juego</Text>
+                    <Text style={styles.rewardsValue}>{gameCoins}</Text>
+                </View>
+                <Text style={styles.rewardsHint}>
+                    {claimedToday
+                        ? 'Ya cobraste el cuidado de hoy. Volvé mañana por los próximos R Coins.'
+                        : `Alimentá a tu mascota para ganar ${dailyPoints} R Coins hoy.`}
+                </Text>
+            </View>
+        );
+    };
+
     const renderWardrobeModal = () => (
         <Modal visible={showWardrobe} animationType="slide" transparent>
             <BlurView intensity={Platform.OS === 'ios' ? 40 : 100} tint={isDark ? "dark" : "light"} style={styles.modalOverlay}>
@@ -591,6 +625,9 @@ export function MiMascotaView({ navigation }: any) {
                 {/* Evolution Progress */}
                 {renderEvolutionTrack()}
 
+                {/* R Coins de la mascota */}
+                {renderPetRewards()}
+
                 {/* Main Actions */}
                 <Text style={styles.sectionTitle}>Cuidados</Text>
                 <View style={styles.actionRow}>
@@ -789,6 +826,30 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         marginBottom: 20,
         borderWidth: 1,
         borderColor: isDark ? '#374151' : '#E2E8F0',
+    },
+    rewardsCard: {
+        backgroundColor: colors(isDark).glass,
+        borderRadius: Radius.lg,
+        padding: 16,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#E2E8F0',
+        gap: 8,
+    },
+    rewardsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    rewardsTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: colors(isDark).text,
+    },
+    rewardsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    rewardsLabel: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' },
+    rewardsValue: { fontSize: 14, fontWeight: '700', color: '#D97706' },
+    rewardsValueDone: { color: '#10B981' },
+    rewardsHint: {
+        fontSize: 12,
+        color: isDark ? '#6B7280' : '#9CA3AF',
+        lineHeight: 16,
     },
     evoHeader: {
         flexDirection: 'row',

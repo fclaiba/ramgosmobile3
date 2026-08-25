@@ -78,6 +78,17 @@ export default defineSchema({
         businessCategory: v.optional(v.string()),
         phoneNumber: v.optional(v.string()),
         nickname: v.optional(v.string()),
+        /**
+         * NO IMPLEMENTADO — no lo escribe ninguna mutation.
+         *
+         * No hay proveedor de SMS integrado (no hay Twilio ni equivalente en
+         * `package.json`), así que el teléfono nunca se verifica: `phoneNumber`
+         * y `kycProfile.contactPhone` son datos de contacto para la revisión
+         * manual del admin (`adminQueries.getKycReviewQueue`), nada más.
+         *
+         * Está declarado para no romper documentos viejos que lo tengan. No lo
+         * leas como "el teléfono está verificado" hasta que exista el flujo.
+         */
         phoneVerified: v.optional(v.boolean()),
         emailVerified: v.optional(v.boolean()),
         otp: v.optional(v.string()),

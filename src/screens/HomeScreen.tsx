@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions, Platform } from 'react-native';
-import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp, MessageCircle } from 'lucide-react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions, Platform, BackHandler } from 'react-native';
+import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp, MessageCircle, Gamepad2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
@@ -102,6 +103,7 @@ const quickActions = [
     { id: 1, title: 'Mi Mascota', icon: Sparkles, color: '#2196F3', bg: 'rgba(33, 150, 243,0.1)', action: 'mascota' },
     { id: 2, title: 'Mapa', icon: MapPin, color: '#2563EB', bg: 'rgba(37,99,235,0.1)', action: 'marketplace-map' },
     { id: 3, title: 'Mis R Coins', icon: Zap, color: '#D97706', bg: 'rgba(217,119,6,0.1)', action: 'points' },
+    { id: 4, title: 'Juegos', icon: Gamepad2, color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', action: 'games' },
 ];
 
 const consumptionData: any[] = [];
@@ -177,6 +179,40 @@ export default function HomeScreen({ navigation, route }: any) {
         }
     }, [route.params]);
 
+    /**
+     * Botón "atrás" de Android.
+     *
+     * `view` y `activeTab` son estado local, no entradas del stack, así que el
+     * back nativo no tenía nada que deshacer. Y como login/KYC/logout hacen
+     * `navigation.reset` dejando `Home` como única ruta, el back cerraba la
+     * app directamente desde R Coins.
+     *
+     * Se deshace de a un nivel — sub-vista, después pestaña — y recién cuando
+     * ya está todo en el inicio devuelve `false` para dejar salir. Va con
+     * `useFocusEffect` para no interceptar el back de las otras pantallas del
+     * stack.
+     */
+    useFocusEffect(
+        React.useCallback(() => {
+            if (Platform.OS !== 'android') return;
+
+            const onBackPress = () => {
+                if (view !== 'home') {
+                    setView('home');
+                    return true;
+                }
+                if (activeTab !== 'home') {
+                    setActiveTab('home');
+                    return true;
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [view, activeTab]),
+    );
+
     // Carousel State
     const [currentSlide, setCurrentSlide] = useState(0);
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -211,6 +247,12 @@ export default function HomeScreen({ navigation, route }: any) {
             navigation.navigate(user ? 'Inbox' : 'Login');
             return;
         }
+        // "R Coins" y "Actividad" son sub-vistas de Home (`view`), no pestañas
+        // de `activeTab`. Sin este reset, estando en R Coins y tocando "Home"
+        // en la barra, `setActiveTab('home')` no cambiaba nada porque
+        // `activeTab` YA era 'home', y `view` se quedaba en 'puntos': el botón
+        // Home no llevaba al inicio.
+        if (tab === 'home') setView('home');
         setActiveTab(tab);
     };
 
@@ -240,6 +282,7 @@ export default function HomeScreen({ navigation, route }: any) {
                             if (action.action === 'points') setView('puntos');
                             else if (action.action === 'marketplace-map') handleNavigate('Marketplace', { viewMode: 'map' });
                             else if (action.action === 'mascota') navigation.navigate('MiMascota');
+                            else if (action.action === 'games') navigation.navigate('Games');
                             else console.log(action.action);
                         }}
                     >

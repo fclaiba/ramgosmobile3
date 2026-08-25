@@ -23,6 +23,7 @@ import {
 } from "./users/identity";
 import { searchDirectoryImpl } from "./userDirectory";
 import { toUserCard, socialProfileOf, userCardValidator } from "./userCard";
+import { REFERRAL_REWARDS } from "./economy/_rewardRules";
 
 export const internalCheckRateLimit = internalMutation({
     args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
@@ -61,10 +62,13 @@ export const checkInfluencerMetrics = internalMutation({
 });
 
 const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
-const REFERRAL_WELCOME_BONUS = 0; // Ahora se da en la primera compra (2000)
-const REFERRAL_SIGNUP_BONUS = 500; // R Coins por completar KYC (se suma al balance)
-const REFERRAL_FIRST_PURCHASE_BONUS = 1000; // R Coins para quien invitó
-const REFERRAL_NEW_USER_FIRST_PURCHASE_BONUS = 2000; // R Coins para el comprador nuevo
+// Los montos vienen de `economy/_rewardRules.ts`, el mismo módulo que leen los
+// contextos de React. Estaban hardcodeados acá y la UI de referidos mostraba
+// otros números (5 / 10 / 25), así que el usuario veía una cifra y cobraba otra.
+const REFERRAL_WELCOME_BONUS = 0; // Ahora se da en la primera compra
+const REFERRAL_SIGNUP_BONUS = REFERRAL_REWARDS.SIGNUP;
+const REFERRAL_FIRST_PURCHASE_BONUS = REFERRAL_REWARDS.FIRST_PURCHASE_REFERRER;
+const REFERRAL_NEW_USER_FIRST_PURCHASE_BONUS = REFERRAL_REWARDS.FIRST_PURCHASE_NEW_USER;
 const REFERRAL_HIGH_TICKET_BONUS = 25;
 const REFERRAL_HIGH_TICKET_THRESHOLD_USD = 100;
 

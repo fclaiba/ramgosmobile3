@@ -22,29 +22,27 @@ import {
 
 
 /**
- * $1 cash spent = 5 base points. Los umbrales y multiplicadores son el espejo
- * server-side de MEMBERSHIP_TIERS (src/contexts/PointsContext.tsx), la tabla
- * canónica de progresión. Si cambia una, tiene que cambiar la otra: el perk que
- * la UI promete ("+5% puntos extra por compra" en Silver) se paga acá.
+ * Las reglas económicas viven en `economy/_rewardRules.ts`, que es el mismo
+ * módulo que importan los contextos de React. Antes estaban duplicadas acá y
+ * allá, y se habían desincronizado: el frontend mostraba 5 puntos por referido
+ * mientras esto acreditaba 500.
  */
-export const POINTS_PER_USD = 5;
-const PURCHASE_TIERS = [
-    { minPoints: 0, bonusMultiplier: 0 },
-    { minPoints: 1000, bonusMultiplier: 0.05 },
-    { minPoints: 5000, bonusMultiplier: 0.1 },
-    { minPoints: 15000, bonusMultiplier: 0.15 },
-] as const;
+import {
+    ARCADE_MAX_PER_DAY,
+    ARCADE_POINTS_RANGE,
+    bonusMultiplierFor,
+    DAILY_LOGIN_POINTS,
+    PET_DAILY_CARE_POINTS,
+    POINT_VALUE_USD,
+    POINTS_PER_USD,
+    rollPoints,
+    STREAK_MILESTONE_REWARDS,
+    WHEEL_POINTS_RANGE,
+} from './economy/_rewardRules';
 
-function purchaseBonusMultiplier(lifetimePoints: number): number {
-    let bonus = 0;
-    for (const tier of PURCHASE_TIERS) {
-        if (lifetimePoints >= tier.minPoints) bonus = tier.bonusMultiplier;
-    }
-    return bonus;
-}
+export { POINTS_PER_USD };
 
-const WHEEL_MIN = 5;
-const WHEEL_MAX = 50;
+const purchaseBonusMultiplier = bonusMultiplierFor;
 
 const CHALLENGE_DEFS: Record<string, { reward: number; target: number; title: string }> = {
     daily_login: { reward: 10, target: 1, title: 'Inicia sesión' },
@@ -518,22 +516,25 @@ const REWARD_CATALOG: Record<
 > = {
     /** Cuidado diario de la mascota. El `eventKey` con la fecha ya lo hace 1/día. */
     pet_daily_care: {
-        points: 5,
+        points: PET_DAILY_CARE_POINTS,
         source: 'bonus',
         description: 'Cuidado diario de mascota virtual',
         dailyMax: 1,
     },
     /**
-     * Recompensa de arcade. Deliberadamente PLANA y no derivada del puntaje:
-     * el puntaje lo reporta el cliente, así que atarle los puntos deja el
-     * monto en manos del cliente otra vez, que es justo el agujero que
-     * estamos cerrando. Tope diario duro de 3, igual que la UI.
+     * Recompensa de arcade. Se SORTEA en el servidor dentro de 1–20, que es el
+     * rango que publican los términos.
+     *
+     * Antes era un valor plano de 10 para cerrar un agujero: el puntaje lo
+     * reporta el cliente, así que derivar los puntos del puntaje deja el monto
+     * en manos del cliente. Sortearlo cumple lo prometido sin reabrir eso —
+     * el cliente sigue sin poder influir en la cifra. Tope diario de 3.
      */
     arcade_play: {
-        points: 10,
+        points: () => rollPoints(ARCADE_POINTS_RANGE),
         source: 'game',
         description: 'Recompensa de arcade',
-        dailyMax: 3,
+        dailyMax: ARCADE_MAX_PER_DAY,
     },
     /** Hito de racha. `refId` = días. El servidor verifica la racha real. */
     streak_milestone: {
@@ -550,13 +551,6 @@ const REWARD_CATALOG: Record<
             return null;
         },
     },
-};
-
-const STREAK_MILESTONE_REWARDS: Record<string, number> = {
-    '3': 20,
-    '7': 60,
-    '14': 150,
-    '30': 400,
 };
 
 /**
@@ -763,8 +757,7 @@ export const spinLuckyWheel = mutation({
             };
         }
 
-        const pointsAwarded =
-            Math.floor(Math.random() * (WHEEL_MAX - WHEEL_MIN + 1)) + WHEEL_MIN;
+        const pointsAwarded = rollPoints(WHEEL_POINTS_RANGE);
 
         const doc = await ensureEconomyState(ctx, { userId: args.userId });
         const current = hydrateRewardsState(doc!.rewardsState);
@@ -825,7 +818,7 @@ export const redeemPoints = mutation({
             return { success: false, message: 'Puntos insuficientes' };
         }
 
-        const discountUsd = amount * 0.001;
+        const discountUsd = amount * POINT_VALUE_USD;
         const newState = {
             ...current,
             points: current.points - amount,
@@ -873,7 +866,7 @@ export const claimDailyReward = mutation({
         const doc = await ensureEconomyState(ctx, { userId: args.userId });
         if (!doc?.rewardsState) return { success: false, message: 'Usuario no encontrado' };
 
-        const reward = 10;
+        const reward = DAILY_LOGIN_POINTS;
         const loginStreak = (hydrateRewardsState(doc.rewardsState).loginStreak || 0) + 1;
 
         // Pasa por awardPoints (motor único): acredita `points` Y `lifetimePoints`

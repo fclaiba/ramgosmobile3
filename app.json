@@ -4,9 +4,14 @@
     "slug": "ramgos-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./logo.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "ramgos",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.fclaiba.ramgosmobile",
@@ -20,7 +25,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./logo.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "versionCode": 1,
@@ -43,7 +48,7 @@
       }
     },
     "web": {
-      "favicon": "./logo.png",
+      "favicon": "./assets/favicon.png",
       "name": "Ramgos App",
       "shortName": "Ramgos App"
     },

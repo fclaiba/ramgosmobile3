@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import {
     Home,
     ShoppingBag,
@@ -16,6 +16,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Radius, colors } from '../theme/tokens';
 import { useUnreadMessages } from '../hooks/useMessaging';
+import { Logo } from './ui/Logo';
 
 // Una sola definición: `HomeScreen` pasa el mismo valor a la barra inferior
 // y a esta sidebar, así que dos tipos separados se desincronizan.
@@ -57,7 +58,7 @@ export function DesktopSidebar({ activeSection, onSectionChange }: DesktopSideba
         <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) }]}>
             {/* Logo / Brand */}
             <View style={styles.brandContainer}>
-                <Image source={require('../../logo.png')} style={styles.logo} resizeMode="contain" />
+                <Logo height={44} style={styles.logo} />
             </View>
 
             {/* Navigation Links */}
@@ -128,8 +129,6 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         paddingHorizontal: 8,
     },
     logo: {
-        width: 160,
-        height: 44,
         marginRight: 12,
     },
     brandText: {

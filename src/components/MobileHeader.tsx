@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Menu, ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, Radius, Type, Touch, Elevation } from '../theme/tokens';
 import { ChromeGlass } from './ui/ChromeGlass';
+import { Logo } from './ui/Logo';
 
 export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton, onBack, logo }: any) => {
     const { colorScheme } = useTheme();
@@ -43,11 +44,7 @@ export const MobileHeader = ({ title, subtitle, actions, onMenuPress, backButton
                     ) : null}
                     <View style={styles.titles}>
                         {logo ? (
-                            <Image 
-                                source={require('../../logo.png')} 
-                                style={{ width: 140, height: 40, marginLeft: -4 }} 
-                                resizeMode="contain"
-                            />
+                            <Logo height={40} style={{ marginLeft: -4 }} />
                         ) : (
                             <Text style={styles.title} numberOfLines={1}>
                                 {title}

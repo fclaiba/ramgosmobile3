@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Switch, ActivityIndicator, AccessibilityInfo, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen, Bookmark, FileText } from 'lucide-react-native';
+import { User, Settings, LogOut, HelpCircle, Save, History, Moon, Sun, X, Plus, PawPrint, Info, Shield, Store, Zap, Bell, ChevronRight, Users, Mail, RefreshCw, PackageOpen, Bookmark, FileText, Gamepad2 } from 'lucide-react-native';
 import { useAuth, type UserRole } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -11,7 +11,7 @@ import { useToast } from '../contexts/ToastContext';
 import { Sheet, SheetContent } from './ui/sheet';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
-import { Radius, colors } from '../theme/tokens';
+import { Radius, colors, Touch } from '../theme/tokens';
 
 
 interface SidebarMenuProps {
@@ -203,7 +203,13 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                 <SafeAreaView style={{ flex: 1 }}>
                     <View style={styles.header}>
                         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 24, paddingRight: 8 }}>
-                            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <TouchableOpacity
+                                onPress={onClose}
+                                style={styles.closeButton}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Cerrar menú"
+                            >
                                 <X color={isDark ? "#9CA3AF" : "#6B7280"} size={24} />
                             </TouchableOpacity>
                         </View>
@@ -298,6 +304,9 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
                                 <>
                                     <MenuItem icon={Bell} label="Notificaciones" action={() => { onClose(); navigation.navigate('Notifications'); }} badge={unreadCount} color="#6366F1" />
                                     <MenuItem icon={PawPrint} label="Mi Mascota" action={() => { onClose(); navigation.navigate('MiMascota'); }} color="#EC4899" />
+                                    {/* `GamesScreen` estaba registrada en el stack pero ninguna
+                                        pantalla navegaba a ella: el arcade era inalcanzable. */}
+                                    <MenuItem icon={Gamepad2} label="Juegos" action={() => { onClose(); navigation.navigate('Games'); }} color="#F59E0B" />
                                     <MenuItem icon={User} label="Mi Perfil" action={() => { onClose(); navigation.navigate('Profile'); }} color="#4FC3F7" />
                                     <MenuItem icon={Users} label="Invitar Amigos" action={() => { onClose(); navigation.navigate('Referrals'); }} color="#10B981" />
                                     <MenuItem icon={Save} label="Guardados" action={() => { onClose(); navigation.navigate('Saved'); }} color="#F59E0B" />
@@ -386,12 +395,19 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(33, 150, 243,0.14)'
     },
+    // El área táctil era el ícono de 24px más `padding: 4`, o sea ~32px: por
+    // debajo del mínimo de 44 y sin `hitSlop`, cuando el resto de la nav sí lo
+    // tiene. Cerrar el menú fallaba seguido, sobre todo con el pulgar cerca del
+    // borde. Ahora el botón mide el mínimo completo y además lleva `hitSlop`.
     closeButton: {
         position: 'absolute',
-        top: 24,
-        right: 24,
+        top: 16,
+        right: 16,
         zIndex: 10,
-        padding: 4,
+        width: Touch.min,
+        height: Touch.min,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     profileSection: {
         flexDirection: 'row',

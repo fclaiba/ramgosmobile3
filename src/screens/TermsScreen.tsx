@@ -160,9 +160,15 @@ export default function TermsScreen({ navigation, route }: any) {
                             Los compradores podrán solicitar una devolución o cambio dentro de los primeros 7 días posteriores a la recepción del producto, siempre que: el artículo no corresponda a la descripción, esté defectuoso o dañado, y no se haya utilizado/modificado.{'\n'}
                             <Text style={styles.bold}>Proceso:</Text> El comprador inicia mediante "Mis compras" aportando evidencias. El vendedor tiene 3 días hábiles para responder.{'\n\n'}
 
+                            <Text style={styles.bold}>4.4. Comisiones y cargos</Text>{'\n'}
+                            <Text style={styles.bold}>Comisión de la plataforma:</Text> Ramgos cobra un 10% sobre el valor de cada venta del marketplace, salvo tarifa especial informada previamente. El monto se muestra antes de confirmar la operación.{'\n'}
+                            <Text style={styles.bold}>Tarifas de procesamiento de pago:</Text> Se cobran por separado de la comisión y las asume el vendedor. Se descuentan de la liquidación.{'\n'}
+                            <Text style={styles.bold}>Cargo de gestión por devolución:</Text> Si se aprueba una devolución podrá aplicarse un cargo de gestión al comprador. Se informa de forma clara antes de confirmar y se identifica como cargo de gestión de Ramgos: no se presenta como tarifa del procesador de pagos.{'\n'}
+                            <Text style={styles.bold}>Transparencia:</Text> El vendedor puede ver, por cada venta, el valor bruto, la comisión, las tarifas de procesamiento y el monto neto a recibir.{'\n\n'}
+
                             <Text style={styles.bold}>4.5. Responsabilidad General Marketplace</Text>{'\n'}
                             <Text style={styles.bold}>Vendedor:</Text> Responsable único de la calidad, autenticidad y legalidad.{'\n'}
-                            <Text style={styles.bold}>Ramgos:</Text> Intermediario tecnológico. Cobra comisión por venta.
+                            <Text style={styles.bold}>Ramgos:</Text> Intermediario tecnológico. Cobra la comisión indicada en 4.4.
                         </Text>
 
                         <Text style={styles.sectionTitle}>5. ECOSISTEMA DE PUNTOS Y BONOS ("RAMGOS REWARDS")</Text>
@@ -175,12 +181,24 @@ export default function TermsScreen({ navigation, route }: any) {
                             {'\n'}
                             <Text style={styles.bold}>B. R Coins por Juegos y Actividad:</Text>{'\n'}
                             • Mascota Virtual: +5 puntos por día.{'\n'}
-                            • Arcade: 1–20 puntos (max 3/día).{'\n'}
-                            • Rueda de la Suerte: 1 giro diario.{'\n'}
-                            • Rachas y Referidos: Bonificaciones progresivas.{'\n'}
+                            • Arcade: 1–20 puntos por partida (máx. 3 por día). El premio lo sortea el servidor dentro de ese rango.{'\n'}
+                            • Rueda de la Suerte: 1 giro diario, entre 5 y 50 puntos.{'\n'}
+                            • Inicio de sesión diario: 10 puntos.{'\n'}
+                            • Rachas de inicio de sesión: 20 puntos a los 3 días, 60 a los 7, 150 a los 14 y 400 a los 30.{'\n'}
                             • <Text style={styles.bold}>Límite Trimestral:</Text> Los puntos por juegos expiran si no se cumple el objetivo trimestral.{'\n\n'}
 
-                            <Text style={styles.bold}>C. Niveles de Membresía (Tiers):</Text>{'\n'}
+                            <Text style={styles.bold}>C. R Coins por Compras y Reseñas:</Text>{'\n'}
+                            • Compras: 5 puntos por cada US$ 1,00 gastado, más el porcentaje extra de tu nivel de membresía.{'\n'}
+                            • Reseñas: 5 puntos por reseña publicada.{'\n\n'}
+
+                            <Text style={styles.bold}>D. R Coins por Referidos:</Text>{'\n'}
+                            Los otorga Ramgos automáticamente al verificarse la condición; no se reclaman de forma manual.{'\n'}
+                            • 500 puntos para quien invita, cuando el invitado completa su verificación KYC.{'\n'}
+                            • 1.000 puntos para quien invita, en la primera compra del invitado.{'\n'}
+                            • 2.000 puntos para el usuario nuevo, en su primera compra.{'\n'}
+                            • No se otorgan puntos por autocompras, cuentas falsas ni manipulación de enlaces de invitación.{'\n\n'}
+
+                            <Text style={styles.bold}>E. Niveles de Membresía (Tiers):</Text>{'\n'}
                             🥉 Bronze (0–999 pts): Acceso básico.{'\n'}
                             🥈 Silver (1,000–4,999 pts): +5% puntos extra.{'\n'}
                             🥇 Gold (5,000–14,999 pts): +10% puntos extra.{'\n'}

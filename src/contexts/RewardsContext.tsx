@@ -96,6 +96,10 @@ interface RewardsContextType {
         claimed: number;
         perGame: Record<string, number>;
     };
+    getPetCareStatus: () => {
+        claimedToday: boolean;
+        dailyPoints: number;
+    };
     spinLuckyWheel: () => Promise<LuckyWheelResult>;
     getLuckyWheelStatus: () => {
         available: boolean;
@@ -127,16 +131,38 @@ const DAILY_STATE_KEY = '@ramgos/rewards/daily';
 const STREAK_STATE_KEY = '@ramgos/rewards/streak';
 const REFERRAL_STATE_PREFIX = '@ramgos/rewards/referral/';
 
-/** Business constants — locked by constitution.test.tsx */
-export const POINT_VALUE_USD = 0.01;
-export const ARCADE_MAX_REWARDS = 3;
-export const ARCADE_POINTS_RANGE = { min: 1, max: 20 } as const;
-export const WHEEL_POINTS_RANGE = { min: 5, max: 100 } as const;
+/**
+ * Reglas de negocio.
+ *
+ * Se re-exportan desde `convex/economy/_rewardRules.ts` en vez de declararse
+ * acá. Cuando eran literales propios se desincronizaron del servidor sin que
+ * nada lo detectara: este archivo decía que el punto valía $0,01 mientras el
+ * canje del servidor lo pagaba a $0,001, y contaba 100 puntos por referido
+ * mientras el servidor acreditaba 500. El test `constitution.test.tsx` no lo
+ * veía porque comparaba estos valores contra sí mismos.
+ */
+export {
+    ARCADE_POINTS_RANGE,
+    POINT_VALUE_USD,
+    WHEEL_POINTS_RANGE,
+} from '../../convex/economy/_rewardRules';
+import {
+    ARCADE_MAX_PER_DAY,
+    ARCADE_POINTS_RANGE,
+    PET_DAILY_CARE_POINTS,
+    REFERRAL_REWARDS,
+    WHEEL_POINTS_RANGE,
+} from '../../convex/economy/_rewardRules';
 
-const FEED_PET_REWARD = 5;
+/** Alias histórico; el nombre canónico es `ARCADE_MAX_PER_DAY`. */
+export const ARCADE_MAX_REWARDS = ARCADE_MAX_PER_DAY;
+
+const FEED_PET_REWARD = PET_DAILY_CARE_POINTS;
+// Contador local de lo acreditado por referidos. Son los montos que paga el
+// servidor: mostrar otros hacía que el usuario viera una cifra y cobrara otra.
 const REFERRAL_POINTS = {
-    registration: 100,
-    firstPurchase: 250,
+    registration: REFERRAL_REWARDS.SIGNUP,
+    firstPurchase: REFERRAL_REWARDS.FIRST_PURCHASE_REFERRER,
 };
 
 const STREAK_MILESTONES: Array<{ value: number; reward: number }> = [
@@ -448,6 +474,22 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         };
     }, [dailyState, claimReward, ensureDailyForToday]);
 
+    /**
+     * Estado del cuidado diario de la mascota.
+     *
+     * La pantalla de la mascota mostraba nivel, EXP y monedas de juego pero
+     * nada sobre los R Coins que genera, que es lo que el usuario quiere ver.
+     * `petFed` era estado interno del contexto y no había forma de consultarlo
+     * desde afuera.
+     */
+    const getPetCareStatus = useCallback(() => {
+        const state = ensureDailyForToday(dailyState);
+        return {
+            claimedToday: state.petFed,
+            dailyPoints: PET_DAILY_CARE_POINTS,
+        };
+    }, [dailyState, ensureDailyForToday]);
+
     const getArcadeStatus = useCallback(() => {
         const state = ensureDailyForToday(dailyState);
         return {
@@ -708,6 +750,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
     const value: RewardsContextType = useMemo(() => ({
         dailyState,
         feedVirtualPet,
+        getPetCareStatus,
         registerArcadeReward,
         getArcadeStatus,
         spinLuckyWheel,
@@ -732,6 +775,7 @@ export const RewardsProvider = ({ children }: { children: React.ReactNode }) => 
         claimStreakMilestone,
         dailyState,
         feedVirtualPet,
+        getPetCareStatus,
         getArcadeStatus,
         getLuckyWheelStatus,
         getStreakMilestones,

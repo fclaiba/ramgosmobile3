@@ -40,12 +40,18 @@ checkEnvVar('STRIPE_SECRET_KEY', 'backend');
 checkEnvVar('EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'frontend');
 checkEnvVar('STRIPE_WEBHOOK_SECRET', 'backend');
 
-console.log('\n--- 3. Verificando Variables Adicionales ---');
+// Sin esta clave, `notifications.sendOTP` cae a un mock de consola: la
+// verificación por email deja de funcionar sin que la app dé señales claras.
+// Es una falla silenciosa que bloquea el registro entero, así que corta acá.
+console.log('\n--- 3. Verificando Envío de Emails (verificación de cuenta) ---');
+checkEnvVar('RESEND_API_KEY', 'backend');
+
+console.log('\n--- 4. Verificando Variables Adicionales ---');
 if (process.env.NODE_ENV !== 'production') {
   console.log(`⚠️ [ADVERTENCIA] NODE_ENV está en ${process.env.NODE_ENV || 'undefined'}. Para producción debería ser 'production'.`);
 }
 
-console.log('\n--- 4. Verificando Scripts en package.json ---');
+console.log('\n--- 5. Verificando Scripts en package.json ---');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 if (!packageJson.scripts['build:prod']) {
     console.log(`⚠️ [ADVERTENCIA] No hay script 'build:prod' en package.json`);
