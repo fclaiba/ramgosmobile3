@@ -30,6 +30,7 @@ import type * as developer from "../developer.js";
 import type * as discovery from "../discovery.js";
 import type * as disputes from "../disputes.js";
 import type * as economy from "../economy.js";
+import type * as economy__rewardRules from "../economy/_rewardRules.js";
 import type * as economy_petLifecycle from "../economy/petLifecycle.js";
 import type * as economy_pointsEngine from "../economy/pointsEngine.js";
 import type * as economy_pointsState from "../economy/pointsState.js";
@@ -126,6 +127,7 @@ declare const fullApi: ApiFromModules<{
   discovery: typeof discovery;
   disputes: typeof disputes;
   economy: typeof economy;
+  "economy/_rewardRules": typeof economy__rewardRules;
   "economy/petLifecycle": typeof economy_petLifecycle;
   "economy/pointsEngine": typeof economy_pointsEngine;
   "economy/pointsState": typeof economy_pointsState;
