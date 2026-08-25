@@ -10,10 +10,16 @@
  *     payloads are pulled via `v2.core.events.retrieve(thinEvent.id)` and
  *     are routed in `convex/http.ts` (see /stripe-webhook).
  *
- * Risk model (per plan):
- *   - fees_collector: 'application'  (Ramgos collects Stripe fees from buyers)
- *   - losses_collector: 'stripe'     (Stripe absorbs negative-balance recovery —
- *                                     safer for an early-stage marketplace)
+ * Responsibilities model:
+ *   - fees_collector: 'application'   (Ramgos collects Stripe fees from buyers)
+ *   - losses_collector: 'application' (NOT a business choice — Stripe rejects
+ *                                      'stripe' with "Losses collector can only
+ *                                      be 'application' for the set of
+ *                                      configurations this account has" given
+ *                                      our `configuration.recipient` +
+ *                                      `stripe_balance.stripe_transfers`
+ *                                      capability. Do not revert this thinking
+ *                                      it's a risk-model preference.)
  *
  * PaymentIntents stay on V1 in `convex/stripe.ts` because Separate Charges
  * + Transfers don't require V2-specific payment APIs. Both APIs coexist
@@ -148,8 +154,8 @@ export const createConnectAccount = action({
                         defaults: {
                             responsibilities: {
                                 fees_collector: "application",
-                                // Plan override vs sample: Stripe absorbs losses.
-                                losses_collector: "stripe",
+                                // Stripe exige "application" para esta config de cuenta.
+                                losses_collector: "application",
                             },
                         },
                         configuration: {
@@ -347,7 +353,8 @@ export const internalCreateConnectAccountAction = internalAction({
             defaults: {
                 responsibilities: {
                     fees_collector: "application",
-                    losses_collector: "stripe",
+                    // Stripe exige "application" para esta config de cuenta.
+                    losses_collector: "application",
                 },
             },
             configuration: {
