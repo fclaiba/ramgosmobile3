@@ -1468,8 +1468,7 @@ export const internalConfirmOrderEscrow = internalMutation({
                 .collect();
             for (const payment of payments) {
                 await ctx.db.patch(payment._id, {
-                    status: "refunded",
-                    updatedAt: new Date().toISOString()
+                    status: "refunded"
                 });
             }
         }
@@ -1634,18 +1633,12 @@ export const internalGetEligibleOrdersForRelease = internalQuery({
         const ONE_DAY = 24 * 60 * 60 * 1000;
 
         for (const order of orders) {
-            const age = now - new Date(order.createdAt).getTime();
+            const age = now - new Date(order.createdAt || 0).getTime();
             
-            // Get order items to check type
-            const items = await ctx.db
-                .query("orderItems")
-                .withIndex("by_order", (q) => q.eq("orderId", order._id))
-                .collect();
-                
-            if (items.length === 0) continue;
+            if (!order.items || order.items.length === 0) continue;
             
             // Fetch listing of first item
-            const listing = await ctx.db.get(items[0].listingId);
+            const listing = await ctx.db.get(order.items[0].listingId as Id<"listings">);
             if (!listing) continue;
             
             if (listing.type === "product" && age >= TEN_DAYS) {
@@ -1666,7 +1659,7 @@ export const internalCronAutoReleaseEscrows = internalAction({
         
         for (const orderId of eligibleOrders) {
             try {
-                await ctx.runAction(internal.stripe.internalReleasePaymentAction, { orderId });
+                await ctx.runAction(internal.stripe.internalReleasePaymentAction, { orderId: orderId as Id<"orders"> });
             } catch (error) {
                 console.error(`Failed to auto-release order ${orderId}`, error);
             }
