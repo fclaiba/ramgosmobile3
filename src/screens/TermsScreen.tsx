@@ -157,8 +157,9 @@ export default function TermsScreen({ navigation, route }: any) {
                             <Text style={styles.bold}>Verificación:</Text> Ramgos podrá realizar verificaciones adicionales de seguridad o autenticación KYC antes de liberar fondos.{'\n\n'}
 
                             <Text style={styles.bold}>4.3. Devoluciones y reclamos</Text>{'\n'}
-                            Los compradores podrán solicitar una devolución o cambio dentro de los primeros 7 días posteriores a la recepción del producto, siempre que: el artículo no corresponda a la descripción, esté defectuoso o dañado, y no se haya utilizado/modificado.{'\n'}
-                            <Text style={styles.bold}>Proceso:</Text> El comprador inicia mediante "Mis compras" aportando evidencias. El vendedor tiene 3 días hábiles para responder.{'\n\n'}
+                            Los compradores podrán solicitar una devolución o cambio dentro de los <Text style={styles.bold}>10 días hábiles</Text> posteriores a la recepción del producto, siempre que: el artículo no corresponda a la descripción, esté defectuoso o dañado, y no se haya utilizado/modificado.{'\n'}
+                            <Text style={styles.bold}>Proceso:</Text> El comprador inicia mediante "Mis compras" aportando evidencias. El vendedor tiene 3 días hábiles para responder.{'\n'}
+                            <Text style={styles.bold}>Efecto sobre la liberación:</Text> Abrir un reclamo dentro del plazo <Text style={styles.bold}>congela</Text> el conteo de los 10 días hábiles de retención descritos en 4.2. Los fondos no se liberan al vendedor mientras el reclamo esté abierto, aunque el plazo original ya se hubiera cumplido.{'\n\n'}
 
                             <Text style={styles.bold}>4.4. Comisiones y cargos</Text>{'\n'}
                             <Text style={styles.bold}>Comisión de la plataforma:</Text> Ramgos cobra un 10% sobre el valor de cada venta del marketplace, salvo tarifa especial informada previamente. El monto se muestra antes de confirmar la operación.{'\n'}

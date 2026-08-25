@@ -19,6 +19,7 @@ import { action, internalAction, internalMutation, internalQuery } from "./_gene
 import { internal } from "./_generated/api";
 import Stripe from "stripe";
 import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { decrementStock, hasEnoughStock, outOfStockMessage, shortfallFor } from "./_inventory";
 
 const stripeKeyTest = process.env.STRIPE_SECRET_KEY_TEST ?? process.env.STRIPE_SECRET_KEY;
 const stripeKeyLive = process.env.STRIPE_SECRET_KEY;
@@ -76,6 +77,30 @@ export const createPaymentIntent = action({
         // Fase 5: transfer_group del carrito. Si viene, el webhook procesa el
         // carrito multi-vendor (sub-órdenes con escrow "held") al confirmarse el pago.
         cartId: v.optional(v.string()),
+        /**
+         * Destino de envío.
+         *
+         * Viaja acá porque la orden se crea del lado del servidor, en el
+         * webhook, mucho después de que la pantalla de pago dejó de existir. Se
+         * guarda en el registro de `payments` y `internalProcessMultiVendorCart`
+         * lo recupera por `by_stripe_intent`. No va en la metadata del
+         * PaymentIntent de Stripe: ahí los valores son strings de 500 caracteres
+         * y una dirección serializada es frágil.
+         */
+        shipping: v.optional(v.object({
+            method: v.string(),
+            cost: v.number(),
+            address: v.object({
+                fullName: v.string(),
+                addressLine1: v.string(),
+                addressLine2: v.optional(v.string()),
+                city: v.string(),
+                state: v.optional(v.string()),
+                postalCode: v.string(),
+                country: v.string(),
+                phone: v.optional(v.string()),
+            }),
+        })),
         // ponytail: UI test mode — never hit Stripe confirm (avoids pk/sk mismatch 404)
         simulate: v.optional(v.boolean()),
         mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
@@ -92,6 +117,38 @@ export const createPaymentIntent = action({
         }
 
         if (totalAmountCents <= 0) throw new Error("El monto debe ser mayor a 0");
+
+        /**
+         * Revalidación contra la base ANTES de cobrar.
+         *
+         * Es el único momento en que se puede decir que no: después del cobro,
+         * rechazar dejaría dinero tomado sin orden. Cubre el stock (que no se
+         * descontaba en ningún lado, así que el carrito nunca se enteraba) y el
+         * precio (el monto salía del snapshot del cliente y las órdenes del
+         * carrito vivo del webhook).
+         */
+        if (args.lineItems && args.lineItems.length > 0) {
+            const { stockIssues, priceIssues } = await ctx.runQuery(
+                internal.stripe.internalValidateCartForCheckout,
+                {
+                    lineItems: args.lineItems.map((i) => ({
+                        listingId: i.listingId,
+                        quantity: i.quantity,
+                        amountInCents: i.amountInCents,
+                    })),
+                },
+            );
+
+            if (stockIssues.length > 0) {
+                throw new Error(outOfStockMessage(stockIssues));
+            }
+            if (priceIssues.length > 0) {
+                const first = priceIssues[0];
+                throw new Error(
+                    `El precio de "${first.title}" cambió. Actualizá el carrito y volvé a intentar.`,
+                );
+            }
+        }
 
         try {
             // 1. Resolve influencer attribution dynamically based on cart items
@@ -218,9 +275,13 @@ export const createPaymentIntent = action({
                 influencerRate: resolvedInfluencerRate,
                 influencerId: resolvedInfluencerId,
                 description: args.description || args.lineItems?.[0]?.description || "Pago Ramgos",
-                metadata: attributionRejectedReason
-                    ? { attributionRejectedReason }
-                    : undefined,
+                metadata:
+                    attributionRejectedReason || args.shipping
+                        ? {
+                              ...(attributionRejectedReason ? { attributionRejectedReason } : {}),
+                              ...(args.shipping ? { shipping: args.shipping } : {}),
+                          }
+                        : undefined,
             });
 
             // Mock mode: no llega webhook, así que procesamos el carrito igual.
@@ -591,12 +652,40 @@ export const internalGetPaymentAndAccounts = internalQuery({
         orderId: v.string(),
     },
     handler: async (ctx, args) => {
-        // Find payment associated with orderId.
-        const payment = await ctx.db
+        /**
+         * Busca el pago por `orderId`.
+         *
+         * Esta búsqueda devolvía `null` SIEMPRE para el flujo de carrito:
+         * `createPaymentIntent` inserta el registro de pago sin `orderId`
+         * —la orden todavía no existe, se crea después en el webhook— y
+         * `internalCreateSubOrder` nunca hacía el back-link. Con `null`,
+         * `internalReleasePaymentAction` retornaba en silencio mientras
+         * `confirmReceipt` ya había marcado la orden como `completed` /
+         * `released`: la orden decía "pagado al vendedor" y el dinero no se
+         * había movido.
+         *
+         * El back-link ahora se hace al crear la sub-orden. El fallback por
+         * `stripePaymentIntentId` cubre las órdenes creadas antes de este
+         * arreglo, que quedaron sin `orderId` en su pago.
+         */
+        let payment = await ctx.db
             .query("payments")
             .withIndex("by_order", (q) => q.eq("orderId", args.orderId))
             .filter((q) => q.eq(q.field("status"), "succeeded_in_escrow"))
             .first();
+
+        if (!payment) {
+            const orderId = ctx.db.normalizeId("orders", args.orderId);
+            const order: any = orderId ? await ctx.db.get(orderId) : null;
+            if (order?.stripePaymentIntentId) {
+                payment = await ctx.db
+                    .query("payments")
+                    .withIndex("by_stripe_intent", (q) =>
+                        q.eq("stripePaymentIntentId", order.stripePaymentIntentId),
+                    )
+                    .first();
+            }
+        }
 
         if (!payment) return null;
 
@@ -699,6 +788,25 @@ export const internalCompleteEscrowRelease = internalMutation({
 /**
  * Acción interna que ejecuta las transferencias reales en Stripe Connect.
  */
+/**
+ * Marca que la liberación de escrow no se pudo completar.
+ *
+ * Revierte el estado optimista que dejó `confirmReceipt` para que la orden no
+ * quede diciendo "pagado al vendedor" cuando el dinero no se movió.
+ */
+export const internalFlagEscrowReleaseFailed = internalMutation({
+    args: { orderId: v.id("orders"), reason: v.string() },
+    handler: async (ctx, args) => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return;
+        await ctx.db.patch(args.orderId, {
+            escrowState: "held",
+            escrowReleaseError: args.reason,
+            updatedAt: new Date().toISOString(),
+        });
+    },
+});
+
 export const internalReleasePaymentAction = internalAction({
     args: {
         orderId: v.id("orders"),
@@ -710,7 +818,25 @@ export const internalReleasePaymentAction = internalAction({
         });
 
         if (!data) {
+            /**
+             * No se encontró el pago.
+             *
+             * Este `return` era MUDO y ocurría SIEMPRE en el flujo de carrito,
+             * porque `payments.orderId` nunca se completaba. Mientras tanto
+             * `confirmReceipt` ya había dejado la orden en `completed` /
+             * `released`: la orden decía "pagado al vendedor" y no se había
+             * transferido nada, sin un solo error visible.
+             *
+             * El back-link de `internalCreateSubOrder` lo resuelve para las
+             * órdenes nuevas. Si igual se llega acá, la orden vuelve a `held` y
+             * queda marcada: es preferible una orden que se ve pendiente a una
+             * que miente diciendo que se pagó.
+             */
             console.error(`[Stripe Escrow] No se encontró pago exitoso para la orden ${args.orderId}`);
+            await ctx.runMutation(internal.stripe.internalFlagEscrowReleaseFailed, {
+                orderId: args.orderId,
+                reason: "no_payment_record",
+            });
             return;
         }
 
@@ -823,20 +949,71 @@ export const internalProcessMultiVendorCart = internalAction({
     handler: async (ctx, args) => {
         // Fetch cart items via internal query
         const cartItems = await ctx.runQuery(internal.stripe.internalGetCartForUser, { userId: args.userId });
+
+        // El destino de envío viajó en el registro de pago (ver el arg
+        // `shipping` de `createPaymentIntent`). Se repite en cada sub-orden
+        // porque cada vendedor despacha por separado y necesita la dirección.
+        const paymentRecord: any = await ctx.runQuery(internal.stripe.internalGetPaymentByIntentId, {
+            stripePaymentIntentId: args.stripePaymentIntentId,
+        });
+        const shipping = paymentRecord?.metadata?.shipping;
         if (!cartItems || cartItems.length === 0) {
             console.log(`[Stripe Connect] Cart empty for user ${args.userId}. Skipping multi-vendor split.`);
             return;
         }
 
-        // Group by sellerId
+        /**
+         * Agrupación por vendedor.
+         *
+         * El fallback anterior era `|| "ramgos"`, un string que no es el `_id`
+         * de ningún usuario: `normalizeId("users", "ramgos")` devuelve `null`,
+         * así que todos los caminos de liberación de escrow fallaban y esa
+         * orden quedaba trabada para siempre, sin nadie a quien pagarle.
+         *
+         * Ahora un item sin vendedor identificable se salta y se registra. El
+         * dinero ya se cobró, así que se procesa el resto del carrito en vez de
+         * tirar todo abajo; el item huérfano queda visible en los logs para
+         * resolverlo a mano.
+         */
         const sellerGroups: Record<string, typeof cartItems> = {};
+        const orphanItems: string[] = [];
         for (const item of cartItems) {
-            const sellerId = item.snapshot?.sellerId || "ramgos";
+            const sellerId = item.snapshot?.sellerId;
+            if (!sellerId) {
+                orphanItems.push(item.listingId);
+                continue;
+            }
             if (!sellerGroups[sellerId]) sellerGroups[sellerId] = [];
             sellerGroups[sellerId].push(item);
         }
 
+        if (orphanItems.length > 0) {
+            console.error(
+                `[Stripe] Items sin vendedor en el carrito de ${args.userId}, no se creó orden para ellos: ${orphanItems.join(", ")}`,
+            );
+        }
+
+        /**
+         * Costo de envío.
+         *
+         * Es un cargo del CARRITO, no de cada vendedor, pero se cobra dentro
+         * del mismo PaymentIntent (`buildLineItems` le agrega una línea
+         * sintética para que el total cuadre). Antes no se guardaba en ninguna
+         * orden, así que `Σ(sub-órdenes) ≠ pi.amount` siempre que hubiera envío
+         * y no quedaba registro de cuánto se había cobrado por él.
+         *
+         * Se adjunta a la PRIMERA sub-orden nada más: repetirlo en todas lo
+         * contaría de más. La dirección sí va en todas, porque cada vendedor
+         * necesita saber adónde despachar.
+         */
+        let shippingCostPending = Number(shipping?.cost) || 0;
+
         for (const [sellerId, items] of Object.entries(sellerGroups)) {
+            const shippingForThisOrder = shipping
+                ? { ...shipping, cost: shippingCostPending }
+                : undefined;
+            shippingCostPending = 0;
+
             // Calculate subtotal
             const subtotal = items.reduce((sum: number, i: any) => sum + ((i.snapshot?.price || 0) * i.quantity), 0);
             const commission = Math.round(subtotal * 0.12 * 100); // 12% in cents
@@ -861,6 +1038,7 @@ export const internalProcessMultiVendorCart = internalAction({
                 commissionCents: commission,
                 transferGroup: args.cartId,
                 stripePaymentIntentId: args.stripePaymentIntentId,
+                ...(shippingForThisOrder ? { shipping: shippingForThisOrder } : {}),
             });
 
             // Emit redeemable bono codes when this sub-order contains bono listings.
@@ -882,6 +1060,80 @@ export const internalProcessMultiVendorCart = internalAction({
 });
 
 
+
+/**
+ * Revalida stock y precio contra la base antes de cobrar.
+ *
+ * El monto del PaymentIntent se arma con el snapshot que el cliente capturó al
+ * navegar al checkout, y las sub-órdenes se construyen leyendo el carrito vivo
+ * en el momento del webhook. Entre esos dos instantes el catálogo puede haber
+ * cambiado: se cobraba una cosa y se creaban órdenes por otra, sin que nadie
+ * lo notara.
+ *
+ * Chequear acá es lo que permite RECHAZAR: el comprador todavía no pagó. Una
+ * vez cobrado ya no se puede negar la venta sin dejar dinero huérfano.
+ */
+export const internalValidateCartForCheckout = internalQuery({
+    args: {
+        lineItems: v.array(v.object({
+            listingId: v.string(),
+            quantity: v.number(),
+            amountInCents: v.number(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const stockIssues: Array<{ listingId: string; title: string; requested: number; available: number }> = [];
+        const priceIssues: Array<{ listingId: string; title: string; chargedCents: number; actualCents: number }> = [];
+
+        for (const item of args.lineItems) {
+            // La línea sintética de envío no es un listing.
+            if (item.listingId === "shipping") continue;
+
+            const listingId = ctx.db.normalizeId("listings", item.listingId);
+            if (!listingId) continue;
+            const listing: any = await ctx.db.get(listingId);
+            if (!listing) continue;
+
+            const title = listing.title || "Producto";
+
+            if (typeof listing.stock === "number" && !hasEnoughStock(listing.stock, item.quantity)) {
+                stockIssues.push({
+                    listingId: item.listingId,
+                    title,
+                    requested: item.quantity,
+                    available: listing.stock,
+                });
+            }
+
+            // El precio se compara en centavos para no arrastrar el error de
+            // punto flotante de multiplicar por 100 en dos lugares distintos.
+            const actualCents = Math.round(Number(listing.price || 0) * 100);
+            if (actualCents !== item.amountInCents) {
+                priceIssues.push({
+                    listingId: item.listingId,
+                    title,
+                    chargedCents: item.amountInCents,
+                    actualCents,
+                });
+            }
+        }
+
+        return { stockIssues, priceIssues };
+    },
+});
+
+/** Pago por PaymentIntent. Lo usa el webhook para recuperar el envío. */
+export const internalGetPaymentByIntentId = internalQuery({
+    args: { stripePaymentIntentId: v.string() },
+    handler: async (ctx, args) => {
+        return await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) =>
+                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
+            )
+            .first();
+    },
+});
 
 export const internalGetCartForUser = internalQuery({
     args: { userId: v.string() },
@@ -907,6 +1159,20 @@ export const internalCreateSubOrder = internalMutation({
         commissionCents: v.optional(v.number()),
         transferGroup: v.string(),
         stripePaymentIntentId: v.string(),
+        shipping: v.optional(v.object({
+            method: v.string(),
+            cost: v.number(),
+            address: v.object({
+                fullName: v.string(),
+                addressLine1: v.string(),
+                addressLine2: v.optional(v.string()),
+                city: v.string(),
+                state: v.optional(v.string()),
+                postalCode: v.string(),
+                country: v.string(),
+                phone: v.optional(v.string()),
+            }),
+        })),
         // PHASE 5: Rentals
         checkInDate: v.optional(v.string()),
         checkOutDate: v.optional(v.string()),
@@ -951,6 +1217,46 @@ export const internalCreateSubOrder = internalMutation({
         // `socialPostSales`, recorded right after the insert below.
         const orderItems = items.map(({ sourcePostId, ...rest }) => rest);
 
+        /**
+         * Descuento de stock — el paso que faltaba por completo.
+         *
+         * Este es el único lugar transaccional del camino que realmente corre
+         * (webhook de Stripe → `internalProcessMultiVendorCart` → acá). Ni esta
+         * mutation ni ninguna otra del recorrido tocaba `listings.stock`, así
+         * que un producto con stock 1 se podía vender indefinidamente.
+         *
+         * NO se lanza excepción si no alcanza: el cobro ya ocurrió y fallar acá
+         * dejaría dinero tomado sin orden asociada, que es peor que la
+         * sobreventa. Se descuenta lo que haya, se acota en 0 y el faltante
+         * queda registrado en la orden para que alguien lo resuelva. La defensa
+         * real está antes, en `createPaymentIntent`, que revalida y rechaza
+         * mientras el comprador todavía no pagó.
+         */
+        const shortfalls: Array<{ listingId: string; title: string; requested: number; available: number }> = [];
+        for (const item of orderItems) {
+            const listingId = ctx.db.normalizeId("listings", item.listingId);
+            if (!listingId) continue;
+            const listing: any = await ctx.db.get(listingId);
+            if (!listing || typeof listing.stock !== "number") continue; // servicios/eventos/bonos no llevan inventario
+
+            const missing = shortfallFor(listing.stock, item.quantity);
+            if (missing > 0) {
+                shortfalls.push({
+                    listingId: item.listingId,
+                    title: item.title,
+                    requested: item.quantity,
+                    available: listing.stock,
+                });
+            }
+            await ctx.db.patch(listingId, { stock: decrementStock(listing.stock, item.quantity) });
+        }
+
+        if (shortfalls.length > 0) {
+            console.error(
+                `[Stripe] SOBREVENTA en la orden de ${args.sellerId}: ${JSON.stringify(shortfalls)}`,
+            );
+        }
+
         const orderId = await ctx.db.insert("orders", {
             userId: args.userId,
             sellerId: args.sellerId,
@@ -963,9 +1269,35 @@ export const internalCreateSubOrder = internalMutation({
             commissionCents: args.commissionCents,
             transferGroup: args.transferGroup,
             stripePaymentIntentId: args.stripePaymentIntentId,
+            ...(args.shipping ? { shipping: args.shipping } : {}),
+            ...(shortfalls.length > 0 ? { stockShortfall: shortfalls } : {}),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         });
+
+        /**
+         * Back-link pago ↔ orden.
+         *
+         * `createPaymentIntent` crea el registro de pago SIN `orderId` porque la
+         * orden todavía no existe. Sin este patch, `internalGetPaymentAndAccounts`
+         * no encontraba nunca el pago y la liberación de escrow terminaba en
+         * silencio: la orden quedaba marcada como liberada sin transferencia.
+         *
+         * También se completa `sellerId`, que la búsqueda necesita para resolver
+         * la cuenta de Connect a la que hay que transferir.
+         */
+        const paymentRow = await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) =>
+                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
+            )
+            .first();
+        if (paymentRow && !paymentRow.orderId) {
+            await ctx.db.patch(paymentRow._id, {
+                orderId: String(orderId),
+                sellerId: paymentRow.sellerId ?? args.sellerId,
+            });
+        }
 
         // Social commerce: credit the posts that drove any of these items.
         const socialItems = items

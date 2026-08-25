@@ -75,20 +75,28 @@ export const removePushToken = mutation({
 // ---------------------------------------------------------------------------
 // OTP / Resend email — unchanged from previous version.
 // ---------------------------------------------------------------------------
-export const sendOTP = action({
+/**
+ * Envía un OTP por email. **Sólo entrega**: el rate limit ya no vive acá.
+ *
+ * Dos cambios respecto de la versión anterior:
+ *
+ * 1. Pasó de `action` pública a `internalAction`. Era invocable por cualquiera
+ *    con la URL del deployment —o sea, un disparador de emails abierto a
+ *    internet— pese a que los únicos llamadores están en `convex/auth.ts`.
+ *
+ * 2. El rate limit se movió a los llamadores, ANTES de persistir el código.
+ *    Acá adentro corría después de que `auth.sendVerificationEmail` ya había
+ *    hecho `saveOtp`, así que el 4º intento pisaba el código válido que el
+ *    usuario quizás sí había recibido y encima no mandaba nada: quedaba sin
+ *    ningún código utilizable durante 10 minutos.
+ */
+export const sendOTP = internalAction({
     args: {
         email: v.string(),
         code: v.string(),
         type: v.optional(v.union(v.literal('verification'), v.literal('recovery'))),
     },
     handler: async (ctx, args) => {
-        // Rate Limiting: max 3 OTP requests per 10 minutes (600000 ms)
-        await ctx.runMutation(internal.users.internalCheckRateLimit, {
-            key: `otp_${args.email}`,
-            maxAttempts: 3,
-            windowMs: 600000
-        });
-
         const resendApiKey = process.env.RESEND_API_KEY;
         if (!resendApiKey) {
             // `delivered: false` es lo que distingue "no salió" de "salió".

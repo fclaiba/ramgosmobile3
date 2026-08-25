@@ -109,7 +109,6 @@ import BusinessScannerScreen from './src/screens/BusinessScannerScreen';
 import SubscriptionPlansScreen from './src/screens/SubscriptionPlansScreen';
 import CreateListingScreen from './src/screens/CreateListingScreen';
 import MyListingsScreen from './src/screens/MyListingsScreen';
-import AddEditProductScreen from './src/screens/marketplace/AddEditProductScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import FormFillScreen from './src/screens/FormFillScreen';
 import ProductDetailScreen from './src/screens/marketplace/ProductDetailScreen';
@@ -299,7 +298,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="Dispute" component={DisputeScreen} />
                     <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
                     <Stack.Screen name="MyListings" component={MyListingsScreen} />
-                    <Stack.Screen name="AddEditProduct" component={AddEditProductScreen} />
                                         {/* Maps & QR Module */}
                     {/* MapExplorer integrated into Marketplace */}
                     <Stack.Screen name="BonusQR" component={BonusQRScreen} />

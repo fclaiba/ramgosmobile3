@@ -27,13 +27,24 @@ import { internal } from "./_generated/api";
 import Stripe from "stripe";
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeKey) {
-    throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
-}
 
-const stripe = new Stripe(stripeKey, {
+/**
+ * El cliente se construye siempre, y la ausencia de clave se chequea DENTRO de
+ * cada handler.
+ *
+ * Antes esto era un `throw` en el nivel superior del módulo: en un deployment
+ * sin `STRIPE_SECRET_KEY` el módulo entero fallaba al cargar, y con él todas
+ * sus funciones — no sólo la que necesitaba la clave.
+ */
+const stripe = new Stripe(stripeKey ?? "sk_test_unconfigured", {
     apiVersion: "2026-06-24.dahlia" as any,
 });
+
+function assertStripeConfigured() {
+    if (!stripeKey) {
+        throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Cursor helpers (single-row table keyed by `scope='stripe-bt'`)
@@ -256,6 +267,38 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                             flagged++;
                             continue;
                         }
+                        /**
+                         * Pago exitoso SIN orden asociada.
+                         *
+                         * Es exactamente lo que deja un webhook perdido: el
+                         * registro de pago existe (se crea al crear el
+                         * PaymentIntent), así que NO cae en `no_local_payment`,
+                         * y el monto coincide, así que tampoco en
+                         * `amount_mismatch`. Se colaba entre las dos reglas y
+                         * nadie se enteraba de que había plata cobrada sin nada
+                         * entregado.
+                         */
+                        if (
+                            bt.type === "charge" &&
+                            !local.orderId &&
+                            (local.status === "succeeded" ||
+                                local.status === "succeeded_in_escrow")
+                        ) {
+                            await ctx.runMutation(
+                                internal.reconciliation.internalCreateFlag,
+                                {
+                                    stripeBalanceTransactionId: bt.id,
+                                    sourceType: bt.type,
+                                    sourceId,
+                                    relatedPaymentId: String(local._id),
+                                    reason: "paid_without_order",
+                                    amountInCents: bt.amount,
+                                    currency: bt.currency,
+                                },
+                            );
+                            flagged++;
+                        }
+
                         // Amount sanity check — Stripe BT.amount is in cents.
                         // local.amount is in USD (float). Coerce to cents.
                         const localCents = Math.round(local.amount * 100);

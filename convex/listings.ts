@@ -4,6 +4,7 @@ import { assertAdminOrDeveloper, assertSelfOrAdmin, requireActor } from "./authH
 import { assertBonoEconomics } from "./bonoEconomics";
 import { eligibleBusinessIdsFor } from "./promotionEligibility";
 import { resolveMediaUrl } from "./mediaUrl";
+import { canIssueBono, resolveKycStatus } from "./_kyc";
 
 /** Influencer may create a bono only for a business with active campaign or whitelist. */
 async function assertInfluencerCanIssueBonoForBusiness(
@@ -37,18 +38,9 @@ async function assertInfluencerKycForBono(ctx: any, influencer: any) {
         .query("global_settings")
         .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
         .first();
-    const isKycEnabled = requireKyc?.value === true;
-    const effectiveKycStatus = influencer.kycStatus
-        ? influencer.kycStatus
-        : isKycEnabled
-          ? "pending"
-          : "approved";
+    const effectiveKycStatus = resolveKycStatus(influencer.kycStatus, requireKyc?.value === true);
 
-    if (
-        effectiveKycStatus !== "completed" &&
-        effectiveKycStatus !== "skipped" &&
-        effectiveKycStatus !== "approved"
-    ) {
+    if (!canIssueBono(effectiveKycStatus)) {
         throw new Error(
             "Debes completar la verificación KYC para crear bonos como influencer.",
         );
@@ -401,6 +393,27 @@ export const createListing = mutation({
             }
         }
 
+        /**
+         * Precio y stock.
+         *
+         * El cliente no puede ser la única defensa: `validatePrice` aceptaba la
+         * cadena vacía, así que un precio en blanco llegaba acá como 0 y se
+         * publicaba. Ese producto después rompía el checkout de cualquiera que
+         * lo pusiera en el carrito, porque `createPaymentIntent` rechaza montos
+         * ≤ 0 — el comprador veía fallar la compra ENTERA por un item ajeno.
+         *
+         * El stock negativo entraba por el mismo camino (`parseInt("-5")` es
+         * truthy) y hace que el descuento de inventario arranque bajo cero.
+         */
+        if (!Number.isFinite(args.price) || args.price <= 0) {
+            throw new Error("El precio debe ser mayor a cero.");
+        }
+        if (args.stock !== undefined) {
+            if (!Number.isInteger(args.stock) || args.stock < 0) {
+                throw new Error("El stock debe ser un número entero de 0 o más.");
+            }
+        }
+
         if (args.openPromotion) {
             const rate = args.openCommissionRate ?? 0;
             if (rate <= 0 || rate > 0.5) {
@@ -588,6 +601,11 @@ export const updateListing = mutation({
             discountType: v.optional(v.string()),
             validUntil: v.optional(v.string()),
             validityDays: v.optional(v.number()),
+            // Editar un evento tiene que poder corregir la fecha: sin estos
+            // campos, una publicación creada con la fecha mal quedaba así para
+            // siempre y su escrow nunca se liberaba solo.
+            eventDate: v.optional(v.string()),
+            eventTime: v.optional(v.string()),
         })
     },
     handler: async (ctx, args) => {
@@ -616,7 +634,37 @@ export const updateListing = mutation({
             }
         }
 
-        const patch: Record<string, unknown> = { ...args.updates };
+        /**
+         * Las claves con `undefined` se descartan antes de patchear.
+         *
+         * `ctx.db.patch` interpreta un `undefined` explícito como "borrá este
+         * campo". El formulario de edición mandaba `image` y `gallery` en
+         * `undefined` cuando el vendedor no tocaba las fotos, así que corregir
+         * un precio podía dejar la publicación sin imágenes. El llamador ya no
+         * las manda, pero el guard va igual: es una mutation pública y no
+         * conviene que borrar datos dependa de la prolijidad del cliente.
+         *
+         * Consecuencia buscada: por esta vía NO se puede vaciar un campo. Si
+         * alguna vez hace falta, tiene que ser un argumento explícito.
+         */
+        const patch: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(args.updates)) {
+            if (value !== undefined) patch[key] = value;
+        }
+
+        if (patch.price !== undefined) {
+            const nextPrice = Number(patch.price);
+            if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+                throw new Error("El precio debe ser mayor a cero.");
+            }
+        }
+        if (patch.stock !== undefined) {
+            const nextStock = Number(patch.stock);
+            if (!Number.isInteger(nextStock) || nextStock < 0) {
+                throw new Error("El stock debe ser un número entero de 0 o más.");
+            }
+        }
+
         if (patch.validityDays != null) {
             const days = Math.floor(Number(patch.validityDays));
             if (!Number.isFinite(days) || days < 1) {

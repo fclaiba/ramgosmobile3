@@ -193,9 +193,38 @@ export const getKycReviewQueue = query({
         const actor = await requireActor(ctx, args.sessionToken);
         assertAdmin(actor);
 
-        const users = await ctx.db.query("users").collect();
-        const pending = users
-            .filter((u) => u.kycStatus === "pending" || u.kycStatus === "unverified")
+        /**
+         * Quién entra en la cola.
+         *
+         * Antes se filtraba por `kycStatus === "pending" || === "unverified"`,
+         * y eso dejaba afuera a dos grupos que quedaban encallados sin ninguna
+         * ruta de aprobación:
+         *
+         *   - `"skipped"`: el que tocó "Omitir" en el wizard. No es `approved`,
+         *     así que sigue bloqueado para retirar, pero no aparecía acá.
+         *   - `kycStatus` ausente: los usuarios legacy y los de seed. No
+         *     matcheaban `"unverified"` porque el campo directamente no existe.
+         *
+         * `"unverified"` se conserva por compatibilidad aunque ninguna mutation
+         * actual lo escriba.
+         */
+        const REVIEWABLE = ["pending", "unverified", "skipped", undefined] as const;
+
+        // Una consulta por estado sobre `by_kyc_status`, en lugar del
+        // `.collect()` de toda la tabla que había antes. El tope por estado
+        // acota la lectura: la cola es una bandeja de trabajo, no un export.
+        const PER_STATUS_LIMIT = 200;
+        const buckets = await Promise.all(
+            REVIEWABLE.map((status) =>
+                ctx.db
+                    .query("users")
+                    .withIndex("by_kyc_status", (q) => q.eq("kycStatus", status))
+                    .take(PER_STATUS_LIMIT),
+            ),
+        );
+
+        const pending = buckets
+            .flat()
             .sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
 
         return await Promise.all(

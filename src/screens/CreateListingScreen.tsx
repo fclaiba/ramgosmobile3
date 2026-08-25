@@ -25,6 +25,16 @@ import { api } from '../../convex/_generated/api';
 import { ImageUploadField } from '../components/ui/ImageUploadField';
 import { LocationPickerModal } from '../components/marketplace/LocationPickerModal';
 import { UNIFIED_CATEGORIES } from '../config/UnifiedCategories';
+import {
+    clampValidityDays,
+    isPriceDraftValid,
+    LISTING_ERRORS,
+    normalizeStock,
+    parseDimensions,
+    parsePrice,
+    resolveCommissionRate,
+    validateListingDraft,
+} from './createListing/_validation';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 
 
@@ -62,20 +72,32 @@ export default function CreateListingScreen({ navigation, route }: any) {
         type: initialData?.type || null,
         category: initialData?.category || '',
         // Product specific
-        condition: 'new' as 'new' | 'used',
+        //
+        // `condition` y `photos` NO se hidrataban desde `initialData`. Al editar
+        // una publicación, un artículo usado volvía a "nuevo" y la galería
+        // aparecía vacía; si el vendedor agregaba una foto, esa foto
+        // REEMPLAZABA toda la galería anterior. Corregir el precio costaba las
+        // fotos.
+        condition: (initialData?.condition as 'new' | 'used') || 'new',
         visualState: '',
         functionalDetails: '',
         repairs: '',
         weight: '',
         dimensions: '',
         // Service/Event specific
-        eventDate: '',
-        eventTime: '',
+        eventDate: initialData?.eventDate || '',
+        eventTime: initialData?.eventTime || '',
         eventVenue: '',
         serviceMode: 'presencial' as 'presencial' | 'online' | 'mixto',
         // Common
-        photos: [] as string[],
-        selectedLocation: initialData?.location || null as { lat: number, lng: number, address?: string } | null,
+        // La galería existente se hidrata para que editar no la borre. Se
+        // prefiere `gallery` y se cae a `image` para las publicaciones viejas
+        // que sólo tienen la portada.
+        photos: (initialData?.gallery?.length
+            ? initialData.gallery
+            : initialData?.image
+              ? [initialData.image]
+              : []) as string[],
         location: initialData?.location || null as { lat: number, lng: number, address?: string } | null, // Kept for compatibility if used elsewhere
         // Influencer Campaign Backend — open promotion. Business-only;
         // server (`convex/listings.ts`) rejects the toggle if the
@@ -95,7 +117,6 @@ export default function CreateListingScreen({ navigation, route }: any) {
         setSelectedType(initialData.type);
     }
 
-    const [photoUrl, setPhotoUrl] = useState('');
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
     const [showLocationModal, setShowLocationModal] = useState(false);
@@ -104,14 +125,11 @@ export default function CreateListingScreen({ navigation, route }: any) {
     React.useEffect(() => {
         if (!selectedType) {
             setForm(initialFormState);
-            setPhotoUrl('');
         }
     }, [selectedType]);
 
     // Function to handle image upload
     const uploadImage = async (uri: string) => {
-        console.log("DEBUG: uploadImage called with:", uri);
-
         // Robust check: Upload anything that isn't clearly a Storage ID or a Remote HTTPS URL.
         // Storage IDs are typically alphanumeric characters (no protocol).
         // Blobs start with "blob:", Files start with "file://".
@@ -121,10 +139,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
         const isRemoteUrl = (uri.startsWith('http') || uri.startsWith('https')) && !uri.startsWith('blob:');
 
         if (isStorageId || isRemoteUrl) {
-            console.log("DEBUG: Skipping upload (already valid ID or Remote URL).");
             return uri;
         }
-        console.log("DEBUG: Proceeding to upload...");
 
         try {
             if (!user?.id) {
@@ -168,25 +184,6 @@ export default function CreateListingScreen({ navigation, route }: any) {
 
     const shippingCosts = calculateShipping();
 
-    const parseDimensions = (value: string) => {
-        const parts = value.split(/[xX×]/).map((part) => parseFloat(part.trim()));
-        const length = Number.isFinite(parts[0]) ? parts[0] : 25;
-        const width = Number.isFinite(parts[1]) ? parts[1] : 20;
-        const height = Number.isFinite(parts[2]) ? parts[2] : 10;
-        return { length, width, height };
-    };
-
-    const handleAddPhoto = () => {
-        const trimmed = photoUrl.trim();
-        if (!trimmed) return;
-        setForm((prev) => ({ ...prev, photos: [...prev.photos, trimmed] }));
-        setPhotoUrl('');
-    };
-
-    const handleRemovePhoto = (target: string) => {
-        setForm((prev) => ({ ...prev, photos: prev.photos.filter((url) => url !== target) }));
-    };
-
     if (!canPublish && publishBlock) {
         return (
             <View style={styles.container}>
@@ -216,57 +213,60 @@ export default function CreateListingScreen({ navigation, route }: any) {
     const handlePublish = async () => {
         if (!selectedType) return;
         if (!gateSellPublishWithdraw()) return;
+        // Sin esto, un doble tap durante la subida de imágenes publicaba dos
+        // veces: `isPublishing` existía pero no llegaba a ningún botón.
+        if (isPublishing) return;
 
-        // Validations
-        if (!validateName(form.title)) {
-            show('El nombre debe contener solo letras y tener al menos 3 caracteres.', 'error');
-            return;
-        }
-        if (!validatePrice(form.price)) {
-            show('El precio debe ser un número válido.', 'error');
-            return;
-        }
-        if (selectedType !== 'bono' && !form.location) {
-            show('Por favor selecciona una ubicación en el mapa.', 'error');
-            return;
-        }
-        if (!form.category) {
-            show('Por favor selecciona una categoría.', 'error');
+        const damageDescription = form.condition === 'used'
+            ? [form.visualState, form.functionalDetails, form.repairs].filter(Boolean).join(' | ')
+            : undefined;
+
+        // Toda la validación vive en `createListing/_validation.ts`, que está
+        // testeado. Antes estaba acá adentro y dejaba pasar precio vacío
+        // (→ $0), stock "0" (→ se publicaba 1) y stock negativo.
+        const draftError = validateListingDraft({
+            type: selectedType,
+            title: form.title,
+            price: form.price,
+            stock: form.stock,
+            category: form.category,
+            description: form.description,
+            photos: form.photos,
+            condition: form.condition,
+            damageDescription,
+            hasLocation: !!form.location,
+            eventDate: form.eventDate,
+            discountValue: form.discountValue,
+        });
+        if (draftError) {
+            show(LISTING_ERRORS[draftError], 'error');
             return;
         }
 
         setIsPublishing(true);
         try {
-            const priceValue = parseFloat(form.price.replace(',', '.')) || 0;
-            const stockValue = parseInt(form.stock || '1', 10) || 1;
+            const priceValue = parsePrice(form.price);
+            // `normalizeStock` ya no puede devolver null: lo validó el draft.
+            const stockValue = normalizeStock(form.stock) ?? 1;
             const weightValue = parseFloat(form.weight.replace(',', '.')) || 0.5;
-            const damageDescription = form.condition === 'used'
-                ? [form.visualState, form.functionalDetails, form.repairs].filter(Boolean).join(' | ')
-                : undefined;
 
             const listingType = selectedType;
             const finalCategory = form.category;
-            
+
             let discountValueFloat: number | undefined = undefined;
             let validityDaysValue: number | undefined = undefined;
             if (listingType === 'bono') {
-                discountValueFloat = parseFloat((form.discountValue || '').replace(',', '.')) || 0;
-                if (discountValueFloat <= priceValue) {
-                    setIsPublishing(false);
-                    show('El monto a consumir debe ser mayor al precio de venta.', 'error');
-                    return;
-                }
-                validityDaysValue = Math.min(
-                    Math.max(parseInt(form.validityDays || '4', 10) || 4, 1),
-                    365,
-                );
+                discountValueFloat = parsePrice(form.discountValue || '');
+                validityDaysValue = clampValidityDays(form.validityDays);
             }
 
+            // El lugar sigue yendo en la descripción porque no hay campo propio
+            // en el schema. La FECHA y la HORA ya no: se mandan estructuradas
+            // (ver abajo), porque `convex/events.ts` las necesita para liberar
+            // el escrow automáticamente.
             const extraLines: string[] = [];
-            if (listingType === 'event') {
-                if (form.eventDate) extraLines.push(`Fecha: ${form.eventDate}`);
-                if (form.eventTime) extraLines.push(`Hora: ${form.eventTime}`);
-                if (form.eventVenue) extraLines.push(`Lugar: ${form.eventVenue}`);
+            if (listingType === 'event' && form.eventVenue) {
+                extraLines.push(`Lugar: ${form.eventVenue}`);
             }
 
             const fullDescription = [form.description, extraLines.join('\n')].filter(Boolean).join('\n\n').trim();
@@ -286,11 +286,21 @@ export default function CreateListingScreen({ navigation, route }: any) {
             // Resolve openPromotion + rate.
             const wantsOpenPromotion = form.openPromotion;
             const openCommissionRateValue = wantsOpenPromotion
-                ? Math.max(0.01, Math.min(0.5, (Number(form.openCommissionRate) || 0) / 100))
+                ? resolveCommissionRate(form.openCommissionRate)
                 : undefined;
 
             if (editMode && initialData?._id) {
                 // UPDATE LOGIC
+                //
+                // Las claves de imagen se omiten cuando no hay fotos en vez de
+                // mandarse en `undefined`: en Convex un `undefined` explícito
+                // dentro de un `patch` BORRA el campo. Mandarlo siempre era lo
+                // que hacía que editar el precio dejara la publicación sin
+                // portada ni galería.
+                const imagePatch = uploadedImages.length > 0
+                    ? { image: uploadedImages[0], gallery: uploadedImages }
+                    : {};
+
                 await updateListingMutation({
                     sessionToken, actorId: user?.id as any,
                     id: initialData._id,
@@ -301,10 +311,12 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         price: priceValue,
                         stock: stockValue,
                         category: finalCategory,
-                        image: uploadedImages[0] || undefined,
-                        gallery: uploadedImages.length > 0 ? uploadedImages : undefined,
+                        ...imagePatch,
                         condition: form.condition,
                         location: locationData,
+                        ...(listingType === 'event'
+                            ? { eventDate: form.eventDate || undefined, eventTime: form.eventTime || undefined }
+                            : {}),
                         openPromotion: wantsOpenPromotion || undefined,
                         openCommissionRate: openCommissionRateValue,
                         discountValue: listingType === 'bono' ? discountValueFloat : undefined,
@@ -336,6 +348,15 @@ export default function CreateListingScreen({ navigation, route }: any) {
                         allowPickup: true,
                     },
                     location: locationData,
+                    // La fecha y hora del evento van ESTRUCTURADAS, no dentro
+                    // del texto de la descripción como estaban. `convex/events.ts`
+                    // hace `if (!res.eventDate) continue;`, así que sin este
+                    // campo el cron `events-auto-release` no liberaba jamás el
+                    // escrow de una orden de evento: el organizador no cobraba
+                    // hasta que el comprador confirmara a mano.
+                    ...(listingType === 'event'
+                        ? { eventDate: form.eventDate || undefined, eventTime: form.eventTime || undefined }
+                        : {}),
                     openPromotion: wantsOpenPromotion || undefined,
                     openCommissionRate: openCommissionRateValue,
                     discountValue: listingType === 'bono' ? discountValueFloat : undefined,
@@ -422,21 +443,11 @@ export default function CreateListingScreen({ navigation, route }: any) {
     // Categories imported from central config
     const CATEGORIES = UNIFIED_CATEGORIES;
 
-    // Validation Helpers
-    const validateName = (text: string) => {
-        // ponytail: allow numbers (BMW 320, iPhone 15) — min 3 chars
-        return text.trim().length >= 3;
-    };
-
-    const validatePrice = (text: string) => {
-        // Allow ONLY numbers and one decimal point. No currency symbols.
-        return /^\d*\.?\d{0,2}$/.test(text);
-    };
 
     const handlePriceChange = (text: string) => {
         // Strip non-numeric/decimal chars first (sanitization)
         const sanitized = text.replace(/[^0-9.]/g, '');
-        if (validatePrice(sanitized)) {
+        if (isPriceDraftValid(sanitized)) {
             setForm({ ...form, price: sanitized });
         }
     };
@@ -656,8 +667,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
 
                 {renderOpenPromotionSection()}
             </Card>
-            <Button onPress={handlePublish} style={{ backgroundColor: '#10B981' }}>
-                <Text style={styles.buttonTextLight}>Publicar Bono</Text>
+            <Button onPress={handlePublish} disabled={isPublishing} isLoading={isPublishing} style={{ backgroundColor: '#10B981' }}>
+                <Text style={styles.buttonTextLight}>{isPublishing ? 'Publicando…' : 'Publicar Bono'}</Text>
             </Button>
             <Button variant="outline" onPress={() => setSelectedType(null)}>
                 <Text style={styles.buttonTextDark}>Cancelar</Text>
@@ -727,8 +738,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
 
                 {renderOpenPromotionSection()}
             </Card>
-            <Button onPress={handlePublish} style={{ backgroundColor: '#F59E0B' }}>
-                <Text style={styles.buttonTextLight}>Publicar Evento</Text>
+            <Button onPress={handlePublish} disabled={isPublishing} isLoading={isPublishing} style={{ backgroundColor: '#F59E0B' }}>
+                <Text style={styles.buttonTextLight}>{isPublishing ? 'Publicando…' : 'Publicar Evento'}</Text>
             </Button>
             <Button variant="outline" onPress={() => setSelectedType(null)}>
                 <Text style={styles.buttonTextDark}>Cancelar</Text>
@@ -786,8 +797,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 {renderOpenPromotionSection()}
             </Card>
 
-            <Button onPress={handlePublish} style={{ backgroundColor: '#2196F3' }}>
-                <Text style={styles.buttonTextLight}>Publicar servicio</Text>
+            <Button onPress={handlePublish} disabled={isPublishing} isLoading={isPublishing} style={{ backgroundColor: '#2196F3' }}>
+                <Text style={styles.buttonTextLight}>{isPublishing ? 'Publicando…' : 'Publicar servicio'}</Text>
             </Button>
             <Button variant="outline" onPress={() => setSelectedType(null)}>
                 <Text style={styles.buttonTextDark}>Cancelar</Text>
@@ -886,8 +897,8 @@ export default function CreateListingScreen({ navigation, route }: any) {
                 {renderOpenPromotionSection()}
             </Card>
 
-            <Button onPress={handlePublish} style={{ backgroundColor: '#2563EB' }}>
-                <Text style={styles.buttonTextLight}>Publicar producto</Text>
+            <Button onPress={handlePublish} disabled={isPublishing} isLoading={isPublishing} style={{ backgroundColor: '#2563EB' }}>
+                <Text style={styles.buttonTextLight}>{isPublishing ? 'Publicando…' : 'Publicar producto'}</Text>
             </Button>
             <Button variant="outline" onPress={() => setSelectedType(null)}>
                 <Text style={styles.buttonTextDark}>Cancelar</Text>
@@ -989,13 +1000,6 @@ const getStyles = (isDark: boolean, width: number) => {
 
         usedSection: { backgroundColor: isDark ? 'rgba(234, 179, 8, 0.10)' : '#fefce8', padding: 12, borderRadius: Radius.md, borderWidth: 1, borderColor: isDark ? 'rgba(234, 179, 8, 0.35)' : '#fde047', marginBottom: 12 },
 
-        photoRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-        photoInput: { flex: 1 },
-        photoAddButton: { backgroundColor: '#2196F3', paddingHorizontal: 12, paddingVertical: 12, borderRadius: Radius.md, flexDirection: 'row', alignItems: 'center', gap: 8 },
-        photoAddText: { color: '#fff', fontWeight: '800' },
-        photoList: { marginTop: 12, gap: 8 },
-        photoChip: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: Radius.md, backgroundColor: isDark ? 'rgba(31,41,55,0.7)' : '#fff', borderWidth: 1, borderColor: border },
-        photoChipText: { flex: 1, color: text, fontSize: 12 },
 
         blockedContainer: {
             flex: 1,

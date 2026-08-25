@@ -55,10 +55,28 @@ interface PaymentFormProps {
         listingId: string;
         sellerId?: string;
         title: string;
+        /** Tipo real del item. Se hardcodeaba 'product' para bonos y eventos. */
+        type?: string;
         price: number;
         quantity: number;
         referralCode?: string;
     }>;
+    /**
+     * Destino de envío. Viaja hasta la orden para que el vendedor sepa adónde
+     * despachar: antes se recolectaba en `CartScreen` y se descartaba acá.
+     */
+    shippingDestination?: {
+        fullName: string;
+        addressLine1: string;
+        addressLine2?: string;
+        city: string;
+        state?: string;
+        postalCode: string;
+        country: string;
+        phone?: string;
+    };
+    shippingMethod?: string;
+    shippingCost?: number;
     onSuccess: (intentId: string, meta?: { pointsRedeemed: number }) => void;
     onError: (err: string | null) => void;
     userId?: string;
@@ -78,6 +96,9 @@ export function PaymentForm({
     amount,
     cartId,
     lineItems,
+    shippingDestination,
+    shippingMethod,
+    shippingCost,
     onSuccess,
     onError,
     theme,
@@ -152,7 +173,9 @@ export function PaymentForm({
         const items = (lineItems ?? []).map((i) => ({
             listingId: i.listingId,
             sellerId: i.sellerId,
-            type: 'product',
+            // El tipo real: hardcodear 'product' mandaba bonos, eventos y
+            // servicios etiquetados mal hasta la atribución de campañas.
+            type: i.type || 'product',
             amountInCents: Math.round(i.price * 100),
             referralCode: i.referralCode,
             quantity: i.quantity,
@@ -245,6 +268,17 @@ export function PaymentForm({
                 amountInCents: Math.round(chargeAmount * 100),
                 lineItems: items.length > 0 ? items : undefined,
                 cartId,
+                // El destino viaja con el pago porque la orden se crea del lado
+                // del servidor, en el webhook, mucho después de que esta
+                // pantalla dejó de existir. Sin esto el vendedor no sabe adónde
+                // enviar.
+                shipping: shippingDestination
+                    ? {
+                          method: shippingMethod || 'standard',
+                          cost: Number(shippingCost) || 0,
+                          address: shippingDestination,
+                      }
+                    : undefined,
                 simulate: !isLive,
                 mode,
                 metadata: isLive

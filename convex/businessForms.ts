@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getActorOrNull, requireActor } from "./authHelpers";
 import { Id } from "./_generated/dataModel";
+import { canCreateBusinessForms, resolveKycStatus } from "./_kyc";
+import { normalizePhone, PHONE_ERRORS, validatePhone } from "./_phone";
 
 export const createForm = mutation({
     args: {
@@ -17,7 +19,13 @@ export const createForm = mutation({
         if (!user || user.role !== 'business') {
             throw new Error("No autorizado. Solo negocios pueden crear formularios.");
         }
-        if (user.kycStatus !== 'approved') {
+        // Estado efectivo, no el crudo: ver el comentario en `_kyc.ts`.
+        const requireKyc = await ctx.db
+            .query("global_settings")
+            .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
+            .first();
+        const kycStatus = resolveKycStatus(user.kycStatus, requireKyc?.value === true);
+        if (!canCreateBusinessForms(kycStatus)) {
             throw new Error("El KYC del negocio no está aprobado. Completa la verificación para usar esta función.");
         }
 
@@ -94,6 +102,16 @@ export const submitLead = mutation({
         }
         
         if (!bId) throw new Error("Se requiere businessId o formId.");
+
+        // El teléfono del lead es el dato con el que el negocio devuelve el
+        // contacto. Es opcional, pero si viene tiene que ser un número real:
+        // antes entraba sin ninguna validación, ni acá ni en el formulario.
+        let phone = args.phone?.trim() || undefined;
+        if (phone) {
+            const phoneError = validatePhone(phone);
+            if (phoneError) throw new Error(PHONE_ERRORS[phoneError]);
+            phone = normalizePhone(phone);
+        }
         
         let submitterId: string | undefined = undefined;
         let finalName = args.name || "Usuario Anónimo";
@@ -134,7 +152,7 @@ export const submitLead = mutation({
             ...(submitterId ? { userId: submitterId } : {}),
             name: finalName,
             email: finalEmail,
-            phone: args.phone,
+            phone,
             message: args.message,
             scheduledDate: args.scheduledDate,
             scheduledTime: args.scheduledTime,

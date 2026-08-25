@@ -178,6 +178,11 @@ export default defineSchema({
         .index("by_referral_alias", ["referralAlias"])
         .index("by_referred_by_user", ["referredByUserId"])
         .index("by_role", ["role"])
+        // La cola de revisión de KYC del panel de admin recorría la tabla
+        // ENTERA con `.collect()` y filtraba en memoria. Con este índice sólo
+        // lee los estados revisables. `kycStatus` es opcional, así que los
+        // usuarios sin el campo se consultan con `.eq("kycStatus", undefined)`.
+        .index("by_kyc_status", ["kycStatus"])
         // El cron diario de expiración de suspensiones (Fase 2) recorre SOLO
         // los suspendidos, no la tabla entera — sin esto sería un full scan.
         .index("by_social_status", ["socialStatus"])
@@ -367,14 +372,43 @@ export default defineSchema({
             address: v.object({
                 fullName: v.string(),
                 addressLine1: v.string(),
+                // Opcionales y aditivos: el formulario de `CartScreen` ya los
+                // recolectaba pero no tenían dónde guardarse. El teléfono es lo
+                // que usa el correo para coordinar la entrega.
+                addressLine2: v.optional(v.string()),
                 city: v.string(),
+                state: v.optional(v.string()),
                 postalCode: v.string(),
                 country: v.string(),
+                phone: v.optional(v.string()),
             }),
             trackingNumber: v.optional(v.string()),
             carrier: v.optional(v.string()),
         })),
         escrowState: v.optional(v.string()), // 'held', 'released', etc.
+        /**
+         * Por qué falló la liberación de fondos, si falló.
+         *
+         * Existe porque `confirmReceipt` marca la orden como liberada ANTES de
+         * que la transferencia ocurra. Si la transferencia no sale, sin este
+         * campo la orden queda afirmando que se pagó al vendedor sin que se
+         * haya movido un peso.
+         */
+        escrowReleaseError: v.optional(v.string()),
+        /**
+         * Sobreventa detectada al descontar inventario.
+         *
+         * Se llena sólo cuando el stock no alcanzaba en el momento de crear la
+         * orden. No se rechaza la orden porque el cobro ya ocurrió: rechazar
+         * dejaría dinero tomado sin orden asociada. Queda acá para que un
+         * humano lo resuelva (reponer, reembolsar o cancelar la línea).
+         */
+        stockShortfall: v.optional(v.array(v.object({
+            listingId: v.string(),
+            title: v.string(),
+            requested: v.number(),
+            available: v.number(),
+        }))),
         netAmountCents: v.optional(v.number()),
         commissionCents: v.optional(v.number()),
         transferGroup: v.optional(v.string()),
@@ -864,7 +898,9 @@ export default defineSchema({
         // Linked rows in our DB (best-effort match on PI / transfer id).
         relatedPaymentId: v.optional(v.string()),
         relatedPayoutId: v.optional(v.string()),
-        // Why the row was flagged (eg. 'no_local_payment', 'amount_mismatch').
+        // Why the row was flagged: 'no_local_payment', 'amount_mismatch',
+        // 'paid_without_order' (webhook perdido: se cobró y no hay orden),
+        // 'orphan_no_pi'.
         reason: v.string(),
         amountInCents: v.number(),
         currency: v.string(),

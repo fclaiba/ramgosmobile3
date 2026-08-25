@@ -454,8 +454,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isTest: userData.isTest,
                 avatar: userData.avatar,
                 status: 'active',
-                emailVerified: true,
-                requiresKyc: true,
+                // Estos dos venían hardcodeados y descartaban lo que decía el
+                // servidor. `emailVerified: true` hacía que reiniciar la app
+                // saltara la verificación (la sesión ya se emite en `register`),
+                // y `requiresKyc: true` era un dato inventado del que
+                // `useActionGate` dependía para decidir bloqueos.
+                emailVerified: userData.emailVerified === true,
+                requiresKyc: userData.requiresKyc === true,
                 termsAcceptedVersion: userData.termsAcceptedVersion || 1,
                 createdAt: userData.joinedAt || new Date().toISOString(),
                 providers: ['password'],
@@ -560,8 +565,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                 }));
 
-                // Enviar el OTP real a través de Resend
-                sendOtpActionCall({ email }).catch(console.error);
+                // Enviar el OTP real a través de Resend.
+                //
+                // El `.catch(console.error)` anterior dejaba al usuario mirando
+                // "te enviamos un código" mientras el envío había fallado. Es el
+                // camino más transitado de todos —el alta— así que un fallo mudo
+                // acá deja gente encallada sin saber por qué.
+                void sendOtpActionCall({ email })
+                    .then((outcome) => {
+                        if (outcome?.delivered === false) {
+                            show(outcome.message || 'No se pudo enviar el código. Probá "Reenviar".', 'error');
+                        }
+                    })
+                    .catch(() => {
+                        show('No se pudo enviar el código. Probá "Reenviar".', 'error');
+                    });
 
                 return {
                     user,
@@ -602,7 +620,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             if ((result as any).requiresOtp) {
                 const pendingUserId = (result as any).userId;
-                await sendOtpActionCall({ email }).catch(console.error);
+                // Mismo criterio que en el alta: si el código no salió, decirlo.
+                try {
+                    const otpOutcome = await sendOtpActionCall({ email });
+                    if (otpOutcome?.delivered === false) {
+                        show(otpOutcome.message || 'No se pudo enviar el código. Probá "Reenviar".', 'error');
+                    }
+                } catch {
+                    show('No se pudo enviar el código. Probá "Reenviar".', 'error');
+                }
                 setState(prev => ({
                     ...prev,
                     status: 'pending_verification',
@@ -647,8 +673,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 isTest: fullResult.isTest,
                 avatar: fullResult.avatar,
                 status: 'active',
-                emailVerified: true,
-                requiresKyc: true,
+                // Del servidor, no inventados. Ver el comentario del efecto de
+                // sincronización más arriba.
+                emailVerified: fullResult.emailVerified === true,
+                requiresKyc: fullResult.requiresKyc === true,
                 termsAcceptedVersion: fullResult.termsAcceptedVersion || 1,
                 createdAt: fullResult.joinedAt || new Date().toISOString(),
                 providers: ['password'],

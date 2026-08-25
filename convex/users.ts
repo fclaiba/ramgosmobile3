@@ -24,6 +24,9 @@ import {
 import { searchDirectoryImpl } from "./userDirectory";
 import { toUserCard, socialProfileOf, userCardValidator } from "./userCard";
 import { REFERRAL_REWARDS } from "./economy/_rewardRules";
+import { resolveKycStatus } from "./_kyc";
+import { can, PRIVILEGED_ROLES, SELF_ASSIGNABLE_ROLES } from "./_roles";
+import { normalizePhone, PHONE_ERRORS, validatePhone } from "./_phone";
 
 export const internalCheckRateLimit = internalMutation({
     args: { key: v.string(), maxAttempts: v.number(), windowMs: v.number() },
@@ -61,7 +64,6 @@ export const checkInfluencerMetrics = internalMutation({
     }
 });
 
-const ALLOWED_ROLES = new Set(['consumer', 'business', 'influencer', 'admin']);
 // Los montos vienen de `economy/_rewardRules.ts`, el mismo módulo que leen los
 // contextos de React. Estaban hardcodeados acá y la UI de referidos mostraba
 // otros números (5 / 10 / 25), así que el usuario veía una cifra y cobraba otra.
@@ -159,11 +161,11 @@ const sanitizeUser = async (ctx: any, user: any) => {
         .first();
     const isKycEnabled = requireKyc?.value === true; // Default is FALSE (Desactivado por defecto)
 
-    // Si el usuario ya tiene un estado de KYC (ej. pending porque acaba de enviarlo), respetamos ese estado.
-    // Solo forzamos 'approved' si el usuario NO tiene estado y el KYC global está desactivado.
-    const effectiveKycStatus = user.kycStatus 
-        ? user.kycStatus 
-        : (isKycEnabled ? "pending" : "approved");
+    // La resolución vive en `_kyc.ts` para que los gates que bloquean de verdad
+    // (retiro, formularios, bonos) usen exactamente el mismo criterio. Antes
+    // cada uno tenía el suyo y esto devolvía "approved" a usuarios a los que
+    // `finance.requestWithdrawal` después les negaba el retiro.
+    const effectiveKycStatus = resolveKycStatus(user.kycStatus, isKycEnabled);
 
     return {
     _id: user._id,
@@ -174,6 +176,10 @@ const sanitizeUser = async (ctx: any, user: any) => {
     role: user.role,
     avatar: avatarUrl,
     kycStatus: effectiveKycStatus,
+    // El cliente no puede deducir esto: el toggle vive en `global_settings`.
+    // `useActionGate` lo venía leyendo de un `requiresKyc` hardcodeado en
+    // `AuthContext`, o sea que decidía sobre un dato inventado.
+    requiresKyc: isKycEnabled,
     joinedAt: user.joinedAt,
     tier: user.tier,
     subscriptionStatus: user.subscriptionStatus,
@@ -220,7 +226,11 @@ export const register = mutation({
         tiktokUrl: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        if (!ALLOWED_ROLES.has(args.role)) {
+        // `register` es una mutation PÚBLICA y `role` llega como `v.string()`
+        // desde el cliente. La lista anterior incluía `'admin'`, así que
+        // cualquiera podía crear una cuenta administrativa llamando esta
+        // mutation con `role: "admin"` — sin dominio de email, sin nada.
+        if (!SELF_ASSIGNABLE_ROLES.has(args.role)) {
             throw new Error("Rol inválido.");
         }
 
@@ -445,7 +455,7 @@ export const oauthLoginFromProvider = internalMutation({
                 );
             }
 
-            if (!args.role || !ALLOWED_ROLES.has(args.role) || args.role === "admin") {
+            if (!args.role || !SELF_ASSIGNABLE_ROLES.has(args.role)) {
                 throw new Error(
                     "Elegí el tipo de cuenta (consumidor, negocio o influencer) antes de continuar.",
                 );
@@ -964,27 +974,47 @@ export const updateUser = mutation({
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
 
-        const isAdmin = actor.role === 'admin';
+        /**
+         * Control de campos protegidos.
+         *
+         * La versión anterior exceptuaba de este control a cualquier actor cuyo
+         * email terminara en `@ramgos.com`:
+         *
+         *     const isDevAccount = actor.email?.endsWith('@ramgos.com');
+         *     if ((field === 'role' || field === 'isTest') && isDevAccount) continue;
+         *
+         * Combinado con `ALLOWED_ROLES`, que incluía `'admin'`, eso significaba
+         * que **cualquier usuario con casilla en ese dominio podía llamar
+         * `updateUser` sobre sí mismo y auto-promoverse a admin**, sin ser admin
+         * ni developer. El control era el sufijo de un email, no un rol — y un
+         * email es un dato que se elige, no un permiso que se otorga.
+         *
+         * Ahora depende de la capacidad `change_role` y de nada más.
+         */
+        const canChangeRole = can(actor.role, 'change_role');
         const isSelf = actor.idString === String(args.id);
-        if (!isAdmin && !isSelf) {
+        if (!canChangeRole && !isSelf) {
             throw new Error("No autorizado.");
         }
 
-        if (!isAdmin) {
+        if (!canChangeRole) {
             const forbidden = ['role', 'kycStatus', 'tier', 'subscriptionStatus', 'isTest'];
-            const isDevAccount = actor.email?.endsWith('@ramgos.com');
-            
             for (const field of forbidden) {
-                if ((field === 'role' || field === 'isTest') && isDevAccount) continue; // Allow dev accounts to change role and isTest
-                
                 if (Object.prototype.hasOwnProperty.call(args.updates, field)) {
                     throw new Error("No autorizado para actualizar ese campo.");
                 }
             }
         }
 
-        if (args.updates.role && !ALLOWED_ROLES.has(args.updates.role)) {
-            throw new Error("Rol inválido.");
+        if (args.updates.role) {
+            // Los roles privilegiados no se asignan por esta vía ni siquiera
+            // teniendo el permiso: promover es una operación aparte, auditada.
+            if (PRIVILEGED_ROLES.has(args.updates.role)) {
+                throw new Error("Los roles administrativos no se asignan desde el perfil.");
+            }
+            if (!SELF_ASSIGNABLE_ROLES.has(args.updates.role)) {
+                throw new Error("Rol inválido.");
+            }
         }
 
         // Los campos de identidad se separan del patch crudo: por acá se
@@ -1005,7 +1035,8 @@ export const updateUser = mutation({
         if (nickname !== undefined) identityPatch.nickname = nickname;
         if (avatar !== undefined) identityPatch.avatar = avatar;
         if (Object.keys(identityPatch).length > 0) {
-            await writeUserIdentity(ctx, args.id, identityPatch, { actorIsAdmin: isAdmin });
+            // Sólo alimenta el metadato `byAdmin` del registro de identidad.
+            await writeUserIdentity(ctx, args.id, identityPatch, { actorIsAdmin: canChangeRole });
         }
     },
 });
@@ -1225,7 +1256,24 @@ export const submitKyc = mutation({
         const businessAddress =
             str(payload.businessAddress) || str(payload.address) || prevProfile.businessAddress;
         const ein = str(payload.ein) || str(payload.taxId) || prevProfile.ein;
-        const contactPhone = str(payload.contactPhone) || prevProfile.contactPhone;
+        /**
+         * El teléfono es el medio por el que el revisor contacta al usuario si
+         * el KYC necesita aclaraciones. No se verifica por SMS, así que lo
+         * mínimo es que sea un número plausible: antes el cliente sólo lo
+         * formateaba y acá entraba cualquier cosa, incluido un solo dígito.
+         *
+         * Se guarda normalizado (sólo dígitos, con `+` si venía) para que el
+         * mismo número escrito de dos formas no parezca dos números distintos.
+         */
+        const rawContactPhone = str(payload.contactPhone) || prevProfile.contactPhone;
+        let contactPhone = rawContactPhone;
+        if (rawContactPhone) {
+            const phoneError = validatePhone(rawContactPhone);
+            if (phoneError) {
+                throw new Error(PHONE_ERRORS[phoneError]);
+            }
+            contactPhone = normalizePhone(rawContactPhone);
+        }
         const contactEmail = str(payload.contactEmail) || prevProfile.contactEmail;
         const socialLink = str(payload.socialLink) || prevProfile.socialLink;
         const legalRep = str(payload.legalRep) || prevProfile.legalRep;

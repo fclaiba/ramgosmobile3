@@ -1,8 +1,34 @@
 import { v } from "convex/values";
 import { mutation, action, internalMutation } from "./_generated/server";
-import { internal, api } from "./_generated/api";
-import { requireActor, createSession } from "./authHelpers";
+import { internal } from "./_generated/api";
+import { requireActor, createSession, checkRateLimit } from "./authHelpers";
 import { hashPassword, verifyPassword } from "./passwordHelpers";
+
+/**
+ * Presupuestos de envío de OTP.
+ *
+ * Antes verificación y recuperación de contraseña compartían la key
+ * `otp_${email}`, así que pedir un código de verificación te consumía intentos
+ * de recuperar la contraseña y viceversa — y cada login con 2FA gastaba uno
+ * más. Con 3 intentos totales, un usuario legítimo quedaba bloqueado enseguida.
+ *
+ * La key va normalizada a minúsculas porque `saveOtp` normaliza el email pero
+ * la del rate limit usaba el string crudo: `Juan@x.com` y `juan@x.com` tenían
+ * contadores distintos, o sea que el límite se evadía cambiando mayúsculas.
+ */
+export const OTP_SEND_MAX_ATTEMPTS = 5;
+export const OTP_SEND_WINDOW_MS = 10 * 60 * 1000;
+
+/** Intentos de ADIVINAR el código, distinto de intentos de pedirlo. */
+export const OTP_VERIFY_MAX_ATTEMPTS = 5;
+export const OTP_VERIFY_WINDOW_MS = 10 * 60 * 1000;
+
+export function otpRateLimitKey(
+    purpose: 'verification' | 'recovery' | 'verify-attempt',
+    email: string,
+): string {
+    return `otp_${purpose}_${email.trim().toLowerCase()}`;
+}
 
 // Internal mutation to save OTP in the users table
 export const saveOtp = internalMutation({
@@ -26,18 +52,27 @@ export const saveOtp = internalMutation({
 // Enviar email de verificación
 export const sendVerificationEmail = action({
     args: { email: v.string() },
-    // El tipo de retorno va explícito porque el handler llama a
-    // `api.notifications.sendOTP`, y ese `api` se genera a partir de este mismo
-    // archivo: sin anotación, TypeScript entra en un ciclo de inferencia
-    // (TS7022) y termina tipando todo el `api` como `any`.
+    // El tipo de retorno va explícito porque el handler llama a otras funciones
+    // del deployment a través de `internal`, que se genera a partir de este
+    // mismo archivo: sin anotación, TypeScript entra en un ciclo de inferencia
+    // (TS7022) y termina tipando toda la API generada como `any`.
     handler: async (ctx, args): Promise<{ success: boolean; delivered: boolean; message: string }> => {
+        // El límite se chequea ANTES de generar y guardar el código. Al revés
+        // —como estaba— el 4º intento ya había pisado en la base el OTP válido
+        // cuando el límite saltaba: el usuario se quedaba sin ningún código
+        // utilizable por 10 minutos, incluso teniendo el mail del 3º.
+        await ctx.runMutation(internal.users.internalCheckRateLimit, {
+            key: otpRateLimitKey('verification', args.email),
+            maxAttempts: OTP_SEND_MAX_ATTEMPTS,
+            windowMs: OTP_SEND_WINDOW_MS,
+        });
+
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        
+
         // Guardamos el OTP en la DB
         await ctx.runMutation(internal.auth.saveOtp, { email: args.email, code });
-        
-        // Enviamos el correo usando notifications.sendOTP
-        const outcome = await ctx.runAction(api.notifications.sendOTP, {
+
+        const outcome = await ctx.runAction(internal.notifications.sendOTP, {
             email: args.email,
             code,
             type: 'verification',
@@ -83,12 +118,27 @@ export const verifyEmailCode = mutation({
             throw new Error("Usuario no encontrado.");
         }
 
-        if (user.otp !== args.code) {
-            throw new Error("Código inválido.");
-        }
-        
+        // Tope de intentos de ADIVINAR el código. Sin esto se podían probar los
+        // 10⁶ códigos de 6 dígitos sin ningún freno: el rate limit sólo cubría
+        // el ENVÍO, no la verificación. Y acertar por fuerza bruta en la rama
+        // sin `sessionToken` devuelve una sesión válida (ver abajo), o sea que
+        // era una toma de cuenta a partir del email solo.
+        await checkRateLimit(
+            ctx,
+            otpRateLimitKey('verify-attempt', user.email),
+            OTP_VERIFY_MAX_ATTEMPTS,
+            OTP_VERIFY_WINDOW_MS,
+        );
+
+        // La expiración se comprueba ANTES que el valor: un código vencido tiene
+        // que decir "expiró" y no "inválido", que manda al usuario a revisar
+        // dígitos que estaban bien.
         if (user.otpExpiresAt && user.otpExpiresAt < Date.now()) {
             throw new Error("El código ha expirado.");
+        }
+
+        if (!user.otp || user.otp !== args.code) {
+            throw new Error("Código inválido.");
         }
 
         // Marcar email como verificado y borrar OTP
@@ -110,15 +160,23 @@ export const verifyEmailCode = mutation({
 // Solicitar recuperación de contraseña
 export const sendPasswordResetEmail = action({
     args: { email: v.string() },
-    handler: async (ctx, args) => {
+    handler: async (ctx, args): Promise<{ success: boolean }> => {
+        // Presupuesto propio: recuperar la contraseña ya no consume los intentos
+        // de verificar la cuenta.
+        await ctx.runMutation(internal.users.internalCheckRateLimit, {
+            key: otpRateLimitKey('recovery', args.email),
+            maxAttempts: OTP_SEND_MAX_ATTEMPTS,
+            windowMs: OTP_SEND_WINDOW_MS,
+        });
+
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        
+
         // Guardamos el OTP en la DB
         await ctx.runMutation(internal.auth.saveOtp, { email: args.email, code });
-        
+
         // Reutilizamos el mismo envío de OTP (simplificación Ponytail)
-        await ctx.runAction(api.notifications.sendOTP, { email: args.email, code, type: 'recovery' });
-        
+        await ctx.runAction(internal.notifications.sendOTP, { email: args.email, code, type: 'recovery' });
+
         return { success: true };
     }
 });

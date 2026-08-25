@@ -22,11 +22,28 @@ export default function PaymentScreen({ navigation, route }: any) {
     const currency = route.params?.currency || 'usd';
     const finalAmount = Math.max(0, subtotal + shippingCost);
 
+    /**
+     * Datos de envío.
+     *
+     * `CartScreen` arma un formulario completo de entrega y lo manda en
+     * `route.params`, pero esta pantalla **nunca lo leía**: el vendedor no
+     * tenía forma de saber adónde despachar. Para un marketplace de bienes
+     * físicos eso es un bloqueante, no un detalle.
+     */
+    const shippingDestination = route.params?.shippingDestination;
+    const shippingMethod = route.params?.shippingMethod;
+
     const cartItems = route.params?.cartItems || [];
     const lineItems = cartItems.map((item: any) => ({
         listingId: item.id,
-        sellerId: item.sellerId || 'ramgos',
+        // `sellerId` no se inventa. El fallback `'ramgos'` producía órdenes con
+        // un vendedor que no existe como usuario: `normalizeId` devuelve null y
+        // el escrow queda trabado para siempre, sin nadie a quien pagarle.
+        sellerId: item.sellerId,
         title: item.name,
+        // El `type` real del item, no 'product' para todo. Se hardcodeaba y
+        // viajaba así hasta la atribución de campañas.
+        type: item.type,
         price: item.price,
         quantity: item.quantity,
         referralCode: item.referralCode,
@@ -177,6 +194,9 @@ export default function PaymentScreen({ navigation, route }: any) {
                     currency={currency}
                     cartId={cartId}
                     lineItems={lineItems}
+                    shippingDestination={shippingDestination}
+                    shippingMethod={shippingMethod}
+                    shippingCost={shippingCost}
                     userId={userId}
                     onSuccess={() => setIsSuccess(true)}
                     onError={setError}

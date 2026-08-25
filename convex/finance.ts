@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { canWithdrawFunds, resolveKycStatus } from "./_kyc";
 import {
     assertAdminOrDeveloper,
     assertSelfOrAdmin,
@@ -284,12 +285,30 @@ export const recordPaymentEvent = internalMutation({
         payload: v.optional(v.any()),
     },
     handler: async (ctx, args) => {
+        /**
+         * Idempotencia del webhook.
+         *
+         * Antes cualquier registro previo se consideraba "ya procesado", pero
+         * la fila se inserta con `processed: false` ANTES de procesar. Si
+         * `internalProcessMultiVendorCart` fallaba a mitad, el reintento de
+         * Stripe encontraba la fila, respondía `alreadyProcessed: true` y se
+         * descartaba: **la orden nunca se creaba** y el cobro quedaba huérfano.
+         * Peor todavía, el webhook devolvía 200, así que Stripe dejaba de
+         * reintentar.
+         *
+         * Ahora sólo se considera procesado lo que se completó. Un evento que
+         * quedó a medias se vuelve a intentar.
+         */
         const existing = await ctx.db
             .query("paymentEvents")
             .withIndex("by_stripe_event", (q) => q.eq("stripeEventId", args.stripeEventId))
             .first();
         if (existing) {
-            return { alreadyProcessed: true, id: existing._id };
+            if (existing.processed) {
+                return { alreadyProcessed: true, id: existing._id };
+            }
+            // Reintento de un evento que quedó incompleto: se deja pasar.
+            return { alreadyProcessed: false, id: existing._id, isRetry: true };
         }
         const id = await ctx.db.insert("paymentEvents", {
             stripeEventId: args.stripeEventId,
@@ -313,8 +332,12 @@ export const markPaymentEventProcessed = internalMutation({
             .withIndex("by_stripe_event", (q) => q.eq("stripeEventId", args.stripeEventId))
             .first();
         if (!existing) return;
+        // Un evento que falló NO queda marcado como procesado: si no, el
+        // reintento de Stripe lo descarta y la orden no se crea nunca. Se deja
+        // el error registrado para diagnóstico, pero `processed` sigue en false
+        // para que el próximo intento vuelva a entrar.
         await ctx.db.patch(existing._id, {
-            processed: true,
+            processed: !args.error,
             processedAt: new Date().toISOString(),
             error: args.error,
         });
@@ -432,11 +455,22 @@ export const createWithdrawal = mutation({
 
         if (args.amount <= 0) throw new Error("El monto del retiro debe ser mayor a 0.");
 
-        // Check user KYC
+        // Check user KYC.
+        //
+        // Se resuelve el estado EFECTIVO, igual que hace `sanitizeUser`. Leer
+        // `user.kycStatus` crudo —como estaba— hacía que un usuario sin estado
+        // viera "verificado" en la app (porque la query se lo devolvía así) y
+        // acá recibiera "Se requiere KYC aprobado": la UI y el backend no
+        // estaban de acuerdo sobre quién era el mismo usuario.
         const userNormId = ctx.db.normalizeId("users", args.userId);
         if (userNormId) {
             const user = await ctx.db.get(userNormId);
-            if (!user || user.kycStatus !== "approved") {
+            const requireKyc = await ctx.db
+                .query("global_settings")
+                .withIndex("by_key", (q: any) => q.eq("key", "require_kyc"))
+                .first();
+            const status = resolveKycStatus(user?.kycStatus, requireKyc?.value === true);
+            if (!user || !canWithdrawFunds(status)) {
                 throw new Error("Se requiere KYC aprobado para retirar fondos.");
             }
         }

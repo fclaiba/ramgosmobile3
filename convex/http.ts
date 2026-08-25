@@ -289,47 +289,35 @@ http.route({
             error: processingError,
         });
 
+        // Ante un fallo se devuelve 500 para que Stripe REINTENTE. Antes se
+        // respondía 200 siempre: un error a mitad de camino dejaba el cobro sin
+        // orden y Stripe, viendo el 200, no volvía a intentarlo nunca.
+        if (processingError) {
+            return new Response(`Processing error: ${processingError}`, { status: 500 });
+        }
+
         return new Response(null, { status: 200 });
     }),
 });
 
 // ---------------------------------------------------------------------------
-// /kyc-webhook — receives KYC approval/rejection events.
+// /kyc-webhook — ELIMINADO (2026-08-25).
+//
+// Aceptaba `{ event: "kyc.approved", userId }` por POST y llamaba a
+// `internalApproveKYC` SIN NINGUNA AUTENTICACIÓN: sin firma, sin secreto
+// compartido, sin allowlist de IP. Como el KYC aprobado habilita retirar
+// fondos (`finance.ts`) y crear formularios de negocio (`businessForms.ts`),
+// cualquiera que conociera la URL del deployment y un userId podía
+// auto-aprobarse. Escalada de privilegios remota.
+//
+// No lo llamaba nadie: la aprobación real entra por dos caminos que sí están
+// autenticados — el panel de admin (`users.approveKYC`, con rol verificado) y
+// el webhook de Stripe Identity de más arriba, que valida la firma.
+//
+// Si alguna vez se integra un proveedor externo de KYC, el endpoint nuevo
+// tiene que verificar firma como hace `/stripe-webhook`, y fallar cerrado si
+// falta el secreto.
 // ---------------------------------------------------------------------------
-http.route({
-    path: "/kyc-webhook",
-    method: "POST",
-    handler: httpAction(async (ctx, request) => {
-        try {
-            const body = await request.json();
-            const eventType = body.event;
-            const targetUserId = body.userId;
-
-            if (!targetUserId) {
-                return new Response("Missing userId", { status: 400 });
-            }
-
-            if (eventType === "kyc.approved") {
-                await ctx.runMutation(internal.users.internalApproveKYC, {
-                    targetUserId: targetUserId as any,
-                });
-                console.log(`[KYC Webhook] Approved for user: ${targetUserId}`);
-            } else if (eventType === "kyc.rejected") {
-                await ctx.runMutation(internal.users.internalRejectKYC, {
-                    targetUserId: targetUserId as any,
-                });
-                console.log(`[KYC Webhook] Rejected for user: ${targetUserId}`);
-            } else {
-                console.log(`[KYC Webhook] Unknown event type: ${eventType}`);
-            }
-
-            return new Response(null, { status: 200 });
-        } catch (err: any) {
-            console.error(`KYC Webhook error: ${err.message}`);
-            return new Response(`Webhook Error: ${err.message}`, { status: 400 });
-        }
-    }),
-});
 
 // ---------------------------------------------------------------------------
 // /apple-iap-webhook — App Store Server Notifications V2 endpoint.

@@ -8,6 +8,10 @@
  * @module
  */
 
+import type * as _inventory from "../_inventory.js";
+import type * as _kyc from "../_kyc.js";
+import type * as _phone from "../_phone.js";
+import type * as _roles from "../_roles.js";
 import type * as admin from "../admin.js";
 import type * as adminQueries from "../adminQueries.js";
 import type * as approveAll from "../approveAll.js";
@@ -56,6 +60,7 @@ import type * as notifications from "../notifications.js";
 import type * as oauthGoogle from "../oauthGoogle.js";
 import type * as observability from "../observability.js";
 import type * as orders from "../orders.js";
+import type * as orders__orderStates from "../orders/_orderStates.js";
 import type * as passwordHelpers from "../passwordHelpers.js";
 import type * as payments_actions from "../payments/actions.js";
 import type * as points from "../points.js";
@@ -105,6 +110,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  _inventory: typeof _inventory;
+  _kyc: typeof _kyc;
+  _phone: typeof _phone;
+  _roles: typeof _roles;
   admin: typeof admin;
   adminQueries: typeof adminQueries;
   approveAll: typeof approveAll;
@@ -153,6 +162,7 @@ declare const fullApi: ApiFromModules<{
   oauthGoogle: typeof oauthGoogle;
   observability: typeof observability;
   orders: typeof orders;
+  "orders/_orderStates": typeof orders__orderStates;
   passwordHelpers: typeof passwordHelpers;
   "payments/actions": typeof payments_actions;
   points: typeof points;

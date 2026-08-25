@@ -118,6 +118,33 @@ export function useActionGate() {
       };
     }
 
+    // `pending_verification` caía al `return null` y podía pagar sin haber
+    // verificado el email, cuando `gateSellPublishWithdraw` sí lo bloquea. La
+    // asimetría no estaba justificada en ningún lado.
+    if (status === 'pending_verification') {
+      return {
+        reason: 'pending_verification',
+        title: 'Verificá tu email',
+        message: 'Confirmá el código que te enviamos para poder completar la compra.',
+        ctaLabel: 'Verificar email',
+        onCta: () => navigation.navigate('Verification', { email: emailForVerification }),
+      };
+    }
+
+    // Autenticado pero sin usuario cargado: `PaymentScreen` calcula
+    // `userId = undefined` y `PaymentForm` corta la carga de tarjetas EN
+    // SILENCIO. El comprador ve un checkout sin medios de pago y sin
+    // explicación.
+    if (status === 'authenticated' && !user) {
+      return {
+        reason: 'loading',
+        title: 'Cargando tu cuenta',
+        message: 'Estamos terminando de cargar tus datos. Probá de nuevo en un momento.',
+        ctaLabel: 'Entendido',
+        onCta: () => { },
+      };
+    }
+
     if (status === 'authenticated' && user && !isKycApproved) {
       return {
         reason: 'kyc_required',
@@ -129,7 +156,7 @@ export function useActionGate() {
     }
 
     return null;
-  }, [isKycApproved, kycRouteName, kycRouteParams, navigation, status, user]);
+  }, [emailForVerification, isKycApproved, kycRouteName, kycRouteParams, navigation, status, user]);
 
   const getSellPublishWithdrawBlock = useCallback((): GateBlock | null => {
     if (status === 'loading') {

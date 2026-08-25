@@ -3,6 +3,12 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, getActorOrNull, requireActor } from "./authHelpers";
+import {
+    canConfirmReceipt,
+    canMarkDelivered,
+    canMarkShipped,
+    ORDER_STATE_ERRORS,
+} from "./orders/_orderStates";
 
 const isStorageId = (url?: string | null) =>
     !!url &&
@@ -275,9 +281,12 @@ export const markAsShipped = mutation({
             throw new Error("No autorizado. Solo el vendedor puede marcar enviado.");
         }
 
-        // Validate State
-        if (order.status !== 'payment_received') {
-            throw new Error("Estado inválido. Solo se puede enviar órdenes pagadas.");
+        // Las órdenes del checkout nacen en `paid_escrow`, no en
+        // `payment_received`: exigir el segundo hacía que el vendedor NUNCA
+        // pudiera marcar una orden como enviada. La tabla vive en
+        // `orders/_orderStates.ts`.
+        if (!canMarkShipped(order.status)) {
+            throw new Error(ORDER_STATE_ERRORS.notShippable);
         }
 
         // Update
@@ -320,9 +329,8 @@ export const markAsDelivered = mutation({
             throw new Error("No autorizado. Solo el vendedor puede marcar entregado.");
         }
 
-        // Validate State
-        if (order.status !== 'in_transit') {
-            throw new Error("Estado inválido. La orden debe estar en tránsito.");
+        if (!canMarkDelivered(order.status)) {
+            throw new Error(ORDER_STATE_ERRORS.notDeliverable);
         }
 
         // Update
@@ -361,10 +369,8 @@ export const confirmReceipt = mutation({
             throw new Error("No autorizado. Solo el comprador puede confirmar recepción.");
         }
 
-        // Validate State — paid_escrow is the marketplace held state
-        const releasable = ['delivered', 'payment_received', 'paid_escrow'];
-        if (!releasable.includes(order.status)) {
-            throw new Error("Estado inválido. La orden debe estar entregada o lista para liberar.");
+        if (!canConfirmReceipt(order.status)) {
+            throw new Error(ORDER_STATE_ERRORS.notReleasable);
         }
 
         await ctx.db.patch(args.orderId, {

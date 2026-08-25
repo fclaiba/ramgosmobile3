@@ -1,15 +1,20 @@
-import React, { createContext, useContext, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useToast } from './ToastContext';
 import { sessionTokenStore } from '../services/auth/sessionTokenStore';
 
+/** Carrito de invitado persistido entre arranques de la app. */
+const GUEST_CART_KEY = '@ramgos/cart/guest';
+
 // FASE 3: convex/cart.ts es la única fuente de verdad para usuarios autenticados.
 // Este contexto es solo una capa reactiva: lee con useQuery y escribe con mutations,
 // pasando siempre sessionToken. No duplica el estado persistente en local/AsyncStorage.
 //
-// Carrito GUEST (sin sesión): se mantiene aislado en memoria, igual que antes de la
-// Fase 3. No se persiste ni se mergea al loguearse — eso es alcance de la Fase 4.
+// Carrito GUEST (sin sesión): se persiste en AsyncStorage y se vuelca al servidor
+// al iniciar sesión. Antes vivía sólo en memoria y se perdía entero justo en el
+// paso de pagar, que es donde `gateCheckout` manda al login.
 
 export interface CartItem {
     id: string;
@@ -84,8 +89,45 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
     const isAuthenticated = !!sessionToken;
 
-    // Carrito guest: solo memoria, aislado del server (ver nota arriba).
+    /**
+     * Carrito de invitado.
+     *
+     * Antes vivía sólo en memoria y no se mergeaba: el usuario armaba el
+     * carrito sin sesión, tocaba pagar, `gateCheckout` lo mandaba a `Login`, y
+     * al volver autenticado `items` pasaba a `serverItems` — **vacío**. El
+     * embudo de conversión se perdía entero, justo en el paso de pagar.
+     *
+     * Ahora persiste en AsyncStorage (sobrevive a que la app se cierre en el
+     * medio del login social, que abre el navegador) y se vuelca al servidor
+     * apenas hay sesión.
+     */
     const [guestItems, setGuestItems] = useState<CartItem[]>([]);
+    const [mergingGuestCart, setMergingGuestCart] = useState(false);
+    /** Evita que el merge corra dos veces si el efecto se re-dispara. */
+    const mergeStartedRef = useRef(false);
+
+    // Rehidratar el carrito de invitado al arrancar.
+    useEffect(() => {
+        let cancelled = false;
+        AsyncStorage.getItem(GUEST_CART_KEY)
+            .then((raw) => {
+                if (cancelled || !raw) return;
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) setGuestItems(parsed);
+            })
+            .catch(() => {
+                // Un carrito de invitado corrupto no puede impedir usar la app.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // Persistir cada cambio mientras no haya sesión.
+    useEffect(() => {
+        if (isAuthenticated) return;
+        AsyncStorage.setItem(GUEST_CART_KEY, JSON.stringify(guestItems)).catch(() => {});
+    }, [guestItems, isAuthenticated]);
 
     const serverCart = useQuery(
         api.cart.getMyCart,
@@ -126,8 +168,75 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         });
     }, [serverCart]);
 
+    /**
+     * Volcado del carrito de invitado al servidor tras iniciar sesión.
+     *
+     * Se espera a que `serverCart` haya cargado (`!== undefined`) para no
+     * competir con la query inicial. Cada item se agrega con la mutation
+     * normal, así el servidor reconstruye el snapshot desde la base y revalida
+     * stock — el precio del cliente no se confía, igual que en `addItem`.
+     *
+     * El almacenamiento local se limpia SIEMPRE al terminar, incluso si algún
+     * item falló: si no, un listing borrado dejaría el carrito de invitado
+     * reintentando para siempre en cada login.
+     */
+    useEffect(() => {
+        if (!isAuthenticated || serverCart === undefined) return;
+        if (guestItems.length === 0 || mergeStartedRef.current) return;
+
+        mergeStartedRef.current = true;
+        setMergingGuestCart(true);
+
+        (async () => {
+            let merged = 0;
+            const failed: string[] = [];
+            for (const item of guestItems) {
+                try {
+                    await addToCartMutation({
+                        sessionToken,
+                        listingId: item.id,
+                        quantity: item.quantity || 1,
+                        snapshot: {
+                            title: item.name,
+                            price: item.price,
+                            image: item.image || undefined,
+                            sellerId: item.sellerId,
+                            type: toSnapshotType(item.type),
+                            location: item.location,
+                            sellerName: item.sellerName,
+                            condition: toSnapshotCondition(item.condition),
+                            shippingWeightKg: item.shippingWeightKg,
+                            shippingDimensionsCm: item.shippingDimensionsCm,
+                            distanceKm: item.distanceKm,
+                            referralCode: item.referralCode,
+                        },
+                        attribution: (item.referralCode || item.sourcePostId)
+                            ? { referralCode: item.referralCode, sourcePostId: item.sourcePostId }
+                            : undefined,
+                    });
+                    merged += 1;
+                } catch {
+                    failed.push(item.name);
+                }
+            }
+
+            setGuestItems([]);
+            await AsyncStorage.removeItem(GUEST_CART_KEY).catch(() => {});
+            setMergingGuestCart(false);
+
+            if (failed.length > 0) {
+                show(
+                    `No pudimos sumar ${failed.length === 1 ? `"${failed[0]}"` : `${failed.length} artículos`} a tu carrito.`,
+                    'warning',
+                );
+            } else if (merged > 0) {
+                show('Recuperamos tu carrito.', 'success');
+            }
+        })();
+    }, [isAuthenticated, serverCart, guestItems, sessionToken, addToCartMutation, show]);
+
     const items = isAuthenticated ? serverItems : guestItems;
-    const isLoading = isAuthenticated && serverCart === undefined;
+    const isLoading = (isAuthenticated && serverCart === undefined) || mergingGuestCart;
 
     const reportError = (error: any, fallback: string) => {
         const message = typeof error?.message === 'string' && error.message.includes('Uncaught Error: ')
