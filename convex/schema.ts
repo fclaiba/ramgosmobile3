@@ -1468,7 +1468,14 @@ export default defineSchema({
         coverImage: v.optional(v.string()),
         ownerUserId: v.string(),
         kind: v.union(v.literal('business'), v.literal('user')),
-        visibility: v.union(v.literal('public'), v.literal('private')),
+        // Ensanchado in-place con 'secret'. Es retrocompatible: toda fila
+        // existente vale 'public' o 'private' y sigue validando. A propósito NO
+        // se renombra 'public' → 'open': eso sí exigiría backfill. La etiqueta
+        // de producto ("Abierta") la pone el cliente en `VISIBILITY_LABELS`.
+        //   public  — abierta: entra cualquiera, aparece en el directorio
+        //   private — privada: aparece en el directorio, requiere aprobación
+        //   secret  — secreta: invisible en búsqueda, sólo por invitación
+        visibility: v.union(v.literal('public'), v.literal('private'), v.literal('secret')),
         location: v.optional(v.string()),
         memberCount: v.number(),
         // Twitter-Communities-style: reglas mostradas en el detalle (sin
@@ -1478,31 +1485,81 @@ export default defineSchema({
         pinnedPostId: v.optional(v.id('socialPosts')),
         createdAt: v.string(),
         deletedAt: v.optional(v.string()),
+
+        // ── Onboarding y descubrimiento ────────────────────────────────
+        // Todo opcional: las filas anteriores a esta feature no se tocan.
+        // `joinPolicy` ausente se deriva en runtime con `resolveJoinPolicy`
+        // (public ⇒ 'open', resto ⇒ 'approval'), así no hace falta backfill.
+        joinPolicy: v.optional(
+            v.union(
+                v.literal('open'), // entra directo
+                v.literal('approval'), // solicitud → decide un admin
+                v.literal('questionnaire'), // cuestionario → solicitud → admin
+                v.literal('invite'), // sólo con invitación válida
+            ),
+        ),
+        hasQuestionnaire: v.optional(v.boolean()),
+        questionnaireVersion: v.optional(v.number()),
+        /** Handle público para `/c/{slug}`. Único cuando está presente. */
+        slug: v.optional(v.string()),
+        /** Categoría del directorio ("Diseño", "Running", …). */
+        topic: v.optional(v.string()),
+        bannerImage: v.optional(v.string()),
+        postCount: v.optional(v.number()),
+        lastActivityAt: v.optional(v.string()),
+        pendingCount: v.optional(v.number()),
+        updatedAt: v.optional(v.string()),
     })
         .index('by_owner', ['ownerUserId'])
         .index('by_kind', ['kind'])
+        .index('by_slug', ['slug'])
+        .index('by_topic_activity', ['topic', 'lastActivityAt'])
+        // Directorio en reposo (sin término de búsqueda): las más pobladas de
+        // cada visibilidad, sin tocar el search index.
+        .index('by_visibility_members', ['visibility', 'memberCount'])
         .searchIndex('search_name', {
             searchField: 'name',
-            filterFields: ['kind', 'visibility'],
+            filterFields: ['kind', 'visibility', 'topic'],
         }),
 
     communityMembers: defineTable({
         communityId: v.string(),
         userId: v.string(),
         role: v.union(v.literal('owner'), v.literal('admin'), v.literal('member')),
+        // Ensanchado. 'invited' ya estaba declarado pero MUERTO: ningún código
+        // lo escribía ni lo leía; `communityAccess.ts` lo revive.
+        //   rejected — antes `rejectMember` borraba la fila, así que no había
+        //              forma de distinguir "nunca solicitó" de "lo rechazaron".
+        //   banned   — expulsado con bloqueo de re-ingreso.
         status: v.union(
             v.literal('active'),
             v.literal('invited'),
             v.literal('pending'),
             v.literal('left'),
+            v.literal('rejected'),
+            v.literal('banned'),
         ),
         createdAt: v.string(),
+
+        invitedByUserId: v.optional(v.string()),
+        /** FK a `communityInvites` (string, como el resto de las FK del repo). */
+        invitationId: v.optional(v.string()),
+        /** Cuándo pasó a `active`. `createdAt` es cuándo SOLICITÓ. */
+        joinedAt: v.optional(v.string()),
+        /** Presente = la comunidad está fijada como tab propia en el feed. */
+        pinnedAt: v.optional(v.string()),
+        pinnedOrder: v.optional(v.number()),
+        mutedAt: v.optional(v.string()),
+        lastReadAt: v.optional(v.string()),
     })
         .index('by_community', ['communityId'])
         .index('by_user', ['userId'])
         .index('by_community_user', ['communityId', 'userId'])
         // Cola de solicitudes pendientes de un dueño/admin.
-        .index('by_community_status', ['communityId', 'status']),
+        .index('by_community_status', ['communityId', 'status'])
+        // Evita el `collect()` + filtro en memoria de `listMyCommunities`.
+        .index('by_user_status', ['userId', 'status'])
+        .index('by_user_pinned', ['userId', 'pinnedOrder']),
 
     // communityListings — la "vidriera del pasillo digital": catálogo
     // compartido de productos que los miembros deciden mostrar en la
@@ -1516,6 +1573,96 @@ export default defineSchema({
     })
         .index('by_community_created', ['communityId', 'createdAt'])
         .index('by_community_listing', ['communityId', 'listingId']),
+
+    // communityInvites — links de invitación emitidos por owner/admin. El
+    // `token` es un secreto propio y NO el `_id`: con el `_id` en la URL
+    // cualquiera podría enumerar comunidades secretas probando ids.
+    communityInvites: defineTable({
+        communityId: v.string(),
+        createdByUserId: v.string(),
+        token: v.string(),
+        kind: v.union(v.literal('link'), v.literal('direct')),
+        /** Sólo en `direct`: a quién se dirigió la invitación. */
+        targetUserId: v.optional(v.string()),
+        role: v.union(v.literal('member'), v.literal('admin')),
+        /** Saltea cuestionario y aprobación: entra directo como `active`. */
+        bypassApproval: v.boolean(),
+        /** Ausente = usos ilimitados. */
+        maxUses: v.optional(v.number()),
+        useCount: v.number(),
+        expiresAt: v.optional(v.string()),
+        revokedAt: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_token', ['token'])
+        .index('by_community_created', ['communityId', 'createdAt'])
+        .index('by_target', ['targetUserId']),
+
+    // communityInviteRedemptions — quién canjeó qué invitación. Separado de
+    // `communityMembers` porque un usuario puede entrar, irse y volver, y el
+    // conteo de usos del link tiene que sobrevivir a eso.
+    communityInviteRedemptions: defineTable({
+        inviteId: v.string(),
+        communityId: v.string(),
+        userId: v.string(),
+        createdAt: v.string(),
+    })
+        .index('by_invite_user', ['inviteId', 'userId'])
+        .index('by_user', ['userId']),
+
+    // communityQuestions — cuestionario de ingreso, versionado. Editar las
+    // preguntas sube `questionnaireVersion` en la comunidad en vez de mutar
+    // las filas, así las solicitudes ya enviadas conservan su contexto.
+    communityQuestions: defineTable({
+        communityId: v.string(),
+        version: v.number(),
+        order: v.number(),
+        prompt: v.string(),
+        kind: v.union(
+            v.literal('text'),
+            v.literal('single'),
+            v.literal('multi'),
+            v.literal('boolean'),
+        ),
+        options: v.optional(v.array(v.object({ id: v.string(), label: v.string() }))),
+        required: v.boolean(),
+        maxLength: v.optional(v.number()),
+        createdAt: v.string(),
+        deletedAt: v.optional(v.string()),
+    }).index('by_community_version_order', ['communityId', 'version', 'order']),
+
+    // communityJoinRequests — solicitud de ingreso con las respuestas.
+    communityJoinRequests: defineTable({
+        communityId: v.string(),
+        userId: v.string(),
+        // Copia INMUTABLE del enunciado junto a la respuesta: si el admin
+        // edita o borra una pregunta después, las solicitudes ya enviadas no
+        // deben quedar mostrando respuestas huérfanas o con otro enunciado.
+        answers: v.array(
+            v.object({
+                questionId: v.string(),
+                prompt: v.string(),
+                kind: v.string(),
+                value: v.optional(v.string()),
+                optionIds: v.optional(v.array(v.string())),
+            }),
+        ),
+        questionnaireVersion: v.optional(v.number()),
+        inviteId: v.optional(v.string()),
+        status: v.union(
+            v.literal('pending'),
+            v.literal('approved'),
+            v.literal('rejected'),
+            v.literal('withdrawn'),
+        ),
+        decidedByUserId: v.optional(v.string()),
+        decidedAt: v.optional(v.string()),
+        decisionNote: v.optional(v.string()),
+        createdAt: v.string(),
+    })
+        .index('by_community_status_created', ['communityId', 'status', 'createdAt'])
+        .index('by_community_user', ['communityId', 'userId'])
+        .index('by_user', ['userId']),
 
     // eventMatches — opt-in "Tinder interno" for event attendees. One row per
     // directed swipe; a mutual pair flips both rows to `matched`.
@@ -1904,7 +2051,14 @@ export default defineSchema({
             v.literal('repost'),
             v.literal('quote'),
             v.literal('sale'),
+            // `community_invite` estaba mal usado: `joinCommunity` lo emitía
+            // para SOLICITUDES de ingreso, no para invitaciones. Ahora recupera
+            // su sentido literal y las solicitudes tienen tipo propio. Las
+            // filas históricas siguen renderizando: la pantalla de Actividad
+            // mapea los tres al mismo bloque según `targetType === 'community'`.
             v.literal('community_invite'),
+            v.literal('community_join_request'),
+            v.literal('community_join_approved'),
             v.literal('moderation'),
             v.literal('match'), // Fase 8: match mutuo en el matching de eventos
         ),

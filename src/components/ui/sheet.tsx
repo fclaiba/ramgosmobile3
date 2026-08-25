@@ -6,10 +6,17 @@ import { colors, Radius, Type, Space, Elevation } from "../../theme/tokens"
 import { glassSheet } from "../../utils/glass"
 
 /* ─── Drag to dismiss ────────────────────────────────────────────────
- * Los bottom sheets se cierran arrastrando la barra hacia abajo. Va con
- * `PanResponder` (RN core) y no con `react-native-gesture-handler`: la
- * app no monta `GestureHandlerRootView`, así que RNGH no tendría dónde
- * engancharse, y `PanResponder` además funciona igual en web.
+ * Los bottom sheets se cierran arrastrando la barra hacia abajo, con
+ * `PanResponder` (RN core), que funciona igual en web.
+ *
+ * NOTA: este comentario decía que la app no montaba `GestureHandlerRootView`
+ * y que por eso RNGH no tenía dónde engancharse. Eso ya no es cierto —
+ * `App.tsx` lo monta en la raíz. `PanResponder` se mantiene porque funciona
+ * y porque es la única opción en web, no porque RNGH sea imposible.
+ *
+ * `SheetContent` compone `[s.content, …, isBottom && s.bottom, style]`, así
+ * que la prop `style` PISA el `height: '85%'` del preset: para un sheet de
+ * alto variable alcanza con `style={{ height: 'auto', maxHeight: '88%' }}`.
  */
 
 /** Fracción del alto del sheet que hay que arrastrar para que se cierre. */

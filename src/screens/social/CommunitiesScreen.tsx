@@ -1,167 +1,265 @@
-import React, { useMemo, useState } from 'react';
+/**
+ * Directorio de comunidades.
+ *
+ * Pasó a ser SÓLO descubrimiento. Antes tenía dos pestañas — "Mis
+ * comunidades" y "Descubrir" — pero la primera ya no tiene razón de estar
+ * acá: las comunidades a las que pertenecés se leen en la tab "Comunidades"
+ * del feed, y las fijadas tienen tab propia. Dejarla duplicada obligaba a
+ * elegir dos veces dónde mirar lo mismo.
+ *
+ * Con el buscador vacío muestra recomendadas y temas (el estado en reposo es
+ * la pantalla que más se ve); con término, resultados planos. Mismo contrato
+ * de debounce que `UserSearch`: 250 ms y mínimo 2 caracteres, para no disparar
+ * una búsqueda por tecla.
+ */
+import { ArrowLeft, Plus, Search, X } from 'lucide-react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    FlatList,
-    StyleSheet,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
     Text,
     TextInput,
-    TouchableOpacity,
     View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Plus, Search, Users, Lock, Globe } from 'lucide-react-native';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { CommunityDirectoryCard } from '../../components/social/CommunityDirectoryCard';
+import { CommunityTopicChips } from '../../components/social/CommunityTopicChips';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../contexts/ToastContext';
 import { useDebouncedSearchTerm } from '../../hooks/useDebounce';
-import { colors, Radius } from '../../theme/tokens';
+import { useResponsive } from '../../hooks/useResponsive';
+import { openCommunityJoin } from '../../navigation/openCommunityJoin';
+import { createThemedStyles } from '../../theme/makeThemedStyles';
+import { colors, Radius, Space, Touch, Type } from '../../theme/tokens';
 
-/**
- * "Comunidades Comerciales" (Sprint 4 del doc) — los pasillos digitales.
- * Tabs: Mis comunidades / Descubrir.
- */
-export default function CommunitiesScreen({ navigation }: any) {
+const MIN_TERM_LENGTH = 2;
+
+export default function CommunitiesScreen({ navigation, route }: any) {
     const insets = useSafeAreaInsets();
     const { sessionToken } = useAuth();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     const styles = getStyles(isDark);
+    const c = colors(isDark);
+    const { show } = useToast();
+    const { feedMaxWidth } = useResponsive();
 
-    const [tab, setTab] = useState<'mine' | 'discover'>('mine');
     const [term, setTerm] = useState('');
-    const debouncedTerm = useDebouncedSearchTerm(term, 300);
+    const [topic, setTopic] = useState<string | null>(null);
+    const debouncedTerm = useDebouncedSearchTerm(term, 250);
+    const searching = debouncedTerm.trim().length >= MIN_TERM_LENGTH;
 
+    const results = useQuery(
+        api.social.communities.searchCommunities,
+        sessionToken
+            ? {
+                  sessionToken,
+                  ...(searching ? { term: debouncedTerm.trim() } : {}),
+                  ...(topic ? { topic } : {}),
+                  limit: 30,
+              }
+            : 'skip',
+    );
     const mine = useQuery(
         api.social.communities.listMyCommunities,
-        sessionToken && tab === 'mine' ? { sessionToken } : 'skip',
+        sessionToken ? { sessionToken } : 'skip',
     );
-    const discover = useQuery(
-        api.social.communities.searchCommunities,
-        sessionToken && tab === 'discover' ? { sessionToken, term: debouncedTerm || undefined, limit: 30 } : 'skip',
+    const joinCommunity = useMutation(api.social.communities.joinCommunity);
+
+    // Los temas salen de lo que hay, no de una lista fija: una categoría vacía
+    // en el directorio es una promesa incumplida.
+    const topics = useMemo(() => {
+        const seen = new Set<string>();
+        for (const community of results ?? []) {
+            if (community?.topic) seen.add(community.topic);
+        }
+        return Array.from(seen).sort();
+    }, [results]);
+
+    const myIds = useMemo(
+        () => new Set((mine ?? []).map((m: any) => String(m._id))),
+        [mine],
     );
 
-    const data = tab === 'mine' ? mine : discover;
-    const loading = data === undefined;
+    const openCommunity = (communityId: string) =>
+        navigation.navigate('CommunityDetail', { communityId });
+
+    const handleAction = async (community: any) => {
+        const id = String(community._id);
+        if (myIds.has(id)) {
+            openCommunity(id);
+            return;
+        }
+        // Abierta: se entra en el acto sin sacar a nadie del directorio. El
+        // resto pasa por el modal, que sabe de cuestionario y aprobación.
+        if (community.joinPolicy === 'open' && sessionToken) {
+            try {
+                await joinCommunity({ sessionToken, communityId: id as any });
+                show(`Te uniste a ${community.name}`, 'success');
+            } catch (e: any) {
+                show(e?.data?.message || 'No se pudo unir', 'error');
+            }
+            return;
+        }
+        openCommunityJoin({ communityIdOrSlug: id });
+    };
+
+    /**
+     * Un link corto `/i/{código}` no trae id de comunidad, así que
+     * `getStateFromPath` abre esta pantalla de fondo y deja el token en los
+     * params. Leerlos acá es lo que hace que el modal aparezca cuando la app
+     * arranca DESDE el link: `useCommunityDeepLinkHandler` sólo ve la URL
+     * cuando llega por `Linking`, y en un arranque en frío por navegación esa
+     * ruta puede no dispararse. Sin esto el link abría el directorio y nada más.
+     */
+    const inviteToken = route?.params?.inviteToken;
+    const inviteHandled = useRef(false);
+    useEffect(() => {
+        if (!inviteToken || inviteHandled.current) return;
+        inviteHandled.current = true;
+        openCommunityJoin({ inviteToken, referralCode: route?.params?.referralCode });
+    }, [inviteToken, route?.params?.referralCode]);
+
+    const loading = results === undefined;
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-                    <ArrowLeft size={22} color={isDark ? '#fff' : '#111827'} />
-                </TouchableOpacity>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+            <View style={[styles.header, styles.column, { maxWidth: feedMaxWidth, paddingTop: insets.top + Space[2] }]}>
+                <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.backBtn}>
+                    <ArrowLeft size={22} color={c.text} />
+                </Pressable>
                 <Text style={styles.headerTitle}>Comunidades</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('CreateCommunity')} style={styles.iconBtn}>
-                    <Plus size={22} color={colors(isDark).primary} />
-                </TouchableOpacity>
+                <Pressable
+                    onPress={() => navigation.navigate('CreateCommunity')}
+                    hitSlop={10}
+                    style={styles.backBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Crear comunidad"
+                >
+                    <Plus size={22} color={c.primary} />
+                </Pressable>
             </View>
 
-            <View style={styles.tabs}>
-                <TouchableOpacity style={[styles.tab, tab === 'mine' && styles.tabActive]} onPress={() => setTab('mine')}>
-                    <Text style={[styles.tabText, tab === 'mine' && styles.tabTextActive]}>Mis comunidades</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.tab, tab === 'discover' && styles.tabActive]} onPress={() => setTab('discover')}>
-                    <Text style={[styles.tabText, tab === 'discover' && styles.tabTextActive]}>Descubrir</Text>
-                </TouchableOpacity>
+            <View style={[styles.searchWrap, styles.column, { maxWidth: feedMaxWidth }]}>
+                <Search size={16} color={c.textSubtle} />
+                <TextInput
+                    style={styles.searchInput}
+                    value={term}
+                    onChangeText={setTerm}
+                    placeholder="Buscar comunidades"
+                    placeholderTextColor={c.textSubtle}
+                    autoCorrect={false}
+                    returnKeyType="search"
+                />
+                {term.length > 0 ? (
+                    <Pressable onPress={() => setTerm('')} hitSlop={8}>
+                        <X size={16} color={c.textSubtle} />
+                    </Pressable>
+                ) : null}
             </View>
 
-            {tab === 'discover' && (
-                <View style={styles.searchBox}>
-                    <Search size={16} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Buscar comunidades…"
-                        placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-                        value={term}
-                        onChangeText={setTerm}
-                    />
-                </View>
-            )}
+            {!searching && topics.length > 0 ? (
+                <CommunityTopicChips topics={topics} selected={topic} onSelect={setTopic} />
+            ) : null}
 
             {loading ? (
-                <ActivityIndicator style={{ marginTop: 40 }} color={colors(isDark).primary} />
-            ) : (data?.length ?? 0) === 0 ? (
-                <View style={styles.empty}>
-                    <Users size={40} color={isDark ? '#4B5563' : '#D1D5DB'} />
-                    <Text style={styles.emptyText}>
-                        {tab === 'mine' ? 'Todavía no te uniste a ninguna comunidad' : 'No encontramos comunidades'}
-                    </Text>
+                <View style={styles.center}>
+                    <ActivityIndicator color={c.primary} />
                 </View>
             ) : (
-                <FlatList
-                    data={data}
+                <View style={[styles.listWrap, styles.column, { maxWidth: feedMaxWidth }]}>
+                <FlashList
+                    data={results ?? []}
                     keyExtractor={(item: any) => String(item._id)}
-                    contentContainerStyle={{ padding: 16, gap: 12 }}
+                    contentContainerStyle={{
+                        paddingHorizontal: Space[4],
+                        paddingBottom: insets.bottom + Space[8],
+                    }}
+                    ListHeaderComponent={
+                        <Text style={styles.sectionLabel}>
+                            {searching
+                                ? 'Resultados'
+                                : topic
+                                  ? topic
+                                  : 'Recomendadas'}
+                        </Text>
+                    }
                     renderItem={({ item }: any) => (
-                        <TouchableOpacity
-                            style={styles.card}
-                            onPress={() => navigation.navigate('CommunityDetail', { communityId: item._id })}
-                        >
-                            <View style={styles.cardHeader}>
-                                <Text style={styles.cardTitle}>{item.name}</Text>
-                                {item.visibility === 'private' ? (
-                                    <Lock size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                ) : (
-                                    <Globe size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                )}
-                            </View>
-                            {item.description ? (
-                                <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>
-                            ) : null}
-                            <View style={styles.cardFooter}>
-                                <Users size={13} color={isDark ? '#9CA3AF' : '#6B7280'} />
-                                <Text style={styles.cardMeta}>{item.memberCount} miembros</Text>
-                                {item.location ? <Text style={styles.cardMeta}>· {item.location}</Text> : null}
-                            </View>
-                        </TouchableOpacity>
+                        <CommunityDirectoryCard
+                            community={item}
+                            membership={myIds.has(String(item._id)) ? 'member' : 'none'}
+                            onPress={() => openCommunity(String(item._id))}
+                            onAction={() => handleAction(item)}
+                        />
                     )}
+                    ListEmptyComponent={
+                        <View style={styles.center}>
+                            <Text style={styles.emptyTitle}>
+                                {searching ? 'Sin resultados' : 'Todavía no hay comunidades'}
+                            </Text>
+                            <Text style={styles.emptyBody}>
+                                {searching
+                                    ? 'Probá con otro nombre.'
+                                    : 'Creá la primera y empezá a juntar gente.'}
+                            </Text>
+                        </View>
+                    }
                 />
+                </View>
             )}
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
-const getStyles = (isDark: boolean) =>
-    StyleSheet.create({
-        container: { flex: 1, backgroundColor: isDark ? '#000' : '#fff' },
-        header: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-        },
-        iconBtn: { padding: 4 },
-        headerTitle: { fontSize: 18, fontWeight: '700', color: isDark ? '#fff' : '#111827' },
-        tabs: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
-        tab: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: Radius.full ?? 999, backgroundColor: isDark ? '#18181B' : '#F3F4F6' },
-        tabActive: { backgroundColor: colors(isDark).primary },
-        tabText: { fontSize: 13, fontWeight: '600', color: isDark ? '#D1D5DB' : '#374151' },
-        tabTextActive: { color: '#fff' },
-        searchBox: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            marginHorizontal: 16,
-            marginBottom: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: Radius.md,
-            backgroundColor: isDark ? '#18181B' : '#F3F4F6',
-        },
-        searchInput: { flex: 1, color: isDark ? '#fff' : '#111827', fontSize: 14 },
-        card: {
-            padding: 16,
-            borderRadius: Radius.lg,
-            backgroundColor: isDark ? '#18181B' : '#F9FAFB',
-            borderWidth: 1,
-            borderColor: isDark ? '#27272A' : '#E5E7EB',
-        },
-        cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-        cardTitle: { fontSize: 16, fontWeight: '700', color: isDark ? '#fff' : '#111827' },
-        cardDesc: { fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4 },
-        cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
-        cardMeta: { fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' },
-        empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingBottom: 100 },
-        emptyText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', paddingHorizontal: 40 },
-    });
+const getStyles = createThemedStyles((isDark, c) => ({
+    // `alignItems: 'center'` centra la columna cuando sobra ancho (escritorio);
+    // en mobile `feedMaxWidth` es la pantalla y no cambia nada.
+    container: { flex: 1, backgroundColor: c.bg, alignItems: 'center' },
+    column: { width: '100%', alignSelf: 'center' },
+    listWrap: { flex: 1 },
+    center: { alignItems: 'center', justifyContent: 'center', paddingTop: Space[10], gap: Space[1] },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Space[4],
+        paddingBottom: Space[3],
+    },
+    backBtn: {
+        width: Touch.min - 12,
+        height: Touch.min - 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitle: { ...Type.title, color: c.text, flex: 1, textAlign: 'center' },
+    searchWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Space[2],
+        height: 40,
+        marginHorizontal: Space[4],
+        marginBottom: Space[3],
+        paddingHorizontal: Space[3],
+        borderRadius: Radius.full,
+        backgroundColor: c.surface1,
+        borderWidth: 1,
+        borderColor: c.border,
+    },
+    searchInput: { ...Type.bodySm, flex: 1, color: c.text, padding: 0 },
+    sectionLabel: {
+        ...Type.caption,
+        color: c.textSubtle,
+        textTransform: 'uppercase',
+        marginBottom: Space[2],
+    },
+    emptyTitle: { ...Type.title, color: c.text, textAlign: 'center' },
+    emptyBody: { ...Type.bodySm, color: c.textMuted, textAlign: 'center' },
+}));

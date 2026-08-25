@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, MessageCircle, ShoppingBag, Check, X, Plus, Video, Pin, PinOff, Info } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, ShoppingBag, Check, X, Plus, Video, Pin, PinOff, Info, Settings } from 'lucide-react-native';
+import { openCommunityJoin } from '../../navigation/openCommunityJoin';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -38,9 +39,13 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
         api.social.communities.getCommunityFeed,
         sessionToken && communityId && tab === 'loops' ? { sessionToken, communityId, type: 'video', limit: 30 } : 'skip',
     );
+    // `getCommunity` devuelve una ficha REDUCIDA (`isPreview`) cuando la
+    // comunidad es privada y el viewer todavía no es miembro: ahí no hay post
+    // fijado que mostrar, sólo lo justo para decidir si solicitar entrar.
+    const pinnedPostId = community && !community.isPreview ? community.pinnedPostId : undefined;
     const pinnedPost = useQuery(
         api.social.getPostById,
-        sessionToken && community?.pinnedPostId ? { sessionToken, postId: community.pinnedPostId } : 'skip',
+        sessionToken && pinnedPostId ? { sessionToken, postId: pinnedPostId } : 'skip',
     );
     const catalog = useQuery(
         api.social.communities.listCommunityCatalog,
@@ -50,17 +55,21 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
         api.social.communities.listMembers,
         sessionToken && communityId && tab === 'members' ? { sessionToken, communityId } : 'skip',
     );
+    // `listJoinRequests` en vez de `listPendingRequests`: trae las RESPUESTAS
+    // del cuestionario junto a cada solicitud, que es lo que el admin necesita
+    // para decidir. La otra sólo devolvía filas de membresía sin contexto.
     const requests = useQuery(
-        api.social.communities.listPendingRequests,
+        api.social.communityAccess.listJoinRequests,
         sessionToken && communityId && tab === 'requests' && community?.myMembership?.role !== 'member'
             ? { sessionToken, communityId }
             : 'skip',
     );
 
-    const joinCommunity = useMutation(api.social.communities.joinCommunity);
     const leaveCommunity = useMutation(api.social.communities.leaveCommunity);
-    const approveMember = useMutation(api.social.communities.approveMember);
-    const rejectMember = useMutation(api.social.communities.rejectMember);
+    // `decideJoinRequest` es idempotente y cierra membresía + solicitud a la
+    // vez; `approveMember`/`rejectMember` sólo tocaban la membresía y dejaban
+    // la solicitud colgada en `pending` para siempre.
+    const decideJoinRequest = useMutation(api.social.communityAccess.decideJoinRequest);
     const getOrCreateChat = useMutation(api.social.communities.getOrCreateCommunityChat);
     const unpinCommunityPost = useMutation(api.social.communities.unpinCommunityPost);
 
@@ -72,15 +81,36 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
     // (ver comentario en `LoopFeed.tsx`).
     const loopsContainerHeight = Math.max(200, windowHeight - insets.top - 180);
 
-    const handleJoin = async () => {
-        if (!sessionToken) return;
-        try {
-            const result = await joinCommunity({ sessionToken, communityId });
-            show(result.status === 'pending' ? 'Solicitud enviada' : 'Te uniste a la comunidad', 'success');
-        } catch (e: any) {
-            show(e?.data?.message ?? 'No se pudo unir', 'error');
-        }
+    /**
+     * Ingresar pasa por el modal compartido en vez de llamar `joinCommunity`
+     * directo: es el único que sabe manejar cuestionario, invitación y
+     * aprobación. Llamar la mutation acá funcionaba sólo para comunidades
+     * abiertas y tiraba error en el resto.
+     */
+    const handleJoin = () => {
+        openCommunityJoin({
+            communityIdOrSlug: communityId,
+            inviteToken: route?.params?.inviteToken,
+            referralCode: route?.params?.referralCode,
+        });
     };
+
+    /**
+     * Con `inviteToken` en los params, el link entró por la navegación normal
+     * (`getStateFromPath`) y no por el handler, que sólo intercepta cuando la
+     * app ya estaba abierta. Se abre el modal una sola vez.
+     */
+    const inviteToken = route?.params?.inviteToken;
+    const inviteHandled = useRef(false);
+    useEffect(() => {
+        if (!inviteToken || inviteHandled.current) return;
+        inviteHandled.current = true;
+        openCommunityJoin({
+            communityIdOrSlug: communityId,
+            inviteToken,
+            referralCode: route?.params?.referralCode,
+        });
+    }, [inviteToken, communityId, route?.params?.referralCode]);
 
     const handleOpenChat = async () => {
         if (!sessionToken) return;
@@ -138,6 +168,16 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                     {Boolean(community.rules?.length) && (
                         <TouchableOpacity onPress={() => setShowRules(true)} style={styles.iconBtn}>
                             <Info size={20} color={isDark ? '#fff' : '#111827'} />
+                        </TouchableOpacity>
+                    )}
+                    {isAdmin && (
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('CommunitySettings', { communityId })}
+                            style={styles.iconBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel="Ajustes de la comunidad"
+                        >
+                            <Settings size={20} color={isDark ? '#fff' : '#111827'} />
                         </TouchableOpacity>
                     )}
                     {isMember ? (
@@ -198,7 +238,13 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                                 </TouchableOpacity>
                             </View>
                         )}
-                        <UnifiedFeed communityId={String(communityId)} canModerate={isAdmin} />
+                        {/* Pantalla apilada: no vive bajo la tab bar global, así que
+                        sólo reserva el gesture bar del dispositivo. */}
+                    <UnifiedFeed
+                        communityId={String(communityId)}
+                        canModerate={isAdmin}
+                        contentBottomInset={insets.bottom}
+                    />
                     </View>
                 )
             )}
@@ -216,6 +262,7 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                             posts={loopsFeed.items}
                             onUserClick={(userId) => openUserProfile(navigation, userId)}
                             itemHeight={loopsContainerHeight}
+                        bottomInset={insets.bottom}
                         />
                     </View>
                 )
@@ -283,37 +330,69 @@ export default function CommunityDetailScreen({ route, navigation }: any) {
                         keyExtractor={(item: any) => String(item._id)}
                         contentContainerStyle={{ padding: 16, gap: 8 }}
                         renderItem={({ item }: any) => (
-                            <View style={styles.memberRow}>
-                                <TouchableOpacity
-                                    onPress={() => openUserProfile(navigation, item.userId)}
-                                    activeOpacity={0.7}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Ver el perfil de ${item.user?.displayName ?? 'este usuario'}`}
-                                >
-                                    <Avatar style={styles.avatar}>
-                                        <AvatarImage src={item.user?.avatar} />
-                                        <AvatarFallback>{(item.user?.displayName ?? '?')[0]}</AvatarFallback>
-                                    </Avatar>
-                                </TouchableOpacity>
-                                <Text
-                                    style={[styles.postText, { flex: 1 }]}
-                                    onPress={() => openUserProfile(navigation, item.userId)}
-                                    suppressHighlighting
-                                >
-                                    {item.user?.displayName ?? item.userId}
-                                </Text>
-                                <TouchableOpacity
-                                    style={styles.approveBtn}
-                                    onPress={() => sessionToken && approveMember({ sessionToken, communityId, userId: item.userId })}
-                                >
-                                    <Check size={16} color="#10B981" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.approveBtn}
-                                    onPress={() => sessionToken && rejectMember({ sessionToken, communityId, userId: item.userId })}
-                                >
-                                    <X size={16} color="#EF4444" />
-                                </TouchableOpacity>
+                            <View style={styles.requestCard}>
+                                <View style={styles.memberRow}>
+                                    <TouchableOpacity
+                                        onPress={() => openUserProfile(navigation, item.userId)}
+                                        activeOpacity={0.7}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Ver el perfil de ${item.user?.displayName ?? 'este usuario'}`}
+                                    >
+                                        <Avatar style={styles.avatar}>
+                                            <AvatarImage src={item.user?.avatar} />
+                                            <AvatarFallback>{(item.user?.displayName ?? '?')[0]}</AvatarFallback>
+                                        </Avatar>
+                                    </TouchableOpacity>
+                                    <Text
+                                        style={[styles.postText, { flex: 1 }]}
+                                        onPress={() => openUserProfile(navigation, item.userId)}
+                                        suppressHighlighting
+                                    >
+                                        {item.user?.displayName ?? item.userId}
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={styles.approveBtn}
+                                        onPress={() =>
+                                            sessionToken &&
+                                            decideJoinRequest({ sessionToken, requestId: item._id, approve: true })
+                                        }
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Aprobar solicitud"
+                                    >
+                                        <Check size={16} color="#10B981" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.approveBtn}
+                                        onPress={() =>
+                                            sessionToken &&
+                                            decideJoinRequest({ sessionToken, requestId: item._id, approve: false })
+                                        }
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Rechazar solicitud"
+                                    >
+                                        <X size={16} color="#EF4444" />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Las respuestas guardan su propio enunciado, así
+                                    que siguen siendo legibles aunque el admin haya
+                                    editado el cuestionario después. */}
+                                {(item.answers ?? []).length > 0 && (
+                                    <View style={styles.answers}>
+                                        {(item.answers ?? []).map((a: any, i: number) => (
+                                            <View key={`${a.questionId}-${i}`} style={styles.answer}>
+                                                <Text style={styles.answerPrompt}>{a.prompt}</Text>
+                                                <Text style={styles.answerValue}>
+                                                    {a.value?.trim()
+                                                        ? a.value
+                                                        : (a.optionIds ?? []).length
+                                                          ? `${(a.optionIds ?? []).length} opción(es) elegida(s)`
+                                                          : '—'}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         )}
                         ListEmptyComponent={<Text style={styles.emptyText}>No hay solicitudes pendientes.</Text>}
@@ -398,6 +477,21 @@ const getStyles = (isDark: boolean) =>
         memberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
         avatar: { width: 36, height: 36 },
         approveBtn: { padding: 6, borderRadius: Radius.full ?? 999, backgroundColor: isDark ? '#27272A' : '#F3F4F6', alignItems: 'center' },
+        requestCard: {
+            padding: 12,
+            borderRadius: Radius.lg,
+            backgroundColor: isDark ? '#18181B' : '#F9FAFB',
+            borderWidth: 1,
+            borderColor: isDark ? '#27272A' : '#E5E7EB',
+        },
+        answers: { marginTop: 10, gap: 8 },
+        answer: {
+            paddingLeft: 10,
+            borderLeftWidth: 2,
+            borderLeftColor: colors(isDark).primaryMuted,
+        },
+        answerPrompt: { fontSize: 11, fontWeight: '700', color: isDark ? '#A1A1AA' : '#71717A' },
+        answerValue: { fontSize: 13, color: isDark ? '#D4D4D8' : '#3F3F46', marginTop: 2 },
         empty: { paddingTop: 40, alignItems: 'center' },
         emptyText: { fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', paddingHorizontal: 40 },
         pinnedWrap: { marginHorizontal: 16, marginBottom: 8, padding: 12, borderRadius: Radius.md, backgroundColor: isDark ? '#18181B' : '#F9FAFB', borderWidth: 1, borderColor: isDark ? '#27272A' : '#E5E7EB' },

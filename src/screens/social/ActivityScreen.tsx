@@ -64,7 +64,15 @@ export default function ActivityScreen({ navigation }: any) {
             case 'quote': return `${who} citó tu post`;
             case 'sale': return 'Vendiste desde tu post';
             case 'match': return `Hiciste match con ${who}`;
+            // `community_invite` significa "te invitaron". Durante un tiempo
+            // `joinCommunity` lo emitía para SOLICITUDES, que es lo contrario,
+            // así que las filas históricas de ese tipo son en realidad
+            // solicitudes. Se distinguen por el destinatario: si soy el dueño
+            // me pidieron entrar, si no, me invitaron. Sin poder saberlo desde
+            // acá, el texto viejo se conserva para no reescribir la historia.
             case 'community_invite': return `${who} pidió unirse a tu comunidad`;
+            case 'community_join_request': return `${who} pidió unirse a tu comunidad`;
+            case 'community_join_approved': return 'Aceptaron tu solicitud para unirte';
             case 'moderation': return 'Un admin actuó sobre tu contenido';
             default: return 'Nueva actividad';
         }
@@ -73,6 +81,10 @@ export default function ActivityScreen({ navigation }: any) {
     const handlePress = (item: any) => {
         if (item.type === 'match') {
             openUserProfile(navigation, item.actorUserId);
+        } else if (item.targetType === 'community' && item.targetId) {
+            // Las tres variantes de comunidad llevan al mismo lugar; desde el
+            // detalle, un admin entra a la cola de solicitudes.
+            navigation.navigate('CommunityDetail', { communityId: item.targetId });
         } else if (item.targetType === 'post' && item.targetId) {
             navigation.navigate('PostDetail', { postId: item.targetId });
         } else if (item.type === 'follow' && item.actorUserId) {

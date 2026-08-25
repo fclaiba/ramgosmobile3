@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { View, FlatList, useWindowDimensions, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResponsive } from '../../hooks/useResponsive';
 import { LoopItem } from './LoopItem';
 import { useVideoPlayerPool } from '../../hooks/useVideoPlayerPool';
+import { NAV_CONTENT_HEIGHT } from '../MobileNav';
 import type { SocialFeedPost } from './types';
 
 interface LoopFeedProps {
@@ -15,11 +18,18 @@ interface LoopFeedProps {
      *  contenedor — si no, el paging calcularía contra la pantalla entera y
      *  desalinearía el swipe contra un contenedor más chico. */
     itemHeight?: number;
+    /** Cromo inferior a esquivar. Por defecto la tab bar global más el gesture
+     *  bar; las pantallas que no viven bajo el nav (tab Loops de una
+     *  comunidad) pasan el suyo. */
+    bottomInset?: number;
 }
 
-export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress, itemHeight }: LoopFeedProps) => {
+export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress, itemHeight, bottomInset }: LoopFeedProps) => {
     const { height: windowHeight, width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+    const { immersiveMaxWidth } = useResponsive();
     const height = itemHeight ?? windowHeight;
+    const bottomOffset = bottomInset ?? NAV_CONTENT_HEIGHT + insets.bottom;
     const [activeIndex, setActiveIndex] = useState(0);
 
     // Pool de 3 reproductores compartidos por todo el feed — ver
@@ -40,7 +50,12 @@ export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress, it
     }).current;
 
     return (
+        // En escritorio el video vertical se acota al ancho de un teléfono y
+        // se centra sobre fondo negro, como hacen TikTok y Reels en web. Sin
+        // tope, un 9:16 estirado a 1400 px se ve deformado y obliga a scrollear
+        // la página para ver un solo video. En mobile el tope es la pantalla.
         <View style={styles.container}>
+            <View style={[styles.stage, { width: '100%', maxWidth: immersiveMaxWidth }]}>
             <FlatList
                 data={posts}
                 keyExtractor={(item) => String(item._id ?? item.id)}
@@ -52,6 +67,7 @@ export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress, it
                         onUserClick={onUserClick}
                         onCommercePress={onCommercePress}
                         itemHeight={height}
+                        bottomInset={bottomOffset}
                     />
                 )}
                 pagingEnabled
@@ -65,6 +81,7 @@ export const LoopFeed = ({ posts, onUserClick, onEndReached, onCommercePress, it
                     {length: height, offset: height * index, index}
                 )}
             />
+            </View>
         </View>
     );
 };
@@ -73,5 +90,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#000',
+        // Centra el "escenario" cuando sobra ancho (escritorio).
+        alignItems: 'center',
+    },
+    stage: {
+        flex: 1,
     },
 });

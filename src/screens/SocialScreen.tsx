@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
     View,
     Text,
@@ -9,10 +9,11 @@ import {
     ActivityIndicator,
     Image,
 } from 'react-native';
-import { Search, Plus as PlusIcon, Send, Film, List, ShoppingCart, Bell, Users2 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { Search, Plus as PlusIcon, Send, Film, List, ShoppingCart, Bell } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
-import { useQuery, useMutation, useConvex } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
 import { MobileHeader } from '../components/MobileHeader';
@@ -21,7 +22,7 @@ import { MobileNav } from '../components/MobileNav';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { useCart } from '../contexts/CartContext';
+import { useCart, OPEN_CART_AFTER_ADD } from '../contexts/CartContext';
 import { useToast } from '../contexts/ToastContext';
 import {
     LoopFeed,
@@ -33,10 +34,16 @@ import {
 import { InlineComposer } from '../components/social/InlineComposer';
 
 import { useResponsive } from '../hooks/useResponsive';
+import { useFeedTabs } from '../hooks/useFeedTabs';
+import { useSocialFeed } from '../hooks/useSocialFeed';
+import { FeedTabBar } from '../components/social/FeedTabBar';
+import { PinnedCommunityTabs, type PinnedCommunity } from '../components/social/PinnedCommunityTabs';
+import { EmptyCommunitiesFeed } from '../components/social/EmptyCommunitiesFeed';
 import { useUnreadMessages } from '../hooks/useMessaging';
 import { ResponsiveLayout } from '../components/ResponsiveLayout';
 import { DesktopSidebar } from '../components/DesktopSidebar';
-import { Radius, colors, glassShadow } from '../theme/tokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Radius, Space, colors, glassShadow } from '../theme/tokens';
 import { glassSurface } from '../utils/glass';
 import { openUserProfile } from '../navigation/openUserProfile';
 
@@ -47,6 +54,7 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
     const navigation = navProp ?? navFromHook;
 
     const { width: _width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
     const { sessionToken, user } = useAuth();
     const { isDesktop } = useResponsive();
@@ -62,83 +70,50 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
     const [activeTab, setActiveTab] = useState<'feed' | 'reels'>('feed');
     // Paridad X/Instagram (plan de ranking, E-085): "Para ti" (algorítmico,
     // `scorePost`) es el default; "Siguiendo" es el tab cronológico puro.
-    const [feedMode, setFeedMode] = useState<'forYou' | 'following'>('forYou');
+    // "Comunidades" y las comunidades fijadas se suman desde `useFeedTabs`.
+    // Las fijadas las carga `PinnedCommunityTabs` detrás de una error
+    // boundary: si esa query falla, se pierden esas tabs y no la pantalla.
+    const [pinnedCommunities, setPinnedCommunities] = useState<PinnedCommunity[]>([]);
+    const feedTabs = useFeedTabs(pinnedCommunities);
+    const setCommunityPinned = useMutation(api.social.communityAccess.setCommunityPinned);
     const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
     const [showSearch, setShowSearch] = useState(false);
 
     const { show } = useToast();
     const [addingToCart, setAddingToCart] = useState(false);
 
+    const handleUnpinCommunity = useCallback(
+        (tabKey: string) => {
+            const communityId = feedTabs.communityIdOf(tabKey);
+            if (!communityId || !sessionToken) return;
+            setCommunityPinned({ sessionToken, communityId: communityId as any, pinned: false }).catch(
+                () => show('No se pudo desfijar la comunidad', 'error'),
+            );
+        },
+        [feedTabs, sessionToken, setCommunityPinned, show],
+    );
+
     // Fuerza un refresh del `UnifiedFeed` (posteo nuevo desde el composer,
     // que vive en el header de la lista, fuera del componente del feed).
     const [feedRefreshKey, setFeedRefreshKey] = useState(0);
 
-    // Los loops NO se derivan del feed general: el ranking "forYou" puede no
-    // traer ningún video en las primeras páginas y la pestaña quedaba vacía
-    // aunque el video existiera. `mode: 'videos'` va directo al índice
-    // by_type_created y devuelve todos los videos, del más nuevo al más viejo.
-    const reelsResult = useQuery(
-        api.social.getFeed,
-        sessionToken ? { sessionToken, limit: 20, mode: 'videos' as const } : 'skip',
-    );
-
-    // Paginación de loops. La primera página es reactiva (`useQuery`), las
-    // siguientes se piden a demanda con el cursor y se acumulan: sin esto el
-    // scroll terminaba en el post 20 y no había forma de llegar a los
-    // anteriores, que es parte de por qué "desaparecían".
-    const convex = useConvex();
-    const [extraReels, setExtraReels] = useState<any[]>([]);
-    const [reelsCursor, setReelsCursor] = useState<string | null | undefined>(undefined);
-    const loadingMoreRef = useRef(false);
-
-    // Se resetea sólo cuando cambia la COMPOSICIÓN de la primera página, no en
-    // cada actualización reactiva: un like sobre cualquier post del pool
-    // devuelve un objeto nuevo, y resetear por eso colapsaba el scroll infinito
-    // de vuelta a 20 items mientras el usuario estaba scrolleando.
-    const firstPageKey = useMemo(
-        () => (reelsResult?.items ?? []).map((p: any) => String(p._id)).join(','),
-        [reelsResult],
-    );
-    useEffect(() => {
-        setExtraReels([]);
-        setReelsCursor(reelsResult?.nextCursor ?? null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [firstPageKey]);
-
-    const reelPosts = useMemo(
-        () => [...(reelsResult?.items ?? []), ...extraReels],
-        [reelsResult, extraReels],
-    );
-
-    const handleReelsEndReached = useCallback(async () => {
-        if (!sessionToken || !reelsCursor || loadingMoreRef.current) return;
-        loadingMoreRef.current = true;
-        try {
-            const page = await convex.query(api.social.getFeed, {
-                sessionToken,
-                limit: 20,
-                mode: 'videos' as const,
-                cursor: reelsCursor,
-            });
-            const items = page?.items ?? [];
-            if (items.length) {
-                // Dedupe por id: el ranking puede repetir un post entre páginas
-                // y FlatList necesita claves únicas.
-                setExtraReels((prev) => {
-                    const seen = new Set([
-                        ...(reelsResult?.items ?? []).map((p: any) => String(p._id)),
-                        ...prev.map((p: any) => String(p._id)),
-                    ]);
-                    return [...prev, ...items.filter((p: any) => !seen.has(String(p._id)))];
-                });
-            }
-            setReelsCursor(page?.nextCursor ?? null);
-        } catch {
-            // Sin más páginas o error de red: dejamos lo que ya está cargado.
-        } finally {
-            loadingMoreRef.current = false;
-        }
-    }, [convex, sessionToken, reelsCursor, reelsResult]);
+    /**
+     * Los loops NO se derivan del feed general: el ranking "forYou" puede no
+     * traer ningún video en las primeras páginas y la pestaña quedaba vacía
+     * aunque el video existiera. `mode: 'videos'` va directo al índice
+     * by_type_created y devuelve todos los videos, del más nuevo al más viejo.
+     *
+     * Esto eran ~65 líneas de cursor + acumulación + dedupe escritas a mano
+     * acá: la cuarta copia de la misma lógica. `useSocialFeed` ya la tiene, y
+     * además sólo resetea cuando cambia la IDENTIDAD del feed (modo, autor,
+     * sesión), no en cada actualización reactiva de la página 1 — que es justo
+     * el colapso del scroll infinito que se arregló en E-092.
+     */
+    const {
+        posts: reelPosts,
+        isLoadingFirstPage: reelsLoading,
+        loadMore: handleReelsEndReached,
+    } = useSocialFeed({ mode: 'videos', pageSize: 20 });
 
     const handleUserClick = useCallback(
         (userId: string) => {
@@ -164,40 +139,53 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
             setAddingToCart(true);
             try {
                 await addPostProduct(postId);
+                if (Platform.OS !== 'web') {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
                 show('Agregado al carrito', 'success');
-                openCart();
+                if (OPEN_CART_AFTER_ADD) openCart();
             } catch (e: any) {
-                // error is already handled and shown by CartContext
+                // El detalle lo muestra CartContext; acá sólo se cierra el
+                // ciclo háptico, que antes quedaba mudo al fallar.
+                if (Platform.OS !== 'web') {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                }
             } finally {
                 setAddingToCart(false);
             }
         },
-        [sessionToken, addingToCart, addPostProduct, navigation, show],
+        [sessionToken, addingToCart, addPostProduct, openCart, show],
     );
 
+    /**
+     * Antes acá había dos botones escritos a mano ("Para ti" / "Siguiendo").
+     * Ahora las tabs son datos y las sirve `useFeedTabs`, así que sumar
+     * "Comunidades" — y más adelante una tab por comunidad fijada — no toca
+     * esta pantalla.
+     */
     const renderFeedModeTabs = () => (
-        <View style={styles.feedModeRow}>
-            <TouchableOpacity
-                style={[styles.feedModeBtn, feedMode === 'forYou' && styles.feedModeBtnActive]}
-                onPress={() => setFeedMode('forYou')}
-            >
-                <Text style={[styles.feedModeText, feedMode === 'forYou' && styles.feedModeTextActive]}>
-                    Para ti
-                </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-                style={[styles.feedModeBtn, feedMode === 'following' && styles.feedModeBtnActive]}
-                onPress={() => setFeedMode('following')}
-            >
-                <Text style={[styles.feedModeText, feedMode === 'following' && styles.feedModeTextActive]}>
-                    Siguiendo
-                </Text>
-            </TouchableOpacity>
-        </View>
+        <>
+            <PinnedCommunityTabs onLoaded={setPinnedCommunities} />
+            <FeedTabBar
+                tabs={feedTabs.tabs}
+                activeKey={feedTabs.activeKey}
+                onChange={feedTabs.setActiveKey}
+                onUnpin={handleUnpinCommunity}
+                onDiscover={() => navigation.navigate('Communities')}
+            />
+        </>
     );
 
     const renderTabs = () => (
-        <View style={[styles.tabContainer, activeTab === 'reels' && styles.tabContainerAbsolute]}>
+        <View
+            style={[
+                styles.tabContainer,
+                activeTab === 'reels' && styles.tabContainerAbsolute,
+                // Sobre el video los tabs flotan, así que el offset tiene que
+                // salir del safe area real y no de un `Platform.OS` fijo.
+                activeTab === 'reels' && { top: insets.top + Space[2] },
+            ]}
+        >
             <View style={[styles.tabSegment, glassSurface(isDark, 'subtle'), activeTab === 'reels' && styles.tabSegmentDark]}>
                 <TouchableOpacity
                     style={[styles.tabButton, activeTab === 'feed' && styles.tabButtonActive]}
@@ -259,12 +247,11 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                     onMenuPress={onMenuPress}
                     actions={
                         <GlobalHeaderActions>
-                            <TouchableOpacity
-                                style={styles.iconBtn}
-                                onPress={() => navigation.navigate('Communities')}
-                            >
-                                <Users2 size={20} color={isDark ? '#fff' : '#111827'} />
-                            </TouchableOpacity>
+                            {/* El ícono de comunidades vivía acá y era la ÚNICA
+                                puerta de entrada — invisible en la pestaña
+                                Loops, además. Ahora las comunidades son una
+                                tab del feed y el chip "Descubrir" de
+                                `FeedTabBar` lleva al directorio. */}
                             <TouchableOpacity
                                 style={styles.iconBtn}
                                 onPress={() => navigation.navigate('Activity')}
@@ -295,8 +282,19 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                 // dwell/completion al salir de cada post y tiene el wiring de
                 // "No me interesa"/silenciar (`PostActionsSheet`).
                 <UnifiedFeed
-                    mode={feedMode}
+                    mode={feedTabs.source.mode}
+                    communityId={feedTabs.source.communityId}
                     refreshKey={feedRefreshKey}
+                    listEmptyComponent={
+                        feedTabs.activeKey === 'communities' ? (
+                            <EmptyCommunitiesFeed
+                                onOpenDirectory={() => navigation.navigate('Communities')}
+                                onOpenCommunity={(communityId) =>
+                                    navigation.navigate('CommunityDetail', { communityId })
+                                }
+                            />
+                        ) : null
+                    }
                     listHeaderComponent={
                         <View>
                             <StoriesBar
@@ -311,7 +309,7 @@ export default function SocialScreen({ navigation: navProp, onMenuPress, isTabMo
                 />
             ) : (
                 <View style={styles.reelsContainer}>
-                    {reelsResult === undefined ? (
+                    {reelsLoading ? (
                         <View style={styles.emptyReels}>
                             <ActivityIndicator color={colors(isDark).primary} />
                         </View>
@@ -413,7 +411,7 @@ const getStyles = (isDark: boolean) => {
         },
         tabContainerAbsolute: {
             position: 'absolute',
-            top: Platform.OS === 'ios' ? 50 : 20,
+            // `top` lo inyecta el componente desde `insets.top`.
             left: 0,
             right: 0,
         },
@@ -451,30 +449,7 @@ const getStyles = (isDark: boolean) => {
             fontWeight: '700',
         },
 
-        feedModeRow: {
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: 20,
-            paddingBottom: 8,
-        },
-        feedModeBtn: {
-            paddingVertical: 4,
-            paddingHorizontal: 4,
-            borderBottomWidth: 2,
-            borderBottomColor: 'transparent',
-        },
-        feedModeBtnActive: {
-            borderBottomColor: c.primary,
-        },
-        feedModeText: {
-            fontSize: 14,
-            fontWeight: '600',
-            color: c.textMuted,
-        },
-        feedModeTextActive: {
-            color: c.text,
-            fontWeight: '700',
-        },
+        /* Los estilos feedMode* murieron con renderFeedModeTabs: las tabs de fuente ahora las dibuja FeedTabBar con sus propios tokens. */
 
         createPostBar: {
             flexDirection: 'row',
@@ -535,18 +510,7 @@ const getStyles = (isDark: boolean) => {
             fontSize: 16,
         },
 
-        fab: {
-            position: 'absolute',
-            bottom: Platform.OS === 'ios' ? 100 : 80,
-            right: 20,
-            ...glassShadow(isDark),
-        },
-        fabGradient: {
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            justifyContent: 'center',
-            alignItems: 'center',
-        },
+        // `fab` y `fabGradient` vivían acá sin que ningún JSX los usara, con un
+        // `bottom` de `Platform.OS` que no llegaba a la pantalla. Eliminados.
     });
 };

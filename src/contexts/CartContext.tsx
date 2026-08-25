@@ -32,6 +32,18 @@ export interface CartItem {
     sourcePostId?: string;
 }
 
+/**
+ * Si agregar un producto desde una superficie de CONTENIDO (feed, loops) abre
+ * el carrito al instante.
+ *
+ * Estaba en `true` implícito: cada compra por impulso sacaba al usuario del
+ * scroll justo cuando estaba consumiendo. El producto se agrega igual, con la
+ * misma atribución al creador (`snapshot.sourcePostId`); lo único que cambia es
+ * que el aviso queda en el toast y en el badge del nav. Ponerlo en `true`
+ * restaura el comportamiento anterior en las dos superficies a la vez.
+ */
+export const OPEN_CART_AFTER_ADD = false;
+
 export interface CartContextData {
     items: CartItem[];
     isOpen: boolean;

@@ -23,7 +23,14 @@ export type ActivityType =
     | 'repost'
     | 'quote'
     | 'sale'
+    // `community_invite` significa literalmente "te invitaron". Durante un
+    // tiempo `joinCommunity` lo emitía para SOLICITUDES de ingreso, que es lo
+    // contrario; los dos tipos de abajo desambiguan. Las filas históricas mal
+    // etiquetadas siguen renderizando: la pantalla de Actividad mapea los tres
+    // al mismo bloque cuando `targetType === 'community'`.
     | 'community_invite'
+    | 'community_join_request'
+    | 'community_join_approved'
     | 'moderation'
     | 'match';
 

@@ -137,7 +137,8 @@ export const useCheckout = () => {
                         listingId: i.id as any,
                         title: i.name,
                         quantity: i.quantity,
-                        price: i.price
+                        price: i.price,
+                        image: i.image
                     })),
                     total: subtotal,
                     currency: 'USD',

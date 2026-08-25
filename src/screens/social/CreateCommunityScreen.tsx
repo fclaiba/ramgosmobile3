@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
 import { useMutation } from 'convex/react';
@@ -7,7 +7,8 @@ import { api } from '../../../convex/_generated/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
-import { colors, Radius } from '../../theme/tokens';
+import { colors, Radius, Space, Type } from '../../theme/tokens';
+import { VISIBILITY_LABELS, type CommunityVisibility } from '../../types/community';
 
 export default function CreateCommunityScreen({ navigation }: any) {
     const insets = useSafeAreaInsets();
@@ -21,7 +22,8 @@ export default function CreateCommunityScreen({ navigation }: any) {
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState('');
     const [kind, setKind] = useState<'business' | 'user'>(user?.role === 'business' ? 'business' : 'user');
-    const [visibility, setVisibility] = useState<'public' | 'private'>('public');
+    const [visibility, setVisibility] = useState<CommunityVisibility>('public');
+    const [topic, setTopic] = useState('');
     // B4: reglas estilo Twitter Communities — una por línea, sin gate de
     // aceptación obligatoria (fricción mínima).
     const [rulesText, setRulesText] = useState('');
@@ -44,6 +46,7 @@ export default function CreateCommunityScreen({ navigation }: any) {
                 location: location.trim() || undefined,
                 kind,
                 visibility,
+                topic: topic.trim() || undefined,
             });
             const rules = rulesText.split('\n').map((r) => r.trim()).filter(Boolean);
             if (rules.length) {
@@ -58,7 +61,15 @@ export default function CreateCommunityScreen({ navigation }: any) {
     };
 
     return (
-        <ScrollView style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={{ padding: 16 }}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+        <ScrollView
+            style={[styles.container, { paddingTop: insets.top }]}
+            contentContainerStyle={{ padding: 16 }}
+            keyboardShouldPersistTaps="handled"
+        >
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
                     <ArrowLeft size={22} color={isDark ? '#fff' : '#111827'} />
@@ -96,15 +107,42 @@ export default function CreateCommunityScreen({ navigation }: any) {
             </View>
 
             <Text style={styles.label}>Visibilidad</Text>
-            <View style={styles.rowOptions}>
-                {(['public', 'private'] as const).map((v) => (
-                    <TouchableOpacity key={v} style={[styles.option, visibility === v && styles.optionActive]} onPress={() => setVisibility(v)}>
-                        <Text style={[styles.optionText, visibility === v && styles.optionTextActive]}>
-                            {v === 'public' ? 'Pública' : 'Privada (aprobación manual)'}
-                        </Text>
+            {/* Tarjetas con explicación en vez de chips sueltos: la diferencia
+                entre privada y secreta no se deduce del nombre, y elegir mal
+                deja una comunidad invisible o expuesta. Todo se puede cambiar
+                después desde Ajustes. */}
+            {(['public', 'private', 'secret'] as const).map((v) => {
+                const meta = VISIBILITY_LABELS[v];
+                const Icon = meta.icon;
+                const selected = visibility === v;
+                return (
+                    <TouchableOpacity
+                        key={v}
+                        style={[styles.visibilityCard, selected && styles.visibilityCardActive]}
+                        onPress={() => setVisibility(v)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                    >
+                        <Icon size={18} color={selected ? colors(isDark).primary : colors(isDark).textMuted} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.optionText, selected && styles.optionTextActive]}>
+                                {meta.label}
+                            </Text>
+                            <Text style={styles.visibilityDesc}>{meta.description}</Text>
+                        </View>
                     </TouchableOpacity>
-                ))}
-            </View>
+                );
+            })}
+
+            <Text style={styles.label}>Tema (opcional)</Text>
+            <TextInput
+                style={styles.input}
+                value={topic}
+                onChangeText={setTopic}
+                placeholder="Diseño, Running, Gastronomía…"
+                placeholderTextColor={colors(isDark).textSubtle}
+                maxLength={30}
+            />
 
             <Text style={styles.label}>Reglas (opcional, una por línea)</Text>
             <TextInput
@@ -124,6 +162,7 @@ export default function CreateCommunityScreen({ navigation }: any) {
                 <Text style={styles.submitBtnText}>{submitting ? 'Creando…' : 'Crear comunidad'}</Text>
             </TouchableOpacity>
         </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -153,6 +192,27 @@ const getStyles = (isDark: boolean) =>
         },
         optionActive: { backgroundColor: colors(isDark).primary, borderColor: colors(isDark).primary },
         optionText: { fontSize: 13, color: isDark ? '#D1D5DB' : '#374151', fontWeight: '500' },
+        visibilityCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Space[3],
+            padding: Space[3],
+            borderRadius: Radius.lg,
+            borderWidth: 1,
+            borderColor: colors(isDark).border,
+            backgroundColor: colors(isDark).surface1,
+            marginBottom: Space[2],
+        },
+        visibilityCardActive: {
+            backgroundColor: colors(isDark).primaryMuted,
+            borderColor: colors(isDark).borderFocus,
+        },
+        visibilityDesc: {
+            ...Type.caption,
+            fontWeight: '500',
+            color: colors(isDark).textMuted,
+            marginTop: 2,
+        },
         optionTextActive: { color: '#fff' },
         submitBtn: {
             marginTop: 32,

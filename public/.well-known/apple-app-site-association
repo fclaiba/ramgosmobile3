@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.fclaiba.ramgosmobile"],
+        "components": [
+          { "/": "/c/*", "comment": "Detalle de comunidad e invitaciones" },
+          { "/": "/comunidades", "comment": "Directorio de comunidades" },
+          { "/": "/ref/*", "comment": "Links de referido con bono" },
+          { "/": "/item/*", "comment": "Detalle de item" },
+          { "/": "/bono/*", "comment": "Bono directo" },
+          { "/": "/chat/*", "comment": "Conversacion" },
+          { "/": "/grupo/*", "comment": "Grupo" },
+          { "/": "/mensajes", "comment": "Bandeja" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["REPLACE_WITH_APPLE_TEAM_ID.com.fclaiba.ramgosmobile"]
+  }
+}

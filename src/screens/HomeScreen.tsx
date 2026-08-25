@@ -130,7 +130,7 @@ export default function HomeScreen({ navigation, route }: any) {
             rawAmount: o.total || 0,
             status: o.status === 'completed' ? 'Completado' : o.status === 'cancelled' ? 'Cancelado' : 'Pendiente',
             statusColor: o.status === 'completed' ? '#16A34A' : o.status === 'cancelled' ? '#EF4444' : '#D97706',
-            image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop',
+            image: o.items?.[0]?.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop',
             description: `${o.items?.length || 0} item(s)`,
             type: 'purchase',
         }));
@@ -142,7 +142,7 @@ export default function HomeScreen({ navigation, route }: any) {
             rawAmount: o.total || 0,
             status: o.status === 'completed' ? 'Completado' : o.status === 'cancelled' ? 'Cancelado' : 'Pendiente',
             statusColor: o.status === 'completed' ? '#16A34A' : o.status === 'cancelled' ? '#EF4444' : '#D97706',
-            image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop',
+            image: o.items?.[0]?.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop',
             description: `Venta a ${String(o.userId).slice(-6)}`,
             type: 'sale',
         }));

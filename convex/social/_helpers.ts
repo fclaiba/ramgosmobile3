@@ -19,6 +19,9 @@ export const SOCIAL_RATE_LIMITS: Record<string, { max: number; windowMs: number 
     report: { max: 20, windowMs: 24 * 60 * 60 * 1000 },
     createCommunity: { max: 5, windowMs: 24 * 60 * 60 * 1000 },
     joinCommunity: { max: 30, windowMs: 60 * 60 * 1000 },
+    createInvite: { max: 20, windowMs: 24 * 60 * 60 * 1000 },
+    submitJoinRequest: { max: 20, windowMs: 24 * 60 * 60 * 1000 },
+    redeemInvite: { max: 30, windowMs: 60 * 60 * 1000 },
     // Los DMs NO están acá: `social/dm.ts` ya tiene su propio presupuesto
     // (`dm:send`, 60/min) aplicado dentro de `deliverMessage`, que cubre
     // todos los caminos de envío (directo, compartir listing, compartir post).
@@ -167,6 +170,79 @@ export const paginateQuery = async <T>(
         items: result.page as T[],
         nextCursor: result.isDone ? null : (result.continueCursor as string | null),
     };
+};
+
+/* ─── Comunidades ──────────────────────────────────────────────────── */
+
+// Las reglas puras (política de ingreso, validez de invitación, slugs) viven
+// en `_communityPolicy.ts`, que no importa nada de Convex y por eso se testea
+// con Jest liso. Acá sólo queda lo que necesita `ctx`.
+export type { CommunityJoinPolicy } from './_communityPolicy';
+export { resolveJoinPolicy } from './_communityPolicy';
+
+/**
+ * Ajusta `memberCount` en un solo lugar.
+ *
+ * Estaba parcheado a mano en cinco sitios distintos de `communities.ts`, cada
+ * uno con su propio `Math.max(0, ...)` (o sin él). Además deja `lastActivityAt`
+ * fresco, que es lo que ordena el directorio.
+ */
+export const adjustMemberCount = async (ctx: any, communityId: string, delta: number) => {
+    const id = ctx.db.normalizeId('commercialCommunities', communityId);
+    if (!id) return;
+    const community = await ctx.db.get(id);
+    if (!community) return;
+    await ctx.db.patch(id, {
+        memberCount: Math.max(0, (community.memberCount ?? 0) + delta),
+        updatedAt: new Date().toISOString(),
+    });
+};
+
+/**
+ * Exige que el actor sea owner o admin ACTIVO de la comunidad.
+ *
+ * Vive acá y no en `communities.ts` porque `communityAccess.ts` necesita la
+ * misma puerta, y los módulos de Convex sólo pueden exportar funciones
+ * registrables — este archivo empieza con `_`, así que Convex no lo registra y
+ * puede exportar helpers comunes.
+ */
+export const requireCommunityAdmin = async (ctx: any, communityId: string, userId: string) => {
+    const membership = await ctx.db
+        .query('communityMembers')
+        .withIndex('by_community_user', (q: any) =>
+            q.eq('communityId', communityId).eq('userId', userId),
+        )
+        .first();
+    if (
+        !membership ||
+        membership.status !== 'active' ||
+        (membership.role !== 'owner' && membership.role !== 'admin')
+    ) {
+        throw new ConvexError({ code: 'FORBIDDEN', message: 'No sos admin de esta comunidad.' });
+    }
+    return membership;
+};
+
+const TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+/**
+ * Token de invitación url-safe.
+ *
+ * Sin caracteres ambiguos (I/l/1, O/0) porque estos links se dictan y se
+ * tipean a mano.
+ *
+ * 10 caracteres sobre un alfabeto de 57 son ~58 bits (57^10 ≈ 3,6·10¹⁷). Eran
+ * 24 (~140 bits), que es criptográficamente más fuerte pero producía un link
+ * impronunciable — y el requisito real no es resistir un ataque offline sino
+ * no ser adivinable online, donde además pega el rate limit de `redeemInvite`
+ * (30/hora). A cambio, el link entra en un mensaje sin ocupar dos renglones.
+ */
+export const newInviteToken = (length = 10): string => {
+    const bytes = new Uint8Array(length);
+    globalThis.crypto.getRandomValues(bytes);
+    let out = '';
+    for (let i = 0; i < length; i++) out += TOKEN_ALPHABET[bytes[i] % TOKEN_ALPHABET.length];
+    return out;
 };
 
 // Throttle helper: returns true if a "similar" notification was already

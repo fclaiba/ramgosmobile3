@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Volume2, VolumeX, Repeat2 } from 'lucide-react-native';
+import { Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Repeat2, ShoppingBag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { colors, Radius } from '../../theme/tokens';
+import { colors, Radius, Space, Touch, Type } from '../../theme/tokens';
+import { createThemedStyles } from '../../theme/makeThemedStyles';
 import { glassSurface } from '../../utils/glass';
+import { useFeedFocus } from '../../hooks/useFeedFocus';
+import { PostMediaBox } from './PostMediaBox';
+import { PostVideo } from './PostVideo';
 import { formatCompactCount } from '../../utils/formatCompactCount';
 import { formatRelativeTime } from '../../utils/formatters';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
@@ -23,7 +25,7 @@ import { CommunityBadge } from './CommunityBadge';
 import { QuotedPostCard, QuotedPost } from './QuotedPostCard';
 
 /** Líneas de texto antes de plegar con "Ver más" (Twitter pliega parecido). */
-const COLLAPSED_LINES = 6;
+const COLLAPSED_LINES = 5;
 
 export interface PostCardProps {
     post: {
@@ -201,6 +203,12 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
     const styles = getStyles(isDark);
     const { sessionToken } = useAuth();
 
+    // Dentro de un feed el foco llega por suscripción al store, así que un
+    // cambio de viewport re-renderiza sólo las tarjetas que entraron o salieron.
+    // Suelta — detalle de post, perfil, preview — no hay store y cae a la prop.
+    const focusFromFeed = useFeedFocus(String(post._id));
+    const focused = focusFromFeed ?? isFocused;
+
     const [liked, setLiked] = useState(Boolean(post.hasLiked));
     const [likeCount, setLikeCount] = useState(post.likesCount);
     const [reposted, setReposted] = useState(Boolean(post.hasReposted));
@@ -232,26 +240,8 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
         setSavedLocal(null);
     }, [post.hasSaved]);
 
-    // Manejo de Video usando expo-video (Performance)
-    const player = useVideoPlayer(post.videoUrl || '', player => {
-        player.loop = true;
-        player.muted = true;
-    });
-
-    // Auto Play/Pause basado en si el post está en foco (FlashList viewability)
-    useEffect(() => {
-        if (!post.videoUrl || !player) return;
-        if (isFocused) {
-            player.play();
-        } else {
-            player.pause();
-        }
-    }, [isFocused, player, post.videoUrl]);
-
-    useEffect(() => {
-        if (!post.videoUrl || !player) return;
-        player.muted = muted;
-    }, [muted, player, post.videoUrl]);
+    // El reproductor ya no lo crea la tarjeta: en el feed lo presta el pool
+    // compartido y suelto lo crea `PostVideo`. Ver `src/hooks/useVideoPool.tsx`.
 
     const handleLike = () => {
         if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -310,66 +300,68 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
     const openAuthorProfile =
         onUserPress && post.authorUserId ? () => onUserPress(String(post.authorUserId)) : undefined;
 
+    // Todas las imágenes del post, no sólo la primera. El
+    // `commercialProduct.image` es el fallback para posts comerciales que no
+    // subieron galería propia.
+    const gallery =
+        post.type === 'image' || post.type === 'commercial'
+            ? post.images && post.images.length > 0
+                ? post.images
+                : post.commercialProduct?.image
+                  ? [post.commercialProduct.image]
+                  : []
+            : [];
+
+    const hasVideo = post.type === 'video' && !!post.videoUrl;
+    const hasMedia = hasVideo || gallery.length > 0;
+
     /**
-     * Media encuadrada. Se mantiene la regla de `PostImageCarousel`: el
-     * contenido se ve COMPLETO (`contain`) y las bandas se rellenan con una
-     * copia difuminada — sólo que ahora dentro de una caja cuadrada en vez
-     * de a pantalla completa.
+     * La píldora de compra flota SOBRE la media en vez de ocupar una fila
+     * propia debajo: entra en la misma fijación visual que el contenido que el
+     * ojo ya está mirando, no compite con la barra de acciones y no le suma
+     * alto al post. Sin media no hay dónde flotar, así que ahí se cae al
+     * bloque `full` de siempre.
+     */
+    const commercePill = post.commercialProduct ? (
+        <CommerceTag
+            product={post.commercialProduct}
+            onPress={handleCommercePress}
+            variant="compact"
+        />
+    ) : undefined;
+
+    /**
+     * Media a sangre en 4:5 (`PostMediaBox`). El video va en UNA sola
+     * superficie con `cover` — el relleno difuminado dejó de hacer falta al
+     * pasar de caja cuadrada a vertical. Las imágenes siguen con el carrusel,
+     * que conserva su propio relleno porque ahí sí no queremos recortar.
      */
     const renderMedia = () => {
-        if (post.type === 'video' && post.videoUrl) {
+        if (hasVideo) {
             return (
-                <View style={styles.mediaBox}>
-                    <VideoView
-                        style={StyleSheet.absoluteFill}
-                        player={player}
-                        contentFit="cover"
-                        nativeControls={false}
-                        pointerEvents="none"
+                <PostMediaBox overlay={commercePill}>
+                    <PostVideo
+                        postId={String(post._id)}
+                        videoUrl={post.videoUrl as string}
+                        isFocused={focused}
+                        muted={muted}
+                        onToggleMute={() => setMuted((m) => !m)}
                     />
-                    <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={styles.videoBackdropTint} pointerEvents="none" />
-                    <VideoView
-                        style={StyleSheet.absoluteFill}
-                        player={player}
-                        contentFit="contain"
-                        nativeControls={false}
-                    />
-                    <TouchableOpacity
-                        style={styles.muteBtn}
-                        onPress={() => setMuted((m) => !m)}
-                        accessibilityRole="button"
-                        accessibilityLabel={muted ? 'Activar sonido' : 'Silenciar'}
-                    >
-                        {muted ? <VolumeX size={16} color="#FFF" /> : <Volume2 size={16} color="#FFF" />}
-                    </TouchableOpacity>
-                </View>
+                </PostMediaBox>
             );
         }
 
-        if (post.type === 'image' || post.type === 'commercial') {
-            // Todas las imágenes del post, no sólo la primera. El
-            // `commercialProduct.image` es el fallback para posts comerciales
-            // que no subieron galería propia.
-            const gallery =
-                post.images && post.images.length > 0
-                    ? post.images
-                    : post.commercialProduct?.image
-                      ? [post.commercialProduct.image]
-                      : [];
-
-            if (gallery.length > 0) {
-                return (
-                    <View style={styles.mediaBox}>
-                        <PostImageCarousel
-                            images={gallery}
-                            alts={post.imageAlts}
-                            fallbackAlt={post.content}
-                            dotsPosition="bottom"
-                        />
-                    </View>
-                );
-            }
+        if (gallery.length > 0) {
+            return (
+                <PostMediaBox overlay={commercePill}>
+                    <PostImageCarousel
+                        images={gallery}
+                        alts={post.imageAlts}
+                        fallbackAlt={post.content}
+                        dotsPosition="bottom"
+                    />
+                </PostMediaBox>
+            );
         }
 
         return null;
@@ -504,7 +496,9 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                 </View>
             )}
 
-            {post.commercialProduct && (
+            {/* Con media la píldora ya está flotando encima; sin media (texto,
+                encuesta) el bloque completo es la única afordancia de compra. */}
+            {post.commercialProduct && !hasMedia && (
                 <CommerceTag product={post.commercialProduct} onPress={handleCommercePress} />
             )}
 
@@ -519,7 +513,7 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                     >
                         <View pointerEvents="none">
                             <Heart
-                                size={22}
+                                size={20}
                                 color={liked ? '#EF4444' : c.textMuted}
                                 fill={liked ? '#EF4444' : 'transparent'}
                             />
@@ -536,7 +530,7 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                         accessibilityLabel="Comentar"
                     >
                         <View pointerEvents="none">
-                            <MessageCircle size={22} color={c.textMuted} />
+                            <MessageCircle size={20} color={c.textMuted} />
                         </View>
                         <Text style={styles.actionCount}>{formatCompactCount(post.commentsCount)}</Text>
                     </TouchableOpacity>
@@ -552,7 +546,7 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                             accessibilityLabel={reposted ? 'Quitar repost' : 'Repostear'}
                         >
                             <View pointerEvents="none">
-                                <Repeat2 size={22} color={reposted ? '#22C55E' : c.textMuted} />
+                                <Repeat2 size={20} color={reposted ? '#22C55E' : c.textMuted} />
                             </View>
                             {repostCount > 0 && (
                                 <Text style={[styles.actionCount, reposted && styles.actionCountReposted]}>
@@ -569,13 +563,30 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                         accessibilityLabel="Compartir"
                     >
                         <View pointerEvents="none">
-                            <Share2 size={22} color={c.textMuted} />
+                            <Share2 size={20} color={c.textMuted} />
                         </View>
                         {(post.sharesCount ?? 0) > 0 && (
                             <Text style={styles.actionCount}>{formatCompactCount(post.sharesCount)}</Text>
                         )}
                     </TouchableOpacity>
                 </View>
+
+                {/* Segundo nivel de compra: la píldora sobre la media captura el
+                    impulso, ésta captura la intención deliberada de quien ya
+                    leyó el post y bajó hasta las acciones. */}
+                {post.commercialProduct && hasMedia && (
+                    <TouchableOpacity
+                        style={styles.buyPill}
+                        onPress={handleCommercePress}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Comprar ${post.commercialProduct.name}`}
+                    >
+                        <View pointerEvents="none">
+                            <ShoppingBag size={16} color={c.primary} />
+                        </View>
+                        <Text style={styles.buyPillText}>Comprar</Text>
+                    </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                     onPress={handleSave}
@@ -585,7 +596,7 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
                 >
                     <View pointerEvents="none">
                         <Bookmark
-                            size={22}
+                            size={20}
                             color={saved ? c.primary : c.textMuted}
                             fill={saved ? c.primary : 'transparent'}
                         />
@@ -606,143 +617,128 @@ export const PostCard = React.memo(({ post, author, repostedBy, onLike, onCommen
 
 PostCard.displayName = 'PostCard';
 
-const getStyles = (isDark: boolean) => {
-    const c = colors(isDark);
-    return StyleSheet.create({
-        card: {
-            ...glassSurface(isDark, 'subtle'),
-            marginBottom: 12,
-            paddingHorizontal: 16,
-            paddingVertical: 16,
-        },
-        header: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 10,
-        },
-        headerIdentity: {
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-        },
-        headerText: {
-            flex: 1,
-            marginLeft: 12,
-        },
-        nameRow: {
-            flexDirection: 'row',
-            alignItems: 'baseline',
-        },
-        authorName: {
-            fontWeight: '700',
-            fontSize: 15,
-            color: c.text,
-            letterSpacing: -0.3,
-            flexShrink: 1,
-        },
-        timestamp: {
-            fontSize: 13,
-            fontWeight: '500',
-            color: c.textMuted,
-        },
-        authorMeta: {
-            fontSize: 13,
-            fontWeight: '500',
-            color: c.textMuted,
-            marginTop: 1,
-        },
-        moreBtn: {
-            padding: 6,
-            marginRight: -6,
-        },
-        chipRow: {
-            marginBottom: 10,
-            flexDirection: 'row',
-        },
-        content: {
-            fontSize: 15,
-            lineHeight: 22,
-            color: c.textSecondary,
-            marginBottom: 10,
-        },
-        moreText: {
-            fontSize: 14,
-            fontWeight: '700',
-            color: c.primary,
-            marginTop: -4,
-            marginBottom: 10,
-        },
-        // Caja cuadrada: con `contain` + relleno difuminado sirve igual a
-        // fotos apaisadas y a video vertical, sin recortar ninguno.
-        mediaBox: {
-            width: '100%',
-            aspectRatio: 1,
-            borderRadius: Radius.lg,
-            overflow: 'hidden',
-            backgroundColor: isDark ? '#000' : c.surface2,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: c.glassBorder,
-            marginBottom: 12,
-        },
-        videoBackdropTint: {
-            position: 'absolute',
-            top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.35)',
-        },
-        muteBtn: {
-            position: 'absolute',
-            right: 10,
-            bottom: 10,
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            backgroundColor: 'rgba(0,0,0,0.45)',
-            alignItems: 'center',
-            justifyContent: 'center',
-        },
-        footer: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            paddingTop: 4,
-        },
-        actions: {
-            flexDirection: 'row',
-            gap: 24,
-        },
-        actionBtn: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            minHeight: 32,
-        },
-        actionCount: {
-            fontSize: 13,
-            fontWeight: '600',
-            color: c.textMuted,
-        },
-        actionCountLiked: {
-            color: '#EF4444',
-        },
-        actionCountReposted: {
-            color: '#22C55E',
-        },
-        repostBanner: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            marginBottom: 8,
-            paddingLeft: 2,
-        },
-        repostBannerText: {
-            flex: 1,
-            fontSize: 13,
-            fontWeight: '700',
-            color: c.textMuted,
-        },
-        saveBtn: {
-            padding: 4,
-            marginRight: -4,
-        },
-    });
-};
+const getStyles = createThemedStyles((isDark, c) => ({
+    card: {
+        ...glassSurface(isDark, 'subtle'),
+        borderRadius: Radius.xl,
+        marginBottom: Space[3],
+        paddingHorizontal: Space[4],
+        paddingTop: Space[3],
+        paddingBottom: Space[2],
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: Space[2],
+    },
+    headerIdentity: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    headerText: {
+        flex: 1,
+        marginLeft: Space[3],
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    authorName: {
+        ...Type.title,
+        color: c.text,
+        flexShrink: 1,
+    },
+    timestamp: {
+        ...Type.bodySm,
+        color: c.textMuted,
+    },
+    authorMeta: {
+        ...Type.bodySm,
+        color: c.textMuted,
+        marginTop: 1,
+    },
+    moreBtn: {
+        padding: 6,
+        marginRight: -6,
+    },
+    chipRow: {
+        marginBottom: Space[2],
+        flexDirection: 'row',
+    },
+    content: {
+        ...Type.body,
+        color: c.textSecondary,
+        marginBottom: Space[2],
+    },
+    moreText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: c.primary,
+        marginTop: -4,
+        marginBottom: Space[2],
+    },
+    footer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Space[2],
+        paddingTop: Space[1],
+    },
+    // `flex: 1` empuja la pildora de compra y el guardar contra el borde
+    // derecho, en vez de que un `space-between` los reparta por el ancho.
+    actions: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: Space[6],
+    },
+    actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        height: Touch.min,
+    },
+    actionCount: {
+        ...Type.bodySm,
+        fontWeight: '600',
+        color: c.textMuted,
+    },
+    actionCountLiked: {
+        color: '#EF4444',
+    },
+    actionCountReposted: {
+        color: '#22C55E',
+    },
+    buyPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        height: 28,
+        paddingHorizontal: Space[3],
+        borderRadius: Radius.full,
+        backgroundColor: c.primaryMuted,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.borderFocus,
+    },
+    buyPillText: {
+        ...Type.caption,
+        fontWeight: '800',
+        color: c.primary,
+    },
+    repostBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: Space[2],
+        paddingLeft: 2,
+    },
+    repostBannerText: {
+        ...Type.bodySm,
+        fontWeight: '700',
+        flex: 1,
+        color: c.textMuted,
+    },
+    saveBtn: {
+        padding: 4,
+        marginRight: -4,
+    },
+}));

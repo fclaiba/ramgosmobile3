@@ -28,11 +28,19 @@ interface LoopItemProps {
     /** Ver `LoopFeed`'s `itemHeight` — mismo motivo (tab Loops de comunidad
      *  embebido debajo de un header, no pantalla completa). */
     itemHeight?: number;
+    /** Alto del cromo inferior a esquivar: tab bar global + gesture bar del
+     *  dispositivo. Antes era `iOS ? 90 : 70` fijo, que erraba en cualquier
+     *  teléfono cuyo safe area no fuera el del modelo con el que se probó. */
+    bottomInset?: number;
 }
 
-export const LoopItem = ({ post, isActive, player, onUserClick, onCommercePress, itemHeight }: LoopItemProps) => {
-    const { height: windowHeight, width } = useWindowDimensions();
+export const LoopItem = ({ post, isActive, player, onUserClick, onCommercePress, itemHeight, bottomInset }: LoopItemProps) => {
+    // El ancho ya no se lee de la ventana: en escritorio `LoopFeed` acota el
+    // escenario al ancho de un teléfono, y usar el de la ventana desbordaría
+    // cada item fuera de él. El item ocupa el 100% de lo que le den.
+    const { height: windowHeight } = useWindowDimensions();
     const height = itemHeight ?? windowHeight;
+    const bottomOffset = bottomInset ?? 0;
     const isDark = useTheme().colorScheme === 'dark';
     const { sessionToken } = useAuth();
 
@@ -148,7 +156,7 @@ export const LoopItem = ({ post, isActive, player, onUserClick, onCommercePress,
     const hasVideo = !!post.videoUrl;
 
     return (
-        <View style={[styles.container, { width, height }]}>
+        <View style={[styles.container, { width: '100%', height }]}>
             <View style={styles.videoCentering}>
                 {hasVideo && player ? (
                     <VideoView
@@ -168,7 +176,7 @@ export const LoopItem = ({ post, isActive, player, onUserClick, onCommercePress,
                 style={styles.gradient}
             />
 
-            <View style={styles.bottomSection}>
+            <View style={[styles.bottomSection, { bottom: bottomOffset }]}>
                 <View style={styles.infoSection}>
                     <View style={styles.userRow}>
                         <TouchableOpacity
@@ -277,8 +285,6 @@ export const LoopItem = ({ post, isActive, player, onUserClick, onCommercePress,
     );
 };
 
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 90 : 70;
-
 const styles = StyleSheet.create({
     container: {
         backgroundColor: '#000',
@@ -303,7 +309,7 @@ const styles = StyleSheet.create({
     },
     bottomSection: {
         position: 'absolute',
-        bottom: Platform.OS === 'ios' ? 90 : 70, // Espacio para bottom nav tab de IG
+        // `bottom` lo inyecta el componente desde `bottomInset`.
         left: 0,
         right: 0,
         paddingHorizontal: 12,

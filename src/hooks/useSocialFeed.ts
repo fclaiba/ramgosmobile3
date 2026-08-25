@@ -3,7 +3,12 @@ import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../contexts/AuthContext';
 
-export type SocialFeedMode = 'forYou' | 'following' | 'videos' | 'recent';
+/**
+ * `communities` es el timeline unificado de TODAS las comunidades del viewer.
+ * Es distinto de `communityId`, que restringe el feed a UNA sola (tab "Feed"
+ * del detalle de comunidad) y va por `getCommunityFeed`.
+ */
+export type SocialFeedMode = 'forYou' | 'following' | 'videos' | 'recent' | 'communities';
 
 export interface UseSocialFeedOptions {
     /** Restringe el feed a un autor — pantallas de perfil. */

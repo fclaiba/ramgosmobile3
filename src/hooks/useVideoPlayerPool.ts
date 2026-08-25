@@ -1,5 +1,6 @@
 import { useVideoPlayer, VideoPlayer } from 'expo-video';
 import { useEffect, useRef } from 'react';
+import { safePlay, tuneLoopingPlayer } from '../utils/videoPlayback';
 
 const POOL_SIZE = 3;
 
@@ -32,9 +33,9 @@ export function useVideoPlayerPool(
     urls: Array<string | undefined>,
     activeIndex: number,
 ): (postIndex: number) => VideoPlayer | null {
-    const p0 = useVideoPlayer('', (p) => { p.loop = true; });
-    const p1 = useVideoPlayer('', (p) => { p.loop = true; });
-    const p2 = useVideoPlayer('', (p) => { p.loop = true; });
+    const p0 = useVideoPlayer('', (p) => tuneLoopingPlayer(p));
+    const p1 = useVideoPlayer('', (p) => tuneLoopingPlayer(p));
+    const p2 = useVideoPlayer('', (p) => tuneLoopingPlayer(p));
 
     const playersRef = useRef<VideoPlayer[]>([p0, p1, p2]);
     playersRef.current = [p0, p1, p2];
@@ -53,11 +54,23 @@ export function useVideoPlayerPool(
             const slot = ((postIndex % POOL_SIZE) + POOL_SIZE) % POOL_SIZE;
             if (loadedIndex.current[slot] === postIndex) continue;
             loadedIndex.current[slot] = postIndex;
-            playersRef.current[slot].replaceAsync(url).catch(() => {
-                // Si falla la carga (fuente inválida, red), no reintenta acá
-                // — el slot queda libre para el próximo índice que lo pida.
-                if (loadedIndex.current[slot] === postIndex) loadedIndex.current[slot] = null;
-            });
+            const player = playersRef.current[slot];
+            player.replaceAsync(url)
+                .then(() => {
+                    if (loadedIndex.current[slot] !== postIndex) return;
+                    // Re-afirmar el loop al cambiar de fuente: sin esto un
+                    // video podía terminar y quedarse en negro en vez de
+                    // volver a empezar, que es el comportamiento esperado acá.
+                    tuneLoopingPlayer(player);
+                    // El activo arranca en cuanto tiene fuente, sin esperar a
+                    // que `LoopItem` re-renderice y su efecto lo dispare.
+                    if (postIndex === activeIndex) safePlay(player);
+                })
+                .catch(() => {
+                    // Si falla la carga (fuente inválida, red), no reintenta acá
+                    // — el slot queda libre para el próximo índice que lo pida.
+                    if (loadedIndex.current[slot] === postIndex) loadedIndex.current[slot] = null;
+                });
         }
     }, [activeIndex, urls]);
 

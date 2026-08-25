@@ -1315,6 +1315,8 @@ export const bumpTagAffinityForPost = async (
 };
 
 const FOLLOW_FANOUT_CAP = 200;
+/** Comunidades leídas por página en `mode: 'communities'`. Ver la rama. */
+const COMMUNITY_FANOUT_CAP = 15;
 const FORYOU_POOL_CAP = 90;
 const FORYOU_OVERSAMPLE = 4; // 3x en v1; sube a 4x para compensar el filtro de moderación.
 
@@ -1335,6 +1337,7 @@ export const getFeed = query({
                 v.literal('following'),
                 v.literal('videos'),
                 v.literal('recent'),
+                v.literal('communities'),
             ),
         ),
     },
@@ -1560,6 +1563,62 @@ export const getFeed = query({
             candidates = merged.length <= cap
                 ? merged
                 : applyDiversityCap(merged, cap, diversityKeyOf, LOOPS_DIVERSITY_PER_KEY);
+        } else if (mode === 'communities') {
+            // Timeline unificado de las comunidades del viewer. Es el ÚNICO
+            // modo que deja pasar posts con `communityId`: el resto los
+            // excluye vía `isGlobalFeedEligible` para no filtrar contenido de
+            // comunidades privadas al feed global.
+            const memberships = await ctx.db
+                .query('communityMembers')
+                .withIndex('by_user_status', (q: any) =>
+                    q.eq('userId', viewerId).eq('status', 'active'),
+                )
+                .collect();
+
+            // Cap duro de fan-out: con 15 comunidades × `cap` posts esto ya
+            // lee hasta 300 documentos por página. Si un usuario pertenece a
+            // más, se priorizan las que tuvieron actividad más reciente.
+            const ordered = (
+                await Promise.all(
+                    memberships.map(async (m: any) => {
+                        const nid = ctx.db.normalizeId('commercialCommunities', m.communityId);
+                        const community = nid ? await ctx.db.get(nid) : null;
+                        if (!community || community.deletedAt) return null;
+                        return {
+                            communityId: m.communityId,
+                            lastActivityAt: community.lastActivityAt ?? community.createdAt ?? '',
+                        };
+                    }),
+                )
+            )
+                .filter(Boolean)
+                .sort((a: any, b: any) => (a.lastActivityAt < b.lastActivityAt ? 1 : -1))
+                .slice(0, COMMUNITY_FANOUT_CAP);
+
+            const perCommunity = await Promise.all(
+                ordered.map((c: any) =>
+                    ctx.db
+                        .query('socialPosts')
+                        .withIndex('by_community_created', (q: any) =>
+                            olderThan(q.eq('communityId', c.communityId)),
+                        )
+                        .order('desc')
+                        .filter((q: any) => q.eq(q.field('deletedAt'), undefined))
+                        .take(cap),
+                ),
+            );
+
+            const raw = perCommunity
+                .flat()
+                .sort((a: any, b: any) => (a.createdAt < b.createdAt ? 1 : -1));
+            rawCount = raw.length;
+            oldestRawCreatedAt = raw.length ? raw[raw.length - 1].createdAt : null;
+            // Sin `isGlobalFeedEligible`: acá el `communityId` es el punto.
+            // Las respuestas (`parentPostId`) sí se excluyen, igual que en el
+            // resto de los timelines.
+            candidates = raw
+                .filter((p: any) => !p.deletedAt && p.parentPostId === undefined)
+                .slice(0, cap);
         } else if (mode === 'following') {
             const follows = await ctx.db
                 .query('socialFollows')

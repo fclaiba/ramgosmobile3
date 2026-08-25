@@ -8,7 +8,12 @@ import { NavigationContainer, DefaultTheme, DarkTheme, getStateFromPath as rnGet
 import { useTheme, ThemeProvider } from './src/contexts/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useBonoDeepLinkHandler } from './src/hooks/useBonoDeepLinkHandler';
-import { parseBonoDeepLink } from './src/utils/bonoDeepLink';
+import { useCommunityDeepLinkHandler } from './src/hooks/useCommunityDeepLinkHandler';
+import { createAppGetStateFromPath } from './src/navigation/getStateFromPath';
+import { CommunityJoinHost } from './src/navigation/CommunityJoinHost';
+
+/** Se arma una sola vez: no depende de props ni de estado. */
+const appGetStateFromPath = createAppGetStateFromPath(rnGetStateFromPath);
 
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ToastProvider } from './src/contexts/ToastContext';
@@ -144,6 +149,7 @@ import EventMatchingScreen from './src/screens/social/EventMatchingScreen';
 import CommunitiesScreen from './src/screens/social/CommunitiesScreen';
 import CreateCommunityScreen from './src/screens/social/CreateCommunityScreen';
 import CommunityDetailScreen from './src/screens/social/CommunityDetailScreen';
+import CommunitySettingsScreen from './src/screens/social/CommunitySettingsScreen';
 import AdminModerationScreen from './src/screens/admin/AdminModerationScreen';
 import AnalyticsDashboardScreen from './src/screens/AnalyticsDashboardScreen';
 import { navigationRef } from './src/navigation/navigationRef';
@@ -155,6 +161,7 @@ const AppNavigator = () => {
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
     useBonoDeepLinkHandler(navigationRef);
+    useCommunityDeepLinkHandler(navigationRef);
 
     // Design system v2: neutral canvas + brand accent (no purple wallpaper)
     const MyDarkTheme = {
@@ -210,64 +217,22 @@ const AppNavigator = () => {
                                 referralCode: (referralCode: string) => referralCode,
                             },
                         },
+                        CommunityDetail: 'c/:communityId',
+                        Communities: 'comunidades',
+                        // Estas dos las resuelve `getStateFromPath` a mano, pero
+                        // igual tienen que estar declaradas: sin patrón de path,
+                        // React Navigation serializa el estado usando el NOMBRE
+                        // de la pantalla (`/ProductDetail`), y al re-parsear esa
+                        // URL la rama de handles la leía como un usuario —
+                        // "Perfil no disponible" después de cualquier navegación.
+                        CommercialProfile: ':handle',
+                        ProductDetail: ':handle/:slug',
                     },
                 },
-                // Custom getStateFromPath so /ref/{code}?bono=ID and ramgos://bono/ID?ref=CODE work
-                getStateFromPath(path, options) {
-                    const parsed = parseBonoDeepLink(path);
-                    if (parsed?.listingId) {
-                        return {
-                            routes: [
-                                {
-                                    name: 'ItemDetail',
-                                    params: {
-                                        itemId: parsed.listingId,
-                                        referralCode: parsed.referralCode || undefined,
-                                    },
-                                },
-                            ],
-                        };
-                    }
-                    
-                    // Parse canonical URLs: /{handle} and /{handle}/{slug}
-                    try {
-                        const withoutOrigin = path.replace(/^https?:\/\/[^/]+/, '');
-                        const [pathOnly, queryString = ''] = withoutOrigin.split('?');
-                        const cleanPath = pathOnly.replace(/^\//, '');
-                        // El `?ref=CODE` que agrega el botón compartir es lo que
-                        // atribuye la venta al influencer. Si se descarta acá, el
-                        // enlace abre el producto pero nadie cobra la comisión.
-                        const referralCode = queryString
-                            .split('&')
-                            .map((pair) => pair.split('='))
-                            .find(([key]) => key === 'ref')?.[1];
-                        const ref = referralCode ? decodeURIComponent(referralCode) : undefined;
-
-                        if (cleanPath) {
-                            const parts = cleanPath.split('/').filter(Boolean);
-                            // Avoid matching known routes
-                            const reservedPaths = ['welcome', 'home', 'signup', 'login', 'item', 'ref', 'bono', 'p'];
-                            if (parts.length > 0 && !reservedPaths.includes(parts[0].toLowerCase())) {
-                                if (parts.length === 1) {
-                                    return {
-                                        routes: [{ name: 'CommercialProfile', params: { handle: parts[0] } }]
-                                    };
-                                } else if (parts.length === 2) {
-                                    return {
-                                        routes: [{
-                                            name: 'ProductDetail',
-                                            params: { handle: parts[0], slug: parts[1], referralCode: ref },
-                                        }]
-                                    };
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        // ignore
-                    }
-                    
-                    return rnGetStateFromPath(path, options);
-                },
+                // El resolver vive en `src/navigation/getStateFromPath.ts`:
+                // estaba inline acá y sin tests, y así fue como E-089 se comió
+                // el `?ref=` de los links de producto sin que nadie lo notara.
+                getStateFromPath: appGetStateFromPath,
             }}
             documentTitle={{ formatter: () => 'Ramgos App' }}>
             <StatusBar style={isDark ? "light" : "dark"} />
@@ -358,6 +323,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="Communities" component={CommunitiesScreen} />
                     <Stack.Screen name="CreateCommunity" component={CreateCommunityScreen} />
                     <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
+                    <Stack.Screen name="CommunitySettings" component={CommunitySettingsScreen} />
                     <Stack.Screen name="AdminModeration" component={AdminModerationScreen} />
                     <Stack.Screen name="Games" component={GamesScreen} />
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
@@ -365,6 +331,11 @@ const AppNavigator = () => {
                     <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
                     <Stack.Screen name="InfluencerBonuses" component={InfluencerBonusesScreen} />
                 </Stack.Navigator>
+                {/* Hermano del navigator: el modal de ingreso a comunidades se
+                    abre desde un deep link, antes de que ninguna pantalla esté
+                    montada, y `Sheet` usa un `<Modal>` de RN que se pinta por
+                    encima del stack entero. */}
+                <CommunityJoinHost />
             </View>
         </NavigationContainer>
     );

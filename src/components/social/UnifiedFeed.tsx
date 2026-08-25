@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, RefreshControl, ActivityIndicator, Platform } from 'react-native';
 import { ViewToken } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { FlashList, ListRenderItemInfo } from '@shopify/flash-list';
 import { useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
@@ -14,12 +16,16 @@ import { QuoteComposerModal } from './QuoteComposerModal';
 import { QuotedPost } from './QuotedPostCard';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useCart } from '../../contexts/CartContext';
+import { useCart, OPEN_CART_AFTER_ADD } from '../../contexts/CartContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { colors } from '../../theme/tokens';
+import { colors, Space } from '../../theme/tokens';
+import { useResponsive } from '../../hooks/useResponsive';
 import { useSocialFeed, SocialFeedMode } from '../../hooks/useSocialFeed';
 import { mapPostToCardProps } from '../../utils/mapPostToCard';
 import { openUserProfile } from '../../navigation/openUserProfile';
+import { FeedFocusProvider, useFeedFocusStore } from '../../hooks/useFeedFocus';
+import { VideoPoolProvider, useVideoPool } from '../../hooks/useVideoPool';
+import { NAV_CONTENT_HEIGHT } from '../MobileNav';
 
 const PAGE_SIZE = 10;
 
@@ -40,10 +46,18 @@ export interface UnifiedFeedProps {
      *  owner/admin de ESA comunidad — se lo pasa acá en vez de que
      *  `PostActionsSheet` intente resolverlo de nuevo. */
     canModerate?: boolean;
+    /** Alto a reservar al final de la lista. Por defecto, la tab bar global más
+     *  el safe area. Las pantallas que no viven bajo el nav pasan el suyo. */
+    contentBottomInset?: number;
+    /** Qué mostrar cuando el feed cargó y vino vacío (ej. la tab Comunidades
+     *  de alguien que todavía no pertenece a ninguna). */
+    listEmptyComponent?: React.ReactElement | null;
 }
 
-export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponent, communityId, canModerate }: UnifiedFeedProps = {}) => {
+export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponent, communityId, canModerate, contentBottomInset, listEmptyComponent }: UnifiedFeedProps = {}) => {
     const { sessionToken, user } = useAuth();
+    const insets = useSafeAreaInsets();
+    const { feedMaxWidth } = useResponsive();
     const { show } = useToast();
     const navigation = useNavigation<any>();
     const isDark = useTheme().colorScheme === 'dark';
@@ -58,9 +72,15 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
     });
     const [refreshing, setRefreshing] = useState(false);
 
-    const [focusedIds, setFocusedIds] = useState<Set<string>>(new Set());
+    // El foco vive fuera de React: si estuviera en estado, cada cambio de
+    // viewport le daría identidad nueva a `renderItem` y FlashList
+    // re-renderizaría todas las filas montadas. Ver `useFeedFocus`.
+    const focusStore = useFeedFocusStore();
+    const visibleIdsRef = useRef<Set<string>>(new Set());
     // Cuándo entró cada post en foco — para calcular `dwellMs` al salir.
     const focusStartedAt = useRef<Map<string, number>>(new Map());
+    // Único video con reproductor "activo": el pool precarga alrededor de él.
+    const [activeVideoKey, setActiveVideoKey] = useState<string | null>(null);
 
     const { addPostProduct, openCart } = useCart();
     const [addingToCart, setAddingToCart] = useState(false);
@@ -129,15 +149,22 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
             setAddingToCart(true);
             try {
                 await addPostProduct(postId);
+                if (Platform.OS !== 'web') {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
                 show('Agregado al carrito', 'success');
-                openCart();
+                if (OPEN_CART_AFTER_ADD) openCart();
             } catch (e: any) {
-                // error handled and shown by CartContext
+                // El detalle del error lo muestra CartContext; acá sólo se
+                // cierra el ciclo háptico, que antes se quedaba mudo al fallar.
+                if (Platform.OS !== 'web') {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                }
             } finally {
                 setAddingToCart(false);
             }
         },
-        [sessionToken, addingToCart, addPostProduct, navigation, show],
+        [sessionToken, addingToCart, addPostProduct, openCart, show],
     );
 
     /**
@@ -167,24 +194,52 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
         [sessionToken, addView, viewedIds],
     );
 
-    const onViewableItemsChanged = useRef(
+    /**
+     * `onViewableItemsChanged` tiene que ser ESTABLE (FlashList se queja si
+     * cambia de identidad), pero antes se construía con `useRef(...).current`,
+     * que lo dejaba clavado al primer render: capturaba el `Set` de foco vacío
+     * inicial y una versión de `flushExit` que había cerrado sobre
+     * `sessionToken === null`. Resultado: el barrido de salida iteraba siempre
+     * sobre un conjunto vacío y, aun si hubiera iterado, `flushExit` salía por
+     * su early-return. `addView` no se emitía NUNCA desde el feed principal, y
+     * el ranking dual se quedó sin dwell ni completion de esta pantalla.
+     *
+     * Ahora el handler es estable de verdad y lee por ref lo que cambia.
+     */
+    const flushExitRef = useRef(flushExit);
+    useEffect(() => {
+        flushExitRef.current = flushExit;
+    }, [flushExit]);
+
+    const onViewableItemsChanged = useCallback(
         ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-            const visibleIds = new Set<string>();
+            const nextVisible = new Set<string>();
+            let nextActiveVideo: string | null = null;
+
             viewableItems.forEach((item) => {
-                if (item.isViewable && item.item?._id) {
-                    const id = String(item.item._id);
-                    visibleIds.add(id);
-                    if (!focusStartedAt.current.has(id)) focusStartedAt.current.set(id, Date.now());
+                if (!item.isViewable || !item.item?._id) return;
+                const id = String(item.item._id);
+                nextVisible.add(id);
+                if (!focusStartedAt.current.has(id)) focusStartedAt.current.set(id, Date.now());
+                // El primero en orden de feed manda: es el que el pool trata
+                // como activo y alrededor del cual precarga.
+                if (nextActiveVideo === null && item.item?.type === 'video' && item.item?.videoUrl) {
+                    nextActiveVideo = id;
                 }
             });
+
             // Todo lo que estaba en foco y ya no está: se fue, se cierra su
             // ventana de watch-time.
-            focusedIds.forEach((id) => {
-                if (!visibleIds.has(id)) flushExit(id);
+            visibleIdsRef.current.forEach((id) => {
+                if (!nextVisible.has(id)) flushExitRef.current(id);
             });
-            setFocusedIds(visibleIds);
+
+            visibleIdsRef.current = nextVisible;
+            focusStore.setVisible(nextVisible);
+            setActiveVideoKey((prev) => (prev === nextActiveVideo ? prev : nextActiveVideo));
         },
-    ).current;
+        [focusStore],
+    );
 
     const renderItem = useCallback(
         ({ item }: ListRenderItemInfo<any>) => {
@@ -209,7 +264,6 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                     onCommercePress={(lId) =>
                         handleCommercePress(lId, String(mappedPost._id))
                     }
-                    isFocused={focusedIds.has(String(item._id))}
                     onOpenActions={() =>
                         setActionsPost({ id: String(mappedPost._id), authorUserId: item.authorUserId })
                     }
@@ -222,7 +276,10 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                 />
             );
         },
-        [focusedIds, handleLike, handleComment, handleCommercePress, handleVotePoll, handleToggleRepost, navigation, user?.id],
+        // Sin `focusedIds`: el foco lo lee cada tarjeta del store. Estas deps
+        // sólo cambian por sesión o navegación, no al scrollear, así que
+        // FlashList deja de invalidar todas las filas en cada viewport.
+        [handleLike, handleComment, handleCommercePress, handleVotePoll, handleToggleRepost, navigation, user?.id],
     );
 
     /** El post sobre el que está abierto el menú de repost, como cita. */
@@ -247,16 +304,59 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
         };
     }, [repostTargetId, posts]);
 
+    // Claves y fuentes de los posts de video, para el pool compartido. Memoizadas
+    // porque son dependencias del efecto que mueve las fuentes entre slots.
+    const videoKeys = useMemo(
+        () =>
+            posts
+                .filter((p: any) => p?.type === 'video' && p?.videoUrl)
+                .map((p: any) => String(p._id)),
+        [posts],
+    );
+    const videoUrlByKey = useMemo(() => {
+        const map = new Map<string, string>();
+        posts.forEach((p: any) => {
+            if (p?.type === 'video' && p?.videoUrl) map.set(String(p._id), p.videoUrl);
+        });
+        return map;
+    }, [posts]);
+    const urlOf = useCallback((key: string) => videoUrlByKey.get(key), [videoUrlByKey]);
+
+    const videoPool = useVideoPool(videoKeys, activeVideoKey, urlOf);
+
+    /**
+     * En escritorio la lista se acota a una columna centrada. A 1200 px de
+     * ancho —lo que permite `ResponsiveLayout`— la línea de texto de un post
+     * se vuelve imposible de seguir y la media queda desproporcionada. En
+     * mobile `feedMaxWidth` es el ancho de pantalla, así que no hace nada.
+     */
+    const columnStyle = useMemo(
+        () => ({ width: '100%' as const, maxWidth: feedMaxWidth, alignSelf: 'center' as const }),
+        [feedMaxWidth],
+    );
+
+    // El último post quedaba tapado por la tab bar: `paddingBottom` era 24 fijo
+    // y no contemplaba ni el nav ni el gesture bar del dispositivo.
+    const listContentStyle = useMemo(
+        () => [
+            styles.listContent,
+            { paddingBottom: (contentBottomInset ?? NAV_CONTENT_HEIGHT + insets.bottom) + Space[4] },
+        ],
+        [contentBottomInset, insets.bottom],
+    );
+
     if (isLoadingFirstPage) {
         return (
-            <View style={[styles.container, styles.center]}>
+            <View style={[styles.container, columnStyle, styles.center]}>
                 <ActivityIndicator color={tint} />
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
+        <FeedFocusProvider store={focusStore}>
+        <VideoPoolProvider store={videoPool}>
+        <View style={[styles.container, columnStyle]}>
             <FlashList
                 data={posts}
                 renderItem={renderItem}
@@ -264,10 +364,15 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                 // Lista vertical normal (Twitter/IG): las tarjetas miden lo que
                 // mide su contenido y v2 de FlashList estima el tamaño solo.
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.listContent}
+                // Pools de reciclado separados por tipo: así una fila de texto
+                // nunca se recicla desde una de video, que es cuando FlashList
+                // tiene que montar y desmontar la superficie de video entera.
+                getItemType={(item: any) => item?.type ?? 'text'}
+                contentContainerStyle={listContentStyle}
                 onEndReached={loadMore}
                 onEndReachedThreshold={0.5}
                 ListHeaderComponent={listHeaderComponent ?? undefined}
+                ListEmptyComponent={listEmptyComponent ?? undefined}
                 onViewableItemsChanged={onViewableItemsChanged as any}
                 viewabilityConfig={{
                     // Con scroll libre (ya no paginado) hay varias tarjetas a la
@@ -316,6 +421,8 @@ export const UnifiedFeed = ({ authorUserId, mode, refreshKey, listHeaderComponen
                 onPosted={refresh}
             />
         </View>
+        </VideoPoolProvider>
+        </FeedFocusProvider>
     );
 };
 
@@ -329,8 +436,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
     },
     listContent: {
-        paddingHorizontal: 12,
-        paddingBottom: 24,
+        // El `paddingBottom` lo calcula `listContentStyle` con el safe area.
+        paddingHorizontal: Space[3],
     },
     center: {
         justifyContent: 'center',
