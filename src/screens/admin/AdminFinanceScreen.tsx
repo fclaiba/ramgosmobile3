@@ -170,7 +170,11 @@ export default function AdminFinanceScreen() {
                 (Date.now() - (o._creationTime ?? 0)) / 86_400_000,
             );
             return (
-                <View key={o._id} style={styles.row}>
+                <TouchableOpacity 
+                    key={o._id} 
+                    style={styles.row}
+                    onPress={() => navigation.navigate('AdminOrderDetails', { orderId: o._id })}
+                >
                     <View style={styles.rowIcon}>
                         <Clock size={18} color="#D97706" />
                     </View>
@@ -182,7 +186,7 @@ export default function AdminFinanceScreen() {
                             ${o.total.toFixed(2)} {o.currency} · seller {String(o.sellerId).slice(0, 12)} · {ageDays}d en escrow
                         </Text>
                     </View>
-                </View>
+                </TouchableOpacity>
             );
         })}
                 <ListPager isDark={isDark} page={page.page} totalPages={page.totalPages} total={page.total} onPage={(p) => setPageOf('escrows', p)} />
@@ -312,12 +316,20 @@ export default function AdminFinanceScreen() {
                 backButton
                 onBack={() => navigation.goBack()}
                 actions={
-                    <TouchableOpacity
-                        onPress={() => show('Reconciliando…', 'info')}
-                        style={styles.refreshBtn}
-                    >
-                        <RefreshCw size={18} color={isDark ? '#F9FAFB' : '#111827'} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('AdminInfluencers')}
+                            style={[styles.refreshBtn, { backgroundColor: isDark ? colors.gray[800] : colors.gray[200], borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }]}
+                        >
+                            <Text style={{ color: isDark ? 'white' : 'black', fontWeight: 'bold' }}>Influencers</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => show('Reconciliando…', 'info')}
+                            style={styles.refreshBtn}
+                        >
+                            <RefreshCw size={18} color={isDark ? '#F9FAFB' : '#111827'} />
+                        </TouchableOpacity>
+                    </View>
                 }
             />
 

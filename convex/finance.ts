@@ -785,3 +785,65 @@ export const updateReconciliationFlag = mutation({
         });
     },
 });
+
+export const listInfluencerBalances = query({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, args.sessionToken as any);
+        assertAdminOrDeveloper(actor);
+
+        const pendingPayments = await ctx.db
+            .query("payments")
+            .withIndex("by_status", q => q.eq("status", "released_to_seller"))
+            .filter((q) => 
+                q.and(
+                    q.neq(q.field("influencerId"), undefined),
+                    q.gt(q.field("influencerAmount"), 0),
+                    q.neq(q.field("influencerPaidOut"), true)
+                )
+            )
+            .collect();
+            
+        const clawbackPayments = await ctx.db
+            .query("payments")
+            .withIndex("by_status", q => q.eq("status", "refunded"))
+            .filter((q) => 
+                q.and(
+                    q.neq(q.field("influencerId"), undefined),
+                    q.eq(q.field("influencerPaidOut"), true),
+                    q.neq(q.field("influencerClawbackApplied"), true)
+                )
+            )
+            .collect();
+            
+        const influencerMap = new Map<string, { amountCents: number, pendingIds: string[], clawbackIds: string[] }>();
+        
+        for (const payment of pendingPayments) {
+            if (!payment.influencerId) continue;
+            const current = influencerMap.get(payment.influencerId) || { amountCents: 0, pendingIds: [], clawbackIds: [] };
+            current.amountCents += Math.round(payment.influencerAmount * 100);
+            current.pendingIds.push(payment._id);
+            influencerMap.set(payment.influencerId, current);
+        }
+        
+        for (const payment of clawbackPayments) {
+            if (!payment.influencerId) continue;
+            const current = influencerMap.get(payment.influencerId) || { amountCents: 0, pendingIds: [], clawbackIds: [] };
+            current.amountCents -= Math.round(payment.influencerAmount * 100);
+            current.clawbackIds.push(payment._id);
+            influencerMap.set(payment.influencerId, current);
+        }
+        
+        const payouts = [];
+        for (const [influencerId, data] of influencerMap.entries()) {
+            payouts.push({
+                influencerId,
+                amountCents: data.amountCents,
+                paymentIds: data.pendingIds,
+                clawbackIds: data.clawbackIds
+            });
+        }
+        
+        return payouts;
+    }
+});

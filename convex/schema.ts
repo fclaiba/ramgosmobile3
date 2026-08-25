@@ -676,6 +676,8 @@ export default defineSchema({
         ramgosCommission: v.number(),
         influencerId: v.optional(v.string()),
         influencerAmount: v.number(),
+        influencerPaidOut: v.optional(v.boolean()),
+        influencerClawbackApplied: v.optional(v.boolean()),
         commissionRate: v.number(),
         influencerRate: v.number(),
         paymentMethodBrand: v.optional(v.string()),

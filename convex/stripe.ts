@@ -183,9 +183,11 @@ export const createPaymentIntent = action({
                 }
             }
 
-            const ramgosCommissionRate = args.commissionRate ?? 0.12; // 12% default
+            const ramgosCommissionRate = args.commissionRate ?? 0.10; // 10% default
             const ramgosCommission = Math.round(totalAmountCents * ramgosCommissionRate);
-            const sellerNet = totalAmountCents - ramgosCommission - resolvedInfluencerAmount;
+            // Tarifa estándar de Stripe (2.9% + 30¢). Asumida por el vendedor.
+            const stripeFeeCents = Math.round(totalAmountCents * 0.029 + 30);
+            const sellerNet = totalAmountCents - ramgosCommission - resolvedInfluencerAmount - stripeFeeCents;
 
             let paymentIntentId: string;
             let clientSecret: string | null;
@@ -267,7 +269,7 @@ export const createPaymentIntent = action({
                 stripePaymentIntentId: paymentIntentId,
                 status: status === "succeeded" ? "succeeded_in_escrow" : "pending",
                 provider: "stripe",
-                providerFee: 0,
+                providerFee: stripeFeeCents / 100,
                 sellerNet: sellerNet / 100,
                 ramgosCommission: ramgosCommission / 100,
                 influencerAmount: resolvedInfluencerAmount / 100,
@@ -877,18 +879,9 @@ export const internalReleasePaymentAction = internalAction({
                     sellerTransferId = sellerTransfer.id;
 
                     if (influencerAmountInCents > 0 && influencerConnectAccountId) {
-                        const influencerTransfer = await stripe.transfers.create({
-                            amount: influencerAmountInCents,
-                            currency: "usd",
-                            destination: influencerConnectAccountId,
-                            transfer_group: String(args.orderId),
-                            metadata: {
-                                orderId: String(args.orderId),
-                                paymentId: String(payment._id),
-                                role: "influencer",
-                            },
-                        });
-                        influencerTransferId = influencerTransfer.id;
+                        // El influencer ya no recibe el payout en este momento.
+                        // El dinero queda en la cuenta de Stripe principal hasta
+                        // el día viernes, cuando un cron job consolida todos los pagos.
                     }
                 } catch (transferErr: any) {
                     const msg = String(transferErr?.message || transferErr?.raw?.message || "");
@@ -1457,12 +1450,29 @@ export const internalConfirmOrderEscrow = internalMutation({
         escrowState: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const status = args.status ? args.status as any : "completed";
+        const escrowState = args.escrowState ? args.escrowState as any : "released";
+        
         await ctx.db.patch(args.orderId, {
-            ...(args.status ? { status: args.status as any } : { status: "completed" }),
-            ...(args.escrowState ? { escrowState: args.escrowState as any } : { escrowState: "released" }),
+            status,
+            escrowState,
             ...(args.stripeTransferId ? { stripeTransferId: args.stripeTransferId } : {}),
             updatedAt: new Date().toISOString(),
         });
+        
+        // Sync payment status if it's a refund or cancellation
+        if (status === "cancelled" || escrowState === "refunded") {
+            const payments = await ctx.db
+                .query("payments")
+                .withIndex("by_order", q => q.eq("orderId", args.orderId))
+                .collect();
+            for (const payment of payments) {
+                await ctx.db.patch(payment._id, {
+                    status: "refunded",
+                    updatedAt: new Date().toISOString()
+                });
+            }
+        }
     }
 });
 
@@ -1544,6 +1554,7 @@ export const adminRefundEscrow = action({
     args: {
         sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
+        returnFeeAmountCents: v.optional(v.number()), // El cargo de gestión (en centavos)
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
@@ -1568,9 +1579,18 @@ export const adminRefundEscrow = action({
         } else {
             // Separate Charges and Transfers: buyer's money sits on the platform,
             // so we partial-refund from the original PaymentIntent.
+            const totalAmountCents = Math.round(order.total * 100);
+            const refundAmount = args.returnFeeAmountCents 
+                ? totalAmountCents - args.returnFeeAmountCents 
+                : totalAmountCents;
+                
+            if (refundAmount <= 0) {
+                throw new Error("El cargo de gestión no puede ser mayor o igual al total de la orden");
+            }
+            
             const refund = await stripe.refunds.create({
                 payment_intent: order.stripePaymentIntentId,
-                amount: Math.round(order.total * 100),
+                amount: refundAmount,
                 reason: "requested_by_customer"
             });
             refundId = refund.id;
@@ -1594,3 +1614,192 @@ export const internalGetOrderForAdminEscrow = internalQuery({
     }
 });
 
+export const internalGetEligibleOrdersForRelease = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        // Query orders that are in "paid_escrow" and "held"
+        const orders = await ctx.db
+            .query("orders")
+            .filter((q) => 
+                q.and(
+                    q.eq(q.field("status"), "paid_escrow"),
+                    q.eq(q.field("escrowState"), "held")
+                )
+            )
+            .collect();
+        
+        const eligibleOrderIds: string[] = [];
+        const now = Date.now();
+        const TEN_DAYS = 10 * 24 * 60 * 60 * 1000;
+        const ONE_DAY = 24 * 60 * 60 * 1000;
+
+        for (const order of orders) {
+            const age = now - new Date(order.createdAt).getTime();
+            
+            // Get order items to check type
+            const items = await ctx.db
+                .query("orderItems")
+                .withIndex("by_order", (q) => q.eq("orderId", order._id))
+                .collect();
+                
+            if (items.length === 0) continue;
+            
+            // Fetch listing of first item
+            const listing = await ctx.db.get(items[0].listingId);
+            if (!listing) continue;
+            
+            if (listing.type === "product" && age >= TEN_DAYS) {
+                eligibleOrderIds.push(order._id);
+            } else if (listing.type === "bono" && age >= ONE_DAY) {
+                eligibleOrderIds.push(order._id);
+            }
+        }
+        
+        return eligibleOrderIds;
+    }
+});
+
+export const internalCronAutoReleaseEscrows = internalAction({
+    args: {},
+    handler: async (ctx) => {
+        const eligibleOrders = await ctx.runQuery(internal.stripe.internalGetEligibleOrdersForRelease);
+        
+        for (const orderId of eligibleOrders) {
+            try {
+                await ctx.runAction(internal.stripe.internalReleasePaymentAction, { orderId });
+            } catch (error) {
+                console.error(`Failed to auto-release order ${orderId}`, error);
+            }
+        }
+    }
+});
+export const internalGetPendingInfluencerPayouts = internalQuery({
+    args: {},
+    handler: async (ctx) => {
+        // 1. Pagos pendientes (ventas válidas que no han sido pagadas al influencer)
+        const pendingPayments = await ctx.db
+            .query("payments")
+            .withIndex("by_status", q => q.eq("status", "released_to_seller"))
+            .filter((q) => 
+                q.and(
+                    q.neq(q.field("influencerId"), undefined),
+                    q.gt(q.field("influencerAmount"), 0),
+                    q.neq(q.field("influencerPaidOut"), true)
+                )
+            )
+            .collect();
+            
+        // 2. Saldos negativos (ventas que fueron reembolsadas, pero el influencer ya había cobrado)
+        const clawbackPayments = await ctx.db
+            .query("payments")
+            .withIndex("by_status", q => q.eq("status", "refunded"))
+            .filter((q) => 
+                q.and(
+                    q.neq(q.field("influencerId"), undefined),
+                    q.eq(q.field("influencerPaidOut"), true),
+                    q.neq(q.field("influencerClawbackApplied"), true)
+                )
+            )
+            .collect();
+            
+        // Aggregate by influencer
+        const influencerMap = new Map<string, { amountCents: number, pendingIds: string[], clawbackIds: string[] }>();
+        
+        for (const payment of pendingPayments) {
+            if (!payment.influencerId) continue;
+            const current = influencerMap.get(payment.influencerId) || { amountCents: 0, pendingIds: [], clawbackIds: [] };
+            current.amountCents += Math.round(payment.influencerAmount * 100);
+            current.pendingIds.push(payment._id);
+            influencerMap.set(payment.influencerId, current);
+        }
+        
+        for (const payment of clawbackPayments) {
+            if (!payment.influencerId) continue;
+            const current = influencerMap.get(payment.influencerId) || { amountCents: 0, pendingIds: [], clawbackIds: [] };
+            current.amountCents -= Math.round(payment.influencerAmount * 100); // Restar saldo negativo
+            current.clawbackIds.push(payment._id);
+            influencerMap.set(payment.influencerId, current);
+        }
+        
+        const payouts = [];
+        for (const [influencerId, data] of influencerMap.entries()) {
+            // Solo transferir si el neto es mayor a 0.
+            // Si es menor a 0, la deuda se arrastra a la siguiente semana (no procesamos el clawback aún).
+            if (data.amountCents > 0) {
+                payouts.push({
+                    influencerId,
+                    amountCents: data.amountCents,
+                    paymentIds: data.pendingIds,
+                    clawbackIds: data.clawbackIds
+                });
+            }
+        }
+        
+        return payouts;
+    }
+});
+
+export const internalMarkInfluencerPaymentsPaid = internalMutation({
+    args: {
+        paymentIds: v.array(v.id("payments")),
+        clawbackIds: v.array(v.id("payments")),
+    },
+    handler: async (ctx, args) => {
+        for (const pid of args.paymentIds) {
+            await ctx.db.patch(pid, {
+                influencerPaidOut: true,
+            });
+        }
+        for (const cid of args.clawbackIds) {
+            await ctx.db.patch(cid, {
+                influencerClawbackApplied: true,
+            });
+        }
+    }
+});
+
+export const internalCronPayInfluencers = internalAction({
+    args: {},
+    handler: async (ctx) => {
+        const payouts = await ctx.runQuery(internal.stripe.internalGetPendingInfluencerPayouts);
+        
+        for (const payout of payouts) {
+            try {
+                // Get connect account
+                const accountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { 
+                    userId: payout.influencerId as any 
+                });
+                
+                if (!accountId) {
+                    console.error(`[Influencer Payout] No Connect Account for influencer ${payout.influencerId}`);
+                    continue;
+                }
+                
+                // Transfer funds
+                const isStripeMock = process.env.STRIPE_MOCK_MODE === "true";
+                if (!isStripeMock) {
+                    await stripe.transfers.create({
+                        amount: payout.amountCents,
+                        currency: "usd",
+                        destination: accountId,
+                        metadata: {
+                            role: "influencer",
+                            type: "weekly_payout",
+                            influencerId: payout.influencerId,
+                        },
+                    });
+                }
+                
+                // Mark as paid and clawbacks as applied
+                await ctx.runMutation(internal.stripe.internalMarkInfluencerPaymentsPaid, {
+                    paymentIds: payout.paymentIds as any[],
+                    clawbackIds: payout.clawbackIds as any[],
+                });
+                
+                console.log(`[Influencer Payout] Paid ${payout.amountCents/100} to ${payout.influencerId}`);
+            } catch (error) {
+                console.error(`[Influencer Payout Error] Failed for ${payout.influencerId}:`, error);
+            }
+        }
+    }
+});

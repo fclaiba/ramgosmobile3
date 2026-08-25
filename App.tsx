@@ -101,6 +101,8 @@ import BusinessCreateScreen from './src/screens/BusinessCreateScreen';
 import InfluencerDashboardScreen from './src/screens/InfluencerDashboardScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 import AdminFinanceScreen from './src/screens/admin/AdminFinanceScreen';
+import AdminInfluencersScreen from './src/screens/admin/AdminInfluencersScreen';
+import AdminOrderDetailsScreen from './src/screens/admin/AdminOrderDetailsScreen';
 import ItemDetailScreen from './src/screens/ItemDetailScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import WithdrawalScreen from './src/screens/WithdrawalScreen';
@@ -293,6 +295,9 @@ const AppNavigator = () => {
                     <Stack.Screen name="InfluencerDashboard" component={InfluencerDashboardScreen} />
                     <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
                     <Stack.Screen name="AdminFinance" component={AdminFinanceScreen} />
+                    <Stack.Screen name="AdminInfluencers" component={AdminInfluencersScreen} />
+                    <Stack.Screen name="AdminOrderDetails" component={AdminOrderDetailsScreen} />
+                    <Stack.Screen name="AdminModeration" component={AdminModerationScreen} />
                     <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
                     <Stack.Screen name="Payment" component={PaymentScreen} />
                     <Stack.Screen name="Dispute" component={DisputeScreen} />

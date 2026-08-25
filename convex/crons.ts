@@ -26,6 +26,21 @@ crons.daily(
     internal.events.internalAutoReleaseServices,
 );
 
+// Motor de Retención: 10 días para marketplace y 24h para bonos de negocio.
+crons.daily(
+    "marketplace-auto-release",
+    { hourUTC: 5, minuteUTC: 30 },
+    internal.stripe.internalCronAutoReleaseEscrows,
+);
+
+// Liquidación semanal a influencers (Todos los viernes)
+crons.weekly(
+    "influencer-weekly-payouts",
+    { dayOfWeek: "friday", hourUTC: 14, minuteUTC: 0 },
+    internal.stripe.internalCronPayInfluencers,
+);
+
+
 // Daily reconciliation against Stripe Balance Transactions. Surfaces drift
 // between our payments/payouts ledger and Stripe's source-of-truth as
 // `reconciliationFlags` rows that admins triage in AdminFinanceScreen.
