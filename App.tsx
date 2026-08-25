@@ -327,7 +327,6 @@ const AppNavigator = () => {
                     <Stack.Screen name="CreateCommunity" component={CreateCommunityScreen} />
                     <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
                     <Stack.Screen name="CommunitySettings" component={CommunitySettingsScreen} />
-                    <Stack.Screen name="AdminModeration" component={AdminModerationScreen} />
                     <Stack.Screen name="Games" component={GamesScreen} />
                     <Stack.Screen name="MapExplorer" component={MapExplorerScreen} />
                     <Stack.Screen name="CommercialProfile" component={CommercialProfileScreen} />
