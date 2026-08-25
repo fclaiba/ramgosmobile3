@@ -66,7 +66,10 @@ export default function SettingsScreen({ navigation }: any) {
         </TouchableOpacity>
     );
 
-    const { logout, deleteMyAccount } = useAuth();
+    const { logout, deleteMyAccount, user } = useAuth();
+    // El switch de modo test/live no es para cualquier usuario logueado:
+    // reservado a admin y a cuentas `isTest`.
+    const canChangePaymentMode = user?.role === 'admin' || (user as any)?.isTest === true;
     const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
@@ -141,10 +144,14 @@ export default function SettingsScreen({ navigation }: any) {
                                     {isTest ? t('settings:rows.testMode') : t('settings:rows.liveMode')}
                                 </Text>
                             </View>
-                            {/* Mismo PaymentModeContext que /Payment — Simulado | Producción */}
+                            {/* Mismo PaymentModeContext que /Payment — Simulado | Producción.
+                                Reservado a admin / cuentas isTest: un usuario final no puede
+                                mandar su propia cuenta a modo producción o simulado. */}
                             <Switch
                                 value={isTest}
+                                disabled={!canChangePaymentMode}
                                 onValueChange={() => {
+                                    if (!canChangePaymentMode) return;
                                     toggle();
                                     show(t('settings:rows.paymentModeInfo'), 'info');
                                 }}

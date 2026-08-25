@@ -25,7 +25,8 @@ import { searchDirectoryImpl } from "./userDirectory";
 import { toUserCard, socialProfileOf, userCardValidator } from "./userCard";
 import { REFERRAL_REWARDS } from "./economy/_rewardRules";
 import { resolveKycStatus } from "./_kyc";
-import { can, PRIVILEGED_ROLES, SELF_ASSIGNABLE_ROLES } from "./_roles";
+import { can, denialMessage, PRIVILEGED_ROLES, SELF_ASSIGNABLE_ROLES } from "./_roles";
+import { buildAuditRecord } from "./_audit";
 import { normalizePhone, PHONE_ERRORS, validatePhone } from "./_phone";
 
 export const internalCheckRateLimit = internalMutation({
@@ -849,7 +850,7 @@ export const listUsers = query({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin' && actor.role !== 'developer') {
+        if (!can(actor.role, 'view_admin_panel')) {
             throw new Error("No autorizado.");
         }
 
@@ -1023,10 +1024,26 @@ export const updateUser = mutation({
         const { username, name, nickname, avatar, ...rest } = args.updates;
 
         if (Object.keys(rest).length > 0) {
+            // Campos sensibles (role/kycStatus/tier/isTest/subscriptionStatus)
+            // sólo llegan hasta acá con `canChangeRole` — son exactamente los
+            // que antes se movían sin dejar rastro. Capturar el "antes" previo
+            // al patch para que el audit log sirva para algo.
+            const before = await ctx.db.get(args.id);
             await ctx.db.patch(args.id, {
                 ...rest,
                 ...(args.updates.role ? { role: args.updates.role as any } : {}),
             });
+            if (canChangeRole && !isSelf) {
+                await ctx.db.insert("audit_logs", buildAuditRecord({
+                    actorUserId: actor.idString,
+                    targetUserId: String(args.id),
+                    action: "USER_ROLE_CHANGED",
+                    before: before
+                        ? { role: before.role, kycStatus: before.kycStatus, tier: before.tier, isTest: (before as any).isTest }
+                        : undefined,
+                    after: rest,
+                }));
+            }
         }
 
         const identityPatch: any = {};
@@ -1063,7 +1080,17 @@ export const deleteUser = mutation({
             await ctx.db.delete(session._id);
         }
 
+        const before = await ctx.db.get(args.id);
         await ctx.db.delete(args.id);
+
+        if (isAdmin && !isSelf) {
+            await ctx.db.insert("audit_logs", buildAuditRecord({
+                actorUserId: actor.idString,
+                targetUserId: String(args.id),
+                action: "USER_DELETED",
+                before: before ? { email: before.email, role: before.role } : undefined,
+            }));
+        }
     },
 });
 
@@ -1074,7 +1101,7 @@ export const unbanUser = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin') throw new Error("No autorizado.");
+        if (!can(actor.role, 'ban_user')) throw new Error(denialMessage('ban_user'));
         await writeUserIdentity(ctx, args.userId, { isBanned: false }, { actorIsAdmin: true });
         await ctx.db.insert("audit_logs", {
             actorUserId: actor.idString,
@@ -1094,7 +1121,7 @@ export const banUser = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin') throw new Error("No autorizado.");
+        if (!can(actor.role, 'ban_user')) throw new Error(denialMessage('ban_user'));
         
         // `writeUserIdentity` es el único escritor de `isBanned`: setea el
         // flag, esconde del directorio y revoca las sesiones, todo junto.
@@ -1119,7 +1146,7 @@ export const approveKYC = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin' && actor.role !== 'developer') {
+        if (!can(actor.role, 'review_kyc')) {
             throw new Error("No tienes permisos de administrador.");
         }
         const user = await ctx.db.get(args.targetUserId);
@@ -1174,7 +1201,7 @@ export const rejectKYC = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== 'admin' && actor.role !== 'developer') {
+        if (!can(actor.role, 'review_kyc')) {
             throw new Error("No tienes permisos de administrador.");
         }
         const user = await ctx.db.get(args.targetUserId);
@@ -1768,7 +1795,7 @@ export const migrateReferralDualCodes = mutation({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        if (actor.role !== "admin" && actor.role !== "developer") {
+        if (!can(actor.role, 'view_admin_panel')) {
             throw new Error("Solo admin/developer puede migrar códigos de referido.");
         }
 

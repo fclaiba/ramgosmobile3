@@ -8,7 +8,7 @@ import { MobileHeader } from '../../components/MobileHeader';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors } from '../../theme/tokens';
-import { Button } from '../../components/Button';
+import { Button } from '../../components/ui/button';
 import { DollarSign, AlertTriangle } from 'lucide-react-native';
 
 export default function AdminOrderDetailsScreen() {
@@ -18,9 +18,14 @@ export default function AdminOrderDetailsScreen() {
     
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    // El tema de este repo es una FUNCION `colors(isDark)`, no una paleta
+    // estatica: estas pantallas se escribieron contra una API que no existe acá.
+    const c = colors(isDark);
     const { sessionToken } = useAuth();
     
-    const order = useQuery(api.orders.getOrder, { orderId });
+    // `getOrder` no existe: la query es `getOrderById`, y sin `sessionToken`
+    // devuelve null en vez de tirar (ver el comentario en convex/orders.ts).
+    const order = useQuery(api.orders.getOrderById, { orderId: orderId as any, sessionToken: sessionToken || undefined });
     const refundAction = useAction(api.stripe.adminRefundEscrow);
     
     const [returnFeeStr, setReturnFeeStr] = useState('');
@@ -76,28 +81,28 @@ export default function AdminOrderDetailsScreen() {
     
     if (order === undefined) {
         return (
-            <View style={[styles.container, { backgroundColor: isDark ? colors.gray[900] : colors.gray[50], justifyContent: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.primary.base} />
+            <View style={[styles.container, { backgroundColor: isDark ? c.bgElevated : c.bg, justifyContent: 'center' }]}>
+                <ActivityIndicator size="large" color={c.primary} />
             </View>
         );
     }
     
     if (order === null) {
         return (
-            <View style={[styles.container, { backgroundColor: isDark ? colors.gray[900] : colors.gray[50] }]}>
+            <View style={[styles.container, { backgroundColor: isDark ? c.bgElevated : c.bg }]}>
                 <MobileHeader title="Detalle de Orden" showBackButton />
                 <Text style={{ textAlign: 'center', marginTop: 40, color: isDark ? 'white' : 'black' }}>Orden no encontrada.</Text>
             </View>
         );
     }
 
-    const textColor = isDark ? 'white' : colors.gray[900];
-    const subTextColor = isDark ? colors.gray[400] : colors.gray[600];
-    const cardBg = isDark ? colors.gray[800] : 'white';
-    const borderColor = isDark ? colors.gray[700] : colors.gray[200];
+    const textColor = isDark ? 'white' : c.bgElevated;
+    const subTextColor = isDark ? c.textSubtle : c.textSubtle;
+    const cardBg = isDark ? c.surface2 : 'white';
+    const borderColor = isDark ? c.border : c.divider;
     
     return (
-        <View style={[styles.container, { backgroundColor: isDark ? colors.gray[900] : colors.gray[50] }]}>
+        <View style={[styles.container, { backgroundColor: isDark ? c.bgElevated : c.bg }]}>
             <MobileHeader title="Gestión de Devolución" showBackButton />
             
             <ScrollView contentContainerStyle={styles.scroll}>
@@ -108,23 +113,23 @@ export default function AdminOrderDetailsScreen() {
                     <View style={styles.row}><Text style={{color: subTextColor}}>Escrow:</Text><Text style={{color: textColor}}>{order.escrowState}</Text></View>
                     <View style={styles.divider} />
                     <View style={styles.row}><Text style={{color: subTextColor}}>Venta Bruta:</Text><Text style={{color: textColor, fontWeight: 'bold'}}>{formatMoney(order.total)}</Text></View>
-                    <View style={styles.row}><Text style={{color: subTextColor}}>Vendedor Recibe:</Text><Text style={{color: colors.semantic.success}}>{formatMoney(order.netAmountCents ? order.netAmountCents / 100 : undefined)}</Text></View>
+                    <View style={styles.row}><Text style={{color: subTextColor}}>Vendedor Recibe:</Text><Text style={{color: c.success}}>{formatMoney(order.netAmountCents ? order.netAmountCents / 100 : undefined)}</Text></View>
                 </View>
                 
                 {order.status === "paid_escrow" && order.escrowState === "held" && (
-                    <View style={[styles.card, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.1)' : '#FEF2F2', borderColor: colors.semantic.error }]}>
+                    <View style={[styles.card, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.1)' : '#FEF2F2', borderColor: c.danger }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                            <AlertTriangle color={colors.semantic.error} size={20} />
-                            <Text style={[styles.sectionTitle, { color: colors.semantic.error, marginBottom: 0, marginLeft: 8 }]}>Reembolsar Orden</Text>
+                            <AlertTriangle color={c.danger} size={20} />
+                            <Text style={[styles.sectionTitle, { color: c.danger, marginBottom: 0, marginLeft: 8 }]}>Reembolsar Orden</Text>
                         </View>
                         
-                        <Text style={{ color: isDark ? colors.gray[300] : colors.gray[700], marginBottom: 12 }}>
+                        <Text style={{ color: isDark ? c.border : c.border, marginBottom: 12 }}>
                             Si ingresas un monto en "Cargo de Gestión", se hará un reembolso parcial al cliente y la plataforma retendrá la diferencia.
                         </Text>
                         
                         <Text style={{ color: textColor, fontWeight: '500', marginBottom: 4 }}>Cargo de Gestión de Devolución ($)</Text>
                         <TextInput
-                            style={[styles.input, { color: textColor, borderColor, backgroundColor: isDark ? colors.gray[900] : colors.gray[50] }]}
+                            style={[styles.input, { color: textColor, borderColor, backgroundColor: isDark ? c.bgElevated : c.bg }]}
                             placeholder="Ej: 5.00"
                             placeholderTextColor={subTextColor}
                             keyboardType="numeric"
@@ -133,13 +138,14 @@ export default function AdminOrderDetailsScreen() {
                             editable={!isRefunding}
                         />
                         
-                        <Button 
-                            title={isRefunding ? "Procesando..." : "Ejecutar Devolución"}
+                        <Button
                             onPress={handleRefund}
-                            variant="primary"
+                            variant="default"
                             disabled={isRefunding}
-                            style={{ backgroundColor: colors.semantic.error, marginTop: 8 }}
-                        />
+                            style={{ backgroundColor: c.danger, marginTop: 8 }}
+                        >
+                            {isRefunding ? "Procesando..." : "Ejecutar Devolución"}
+                        </Button>
                     </View>
                 )}
             </ScrollView>

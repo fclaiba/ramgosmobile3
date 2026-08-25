@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as _audit from "../_audit.js";
+import type * as _fees from "../_fees.js";
 import type * as _inventory from "../_inventory.js";
 import type * as _kyc from "../_kyc.js";
 import type * as _phone from "../_phone.js";
@@ -110,6 +112,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  _audit: typeof _audit;
+  _fees: typeof _fees;
   _inventory: typeof _inventory;
   _kyc: typeof _kyc;
   _phone: typeof _phone;

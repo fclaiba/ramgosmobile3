@@ -58,6 +58,9 @@ export default function AdminFinanceScreen() {
     const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    // El tema de este repo es una FUNCION `colors(isDark)`, no una paleta
+    // estatica: estas pantallas se escribieron contra una API que no existe acá.
+    const c = colors(isDark);
     const { sessionToken } = useAuth();
     const { show } = useToast();
 
@@ -319,7 +322,7 @@ export default function AdminFinanceScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         <TouchableOpacity
                             onPress={() => navigation.navigate('AdminInfluencers')}
-                            style={[styles.refreshBtn, { backgroundColor: isDark ? colors.gray[800] : colors.gray[200], borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }]}
+                            style={[styles.refreshBtn, { backgroundColor: isDark ? c.surface2 : c.divider, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }]}
                         >
                             <Text style={{ color: isDark ? 'white' : 'black', fontWeight: 'bold' }}>Influencers</Text>
                         </TouchableOpacity>

@@ -10,6 +10,7 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useMarketplace, ShippingMethod, ShippingQuote } from '../contexts/MarketplaceContext';
 import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { Switch } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
@@ -25,6 +26,10 @@ function CartScreen({ navigation }: any) {
     const { show } = useToast();
     const { mode, toggle } = usePaymentMode();
     const isLive = mode === 'live';
+    const { user } = useAuth();
+    // Reservado a admin / cuentas isTest — el checkout no es lugar para que
+    // un comprador cualquiera cambie el modo de cobro.
+    const canChangePaymentMode = user?.role === 'admin' || (user as any)?.isTest === true;
     const { t } = useTranslation();
     const { gateCheckout } = useActionGate();
 
@@ -300,18 +305,23 @@ function CartScreen({ navigation }: any) {
                     </ScrollView>
 
                     <View style={styles.checkoutBar}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
-                            <View>
-                                <Text style={{ color: isDark ? '#fff' : '#111', fontWeight: 'bold', fontSize: 14 }}>{isLive ? 'Transacción Real' : 'Modo Simulador'}</Text>
-                                <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 12 }}>{isLive ? 'Cargos verdaderos a tarjeta' : 'Pagos de prueba'}</Text>
+                        {/* Sólo admin / cuentas isTest ven este switch: un comprador
+                            final no debería poder cambiar el modo de cobro desde el
+                            checkout. */}
+                        {canChangePaymentMode && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}>
+                                <View>
+                                    <Text style={{ color: isDark ? '#fff' : '#111', fontWeight: 'bold', fontSize: 14 }}>{isLive ? 'Transacción Real' : 'Modo Simulador'}</Text>
+                                    <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 12 }}>{isLive ? 'Cargos verdaderos a tarjeta' : 'Pagos de prueba'}</Text>
+                                </View>
+                                <Switch
+                                    value={isLive}
+                                    onValueChange={toggle}
+                                    trackColor={{ false: '#9CA3AF', true: '#3b82f6' }}
+                                    thumbColor={'#ffffff'}
+                                />
                             </View>
-                            <Switch 
-                                value={isLive} 
-                                onValueChange={toggle}
-                                trackColor={{ false: '#9CA3AF', true: '#3b82f6' }}
-                                thumbColor={'#ffffff'}
-                            />
-                        </View>
+                        )}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                             <View>
                                 <Text style={styles.checkoutLabel}>Total</Text>

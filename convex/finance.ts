@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { internalMutation, mutation, query, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { canWithdrawFunds, resolveKycStatus } from "./_kyc";
+import { can, denialMessage } from "./_roles";
+import { buildAuditRecord } from "./_audit";
 import {
     assertAdminOrDeveloper,
     assertSelfOrAdmin,
@@ -445,8 +447,8 @@ export const createWithdrawal = mutation({
         const actor = await requireActor(ctx, (args as any).sessionToken);
         // Sprint 6: lock to admin / developer. Sellers + influencers must
         // use the Stripe Connect payout flow exposed in convex/connect.ts.
-        const role = (actor as any).role;
-        if (role !== "admin" && role !== "developer") {
+        // Mueve fondos: reservado al titular. Antes lo aceptaba `developer`.
+        if (!can((actor as any).role, 'withdraw_funds')) {
             throw new Error(
                 "Esta operación está deprecada. Usa Stripe Connect (requestInstantPayout) para mover fondos.",
             );
@@ -512,6 +514,14 @@ export const createWithdrawal = mutation({
             category: 'payment',
             data: { type: 'withdrawal_requested', withdrawalId: String(withdrawalId), amount: args.amount },
         });
+
+        await ctx.db.insert("audit_logs", buildAuditRecord({
+            actorUserId: actor.idString,
+            targetUserId: String(args.userId),
+            action: "WITHDRAWAL_CREATED",
+            amountCents: Math.round(args.amount * 100),
+            metadata: { withdrawalId: String(withdrawalId), destinationType: args.destinationType },
+        }));
 
         return withdrawalId;
     },
@@ -773,7 +783,13 @@ export const updateReconciliationFlag = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        assertAdminOrDeveloper(actor);
+        // Cerrar una discrepancia contra Stripe es una decisión contable: dar
+        // por buena una diferencia de dinero. Reservado al titular.
+        if (!can(actor.role, 'resolve_reconciliation')) {
+            throw new Error(denialMessage('resolve_reconciliation'));
+        }
+
+        const before = await ctx.db.get(args.flagId);
 
         await ctx.db.patch(args.flagId, {
             status: args.status,
@@ -783,6 +799,14 @@ export const updateReconciliationFlag = mutation({
                     ? new Date().toISOString()
                     : undefined,
         });
+
+        await ctx.db.insert("audit_logs", buildAuditRecord({
+            actorUserId: actor.idString,
+            action: "RECONCILIATION_RESOLVED",
+            before: before ? { status: before.status } : undefined,
+            after: { status: args.status },
+            metadata: { flagId: String(args.flagId), notes: args.notes },
+        }));
     },
 });
 

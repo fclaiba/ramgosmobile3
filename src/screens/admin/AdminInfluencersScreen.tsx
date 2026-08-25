@@ -13,6 +13,9 @@ export default function AdminInfluencersScreen() {
     const insets = useSafeAreaInsets();
     const { colorScheme } = useTheme();
     const isDark = colorScheme === 'dark';
+    // El tema de este repo es una FUNCION `colors(isDark)`, no una paleta
+    // estatica: estas pantallas se escribieron contra una API que no existe acá.
+    const c = colors(isDark);
     const { sessionToken } = useAuth();
     
     const queryArgs = sessionToken ? { sessionToken } : 'skip';
@@ -42,10 +45,10 @@ export default function AdminInfluencersScreen() {
                 <Text style={styles.sectionTitle}>Saldos por Influencer</Text>
                 
                 {influencerBalances === undefined ? (
-                    <ActivityIndicator size="large" color={colors.primary.base} style={{ marginTop: 40 }} />
+                    <ActivityIndicator size="large" color={c.primary} style={{ marginTop: 40 }} />
                 ) : influencerBalances.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <Users size={32} color={isDark ? colors.gray[500] : colors.gray[400]} />
+                        <Users size={32} color={isDark ? c.textMuted : c.textSubtle} />
                         <Text style={styles.emptyText}>No hay comisiones pendientes</Text>
                     </View>
                 ) : (
@@ -55,7 +58,7 @@ export default function AdminInfluencersScreen() {
                             <View key={inf.influencerId} style={styles.influencerCard}>
                                 <View style={styles.influencerHeader}>
                                     <View style={styles.iconContainer}>
-                                        <Users size={20} color={colors.primary.base} />
+                                        <Users size={20} color={c.primary} />
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.influencerId}>User: {inf.influencerId.slice(0, 10)}...</Text>
@@ -73,7 +76,7 @@ export default function AdminInfluencersScreen() {
                                 
                                 {isNegative && (
                                     <Text style={styles.clawbackWarning}>
-                                        <TrendingDown size={14} color={colors.semantic.error} />
+                                        <TrendingDown size={14} color={c.danger} />
                                         {' '}Saldo negativo por devoluciones. Se descontará de futuras ventas.
                                     </Text>
                                 )}
@@ -87,17 +90,18 @@ export default function AdminInfluencersScreen() {
 }
 
 function getStyles(isDark: boolean, insets: any) {
+    const c = colors(isDark);
     return StyleSheet.create({
         container: {
             flex: 1,
-            backgroundColor: isDark ? colors.gray[900] : colors.gray[50],
+            backgroundColor: isDark ? c.bgElevated : c.bg,
         },
         scroll: {
             padding: 16,
             paddingBottom: insets.bottom + 24,
         },
         summaryCard: {
-            backgroundColor: colors.primary.base,
+            backgroundColor: c.primary,
             borderRadius: 16,
             padding: 24,
             alignItems: 'center',
@@ -124,16 +128,16 @@ function getStyles(isDark: boolean, insets: any) {
         sectionTitle: {
             fontSize: 18,
             fontWeight: 'bold',
-            color: isDark ? 'white' : colors.gray[900],
+            color: isDark ? 'white' : c.bgElevated,
             marginBottom: 16,
         },
         influencerCard: {
-            backgroundColor: isDark ? colors.gray[800] : 'white',
+            backgroundColor: isDark ? c.surface2 : 'white',
             borderRadius: 12,
             padding: 16,
             marginBottom: 12,
             borderWidth: 1,
-            borderColor: isDark ? colors.gray[700] : colors.gray[200],
+            borderColor: isDark ? c.border : c.divider,
         },
         influencerHeader: {
             flexDirection: 'row',
@@ -144,7 +148,7 @@ function getStyles(isDark: boolean, insets: any) {
             width: 40,
             height: 40,
             borderRadius: 20,
-            backgroundColor: isDark ? colors.gray[700] : colors.primary.light,
+            backgroundColor: isDark ? c.border : c.primarySoft,
             alignItems: 'center',
             justifyContent: 'center',
             marginRight: 12,
@@ -152,11 +156,11 @@ function getStyles(isDark: boolean, insets: any) {
         influencerId: {
             fontSize: 16,
             fontWeight: '600',
-            color: isDark ? 'white' : colors.gray[900],
+            color: isDark ? 'white' : c.bgElevated,
         },
         detailText: {
             fontSize: 14,
-            color: isDark ? colors.gray[400] : colors.gray[500],
+            color: isDark ? c.textSubtle : c.textMuted,
             marginTop: 2,
         },
         balanceBadge: {
@@ -175,7 +179,7 @@ function getStyles(isDark: boolean, insets: any) {
             fontSize: 16,
         },
         negativeText: {
-            color: colors.semantic.error,
+            color: c.danger,
         },
         emptyState: {
             alignItems: 'center',
@@ -184,12 +188,12 @@ function getStyles(isDark: boolean, insets: any) {
         },
         emptyText: {
             marginTop: 12,
-            color: isDark ? colors.gray[500] : colors.gray[400],
+            color: isDark ? c.textMuted : c.textSubtle,
             fontSize: 16,
         },
         clawbackWarning: {
             marginTop: 12,
-            color: colors.semantic.error,
+            color: c.danger,
             fontSize: 13,
             flexDirection: 'row',
             alignItems: 'center',

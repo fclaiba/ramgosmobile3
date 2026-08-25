@@ -20,6 +20,9 @@ import { internal } from "./_generated/api";
 import Stripe from "stripe";
 import { assertSelfOrAdmin, requireActor } from "./authHelpers";
 import { decrementStock, hasEnoughStock, outOfStockMessage, shortfallFor } from "./_inventory";
+import { can, denialMessage } from "./_roles";
+import { buildAuditRecord } from "./_audit";
+import { PLATFORM_COMMISSION_RATE, BONO_COMMISSION_RATE, commissionCentsFor, stripeFeeCentsFor } from "./_fees";
 
 const stripeKeyTest = process.env.STRIPE_SECRET_KEY_TEST ?? process.env.STRIPE_SECRET_KEY;
 const stripeKeyLive = process.env.STRIPE_SECRET_KEY;
@@ -127,8 +130,9 @@ export const createPaymentIntent = action({
          * precio (el monto salía del snapshot del cliente y las órdenes del
          * carrito vivo del webhook).
          */
+        let isBonoOrder = false;
         if (args.lineItems && args.lineItems.length > 0) {
-            const { stockIssues, priceIssues } = await ctx.runQuery(
+            const { stockIssues, priceIssues, hasBono } = await ctx.runQuery(
                 internal.stripe.internalValidateCartForCheckout,
                 {
                     lineItems: args.lineItems.map((i) => ({
@@ -138,6 +142,7 @@ export const createPaymentIntent = action({
                     })),
                 },
             );
+            isBonoOrder = !!hasBono;
 
             if (stockIssues.length > 0) {
                 throw new Error(outOfStockMessage(stockIssues));
@@ -183,10 +188,11 @@ export const createPaymentIntent = action({
                 }
             }
 
-            const ramgosCommissionRate = args.commissionRate ?? 0.10; // 10% default
-            const ramgosCommission = Math.round(totalAmountCents * ramgosCommissionRate);
+            const defaultCommission = isBonoOrder ? BONO_COMMISSION_RATE : PLATFORM_COMMISSION_RATE;
+            const ramgosCommissionRate = args.commissionRate ?? defaultCommission; // 30% bonos, 10% productos
+            const ramgosCommission = commissionCentsFor(totalAmountCents, ramgosCommissionRate);
             // Tarifa estándar de Stripe (2.9% + 30¢). Asumida por el vendedor.
-            const stripeFeeCents = Math.round(totalAmountCents * 0.029 + 30);
+            const stripeFeeCents = stripeFeeCentsFor(totalAmountCents);
             const sellerNet = totalAmountCents - ramgosCommission - resolvedInfluencerAmount - stripeFeeCents;
 
             let paymentIntentId: string;
@@ -843,10 +849,27 @@ export const internalReleasePaymentAction = internalAction({
         }
 
         const { payment, sellerConnectAccountId, influencerConnectAccountId } = data;
-        const sellerAmountInCents = Math.round(payment.sellerNet * 100);
+
+        /**
+         * Monto a transferir: el de LA ORDEN, no el del pago compartido.
+         *
+         * `payment` es un único registro por PaymentIntent — en un carrito de
+         * un solo vendedor coincide con la orden, pero en uno multi-vendedor
+         * `payment.sellerNet` es el neto del CARRITO ENTERO. Usarlo acá
+         * transfería el total del carrito a CADA vendedor por separado (2
+         * vendedores → se pagaba el doble de lo cobrado). `order.netAmountCents`
+         * ya viene prorrateado por vendedor desde `internalProcessMultiVendorCart`;
+         * el fallback a `payment.sellerNet` es sólo para órdenes previas a ese
+         * campo.
+         */
+        const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, {
+            orderId: args.orderId,
+        });
+        const sellerAmountInCents =
+            order?.netAmountCents != null ? order.netAmountCents : Math.round(payment.sellerNet * 100);
         const influencerAmountInCents = payment.influencerAmount ? Math.round(payment.influencerAmount * 100) : 0;
 
-        console.log(`[Stripe Escrow] Iniciando liberación para orden: ${args.orderId}, sellerNet: $${payment.sellerNet}`);
+        console.log(`[Stripe Escrow] Iniciando liberación para orden: ${args.orderId}, sellerNet: $${sellerAmountInCents / 100}`);
 
         try {
             let sellerTransferId: string;
@@ -1001,16 +1024,52 @@ export const internalProcessMultiVendorCart = internalAction({
          */
         let shippingCostPending = Number(shipping?.cost) || 0;
 
+        /**
+         * Split real, no recalculado.
+         *
+         * Antes cada sub-orden recalculaba su propia comisión al 12% —
+         * desalineada con el 10% que `createPaymentIntent` YA cobró— y sin
+         * restar ni la tarifa de Stripe ni el corte del influencer. Ese
+         * número quedaba guardado en `orders.netAmountCents`/`commissionCents`
+         * sin que nadie lo usara para transferir... hasta que se lo usó
+         * (`internalReleasePaymentAction` ahora prefiere el neto de la orden
+         * sobre el del pago compartido, porque ESE es el bug real: un
+         * carrito con 2+ vendedores le transferiría a cada uno el neto del
+         * carrito ENTERO). Con el cálculo viejo, esto hubiera sobrepagado a
+         * todos los vendedores. Ahora se prorratea el `sellerNet` y la
+         * `ramgosCommission` que el pago realmente cobró, por la porción de
+         * subtotal de cada vendedor — así la suma de las sub-órdenes cuadra
+         * con lo que Stripe efectivamente retuvo.
+         */
+        const subtotalCentsBySeller: Record<string, number> = {};
+        let totalSubtotalCents = 0;
+        for (const [sellerId, items] of Object.entries(sellerGroups)) {
+            const cents = Math.round(
+                items.reduce((sum: number, i: any) => sum + (i.snapshot?.price || 0) * i.quantity, 0) * 100,
+            );
+            subtotalCentsBySeller[sellerId] = cents;
+            totalSubtotalCents += cents;
+        }
+        const paymentSellerNetCents = Math.round((paymentRecord?.sellerNet ?? 0) * 100);
+        const paymentCommissionCents = Math.round((paymentRecord?.ramgosCommission ?? 0) * 100);
+
         for (const [sellerId, items] of Object.entries(sellerGroups)) {
             const shippingForThisOrder = shipping
                 ? { ...shipping, cost: shippingCostPending }
                 : undefined;
             shippingCostPending = 0;
 
-            // Calculate subtotal
-            const subtotal = items.reduce((sum: number, i: any) => sum + ((i.snapshot?.price || 0) * i.quantity), 0);
-            const commission = Math.round(subtotal * 0.12 * 100); // 12% in cents
-            const sellerNet = Math.round(subtotal * 100) - commission;
+            const subtotalCents = subtotalCentsBySeller[sellerId] ?? 0;
+            const shareFraction = totalSubtotalCents > 0 ? subtotalCents / totalSubtotalCents : 0;
+
+            // Sin pago cart-level (no debería pasar, pero no es motivo para
+            // tirar toda la orden abajo): cae al 10% plano, sin descuentos.
+            const commission = paymentRecord
+                ? Math.round(paymentCommissionCents * shareFraction)
+                : commissionCentsFor(subtotalCents);
+            const sellerNet = paymentRecord
+                ? Math.round(paymentSellerNetCents * shareFraction)
+                : subtotalCents - commission;
 
             // Create Order for this seller with escrow fields
             const orderId = await ctx.runMutation(internal.stripe.internalCreateSubOrder, {
@@ -1026,7 +1085,7 @@ export const internalProcessMultiVendorCart = internalAction({
                     // post whose CommerceTag put this item in the cart.
                     sourcePostId: i.snapshot?.sourcePostId,
                 })),
-                total: subtotal,
+                total: subtotalCents / 100,
                 netAmountCents: sellerNet,
                 commissionCents: commission,
                 transferGroup: args.cartId,
@@ -1078,6 +1137,7 @@ export const internalValidateCartForCheckout = internalQuery({
         const stockIssues: Array<{ listingId: string; title: string; requested: number; available: number }> = [];
         const priceIssues: Array<{ listingId: string; title: string; chargedCents: number; actualCents: number }> = [];
 
+        let hasBono = false;
         for (const item of args.lineItems) {
             // La línea sintética de envío no es un listing.
             if (item.listingId === "shipping") continue;
@@ -1086,6 +1146,10 @@ export const internalValidateCartForCheckout = internalQuery({
             if (!listingId) continue;
             const listing: any = await ctx.db.get(listingId);
             if (!listing) continue;
+
+            if (listing.type === "bono") {
+                hasBono = true;
+            }
 
             const title = listing.title || "Producto";
 
@@ -1111,7 +1175,7 @@ export const internalValidateCartForCheckout = internalQuery({
             }
         }
 
-        return { stockIssues, priceIssues };
+        return { stockIssues, priceIssues, hasBono };
     },
 });
 
@@ -1475,6 +1539,19 @@ export const internalConfirmOrderEscrow = internalMutation({
     }
 });
 
+export const internalRecordEscrowAudit = internalMutation({
+    args: {
+        actorUserId: v.string(),
+        targetUserId: v.optional(v.string()),
+        action: v.union(v.literal("ESCROW_RELEASED"), v.literal("ESCROW_REFUNDED")),
+        amountCents: v.optional(v.number()),
+        metadata: v.optional(v.any()),
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.insert("audit_logs", buildAuditRecord(args));
+    },
+});
+
 export const adminForceReleaseEscrow = action({
     args: {
         sessionToken: v.optional(v.string()),
@@ -1482,8 +1559,10 @@ export const adminForceReleaseEscrow = action({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== "admin" && actor.role !== "developer") {
-            throw new Error("No autorizado");
+        // Mueve dinero real e irreversible: reservado al titular. Antes lo
+        // aceptaba también `developer`, que es el rol del programador.
+        if (!can(actor.role, 'release_escrow')) {
+            throw new Error(denialMessage('release_escrow'));
         }
 
         const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, { orderId: args.orderId });
@@ -1545,6 +1624,14 @@ export const adminForceReleaseEscrow = action({
             status: "completed"
         });
 
+        await ctx.runMutation(internal.stripe.internalRecordEscrowAudit, {
+            actorUserId: actor.idString,
+            targetUserId: String(order.sellerId),
+            action: "ESCROW_RELEASED",
+            amountCents: order.netAmountCents,
+            metadata: { orderId: String(args.orderId), transferId },
+        });
+
         return { success: true, transferId };
     }
 });
@@ -1557,8 +1644,9 @@ export const adminRefundEscrow = action({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
-        if (actor.role !== "admin" && actor.role !== "developer") {
-            throw new Error("No autorizado");
+        // Devuelve dinero al comprador: reservado al titular.
+        if (!can(actor.role, 'refund')) {
+            throw new Error(denialMessage('refund'));
         }
 
         const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, { orderId: args.orderId });
@@ -1602,6 +1690,14 @@ export const adminRefundEscrow = action({
             escrowState: "refunded"
         });
 
+        await ctx.runMutation(internal.stripe.internalRecordEscrowAudit, {
+            actorUserId: actor.idString,
+            targetUserId: String(order.userId),
+            action: "ESCROW_REFUNDED",
+            amountCents: Math.round((order as any).total * 100),
+            metadata: { orderId: String(args.orderId), refundId, returnFeeAmountCents: args.returnFeeAmountCents },
+        });
+
         return { success: true, refundId };
     }
 });
@@ -1627,7 +1723,7 @@ export const internalGetEligibleOrdersForRelease = internalQuery({
             )
             .collect();
         
-        const eligibleOrderIds: string[] = [];
+        const eligibleOrderIds: (typeof orders[number]["_id"])[] = [];
         const now = Date.now();
         const TEN_DAYS = 10 * 24 * 60 * 60 * 1000;
         const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -1637,13 +1733,16 @@ export const internalGetEligibleOrdersForRelease = internalQuery({
             
             if (!order.items || order.items.length === 0) continue;
             
-            // Fetch listing of first item
-            const listing = await ctx.db.get(order.items[0].listingId as Id<"listings">);
-            if (!listing) continue;
+            // Fetch listing of first item — listingId is stored as string
+            const listingDoc = await ctx.db
+                .query("listings")
+                .filter((q) => q.eq(q.field("_id"), order.items[0].listingId))
+                .first();
+            if (!listingDoc) continue;
             
-            if (listing.type === "product" && age >= TEN_DAYS) {
+            if (listingDoc.type === "product" && age >= TEN_DAYS) {
                 eligibleOrderIds.push(order._id);
-            } else if (listing.type === "bono" && age >= ONE_DAY) {
+            } else if (listingDoc.type === "bono" && age >= ONE_DAY) {
                 eligibleOrderIds.push(order._id);
             }
         }
@@ -1659,7 +1758,8 @@ export const internalCronAutoReleaseEscrows = internalAction({
         
         for (const orderId of eligibleOrders) {
             try {
-                await ctx.runAction(internal.stripe.internalReleasePaymentAction, { orderId: orderId as Id<"orders"> });
+                // orderId ya es Id<"orders"> (string compatible) — lo pasamos directo
+                await ctx.runAction(internal.stripe.internalReleasePaymentAction, { orderId });
             } catch (error) {
                 console.error(`Failed to auto-release order ${orderId}`, error);
             }

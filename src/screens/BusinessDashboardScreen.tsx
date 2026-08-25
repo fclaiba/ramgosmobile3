@@ -345,6 +345,7 @@ function BusinessDashboardScreen({
       try {
         const status = await getAccountStatusAction({
           accountId: stripeConnectAccountId,
+          sessionToken,
         });
         if (!cancelled && status) {
           setConnectStatus({
@@ -362,7 +363,14 @@ function BusinessDashboardScreen({
   }, [stripeConnectAccountId, getAccountStatusAction, user?.id]);
 
   const handleStripeConnectOnboarding = async () => {
-    if (!user) {
+    // Convex tira "ArgumentValidationError: missing required field userId"
+    // cuando este valor resuelve a `undefined` — el cliente directamente
+    // omite la clave del payload. `user` mezcla formas (`_id` de Convex,
+    // `id` mapeado en AuthContext, y alguna sesión vieja con `uid`); cubrir
+    // las tres en vez de las dos que dejaban pasar el caso roto.
+    const businessUserId =
+      (user as any)?._id || (user as any)?.id || (user as any)?.uid;
+    if (!user || !businessUserId) {
       show("Inicia sesión primero", "error");
       return;
     }
@@ -370,6 +378,8 @@ function BusinessDashboardScreen({
     try {
       // Step 1: ensure account exists (idempotent — creates only if missing).
       const ensured = await ensureConnectAccountAction({
+        userId: businessUserId,
+        sessionToken,
         displayName: businessInfo?.name || user.name || "Ramgos seller",
         contactEmail: user.email,
       });
@@ -379,6 +389,7 @@ function BusinessDashboardScreen({
       // Step 2: open Stripe-hosted onboarding URL.
       const link = await createOnboardingLinkAction({
         accountId,
+        sessionToken,
       });
       const url = (link as any)?.url;
       if (url) await Linking.openURL(url);

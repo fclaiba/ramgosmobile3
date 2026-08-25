@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, ScrollView, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, ScrollView, Text, StyleSheet, useWindowDimensions, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useFintech } from '../contexts/FintechContext';
 import { useReferral } from '../contexts/ReferralContext';
-import { useQuery } from 'convex/react';
+import { useQuery, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id } from '../../convex/_generated/dataModel';
 import { glassGradient, glassSurface } from '../utils/glass';
@@ -36,7 +36,76 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const { referralLink, referralSummary } = useReferral();
     const { ensureWalletAccount, getWalletByOwner } = useFintech();
     const wallet = getWalletByOwner(influencerId) ?? getWalletByOwner('influencer_demo');
-    
+    const { show } = useToast();
+
+    // Stripe Connect V2 — mismo flujo que BusinessDashboardScreen (única
+    // fuente de onboarding). Antes esta pantalla no tenía ningún botón para
+    // vincular cuenta de pagos: el influencer no podía cobrar nunca.
+    const _api = api as any;
+    const ensureConnectAccountAction = useAction(_api.connect?.ensureConnectAccount as any);
+    const createOnboardingLinkAction = useAction(_api.connect?.createOnboardingLink as any);
+    const getAccountStatusAction = useAction(_api.connect?.getAccountStatus as any);
+    const [connectLoading, setConnectLoading] = useState(false);
+    const [connectStatus, setConnectStatus] = useState<{
+        readyToReceivePayments: boolean;
+        onboardingComplete: boolean;
+    } | null>(null);
+    const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!stripeConnectAccountId) {
+            setConnectStatus(null);
+            return;
+        }
+        (async () => {
+            try {
+                const status = await getAccountStatusAction({
+                    accountId: stripeConnectAccountId,
+                    sessionToken,
+                });
+                if (!cancelled && status) {
+                    setConnectStatus({
+                        readyToReceivePayments: !!(status as any).readyToReceivePayments,
+                        onboardingComplete: !!(status as any).onboardingComplete,
+                    });
+                }
+            } catch (err) {
+                console.warn('[Connect V2] influencer status fetch failed', err);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [stripeConnectAccountId, getAccountStatusAction]);
+
+    const handleInfluencerConnectOnboarding = async () => {
+        const connectUserId = (user as any)?._id || (user as any)?.id || (user as any)?.uid;
+        if (!user || !connectUserId) {
+            show('Inicia sesión primero', 'error');
+            return;
+        }
+        setConnectLoading(true);
+        try {
+            const ensured = await ensureConnectAccountAction({
+                userId: connectUserId,
+                sessionToken,
+                displayName: influencerName || 'Ramgos influencer',
+                contactEmail: user.email,
+            });
+            const accountId = (ensured as any)?.accountId;
+            if (!accountId) throw new Error('No se obtuvo accountId de Stripe.');
+
+            const link = await createOnboardingLinkAction({ accountId, sessionToken });
+            const url = (link as any)?.url;
+            if (url) await Linking.openURL(url);
+        } catch (e: any) {
+            show(e.message || 'Error al iniciar onboarding de Stripe', 'error');
+        } finally {
+            setConnectLoading(false);
+        }
+    };
+
     // UI State
     const [modalVisible, setModalVisible] = useState(false);
 
@@ -141,6 +210,42 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
 
                 {/* Affiliate Link Card */}
                 <AffiliateLinkCard referralLink={referralLink} containerWidth={containerWidth} />
+
+                {/* Cuenta de pagos (Stripe Connect) */}
+                <View style={[styles.bonusCard, glassSurface(isDark, 'prominent'), { maxWidth: containerWidth }]}>
+                    <Text style={[styles.bonusTitle, { color: isDark ? '#fff' : '#111827' }]}>
+                        Cuenta de pagos
+                    </Text>
+                    {stripeConnectAccountId ? (
+                        <>
+                            <Text style={[styles.bonusSubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>
+                                {connectStatus?.readyToReceivePayments
+                                    ? 'Tu cuenta está lista para recibir comisiones.'
+                                    : 'Tu cuenta está conectada, pero Stripe todavía necesita datos para habilitar los cobros.'}
+                            </Text>
+                            <Button
+                                onPress={() => navigation.navigate('Withdrawal', { ownerId: user?.id })}
+                                style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Ver saldo y retiros</Text>
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Text style={[styles.bonusSubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>
+                                Conectá tu cuenta de Stripe para poder cobrar tus comisiones de influencer.
+                            </Text>
+                            <Button
+                                onPress={handleInfluencerConnectOnboarding}
+                                isLoading={connectLoading}
+                                disabled={connectLoading}
+                                style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Conectar cuenta de pagos</Text>
+                            </Button>
+                        </>
+                    )}
+                </View>
 
                 {/* Negocios autorizados (whitelist + campañas) */}
                 <View style={[styles.bonusCard, glassSurface(isDark, 'prominent'), { maxWidth: containerWidth }]}>

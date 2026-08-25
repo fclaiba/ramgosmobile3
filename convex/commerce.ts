@@ -37,11 +37,9 @@ import { internal } from './_generated/api';
 import { requireActor, authError } from './authHelpers';
 import { applyAddToCart } from './cart';
 import { resolveMediaUrl } from './mediaUrl';
+import { PLATFORM_COMMISSION_RATE } from './_fees';
 
 const NOW = () => new Date().toISOString();
-
-/** Platform take rate — matches the cart flow default in convex/stripe.ts. */
-const PLATFORM_COMMISSION_RATE = 0.12;
 
 // ---------------------------------------------------------------------------
 // Offer — what the post's CommerceTag / preview sheet renders

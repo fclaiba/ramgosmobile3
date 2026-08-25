@@ -6,7 +6,7 @@ import {
     TouchableOpacity,
     ActivityIndicator,
     TextInput,
-    Dimensions,
+    useWindowDimensions,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -43,8 +43,6 @@ import WebBonoQrScanner, {
     type WebCameraFacing,
 } from '../components/scanner/WebBonoQrScanner';
 
-const { width: WIN_W } = Dimensions.get('window');
-const VIEWFINDER = Math.min(WIN_W * 0.88, 420);
 const IS_WEB = Platform.OS === 'web';
 
 type Mode = 'scan' | 'manual';
@@ -87,7 +85,14 @@ export default function BusinessScannerScreen() {
     const isDark = colorScheme === 'dark';
     const c = colors(isDark);
     const glass = glassTokens(isDark);
-    const styles = useMemo(() => getStyles(isDark, c, glass), [isDark, c, glass]);
+    const { width: winW, height: winH } = useWindowDimensions();
+    // Cuadrado garantizado: limitado por ancho, alto Y un tope fijo, no sólo
+    // por el ancho como antes (eso podía dar un visor más alto que ancho).
+    const viewfinderSize = Math.min(winW * 0.88, winH * 0.5, 420);
+    const styles = useMemo(
+        () => getStyles(isDark, c, glass, viewfinderSize),
+        [isDark, c, glass, viewfinderSize],
+    );
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const { user, sessionToken } = useAuth();
@@ -787,6 +792,7 @@ const getStyles = (
     isDark: boolean,
     c: ReturnType<typeof colors>,
     glass: ReturnType<typeof glassTokens>,
+    viewfinderSize: number,
 ) =>
     StyleSheet.create({
         container: { flex: 1, backgroundColor: c.bg },
@@ -900,8 +906,9 @@ const getStyles = (
             letterSpacing: 0.3,
         },
         viewfinder: {
-            width: VIEWFINDER,
-            height: VIEWFINDER,
+            width: viewfinderSize,
+            height: viewfinderSize,
+            aspectRatio: 1,
             maxWidth: '100%',
             borderRadius: Radius['2xl'],
             overflow: 'hidden',
@@ -985,7 +992,7 @@ const getStyles = (
             textAlign: 'center',
             paddingHorizontal: 16,
             lineHeight: 18,
-            maxWidth: VIEWFINDER,
+            maxWidth: viewfinderSize,
         },
         manualCard: {
             backgroundColor: glass.bg,

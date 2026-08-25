@@ -46,9 +46,23 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
         setMode(mode === 'test' ? 'live' : 'test');
     }, [mode, setMode]);
 
+    // Antes, `EXPO_PUBLIC_STRIPE_KEY` (sin sufijo) era el fallback de LOS DOS
+    // modos: si alguien la configuraba con una `pk_live_...`, el modo "test"
+    // cobraba de verdad sin que nada lo avisara. Cada modo exige ahora su
+    // variable explícita — sin fallback cruzado.
     const stripePublishableKey = mode === 'test'
-        ? (process.env.EXPO_PUBLIC_STRIPE_KEY_TEST || process.env.EXPO_PUBLIC_STRIPE_KEY)
-        : (process.env.EXPO_PUBLIC_STRIPE_KEY_LIVE || process.env.EXPO_PUBLIC_STRIPE_KEY);
+        ? process.env.EXPO_PUBLIC_STRIPE_KEY_TEST
+        : process.env.EXPO_PUBLIC_STRIPE_KEY_LIVE;
+
+    if (__DEV__ && stripePublishableKey) {
+        const expectedPrefix = mode === 'test' ? 'pk_test_' : 'pk_live_';
+        if (!stripePublishableKey.startsWith(expectedPrefix)) {
+            console.warn(
+                `[PaymentMode] La clave configurada para modo "${mode}" no empieza con "${expectedPrefix}". ` +
+                    'Revisá EXPO_PUBLIC_STRIPE_KEY_TEST / EXPO_PUBLIC_STRIPE_KEY_LIVE.',
+            );
+        }
+    }
 
     const value: PaymentModeContextValue = {
         mode,

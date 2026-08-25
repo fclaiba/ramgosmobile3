@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { FlaskConical, Zap } from 'lucide-react-native';
 import { usePaymentMode, type PaymentMode } from '../../contexts/PaymentModeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { glassTokens } from '../../utils/glass';
 import { Radius, Type, colors, glassShadow } from '../../theme/tokens';
 
@@ -12,15 +13,38 @@ type Props = {
 /**
  * Segmented control: Simulado (TEST) | Producción (LIVE).
  * Wired to PaymentModeContext.
+ *
+ * Quién puede tocarlo: sólo admin o cuentas `isTest`. Este switch vivía
+ * accesible a cualquier usuario logueado, justo en el checkout — un
+ * comprador final no debería poder mandar la app a modo simulado (o a modo
+ * producción) desde acá.
  */
 export function PaymentModeToggle({ isDark = false }: Props) {
     const { mode, setMode, isLive } = usePaymentMode();
+    const { user } = useAuth();
+    const canChangeMode = user?.role === 'admin' || (user as any)?.isTest === true;
     const glass = glassTokens(isDark);
     const c = colors(isDark);
 
     const select = (next: PaymentMode) => {
+        if (!canChangeMode) return;
         if (next !== mode) setMode(next);
     };
+
+    if (!canChangeMode) {
+        // Usuario final: sólo lectura. Nada que tocar acá — el modo lo
+        // decide el titular o queda fijo en simulado para su cuenta.
+        return (
+            <View style={styles.wrap}>
+                <Text style={[styles.heading, { color: c.text }]}>Modo de pago</Text>
+                <Text style={[styles.sub, { color: c.textMuted }]}>
+                    {isLive
+                        ? 'Producción: cobro real con Stripe LIVE'
+                        : 'Simulado: tarjetas de prueba, sin cobro real'}
+                </Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.wrap}>

@@ -1,13 +1,14 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireActor } from "./authHelpers";
+import { can, denialMessage, type Capability } from "./_roles";
 
 export const getDisputedOrEscrowOrders = query({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        if (actor.role !== "admin" && actor.role !== "developer") {
-            throw new Error("No autorizado");
+        if (!can(actor.role, "view_admin_panel")) {
+            throw new Error(denialMessage("view_admin_panel"));
         }
 
         const orders = await ctx.db
@@ -27,8 +28,8 @@ export const getPlatformStats = query({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        if (actor.role !== "admin" && actor.role !== "developer") {
-            throw new Error("No autorizado");
+        if (!can(actor.role, "view_admin_panel")) {
+            throw new Error(denialMessage("view_admin_panel"));
         }
 
         const allOrders = await ctx.db
@@ -76,9 +77,9 @@ export const getPlatformStats = query({
 
 // ── Panel Admin: logs, sesiones y estado de hashes ──────────────────────────
 
-const assertAdmin = (actor: { role: string }) => {
-    if (actor.role !== "admin" && actor.role !== "developer") {
-        throw new Error("No autorizado");
+const assertAdmin = (actor: { role: string }, capability: Capability = "view_admin_panel") => {
+    if (!can(actor.role, capability)) {
+        throw new Error(denialMessage(capability));
     }
 };
 
@@ -89,7 +90,7 @@ export const getAuditLogs = query({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        assertAdmin(actor);
+        assertAdmin(actor, "view_audit_logs");
         const cap = Math.min(args.limit ?? 100, 300);
         return await ctx.db.query("audit_logs").order("desc").take(cap);
     },
@@ -146,7 +147,7 @@ export const getActiveSessions = query({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        assertAdmin(actor);
+        assertAdmin(actor, "view_sessions");
 
         const now = Date.now();
         const cap = Math.min(args.limit ?? 100, 300);
@@ -191,7 +192,7 @@ export const getKycReviewQueue = query({
     args: { sessionToken: v.optional(v.string()) },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        assertAdmin(actor);
+        assertAdmin(actor, "review_kyc");
 
         /**
          * Quién entra en la cola.
@@ -447,7 +448,7 @@ export const revokeSession = mutation({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        assertAdmin(actor);
+        assertAdmin(actor, "revoke_session");
         await ctx.db.patch(args.sessionId, { revokedAt: new Date().toISOString() });
         await ctx.db.insert("audit_logs", {
             actorUserId: actor.idString,
@@ -466,8 +467,8 @@ export const getRecentOrders = query({
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, args.sessionToken);
-        if (actor.role !== "admin" && actor.role !== "developer") {
-            throw new Error("No autorizado");
+        if (!can(actor.role, "view_admin_panel")) {
+            throw new Error(denialMessage("view_admin_panel"));
         }
 
         const limit = args.limit ?? 20;
