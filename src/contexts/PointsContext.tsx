@@ -63,6 +63,8 @@ type PointsContextValue = {
     petConfig: PetConfig;
     /** Progreso de incubación 0..100. 100 = ya nació. */
     eggProgress: number;
+    /** true cuando el huevo llegó a 100 y ya se puede tocar "Abrir huevo". */
+    eggReady: boolean;
     isEgg: boolean;
     primaryNeed: PetNeed;
     transactions: any[];
@@ -93,10 +95,12 @@ type PointsContextValue = {
         pointsToRedeem: number,
         orderId?: string,
     ) => Promise<{ success: boolean; discountUsd?: number; pointsSpent?: number; message?: string }>;
-    feedPet: () => Promise<{ success: boolean; message: string }>;
+    feedPet: () => Promise<{ success: boolean; message: string; pointsAwarded?: number }>;
     sleepPet: () => Promise<{ success: boolean; message: string }>;
     cleanPet: () => Promise<{ success: boolean; message: string }>;
     playPet: () => Promise<{ success: boolean; message: string }>;
+    /** Abre el huevo cuando `eggReady` es true. Falla si todavía no llegó a 100. */
+    openEgg: () => Promise<{ success: boolean; message: string }>;
     unlockHat: (id: string, cost: number) => Promise<boolean>;
     equipHat: (id: string) => Promise<void>;
     updatePetState: (updates: Partial<PetStats>) => Promise<boolean>;
@@ -115,6 +119,7 @@ const DEFAULT_CONTEXT: PointsContextValue = {
     petStats: DEFAULT_PET_STATS,
     petConfig: DEFAULT_PET_CONFIG,
     eggProgress: 0,
+    eggReady: false,
     isEgg: true,
     primaryNeed: null,
     transactions: [],
@@ -136,6 +141,7 @@ const DEFAULT_CONTEXT: PointsContextValue = {
     sleepPet: async () => ({ success: false, message: 'Sin sesión' }),
     cleanPet: async () => ({ success: false, message: 'Sin sesión' }),
     playPet: async () => ({ success: false, message: 'Sin sesión' }),
+    openEgg: async () => ({ success: false, message: 'Sin sesión' }),
     unlockHat: async () => false,
     equipHat: async () => {},
     updatePetState: async () => false,
@@ -167,6 +173,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const sleepMutation = useMutation(api.economy.sleepVirtualPet);
     const cleanMutation = useMutation(api.economy.cleanVirtualPet);
     const playMutation = useMutation(api.economy.playVirtualPet);
+    const openEggMutation = useMutation(api.economy.openEgg);
     const unlockHatMutation = useMutation(api.economy.unlockAccessory);
     const equipHatMutation = useMutation(api.economy.equipAccessory);
     const updatePetStateMutation = useMutation(api.economy.updatePetState);
@@ -195,6 +202,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const eggProgress: number = Number.isFinite(economyState?.eggProgress)
         ? (economyState!.eggProgress as number)
         : 0;
+    const eggReady: boolean = economyState?.eggReady ?? false;
     const isEgg: boolean = economyState?.isEgg ?? (petStats.level < 3);
     const primaryNeed: PetNeed = economyState?.primaryNeed ?? null;
     const challengeState = economyState?.challenges;
@@ -389,7 +397,11 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
                 if (result?.status === 'error' || result?.status === 'already_claimed') {
                     return { success: false, message: result.message || 'No se pudo completar' };
                 }
-                return { success: true, message: result?.message || 'OK' };
+                return {
+                    success: true,
+                    message: result?.message || 'OK',
+                    pointsAwarded: typeof result?.pointsAwarded === 'number' ? result.pointsAwarded : 0,
+                };
             } catch (e: any) {
                 return { success: false, message: e?.message ?? 'Error' };
             }
@@ -401,6 +413,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
     const sleepPet = useCallback(() => runPet((a) => sleepMutation(a)), [runPet, sleepMutation]);
     const cleanPet = useCallback(() => runPet((a) => cleanMutation(a)), [cleanMutation, runPet]);
     const playPet = useCallback(() => runPet((a) => playMutation(a)), [playMutation, runPet]);
+    const openEgg = useCallback(() => runPet((a) => openEggMutation(a)), [openEggMutation, runPet]);
 
     const unlockHat = useCallback(
         async (id: string, cost: number) => {
@@ -457,6 +470,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             petStats,
             petConfig,
             eggProgress,
+            eggReady,
             isEgg,
             primaryNeed,
             transactions,
@@ -478,6 +492,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             sleepPet,
             cleanPet,
             playPet,
+            openEgg,
             unlockHat,
             equipHat,
             updatePetState,
@@ -492,6 +507,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             petStats,
             petConfig,
             eggProgress,
+            eggReady,
             isEgg,
             primaryNeed,
             transactions,
@@ -513,6 +529,7 @@ export function PointsProvider({ children }: { children: React.ReactNode }) {
             sleepPet,
             cleanPet,
             playPet,
+            openEgg,
             unlockHat,
             equipHat,
             challenges,

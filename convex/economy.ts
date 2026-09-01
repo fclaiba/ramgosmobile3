@@ -15,6 +15,7 @@ import {
     decoratePetState,
     EGG_CARE_BOOST,
     EGG_DAILY_LOGIN_BOOST,
+    hatchEgg,
     isEggStage,
     settlePetState,
 } from './economy/petLifecycle';
@@ -36,8 +37,8 @@ import {
     POINT_VALUE_USD,
     POINTS_PER_USD,
     rollPoints,
+    rollWheelPrize,
     STREAK_MILESTONE_REWARDS,
-    WHEEL_POINTS_RANGE,
 } from './economy/_rewardRules';
 
 export { POINTS_PER_USD };
@@ -217,13 +218,17 @@ export const addCoins = mutation({
 async function internalAddCoins(ctx: any, args: { userId: string; amount: number; reason: string }) {
     const { doc: state, state: currentState } = await settleAndLoad(ctx, args.userId);
 
-    // La eclosión ya no depende de las monedas. Antes acá había un atajo —
-    // "≥100 monedas ⇒ el huevo nace"— que, como el estado por defecto arranca
-    // justo con 100 monedas, rompía el huevo con la primera moneda ganada.
-    // Ahora incuba por tiempo real en `settlePetState`.
+    // El huevo eclosiona al juntar 100 puntos de juego, pero NO leyendo el
+    // saldo `gameCoins` — ese arranca en 100 por defecto y se gasta/recarga
+    // todo el tiempo, así que usarlo directo rompía el huevo con la primera
+    // moneda ganada (por eso existe `eggCoinsEarned`: sólo sube acá, sólo
+    // mientras es huevo, con tope 100; ver `economy/petLifecycle.ts`).
     const newState = {
         ...currentState,
         gameCoins: currentState.gameCoins + args.amount,
+        ...(isEggStage(currentState)
+            ? { eggCoinsEarned: Math.min(100, (currentState.eggCoinsEarned || 0) + args.amount) }
+            : {}),
     };
 
     await ctx.db.patch(state!._id, {
@@ -245,6 +250,32 @@ async function internalAddCoins(ctx: any, args: { userId: string; amount: number
 }
 
 // Mascota Specific Actions
+
+/**
+ * Abre el huevo cuando ya juntó los 100 puntos de juego. Es una acción
+ * explícita del usuario (botón "Abrir huevo"), no algo que pase solo al
+ * llegar a 100 — ver `hatchEgg` en `economy/petLifecycle.ts`.
+ */
+export const openEgg = mutation({
+    args: { sessionToken: v.optional(v.string()), userId: v.string() },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertSelfOrAdmin(actor, args.userId);
+
+        const { doc, state } = await settleAndLoad(ctx, args.userId);
+        const result = hatchEgg(state, Date.now());
+        if (!result.hatched) {
+            return { status: 'error', message: 'Todavía no juntaste los 100 puntos del huevo' };
+        }
+
+        await ctx.db.patch(doc._id, {
+            rewardsState: result.state,
+            updatedAt: new Date().toISOString(),
+        });
+        return { status: 'awarded', message: '¡Tu mascota nació! 🐣', state: result.state };
+    },
+});
+
 export const feedVirtualPet = mutation({
     args: { sessionToken: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
@@ -262,7 +293,28 @@ export const feedVirtualPet = mutation({
                 exp: (res.state.petStats.exp || 0) + 15,
             },
         });
-        return { status: 'awarded', message: 'Mascota alimentada!', state: newState };
+
+        // Cuidado diario de la mascota: reusa el mismo catálogo/idempotencia
+        // que `claimReward('pet_daily_care')`, así que da lo mismo cuántas
+        // veces se alimente en el día — sólo se acredita la primera.
+        const petCareDef = REWARD_CATALOG.pet_daily_care;
+        const careAward = await awardPoints(ctx, {
+            userId: args.userId,
+            eventKey: buildEventKey('pet_daily_care', 'default'),
+            amount: petCareDef.points as number,
+            description: petCareDef.description,
+            source: petCareDef.source,
+            metadata: { kind: 'pet_daily_care', refId: 'default' },
+            dailyCapKind: 'pet_daily_care',
+            dailyCapMax: petCareDef.dailyMax,
+        });
+
+        return {
+            status: 'awarded',
+            message: 'Mascota alimentada!',
+            state: newState,
+            pointsAwarded: careAward.awarded,
+        };
     }
 });
 
@@ -326,17 +378,18 @@ export const playVirtualPet = mutation({
         });
         if (!spent.success) return { status: 'error', message: spent.message };
 
-        // Sobre el huevo esta acción es "dar calor": acelera la incubación en
-        // vez de jugar. Un huevo no tiene energía que gastar ni felicidad que
-        // subir, pero sí es el único cuidado que admite, y es lo que hace que
-        // estar encima del huevo se note frente a sólo esperar.
+        // Sobre el huevo esta acción es "dar calor": suma progreso secundario
+        // en vez de jugar. Un huevo no tiene energía que gastar ni felicidad
+        // que subir, pero sí es un cuidado que admite. El driver principal
+        // para eclosionar son los puntos de juego (`eggCoinsEarned` en
+        // `internalAddCoins`); esto sólo acelera un poco — nunca hace
+        // eclosionar solo, eso requiere tocar "Abrir huevo".
         if (isEggStage(spent.state)) {
             const { doc, state } = await settleAndLoad(ctx, args.userId);
             const boosted = {
                 ...state,
                 eggCareBoost: Math.min(100, (state.eggCareBoost || 0) + EGG_CARE_BOOST),
             };
-            // Vuelve a liquidar: el boost puede ser justo lo que rompe el huevo.
             const settled = settlePetState(boosted, Date.now());
             await ctx.db.patch(doc._id, {
                 rewardsState: settled.state,
@@ -344,7 +397,7 @@ export const playVirtualPet = mutation({
             });
             return {
                 status: 'awarded',
-                message: settled.hatched ? '¡El huevo se rompió! 🐣' : 'Le diste calor al huevo 🔥',
+                message: 'Le diste calor al huevo 🔥',
                 state: settled.state,
             };
         }
@@ -757,7 +810,9 @@ export const spinLuckyWheel = mutation({
             };
         }
 
-        const pointsAwarded = rollPoints(WHEEL_POINTS_RANGE);
+        // Uno de los 8 gajos exactos, nunca "cualquier entero 5-50" — así el
+        // gajo donde frena la rueda (cliente) coincide siempre con esto.
+        const pointsAwarded = rollWheelPrize();
 
         const doc = await ensureEconomyState(ctx, { userId: args.userId });
         const current = hydrateRewardsState(doc!.rewardsState);

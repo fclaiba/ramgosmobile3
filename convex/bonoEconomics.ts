@@ -40,9 +40,9 @@ export function assertBonoEconomics(input: BonoEconomicsInput): void {
     if (!Number.isFinite(credit) || credit <= 0) {
         throw new Error("El bono debe tener un crédito canjeable (discountValue) mayor a 0.");
     }
-    if (credit <= paid) {
+    if (credit !== paid * 2) {
         throw new Error(
-            "El crédito del bono debe ser mayor al precio pagado (ej. pagás 50 y tenés 100 de crédito).",
+            "El bono debe valer exactamente el doble de lo pagado (ej. pagás 50, crédito 100).",
         );
     }
 }
@@ -55,7 +55,7 @@ export function resolveBonoEconomics(listing: any): BonoEconomics {
         Number.isFinite(paidRaw) && paidRaw > 0 ? paidRaw : DEFAULT_BONO_PAID;
     let creditTotal =
         Number.isFinite(creditRaw) && creditRaw > 0 ? creditRaw : paidAmount * 2;
-    if (creditTotal <= paidAmount) creditTotal = DEFAULT_BONO_CREDIT;
+    if (creditTotal !== paidAmount * 2) creditTotal = DEFAULT_BONO_CREDIT;
     return {
         paidAmount,
         creditTotal,

@@ -180,19 +180,19 @@ export default function LoginScreen({ navigation }: any) {
             const response = await signInWithGoogle();
             if (response?.idToken) {
                 const decision = await loginWithGoogleIdToken(response.idToken, { mode: 'login' });
-                if (decision.nextRoute?.screen === 'RoleSelection') {
-                    navigation.navigate('RoleSelection', { googleIdToken: response.idToken, isSignup: true, rememberMe });
-                    return;
-                }
                 navigateAfterAuth(decision);
             } else {
-                show(t('auth:login.googleLoginFailed'), 'error');
+                show(t('auth:login.googleFailed'), 'error');
             }
         } catch (error) {
             if (error instanceof GoogleSignInCancelledError) {
                 // Ignore silent cancellation
             } else if (isNoAccountError(error)) {
-                show(t('auth:login.noAccountExists'), 'error');
+                // Cuenta de Google nueva: no hay con qué "loguear" — se manda
+                // al alta normal (que sí crea el usuario y llega a KYC con
+                // sesión real) en vez de al `RoleSelection` roto de antes.
+                show(t('auth:login.noAccountExists'), 'info');
+                setTimeout(() => navigation.navigate('SignUp'), 600);
             } else {
                 show(mapAuthError(error instanceof Error ? error.message : String(error)), 'error');
             }

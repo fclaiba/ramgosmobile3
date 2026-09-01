@@ -2,7 +2,7 @@
  * Ciclo de vida de la mascota: incubación del huevo y desgaste por el tiempo.
  *
  * ── Por qué existe ────────────────────────────────────────────────────────
- * Antes había tres modelos contradictorios y ninguno usaba el reloj:
+ * Antes había tres modelos contradictorios:
  *
  *   1. El huevo "eclosionaba" al tener ≥100 monedas dentro de `addCoins`. Como
  *      el estado por defecto arranca con 100 monedas, eclosionaba con la
@@ -14,20 +14,25 @@
  *      la app congelaba la mascota.
  *
  * ── Cómo funciona ahora ───────────────────────────────────────────────────
- * Todo se deriva de timestamps, en el servidor, sin cron. El estado guarda
- * *cuándo* pasó la última liquidación; al leer o mutar se calcula qué debería
- * haber pasado desde entonces. Es la forma barata de simular tiempo continuo:
- * un cron que tocara cada mascota cada hora costaría escrituras por usuario
- * inactivo, y este cálculo cuesta cero mientras nadie mire.
+ * El desgaste post-nacimiento sigue derivándose de timestamps en el servidor
+ * (sin cron): el estado guarda *cuándo* pasó la última liquidación y se
+ * calcula qué debería haber pasado desde entonces.
+ *
+ * La incubación del huevo, en cambio, NO depende del reloj: depende de
+ * `eggCoinsEarned`, un contador aparte del saldo gastable de monedas
+ * (`gameCoins`) que sólo sube cuando el usuario gana monedas jugando a los
+ * minijuegos arcade mientras la mascota sigue siendo huevo. Es un contador
+ * distinto del saldo a propósito — leer el saldo directamente reintroduciría
+ * el bug #1 de arriba, porque el saldo arranca en 100 y se gasta y se
+ * recarga constantemente. Al llegar a 100 el huevo queda "listo"
+ * (`eggReady`), pero no eclosiona solo: hace falta que el usuario toque el
+ * botón "Abrir huevo", que llama a `hatchEgg`.
  *
  * Las funciones son puras (estado + `nowMs` → estado nuevo) para poder testear
- * "pasaron 40 horas" sin tocar la base ni el reloj real.
+ * sin tocar la base ni el reloj real.
  */
 
-/** Cuánto tarda el huevo en romperse solo, sin ningún cuidado. */
-export const EGG_INCUBATION_HOURS = 48;
-
-/** Cuánto progreso suma cada acción de cuidado sobre el huevo. */
+/** Cuánto progreso suma cada acción de cuidado sobre el huevo (boost secundario). */
 export const EGG_CARE_BOOST = 5;
 export const EGG_DAILY_LOGIN_BOOST = 10;
 
@@ -76,19 +81,15 @@ export type PetNeed = 'hungry' | 'dirty' | 'sleepy' | null;
 /**
  * Progreso de incubación 0..100.
  *
- * Es tiempo transcurrido + lo que el usuario aceleró cuidándolo. `eggCareBoost`
- * se acumula aparte del reloj para que cuidar el huevo se sienta, pero sin
- * poder saltearlo entero: cada acción vale 5 puntos y hay tope diario de
- * monedas, así que el piso realista sigue siendo del orden de un día.
+ * El driver principal son los puntos de juego (`eggCoinsEarned`, monedas
+ * arcade ganadas siendo huevo); `eggCareBoost` es un boost secundario que dan
+ * "Dar calor" y el login diario. `nowMs` ya no interviene — se mantiene el
+ * parámetro para no romper todas las llamadas existentes.
  */
-export function computeEggProgress(state: any, nowMs: number): number {
-    const startedAt = state?.eggStartedAt ?? null;
-    if (!startedAt) return clamp(Number(state?.eggCareBoost) || 0);
-
-    const elapsed = hoursBetween(startedAt, nowMs);
-    const fromTime = (elapsed / EGG_INCUBATION_HOURS) * 100;
+export function computeEggProgress(state: any, _nowMs?: number): number {
+    const fromCoins = Number(state?.eggCoinsEarned) || 0;
     const fromCare = Number(state?.eggCareBoost) || 0;
-    return clamp(fromTime + fromCare);
+    return clamp(fromCoins + fromCare);
 }
 
 /** ¿El estado todavía está en etapa huevo? */
@@ -115,8 +116,11 @@ export type SettleResult = {
  * Pone el estado al día contra el reloj. Idempotente: llamarla dos veces
  * seguidas con el mismo `nowMs` no cambia nada la segunda vez.
  *
- * En etapa huevo sólo avanza la incubación (un huevo no tiene hambre). Después
- * de nacer, aplica el desgaste de las horas transcurridas desde `lastTickAt`.
+ * En etapa huevo no hay nada que liquidar contra el reloj: el progreso lo da
+ * `computeEggProgress` directo del estado guardado, y aunque llegue a 100 acá
+ * NO eclosiona sola — eso es responsabilidad exclusiva de `hatchEgg`, que se
+ * dispara con el botón "Abrir huevo". Después de nacer, aplica el desgaste de
+ * las horas transcurridas desde `lastTickAt`.
  */
 export function settlePetState(state: any, nowMs: number): SettleResult {
     const nowIso = new Date(nowMs).toISOString();
@@ -126,37 +130,10 @@ export function settlePetState(state: any, nowMs: number): SettleResult {
     if (!Number.isFinite(petStats.hygiene)) petStats.hygiene = 80;
 
     if (isEggStage(state)) {
-        // Arranca el reloj la primera vez que vemos este huevo. No se puede
-        // hacer en el default porque ahí no hay "primera vez": el documento se
-        // crea cuando el usuario se registra y podría no abrir la app en días.
-        const eggStartedAt = state?.eggStartedAt ?? nowIso;
-        const progress = computeEggProgress({ ...state, eggStartedAt }, nowMs);
-
-        if (progress >= 100) {
-            return {
-                state: {
-                    ...state,
-                    eggStartedAt,
-                    petStats: {
-                        ...petStats,
-                        level: HATCHED_LEVEL,
-                        exp: 0,
-                        happiness: 100,
-                        hunger: 100,
-                        energy: 100,
-                        hygiene: 100,
-                    },
-                    lastTickAt: nowIso,
-                },
-                hatched: true,
-                changed: true,
-            };
-        }
-
         return {
-            state: { ...state, eggStartedAt, petStats },
+            state: { ...state, petStats },
             hatched: false,
-            changed: state?.eggStartedAt !== eggStartedAt || !Number.isFinite(state?.petStats?.hygiene),
+            changed: !Number.isFinite(state?.petStats?.hygiene),
         };
     }
 
@@ -202,15 +179,51 @@ export function settlePetState(state: any, nowMs: number): SettleResult {
     };
 }
 
+export type HatchResult = {
+    state: any;
+    hatched: boolean;
+};
+
+/**
+ * Abre el huevo: si todavía no juntó 100 de progreso, no hace nada. Si sí,
+ * aplica la misma transición que antes disparaba sola `settlePetState` —
+ * ahora sólo corre cuando el usuario toca "Abrir huevo".
+ */
+export function hatchEgg(state: any, nowMs: number): HatchResult {
+    if (!isEggStage(state) || computeEggProgress(state) < 100) {
+        return { state, hatched: false };
+    }
+
+    const petStats = { ...(state?.petStats || {}) };
+    return {
+        state: {
+            ...state,
+            petStats: {
+                ...petStats,
+                level: HATCHED_LEVEL,
+                exp: 0,
+                happiness: 100,
+                hunger: 100,
+                energy: 100,
+                hygiene: 100,
+            },
+            lastTickAt: new Date(nowMs).toISOString(),
+        },
+        hatched: true,
+    };
+}
+
 /**
  * Decora el estado con lo que la UI necesita mostrar y no conviene recalcular
  * en el cliente (ahí el reloj puede estar corrido o adelantado a propósito).
  */
 export function decoratePetState(state: any, nowMs: number) {
     const egg = isEggStage(state);
+    const progress = egg ? Math.round(computeEggProgress(state)) : 100;
     return {
         ...state,
-        eggProgress: egg ? Math.round(computeEggProgress(state, nowMs)) : 100,
+        eggProgress: progress,
+        eggReady: egg && progress >= 100,
         isEgg: egg,
         primaryNeed: egg ? null : primaryNeed(state?.petStats),
     };

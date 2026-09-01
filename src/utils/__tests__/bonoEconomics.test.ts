@@ -36,10 +36,28 @@ describe('bonoEconomics (prepaid credit)', () => {
   it('rejects credit <= paid', () => {
     expect(() =>
       assertBonoEconomics({ price: 50, discountValue: 50 }),
-    ).toThrow(/mayor al precio/i);
+    ).toThrow(/el doble/i);
     expect(() =>
       assertBonoEconomics({ price: 100, discountValue: 50 }),
-    ).toThrow(/mayor al precio/i);
+    ).toThrow(/el doble/i);
+  });
+
+  it('rejects credit that is not exactly the double (ni un poco más, ni un poco menos)', () => {
+    expect(() =>
+      assertBonoEconomics({ price: 50, discountValue: 51 }),
+    ).toThrow(/el doble/i);
+    expect(() =>
+      assertBonoEconomics({ price: 50, discountValue: 150 }),
+    ).toThrow(/el doble/i);
+  });
+
+  it('acepta cualquier monto, siempre que el crédito sea exactamente el doble', () => {
+    expect(() =>
+      assertBonoEconomics({ price: 20, discountValue: 40 }),
+    ).not.toThrow();
+    expect(() =>
+      assertBonoEconomics({ price: 30, discountValue: 60 }),
+    ).not.toThrow();
   });
 
   it('rejects missing credit', () => {

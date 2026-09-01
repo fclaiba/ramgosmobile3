@@ -73,6 +73,22 @@ export function bonusMultiplierFor(lifetimePoints: number): number {
 export const WHEEL_POINTS_RANGE = { min: 5, max: 50 } as const;
 
 /**
+ * Los 8 gajos exactos de la ruleta — son los mismos valores que la UI
+ * mostraba antes (espaciados por `WHEEL_POINTS_RANGE`, redondeados), sólo
+ * que ahora son la fuente de verdad en vez de una aproximación: antes el
+ * servidor sorteaba CUALQUIER entero 5-50 y el cliente frenaba en el gajo
+ * más cercano, así que el número donde paraba la rueda casi nunca coincidía
+ * con lo que realmente se acreditaba (ver `LuckyWheel.tsx`). Mismo rango,
+ * mismo promedio (27.5) — pero ahora el gajo donde frena ES el premio.
+ */
+export const WHEEL_PRIZE_VALUES = [5, 11, 18, 24, 31, 37, 44, 50] as const;
+
+/** Sortea uno de los 8 premios exactos de la ruleta, con la misma probabilidad. */
+export function rollWheelPrize(): number {
+    return WHEEL_PRIZE_VALUES[Math.floor(Math.random() * WHEEL_PRIZE_VALUES.length)];
+}
+
+/**
  * Arcade: hasta 3 reclamos por día, premio en este rango.
  *
  * El premio se sortea EN EL SERVIDOR y no se deriva del puntaje del juego. El

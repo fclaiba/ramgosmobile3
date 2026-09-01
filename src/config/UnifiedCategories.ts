@@ -14,10 +14,6 @@ export const UNIFIED_CATEGORIES = {
         'Concierto', 'Fiesta', 'Deportivo', 'Teatro', 'Conferencia', 'Workshop',
         'Webinar', 'Meetup', 'Feria', 'Exposición', 'Festival', 'Cine', 'Otros'
     ],
-    bono: [
-        'Descuento %', '2x1', 'Envío Gratis', 'Regalo', 'Gift Card',
-        'Voucher', 'Promoción Especial', 'Otros'
-    ],
     business: [
         'Gastronomía', 'Indumentaria', 'Tecnología', 'Salud y Belleza',
         'Barbería', 'Gimnasio',

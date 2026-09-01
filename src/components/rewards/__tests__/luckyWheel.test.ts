@@ -7,8 +7,33 @@
  * rompe nada, sólo miente.
  */
 import { rotationForSegment, segmentForPoints } from '../LuckyWheel';
+import { WHEEL_PRIZE_VALUES, rollWheelPrize } from '../../../../convex/economy/_rewardRules';
 
 const SEGMENTS = [5, 11, 18, 24, 31, 37, 44, 50];
+
+describe('la rueda ya no miente: el gajo donde frena ES el premio', () => {
+    it('los gajos del cliente son exactamente los premios que puede sortear el servidor', () => {
+        expect([...WHEEL_PRIZE_VALUES]).toEqual(SEGMENTS);
+    });
+
+    it('rollWheelPrize() nunca devuelve algo fuera de los 8 gajos, en 2.000 tiradas', () => {
+        for (let i = 0; i < 2000; i++) {
+            expect(WHEEL_PRIZE_VALUES).toContain(rollWheelPrize());
+        }
+    });
+
+    it('en 2.000 tiradas aparecen los 8 valores al menos una vez', () => {
+        const seen = new Set<number>();
+        for (let i = 0; i < 2000; i++) seen.add(rollWheelPrize());
+        WHEEL_PRIZE_VALUES.forEach((value) => expect(seen.has(value)).toBe(true));
+    });
+
+    it('todo premio exacto cae con distancia 0 en segmentForPoints (nunca "el más cercano")', () => {
+        WHEEL_PRIZE_VALUES.forEach((value, index) => {
+            expect(segmentForPoints(value, [...WHEEL_PRIZE_VALUES])).toBe(index);
+        });
+    });
+});
 
 describe('segmentForPoints', () => {
     it('acierta el gajo exacto cuando el premio coincide con una etiqueta', () => {

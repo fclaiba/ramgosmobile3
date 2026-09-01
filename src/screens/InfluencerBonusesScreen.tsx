@@ -155,12 +155,12 @@ function InfluencerBonusesScreen({ navigation }: any) {
         const price = Number(paidPrice);
         const credit = Number(creditValue);
         const days = Math.floor(Number(validityDays) || 4);
-        if (!Number.isFinite(price) || price <= 0) {
-            show('El precio pagado debe ser mayor a 0.', 'error');
+        if (!Number.isFinite(credit) || credit <= 0) {
+            show('El crédito debe ser mayor a 0.', 'error');
             return;
         }
-        if (!Number.isFinite(credit) || credit <= price) {
-            show('El crédito debe ser mayor al precio (ej. 50 → 100).', 'error');
+        if (!Number.isFinite(price) || price <= 0) {
+            show('El precio pagado debe ser mayor a 0.', 'error');
             return;
         }
 
@@ -178,7 +178,7 @@ function InfluencerBonusesScreen({ navigation }: any) {
                 discountType: 'fixed',
                 validityDays: Math.min(Math.max(days, 1), 365),
                 stock: 1000,
-                category: 'bonos',
+                category: 'Bono',
                 sellerId: selectedBusinessId,
                 image: uploadedImages[0],
                 gallery: uploadedImages,
@@ -397,24 +397,27 @@ function InfluencerBonusesScreen({ navigation }: any) {
                         />
                         <View style={styles.row}>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.label}>Precio pagado ($)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    keyboardType="decimal-pad"
-                                    value={paidPrice}
-                                    onChangeText={setPaidPrice}
-                                    placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
-                                />
-                            </View>
-                            <View style={{ flex: 1 }}>
                                 <Text style={styles.label}>Crédito ($)</Text>
                                 <TextInput
                                     style={styles.input}
                                     keyboardType="decimal-pad"
                                     value={creditValue}
-                                    onChangeText={setCreditValue}
+                                    onChangeText={(t) => {
+                                        const sanitized = t.replace(/[^0-9.]/g, '');
+                                        const num = parseFloat(sanitized) || 0;
+                                        setCreditValue(sanitized);
+                                        setPaidPrice(num > 0 ? (num / 2).toString() : '');
+                                    }}
                                     placeholderTextColor={isDark ? '#6B7280' : '#9CA3AF'}
                                 />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.label}>Precio pagado (50%)</Text>
+                                <View style={[styles.input, { justifyContent: 'center' }]}>
+                                    <Text style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                                        ${paidPrice || '0.00'}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
                         <Text style={styles.label}>Validez (días)</Text>

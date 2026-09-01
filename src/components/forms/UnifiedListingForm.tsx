@@ -48,7 +48,6 @@ export const UnifiedListingForm = ({ type, initialData, onSubmit, onCancel, isLo
         location: '',
         capacity: '',
         // Bonus specific
-        discountType: 'percentage' as 'percentage' | 'fixed',
         value: '',
         maxPerUser: '',
         startDate: '',

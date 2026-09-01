@@ -45,7 +45,7 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
 
         setIsSubmitting(true);
         try {
-            await addReview({
+            const result = await addReview({
                 listingId,
                 rating,
                 comment,
@@ -55,7 +55,8 @@ export const AddReviewModal: React.FC<AddReviewModalProps> = ({ visible, onClose
             setComment('');
             onSuccess?.();
             onClose();
-            show('Reseña publicada correctamente.', 'success');
+            const bonus = (result as any)?.pointsAwarded ? ` · +${(result as any).pointsAwarded} pts` : '';
+            show(`Reseña publicada correctamente${bonus}`, 'success');
         } catch (e: any) {
             console.error("Failed to add review", e);
             const msg = e instanceof Error ? e.message : String(e);

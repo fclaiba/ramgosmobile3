@@ -147,6 +147,18 @@ async function awardReferralOnSignup(
         description: `Registro de referido (${userName})`,
         metadata: { friendUserId: String(userId), referrerUserId: String(referrerId) },
     });
+
+    // Antes esto no avisaba a nadie: el referidor recién se enteraba si
+    // abría la pantalla de Referidos. Mismo patrón que la notificación de
+    // puntos por compra propia (`stripe.ts`).
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+        userId: String(referrerUser._id),
+        title: "¡Tu referido se registró!",
+        body: `Sumaste +${REFERRAL_SIGNUP_BONUS} pts porque ${userName} se registró con tu código.`,
+        category: "payment",
+        sendEmail: true,
+        data: { friendUserId: String(userId) },
+    });
 }
 
 const sanitizeUser = async (ctx: any, user: any) => {
@@ -1717,6 +1729,18 @@ export const internalHandleReferralPurchase = internalMutation({
             });
             pointsAwarded += REFERRAL_FIRST_PURCHASE_BONUS;
 
+            // Igual que el alta: antes esto se acreditaba en silencio y el
+            // referidor nunca se enteraba salvo que abriera la pantalla de
+            // Referidos.
+            await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                userId: String(referrer._id),
+                title: "¡Tu referido compró!",
+                body: `Sumaste +${REFERRAL_FIRST_PURCHASE_BONUS} pts porque ${buyer.name || "tu referido"} hizo su primera compra.`,
+                category: "payment",
+                sendEmail: true,
+                data: { friendUserId: String(buyer._id), paymentIntentId: args.paymentIntentId },
+            });
+
             // BONO NUEVO USUARIO (Primera Compra)
             const buyerFirstPurchaseEventKey = `new_user_purchase_first_${String(buyer._id)}`;
             const buyerFirstPurchaseClaim = await ctx.db
@@ -1780,6 +1804,15 @@ export const internalHandleReferralPurchase = internalMutation({
                     claimedAt: new Date().toISOString(),
                 });
                 pointsAwarded += REFERRAL_HIGH_TICKET_BONUS;
+
+                await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                    userId: String(referrer._id),
+                    title: "¡Bono extra por tu referido!",
+                    body: `Sumaste +${REFERRAL_HIGH_TICKET_BONUS} pts porque ${buyer.name || "tu referido"} hizo una compra grande.`,
+                    category: "payment",
+                    sendEmail: true,
+                    data: { friendUserId: String(buyer._id), paymentIntentId: args.paymentIntentId },
+                });
             }
         }
 

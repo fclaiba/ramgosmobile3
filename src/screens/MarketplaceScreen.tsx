@@ -119,7 +119,7 @@ const getStableFallbackLocation = (id: string | number, name: string = '') => {
 };
 
 
-function MarketplaceScreen({ navigation, route, initialParams }: any) {
+function MarketplaceScreen({ navigation, route, initialParams, onMenuPress }: any) {
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const { addItem, openCart, items: cartItems } = useCart();
@@ -753,7 +753,7 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                 <MobileHeader
                     title="Marketplace"
                     subtitle="Productos, Bonos y Eventos"
-                    onMenuPress={() => setIsSidebarOpen(true)}
+                    onMenuPress={activeParams?.isTabMode ? onMenuPress : () => setIsSidebarOpen(true)}
                     actions={headerActions}
                 />
 
@@ -892,7 +892,13 @@ function MarketplaceScreen({ navigation, route, initialParams }: any) {
                 />
             )}
 
-            <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            {/* En modo tab (embebido en HomeScreen) el sidebar es el de
+                HomeScreen — montar uno propio acá crea dos instancias
+                simultáneas del mismo Modal, y la X termina cerrando la que
+                no se ve. Ver `SocialScreen.tsx`, que ya sigue este patrón. */}
+            {!activeParams?.isTabMode && (
+                <SidebarMenu visible={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+            )}
         </ResponsiveLayout>
     );
 }

@@ -202,7 +202,7 @@ export const SidebarMenu = ({ visible, onClose }: SidebarMenuProps) => {
 
                 <SafeAreaView style={{ flex: 1 }}>
                     <View style={styles.header}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 24, paddingRight: 8 }}>
+                        <View style={styles.closeButtonRow}>
                             <TouchableOpacity
                                 onPress={onClose}
                                 style={styles.closeButton}
@@ -399,11 +399,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     // debajo del mínimo de 44 y sin `hitSlop`, cuando el resto de la nav sí lo
     // tiene. Cerrar el menú fallaba seguido, sobre todo con el pulgar cerca del
     // borde. Ahora el botón mide el mínimo completo y además lleva `hitSlop`.
+    //
+    // Antes este botón era `position:'absolute'` y su fila envolvente
+    // (`closeButtonRow`) no tenía otro hijo en el flujo, así que colapsaba a
+    // altura 0: el `top/right` terminaba resolviéndose contra un ancestro
+    // ambiguo y el tap quedaba corrido respecto del ícono pintado. En flujo
+    // normal, la caja que Yoga usa para el hit-test es la misma que pinta la
+    // X — no hay dos cálculos que puedan desalinearse.
+    closeButtonRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginBottom: 24,
+        paddingRight: 8,
+    },
     closeButton: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
-        zIndex: 10,
         width: Touch.min,
         height: Touch.min,
         alignItems: 'center',

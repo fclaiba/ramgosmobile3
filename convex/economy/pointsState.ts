@@ -42,6 +42,10 @@ export const DEFAULT_PET_STATE = {
      */
     eggStartedAt: null as string | null,
     eggCareBoost: 0,
+    /** Monedas de juego ganadas jugando mientras la mascota es huevo (tope 100).
+     *  Es lo que dispara el botón "Abrir huevo" al llegar a 100 — separado del
+     *  saldo `gameCoins` a propósito, ver `economy/petLifecycle.ts`. */
+    eggCoinsEarned: 0,
     lastTickAt: null as string | null,
     challenges: {
         daily_browse: { current: 0, claimed: false, dayKey: '' },
@@ -96,6 +100,7 @@ export function hydrateRewardsState(raw: any) {
         // que puede rellenarlos sin migrar la tabla (rewardsState es v.any()).
         eggStartedAt: base.eggStartedAt ?? null,
         eggCareBoost: Number.isFinite(base.eggCareBoost) ? base.eggCareBoost : 0,
+        eggCoinsEarned: Number.isFinite(base.eggCoinsEarned) ? base.eggCoinsEarned : 0,
         lastTickAt: base.lastTickAt ?? null,
         petConfig: {
             activeHat: base.petConfig?.activeHat || 'none',

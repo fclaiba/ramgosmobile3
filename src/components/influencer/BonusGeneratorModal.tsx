@@ -167,12 +167,12 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
         const price = Number(paidPrice);
         const credit = Number(creditValue);
         const days = Math.floor(Number(validityDays) || 4);
-        if (!Number.isFinite(price) || price <= 0) {
-            show('El precio pagado debe ser mayor a 0.', 'warning');
+        if (!Number.isFinite(credit) || credit <= 0) {
+            show('El crédito debe ser mayor a 0.', 'warning');
             return;
         }
-        if (!Number.isFinite(credit) || credit <= price) {
-            show('El crédito debe ser mayor al precio (ej. pagás 50, crédito 100).', 'warning');
+        if (!Number.isFinite(price) || price <= 0) {
+            show('El precio pagado debe ser mayor a 0.', 'warning');
             return;
         }
 
@@ -188,7 +188,7 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                 discountType: 'fixed',
                 validityDays: Math.min(Math.max(days, 1), 365),
                 type: 'bono',
-                category: 'bonos',
+                category: 'Bono',
                 stock: 1000,
                 sellerId: selectedBusinessId,
                 image: uploadedImages[0],
@@ -344,26 +344,6 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                         <View style={styles.row2}>
                             <View style={[styles.formGroup, { flex: 1 }]}>
                                 <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
-                                    Precio pagado ($)
-                                </Text>
-                                <TextInput
-                                    style={[
-                                        styles.input,
-                                        {
-                                            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
-                                            color: isDark ? '#fff' : '#111827',
-                                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
-                                        },
-                                    ]}
-                                    keyboardType="decimal-pad"
-                                    value={paidPrice}
-                                    onChangeText={setPaidPrice}
-                                    placeholder="50"
-                                    placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
-                                />
-                            </View>
-                            <View style={[styles.formGroup, { flex: 1 }]}>
-                                <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
                                     Crédito ($)
                                 </Text>
                                 <TextInput
@@ -377,10 +357,34 @@ export default function BonusGeneratorModal({ visible, onClose, user }: Props) {
                                     ]}
                                     keyboardType="decimal-pad"
                                     value={creditValue}
-                                    onChangeText={setCreditValue}
+                                    onChangeText={(t) => {
+                                        const sanitized = t.replace(/[^0-9.]/g, '');
+                                        const num = parseFloat(sanitized) || 0;
+                                        setCreditValue(sanitized);
+                                        setPaidPrice(num > 0 ? (num / 2).toString() : '');
+                                    }}
                                     placeholder="100"
                                     placeholderTextColor={isDark ? '#9CA3AF' : '#999'}
                                 />
+                            </View>
+                            <View style={[styles.formGroup, { flex: 1 }]}>
+                                <Text style={[styles.modalLabel, { color: isDark ? '#E2E8F0' : '#374151' }]}>
+                                    Precio pagado (50%)
+                                </Text>
+                                <View
+                                    style={[
+                                        styles.input,
+                                        {
+                                            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F3F4F6',
+                                            borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+                                            justifyContent: 'center',
+                                        },
+                                    ]}
+                                >
+                                    <Text style={{ color: isDark ? '#94A3B8' : '#6B7280' }}>
+                                        ${paidPrice || '0.00'}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Animated, ImageBackground, Image, useWindowDimensions, Platform, BackHandler } from 'react-native';
-import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp, MessageCircle, Gamepad2 } from 'lucide-react-native';
+import { Sparkles, MapPin, Zap, ShoppingBag, ShoppingCart, Percent, Calendar, Tag, Star, DollarSign, ArrowRight, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -103,7 +103,6 @@ const quickActions = [
     { id: 1, title: 'Mi Mascota', icon: Sparkles, color: '#2196F3', bg: 'rgba(33, 150, 243,0.1)', action: 'mascota' },
     { id: 2, title: 'Mapa', icon: MapPin, color: '#2563EB', bg: 'rgba(37,99,235,0.1)', action: 'marketplace-map' },
     { id: 3, title: 'Mis R Coins', icon: Zap, color: '#D97706', bg: 'rgba(217,119,6,0.1)', action: 'points' },
-    { id: 4, title: 'Juegos', icon: Gamepad2, color: '#F59E0B', bg: 'rgba(245,158,11,0.1)', action: 'games' },
 ];
 
 const consumptionData: any[] = [];
@@ -566,7 +565,7 @@ export default function HomeScreen({ navigation, route }: any) {
                     </>
                 )}
 
-                {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={marketplaceInitialParams} />}
+                {activeTab === 'marketplace' && <MarketplaceScreen navigation={navigation} initialParams={marketplaceInitialParams} onMenuPress={() => setIsSidebarOpen(true)} />}
                 {activeTab === 'social' && <SocialScreen isTabMode={true} onMenuPress={() => setIsSidebarOpen(true)} />}
                 {activeTab === 'dashboard' && (
                     user?.role === 'business' ? <BusinessDashboardScreen isTabMode onMenuPress={() => setIsSidebarOpen(true)} /> :

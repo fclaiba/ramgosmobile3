@@ -2,7 +2,7 @@ import {
     computeEggProgress,
     DECAY_CAP_HOURS,
     decoratePetState,
-    EGG_INCUBATION_HOURS,
+    hatchEgg,
     isEggStage,
     primaryNeed,
     settlePetState,
@@ -15,7 +15,7 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const eggState = (overrides: any = {}) => ({
     gameCoins: 100,
     petStats: { happiness: 80, hunger: 60, energy: 70, hygiene: 80, level: 1, exp: 0 },
-    eggStartedAt: iso(T0),
+    eggCoinsEarned: 0,
     eggCareBoost: 0,
     lastTickAt: null,
     ...overrides,
@@ -24,58 +24,71 @@ const eggState = (overrides: any = {}) => ({
 const hatchedState = (overrides: any = {}) => ({
     gameCoins: 100,
     petStats: { happiness: 80, hunger: 60, energy: 70, hygiene: 80, level: 3, exp: 0 },
-    eggStartedAt: iso(T0),
+    eggCoinsEarned: 0,
     eggCareBoost: 0,
     lastTickAt: iso(T0),
     ...overrides,
 });
 
 describe('incubación del huevo', () => {
-    it('progresa con el tiempo transcurrido', () => {
-        expect(computeEggProgress(eggState(), T0)).toBe(0);
-        expect(computeEggProgress(eggState(), T0 + 24 * HOUR)).toBe(50);
-        expect(computeEggProgress(eggState(), T0 + EGG_INCUBATION_HOURS * HOUR)).toBe(100);
+    it('progresa con los puntos de juego ganados siendo huevo', () => {
+        expect(computeEggProgress(eggState())).toBe(0);
+        expect(computeEggProgress(eggState({ eggCoinsEarned: 50 }))).toBe(50);
+        expect(computeEggProgress(eggState({ eggCoinsEarned: 100 }))).toBe(100);
     });
 
-    it('los cuidados aceleran el progreso', () => {
-        const cuidado = eggState({ eggCareBoost: 20 });
-        expect(computeEggProgress(cuidado, T0 + 24 * HOUR)).toBe(70);
+    it('los cuidados suman aparte de los puntos de juego', () => {
+        const cuidado = eggState({ eggCoinsEarned: 50, eggCareBoost: 20 });
+        expect(computeEggProgress(cuidado)).toBe(70);
     });
 
     it('nunca pasa de 100', () => {
-        const state = eggState({ eggCareBoost: 90 });
-        expect(computeEggProgress(state, T0 + 40 * HOUR)).toBe(100);
+        const state = eggState({ eggCoinsEarned: 90, eggCareBoost: 90 });
+        expect(computeEggProgress(state)).toBe(100);
     });
 
-    it('NO eclosiona por juntar monedas — sólo por tiempo', () => {
-        // Regresión: el estado por defecto arranca con 100 monedas y el código
-        // viejo rompía el huevo con la primera moneda ganada.
-        const rico = eggState({ gameCoins: 5000 });
+    it('llegar a 100 no eclosiona sola — sólo queda "lista"', () => {
+        // Regresión: el estado por defecto arranca con 100 monedas de saldo;
+        // eso NO debe eclosionar nada, sólo `eggCoinsEarned` cuenta.
+        const rico = eggState({ gameCoins: 5000, eggCoinsEarned: 0 });
         const settled = settlePetState(rico, T0 + HOUR);
         expect(settled.hatched).toBe(false);
         expect(isEggStage(settled.state)).toBe(true);
-    });
 
-    it('eclosiona al completar la incubación, con los stats llenos', () => {
-        const settled = settlePetState(eggState(), T0 + EGG_INCUBATION_HOURS * HOUR);
-        expect(settled.hatched).toBe(true);
-        expect(settled.state.petStats.level).toBe(3);
-        expect(settled.state.petStats.hunger).toBe(100);
-        expect(settled.state.petStats.hygiene).toBe(100);
-        expect(settled.state.lastTickAt).toBe(iso(T0 + EGG_INCUBATION_HOURS * HOUR));
-    });
-
-    it('arranca el reloj la primera vez que se liquida un huevo sin fecha', () => {
-        const sinFecha = eggState({ eggStartedAt: null });
-        const settled = settlePetState(sinFecha, T0);
-        expect(settled.state.eggStartedAt).toBe(iso(T0));
-        expect(settled.changed).toBe(true);
+        const lista = eggState({ eggCoinsEarned: 100 });
+        const settledLista = settlePetState(lista, T0 + HOUR);
+        expect(settledLista.hatched).toBe(false);
+        expect(isEggStage(settledLista.state)).toBe(true);
     });
 
     it('el huevo no sufre desgaste', () => {
         const settled = settlePetState(eggState(), T0 + 10 * HOUR);
         expect(settled.state.petStats.hunger).toBe(60);
         expect(settled.state.petStats.energy).toBe(70);
+    });
+});
+
+describe('abrir el huevo (hatchEgg)', () => {
+    it('rechaza abrir si todavía no llegó a 100', () => {
+        const result = hatchEgg(eggState({ eggCoinsEarned: 99 }), T0);
+        expect(result.hatched).toBe(false);
+        expect(isEggStage(result.state)).toBe(true);
+    });
+
+    it('eclosiona al tocar el botón con 100 de progreso, con los stats llenos', () => {
+        const result = hatchEgg(eggState({ eggCoinsEarned: 100 }), T0);
+        expect(result.hatched).toBe(true);
+        expect(result.state.petStats.level).toBe(3);
+        expect(result.state.petStats.hunger).toBe(100);
+        expect(result.state.petStats.hygiene).toBe(100);
+        expect(result.state.lastTickAt).toBe(iso(T0));
+    });
+
+    it('no hace nada si ya nació', () => {
+        const nacida = hatchedState();
+        const result = hatchEgg(nacida, T0);
+        expect(result.hatched).toBe(false);
+        expect(result.state).toBe(nacida);
     });
 });
 
@@ -133,16 +146,25 @@ describe('necesidades visibles', () => {
         expect(primaryNeed({ hunger: 90, hygiene: 90, energy: 90 })).toBe(null);
     });
 
-    it('decora el estado con el progreso del huevo', () => {
-        const decorated = decoratePetState(eggState(), T0 + 24 * HOUR);
+    it('decora el estado con el progreso del huevo y si está listo', () => {
+        const decorated = decoratePetState(eggState({ eggCoinsEarned: 50 }), T0);
         expect(decorated.isEgg).toBe(true);
         expect(decorated.eggProgress).toBe(50);
+        expect(decorated.eggReady).toBe(false);
         expect(decorated.primaryNeed).toBe(null);
     });
 
-    it('una mascota nacida reporta 100% de incubación', () => {
+    it('marca el huevo como listo (eggReady) al llegar a 100, sin eclosionar', () => {
+        const decorated = decoratePetState(eggState({ eggCoinsEarned: 100 }), T0);
+        expect(decorated.isEgg).toBe(true);
+        expect(decorated.eggProgress).toBe(100);
+        expect(decorated.eggReady).toBe(true);
+    });
+
+    it('una mascota nacida reporta 100% de incubación y no está "lista" (ya nació)', () => {
         const decorated = decoratePetState(hatchedState(), T0);
         expect(decorated.isEgg).toBe(false);
         expect(decorated.eggProgress).toBe(100);
+        expect(decorated.eggReady).toBe(false);
     });
 });

@@ -156,10 +156,11 @@ export const AdvancedFilters = ({ open, onOpenChange, onApplyFilters, currentFil
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Categorías</Text>
 
-                        {(['product', 'service', 'bono', 'event'] as const).map((type) => {
+                        {/* Los bonos ya no tienen sub-categorías (modelo único
+                            "pagás X, conseguís 2X") — sin sección de chips acá. */}
+                        {(['product', 'service', 'event'] as const).map((type) => {
                             const label = type === 'product' ? 'Productos' :
-                                type === 'service' ? 'Servicios' :
-                                    type === 'bono' ? 'Bonos' : 'Eventos';
+                                type === 'service' ? 'Servicios' : 'Eventos';
 
                             const categories = UNIFIED_CATEGORIES[type];
 

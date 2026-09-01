@@ -92,7 +92,7 @@ export const addReview = mutation({
 
         // Recompensa por dejar una reseña. El monto sale de la tabla única
         // (`economy/_rewardRules.ts`), no de un literal suelto.
-        await ctx.runMutation(internal.economy.applyPointsEventInternal, {
+        const pointsResult: any = await ctx.runMutation(internal.economy.applyPointsEventInternal, {
             userId: targetUserId,
             eventKey: `review_${reviewId}`,
             type: "earn",
@@ -101,7 +101,7 @@ export const addReview = mutation({
             description: "Recompensa por dejar una reseña",
         });
 
-        return reviewId;
+        return { reviewId, pointsAwarded: pointsResult?.success ? REVIEW_POINTS : 0 };
     },
 });
 

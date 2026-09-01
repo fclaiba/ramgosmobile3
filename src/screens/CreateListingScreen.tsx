@@ -229,7 +229,7 @@ export default function CreateListingScreen({ navigation, route }: any) {
             title: form.title,
             price: form.price,
             stock: form.stock,
-            category: form.category,
+            category: selectedType === 'bono' ? 'Bono' : form.category,
             description: form.description,
             photos: form.photos,
             condition: form.condition,
@@ -251,7 +251,10 @@ export default function CreateListingScreen({ navigation, route }: any) {
             const weightValue = parseFloat(form.weight.replace(',', '.')) || 0.5;
 
             const listingType = selectedType;
-            const finalCategory = form.category;
+            // Los bonos ya no tienen selector de categoría (modelo único
+            // "pagás X, conseguís 2X") — categoría fija, también normaliza
+            // bonos viejos con categorías del modelo anterior al reeditarlos.
+            const finalCategory = listingType === 'bono' ? 'Bono' : form.category;
 
             let discountValueFloat: number | undefined = undefined;
             let validityDaysValue: number | undefined = undefined;
@@ -575,8 +578,6 @@ export default function CreateListingScreen({ navigation, route }: any) {
                     onChange={(t: string) => setForm({ ...form, title: t })}
                     styles={styles}
                 />
-                {renderCategoryPicker(form.category, (val) => setForm(prev => ({ ...prev, category: val })), CATEGORIES.bono)}
-
                 <Text style={{ fontSize: 13, color: isDark ? '#A1A1AA' : '#6B7280', marginBottom: 12, lineHeight: 18 }}>
                     Modelo Ramgos: el cliente paga la mitad y recibe el doble de crédito. Ej. pagá $50 → $100 de descuento en tu negocio.
                 </Text>

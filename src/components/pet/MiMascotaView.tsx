@@ -4,7 +4,18 @@ import { Heart, Utensils, Zap, Sparkles, Moon, Play, Coins, ArrowRight, Trophy, 
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming, FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+    withSequence,
+    withTiming,
+    withDelay,
+    interpolate,
+    FadeInDown,
+    FadeIn,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { usePoints } from '../../contexts/PointsContext';
 import { useRewards } from '../../contexts/RewardsContext';
 import { MobileHeader } from '../MobileHeader';
@@ -21,7 +32,7 @@ import { FlappyBird } from '../games/FlappyBird';
 import { GameWrapper } from '../games/GameWrapper';
 import type { GameId } from '../games/gameContracts';
 import { coinsForScore, isRewardGame } from '../games/arcadeRewards';
-import { Radius, colors } from '../../theme/tokens';
+import { Radius, colors, Motion } from '../../theme/tokens';
 
 
 // Parte 0 (contrato): tipos/tokens para wrapper compartido (sin refactor aún).
@@ -82,6 +93,67 @@ const HATS = [
     { id: 'alien', icon: '👽', name: 'Alien', cost: 250 },
 ];
 
+/**
+ * Partículas del "crack" del huevo: ángulo/distancia/emoji fijos (no
+ * `Math.random()` en cada render) repartidos en círculo. Una sola shared
+ * value (`hatchBurst`, 0→1) las mueve a todas — cada partícula sólo aporta
+ * su propio ángulo/distancia a la interpolación, así no hace falta crear
+ * una shared value por partícula. Emojis + colores toman la paleta festiva
+ * ya usada en `PaymentSuccessBurst` mezclada con los ámbares del huevo.
+ */
+const HATCH_PARTICLE_COUNT = 10;
+const HATCH_PARTICLE_EMOJIS = ['✨', '🎉', '🥚', '⭐'];
+const HATCH_PARTICLE_COLORS = ['#F59E0B', '#FCD34D', '#34D399', '#F472B6'];
+const HATCH_PARTICLES = Array.from({ length: HATCH_PARTICLE_COUNT }, (_, i) => {
+    const angle = (i / HATCH_PARTICLE_COUNT) * Math.PI * 2;
+    return {
+        angle,
+        distance: 70 + (i % 3) * 18,
+        emoji: HATCH_PARTICLE_EMOJIS[i % HATCH_PARTICLE_EMOJIS.length],
+        color: HATCH_PARTICLE_COLORS[i % HATCH_PARTICLE_COLORS.length],
+        rotate: (i % 2 === 0 ? 1 : -1) * 180,
+    };
+});
+
+/**
+ * Una partícula del "crack": interpola su propia posición/opacidad/rotación
+ * a partir del único driver `progress` (0→1) que le pasa el padre — así el
+ * `useAnimatedStyle` de cada partícula vive en su propio componente (reglas
+ * de hooks) en vez de en un loop dentro de `MiMascotaView`.
+ */
+function HatchParticle({
+    particle,
+    progress,
+}: {
+    particle: (typeof HATCH_PARTICLES)[number];
+    progress: any;
+}) {
+    const style = useAnimatedStyle(() => {
+        const p = progress.value;
+        const eased = 1 - Math.pow(1 - p, 3); // ease-out cúbico
+        const dist = eased * particle.distance;
+        return {
+            opacity: interpolate(p, [0, 0.15, 0.7, 1], [0, 1, 1, 0]),
+            transform: [
+                { translateX: Math.cos(particle.angle) * dist },
+                { translateY: Math.sin(particle.angle) * dist },
+                { scale: interpolate(p, [0, 0.2, 1], [0.3, 1, 0.7]) },
+                { rotate: `${p * particle.rotate}deg` },
+            ],
+        };
+    });
+    return (
+        <Animated.Text style={[hatchParticleStyle, style, { color: particle.color }]}>
+            {particle.emoji}
+        </Animated.Text>
+    );
+}
+
+const hatchParticleStyle = {
+    position: 'absolute' as const,
+    fontSize: 20,
+};
+
 export function MiMascotaView({ navigation }: any) {
     const {
         convertCoinsToPoints,
@@ -90,11 +162,13 @@ export function MiMascotaView({ navigation }: any) {
         petStats,
         petConfig: economyPetConfig,
         eggProgress,
+        eggReady,
         primaryNeed,
         feedPet,
         sleepPet: sleepPetRemote,
         cleanPet: cleanPetRemote,
         playPet: playPetRemote,
+        openEgg,
         addGameCoins,
         updatePetState,
     } = usePoints();
@@ -116,6 +190,7 @@ export function MiMascotaView({ navigation }: any) {
     const [petMood, setPetMood] = useState<PetMood>('happy');
     const [isAnimating, setIsAnimating] = useState(false);
     const [catAnimation, setCatAnimation] = useState<string>('idle');
+    const [isHatching, setIsHatching] = useState(false);
     const [showWardrobe, setShowWardrobe] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
     const [previewHat, setPreviewHat] = useState<string | null>(null);
@@ -190,8 +265,32 @@ export function MiMascotaView({ navigation }: any) {
     const catScale = useSharedValue(1);
     const catRotate = useSharedValue(0);
     const catY = useSharedValue(0);
+    // Destello + anillos + partículas, sólo para la secuencia de eclosión.
+    const eggBurstScale = useSharedValue(0);
+    const eggBurstOpacity = useSharedValue(0);
+    const ring1Scale = useSharedValue(0);
+    const ring1Opacity = useSharedValue(0);
+    const ring2Scale = useSharedValue(0);
+    const ring2Opacity = useSharedValue(0);
+    /** Driver 0→1 de las partículas del crack — cada una interpola su propio
+     *  ángulo/distancia a partir de este único valor (ver `HATCH_PARTICLES`). */
+    const hatchBurst = useSharedValue(0);
 
-    const animateCat = (type: 'jump' | 'shake' | 'sleep' | 'idle') => {
+    /** Duración total de la secuencia 'hatch' (anticipación + shake + crack),
+     *  en ms. Se usa para esperar a que asiente antes de llamar al backend. */
+    const HATCH_ANIMATION_MS = 1300;
+    // Momento, dentro de esa secuencia, en el que "revienta" el huevo — todo
+    // lo demás (rings, partículas, haptic fuerte) se ancla a este offset.
+    const HATCH_CRACK_MS = 780;
+
+    const hapticImpact = (style: Haptics.ImpactFeedbackStyle) => {
+        if (Platform.OS !== 'web') Haptics.impactAsync(style).catch(() => {});
+    };
+    const hapticSuccess = () => {
+        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    };
+
+    const animateCat = (type: 'jump' | 'shake' | 'sleep' | 'idle' | 'hatch') => {
         if (type === 'jump') {
             catY.value = withSequence(withTiming(-20, { duration: 300 }), withTiming(0, { duration: 300 }));
         } else if (type === 'shake') {
@@ -201,6 +300,58 @@ export function MiMascotaView({ navigation }: any) {
                 withTiming(10, { duration: 100 }),
                 withTiming(0, { duration: 100 })
             );
+        } else if (type === 'hatch') {
+            // 1) Anticipación: el huevo "respira" antes de temblar.
+            catScale.value = withSequence(
+                withTiming(1.06, { duration: 120 }),
+                withTiming(1, { duration: 120 }),
+                withTiming(1.06, { duration: 120 }),
+                withTiming(1, { duration: 120 }),
+                // 3) Crack: el pop grande, justo cuando arrancan los anillos
+                // y las partículas (ver más abajo).
+                withDelay(
+                    240, // el shake de abajo dura 240ms (240 a 780 total)
+                    withSequence(
+                        withTiming(1.4, { duration: 180 }),
+                        withTiming(0.85, { duration: 120 }),
+                        withTiming(1, { duration: 160 })
+                    )
+                )
+            );
+            // 2) Shake: tiembla cada vez más fuerte mientras dura la anticipación.
+            catRotate.value = withDelay(
+                240,
+                withSequence(
+                    withTiming(-8, { duration: 90 }),
+                    withTiming(8, { duration: 90 }),
+                    withTiming(-10, { duration: 90 }),
+                    withTiming(10, { duration: 90 }),
+                    withTiming(-6, { duration: 90 }),
+                    withTiming(0, { duration: 90 })
+                )
+            );
+
+            // Destello central.
+            eggBurstScale.value = withDelay(HATCH_CRACK_MS, withTiming(2.4, { duration: 400 }));
+            eggBurstOpacity.value = withDelay(
+                HATCH_CRACK_MS,
+                withSequence(withTiming(0.9, { duration: 100 }), withTiming(0, { duration: 300 }))
+            );
+            // Dos anillos concéntricos expandiéndose, el segundo un toque
+            // más tarde para que se sienta como una onda, no un solo pulso.
+            ring1Scale.value = withDelay(HATCH_CRACK_MS, withTiming(3, { duration: 500 }));
+            ring1Opacity.value = withDelay(
+                HATCH_CRACK_MS,
+                withSequence(withTiming(0.8, { duration: 80 }), withTiming(0, { duration: 420 }))
+            );
+            ring2Scale.value = withDelay(HATCH_CRACK_MS + 120, withTiming(3.4, { duration: 500 }));
+            ring2Opacity.value = withDelay(
+                HATCH_CRACK_MS + 120,
+                withSequence(withTiming(0.6, { duration: 80 }), withTiming(0, { duration: 420 }))
+            );
+            // Partículas: salen disparadas del centro al mismo tiempo que el pop.
+            hatchBurst.value = 0;
+            hatchBurst.value = withDelay(HATCH_CRACK_MS, withTiming(1, { duration: 460 }));
         }
     };
 
@@ -211,6 +362,22 @@ export function MiMascotaView({ navigation }: any) {
             { translateY: catY.value }
         ]
     }));
+
+    const eggBurstStyle = useAnimatedStyle(() => ({
+        opacity: eggBurstOpacity.value,
+        transform: [{ scale: eggBurstScale.value }],
+    }));
+
+    const ring1Style = useAnimatedStyle(() => ({
+        opacity: ring1Opacity.value,
+        transform: [{ scale: ring1Scale.value }],
+    }));
+
+    const ring2Style = useAnimatedStyle(() => ({
+        opacity: ring2Opacity.value,
+        transform: [{ scale: ring2Scale.value }],
+    }));
+
 
     const getCatEmoji = () => {
         if (petStage === 'EGG') return '🥚';
@@ -242,7 +409,8 @@ export function MiMascotaView({ navigation }: any) {
         setIsAnimating(true);
         setCatAnimation('eating');
         animateCat('jump');
-        show('¡Comida deliciosa! +30 Hambre, +15 XP 🍖', 'success');
+        const bonus = result.pointsAwarded ? ` · +${result.pointsAwarded} pts` : '';
+        show(`¡Comida deliciosa! +30 Hambre, +15 XP 🍖${bonus}`, 'success');
         setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 2000);
     };
 
@@ -271,6 +439,41 @@ export function MiMascotaView({ navigation }: any) {
         show('¡A jugar! +20 Felicidad, +25 XP 😺', 'success');
         setTimeout(() => { setIsAnimating(false); setCatAnimation('idle'); }, 1000);
     };
+
+    /**
+     * Abre el huevo. La animación corre primero (anticipación + shake +
+     * crack con anillos/partículas) y recién cuando termina se llama al
+     * backend — así el usuario siempre ve la eclosión completa, en vez de
+     * que el huevo cambie de golpe apenas responde Convex. El rebote final
+     * de la cría se dispara en un `useEffect` propio, sincronizado con el
+     * cambio real de `petStage` (no con la latencia de red).
+     */
+    const handleOpenEgg = () => {
+        if (!eggReady || isHatching) return;
+        setIsHatching(true);
+        animateCat('hatch');
+        hapticImpact(Haptics.ImpactFeedbackStyle.Medium);
+        setTimeout(() => hapticImpact(Haptics.ImpactFeedbackStyle.Heavy), HATCH_CRACK_MS);
+        setTimeout(async () => {
+            const result = await openEgg();
+            if (!result.success) {
+                setIsHatching(false);
+                return show(result.message, 'error');
+            }
+            show(result.message || '¡Tu mascota nació! 🐣', 'success');
+        }, HATCH_ANIMATION_MS);
+    };
+
+    // Rebote + haptic de éxito cuando la cría realmente aparece (petStage deja
+    // de ser 'EGG'), en vez de atarlo a cuándo respondió la mutation.
+    useEffect(() => {
+        if (isHatching && petStage !== 'EGG') {
+            catScale.value = 0.4;
+            catScale.value = withSpring(1, Motion.pressSpring);
+            hapticSuccess();
+            setIsHatching(false);
+        }
+    }, [petStage, isHatching]);
 
     const handleSleepPet = async () => {
         if (petStage === 'EGG') return show('¡El huevo ya está descansando! 🥚', 'info');
@@ -476,8 +679,11 @@ export function MiMascotaView({ navigation }: any) {
                 <View style={styles.guideCard}>
                     <Text style={styles.guideTitle}>Guía de Evolución</Text>
                     <Text style={styles.guideText}>
-                        El huevo incuba solo: tarda unas 48 horas. Darle calor y entrar cada
-                        día lo acelera. Después de nacer, tu mascota sube de nivel con la
+                        El huevo se rompe juntando 100 monedas jugando a los minijuegos del
+                        Arcade (darle calor también suma un poco). Estas monedas son las de tu
+                        mascota — no tienen nada que ver con los Pts Ramgos, que son otro
+                        sistema aparte para descuentos. Al llegar a 100 aparece el botón
+                        "Abrir huevo". Después de nacer, tu mascota sube de nivel con la
                         experiencia que gana cada vez que la cuidás.
                     </Text>
 
@@ -495,7 +701,7 @@ export function MiMascotaView({ navigation }: any) {
                         antes esta lista y nunca fue cierto — la racha no
                         intervenía en la evolución por ningún lado. */}
                     <View style={styles.reqList}>
-                        <Text style={styles.reqItem}>• Huevo: ~48 h de incubación</Text>
+                        <Text style={styles.reqItem}>• Huevo: 100 monedas jugando en el Arcade</Text>
                         <Text style={styles.reqItem}>• Bebé: al nacer (nivel 3)</Text>
                         <Text style={styles.reqItem}>• Joven: nivel 8</Text>
                         <Text style={styles.reqItem}>• Adulto: nivel 30</Text>
@@ -551,7 +757,13 @@ export function MiMascotaView({ navigation }: any) {
                                 const result = registerArcadeReward(currentGame, score);
                                 if (result.status === 'awarded') show(`+${result.pointsAwarded} Pts Ramgos`);
                             }
-                            show(`Fin de juego: Ganaste ${coins} monedas`);
+                            // Mientras es huevo, estas mismas monedas también suman para
+                            // romperlo — decirlo acá evita que parezca que "no contabiliza".
+                            show(
+                                petStage === 'EGG' && coins > 0
+                                    ? `Fin de juego: +${coins} monedas → suman para tu huevo 🥚`
+                                    : `Fin de juego: Ganaste ${coins} monedas`
+                            );
                         }}
                         gameProps={{}}
                     />
@@ -580,6 +792,12 @@ export function MiMascotaView({ navigation }: any) {
                 <View style={styles.heroCard}>
                     <LinearGradient colors={isDark ? ['#312E81', '#1E1B4B'] : ['#E0E7FF', '#FAFAFA']} style={styles.heroGradient}>
                         <View style={styles.petStageArea}>
+                            <Animated.View pointerEvents="none" style={[styles.hatchRing, ring2Style]} />
+                            <Animated.View pointerEvents="none" style={[styles.hatchRing, ring1Style]} />
+                            <Animated.View pointerEvents="none" style={[styles.eggBurst, eggBurstStyle]} />
+                            {HATCH_PARTICLES.map((particle, i) => (
+                                <HatchParticle key={i} particle={particle} progress={hatchBurst} />
+                            ))}
                             {petConfig?.activeHat && petConfig.activeHat !== 'none' && (
                                 <Animated.Text entering={FadeInDown} style={styles.hatEmoji}>
                                     {HATS.find(h => h.id === petConfig.activeHat)?.icon}
@@ -607,10 +825,21 @@ export function MiMascotaView({ navigation }: any) {
                         <View style={styles.statsGrid}>
                             {renderProgressBar(eggProgress, '#F59E0B', <Egg size={14} color="#F59E0B" />)}
                             <Text style={styles.eggHint}>
-                                {eggProgress >= 95
-                                    ? '¡Está por romperse!'
-                                    : 'Incuba solo con el tiempo. Dale calor y entrá cada día para acelerarlo.'}
+                                {eggReady
+                                    ? '¡Tu huevo está listo! Tocá el botón para abrirlo 🥚'
+                                    : `Llevás ${eggProgress}/100 monedas para tu huevo. Jugá los minijuegos del Arcade y ganá monedas — cada moneda cuenta acá (dar calor también suma un poco). Esto no tiene nada que ver con los Pts Ramgos.`}
                             </Text>
+                            {eggReady && (
+                                <TouchableOpacity
+                                    style={styles.openEggBtn}
+                                    onPress={handleOpenEgg}
+                                    disabled={isHatching}
+                                >
+                                    <Text style={styles.openEggBtnText}>
+                                        {isHatching ? 'Abriendo...' : 'Abrir huevo 🥚'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ) : (
                         <View style={styles.statsGrid}>
@@ -758,6 +987,21 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     mainPetEmoji: {
         fontSize: 80,
     },
+    eggBurst: {
+        position: 'absolute',
+        width: 90,
+        height: 90,
+        borderRadius: Radius.full,
+        backgroundColor: '#FDE68A',
+    },
+    hatchRing: {
+        position: 'absolute',
+        width: 90,
+        height: 90,
+        borderRadius: Radius.full,
+        borderWidth: 3,
+        borderColor: '#F59E0B',
+    },
     hatEmoji: {
         position: 'absolute',
         top: -35,
@@ -790,6 +1034,22 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
         lineHeight: 17,
         color: isDark ? '#A1A1AA' : '#6B7280',
         textAlign: 'center',
+    },
+    openEggBtn: {
+        backgroundColor: '#F59E0B',
+        paddingVertical: 12,
+        borderRadius: Radius.lg,
+        alignItems: 'center',
+        shadowColor: '#F59E0B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+    openEggBtnText: {
+        color: '#FFF',
+        fontWeight: 'bold',
+        fontSize: 15,
     },
     statRow: {
         flexDirection: 'row',
