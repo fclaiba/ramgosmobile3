@@ -35,7 +35,7 @@ Cargar con `npx convex env set VAR valor` (o en el Dashboard de Convex → Setti
 | `STRIPE_WEBHOOK_SECRET_TEST` | test | destino snapshot → `/stripe-webhook-test` |
 | `STRIPE_WEBHOOK_SECRET_THIN_TEST` | test | destino thin → `/stripe-webhook-test` |
 | `ALLOW_STRIPE_MOCK` | ambos | `false` en producción. `true` sólo para QA: habilita `simulate` (pagos sin Stripe). |
-| `STRIPE_CONNECT_RETURN_URL_BASE` | ambos | `ramgos://connect` (default). Si Stripe rechaza el esquema: `https://ramgos.app/connect`. |
+| `STRIPE_CONNECT_RETURN_URL_BASE` | ambos | **Opcional.** Default `https://ramgos.app/connect`. Tiene que ser https (Stripe rechaza esquemas custom tipo `ramgos://`; sólo tolera `http://localhost` en modo test) — un valor con esquema custom se ignora. En web el cliente manda su propio origen y gana sobre esta variable, si está en la allowlist de `convex/_connectReturnUrl.ts`. El retorno a la app nativa entra por universal link (`ramgos.app`). |
 
 Con un solo modo alcanza: la app sólo muestra en el toggle los modos configurados.
 

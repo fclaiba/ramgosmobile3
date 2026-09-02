@@ -4,8 +4,10 @@
  *
  *   start()   → ensureConnectAccount → createOnboardingLink → abre el
  *               onboarding hosted de Stripe en un browser de auth
- *               (`WebBrowser.openAuthSessionAsync`) que vuelve a la app por
- *               `ramgos://connect/return?mode=…` → refresh().
+ *               (`WebBrowser.openAuthSessionAsync`) que vuelve por
+ *               `https://…/connect/return?mode=…` → refresh(). Stripe exige
+ *               https, así que el retorno entra por universal link (nativo)
+ *               o por la ruta web; ver `convex/_connectReturnUrl.ts`.
  *   refresh() → getAccountStatus (lee Stripe en vivo y persiste); la query
  *               reactiva `getMyConnectStatus` actualiza la UI sola.
  *
@@ -79,10 +81,16 @@ export function useConnectOnboarding(options?: { mode?: PaymentMode; userId?: st
                 displayName: options?.displayName || (user as any).name || undefined,
                 contactEmail: (user as any).email || undefined,
             });
+            // En web hay que volver al origen desde el que se arrancó: mandar
+            // al dev de localhost a ramgos.app lo deja en producción y con
+            // otra sesión. El servidor lo valida contra una allowlist.
+            const returnOrigin =
+                Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
             const link = await createOnboardingLink({
                 sessionToken,
                 mode,
                 ...(options?.userId ? { userId: options.userId } : {}),
+                ...(returnOrigin ? { returnOrigin } : {}),
             });
             if (Platform.OS === 'web') {
                 // En web no hay sesión de auth: se abre en la misma pestaña y

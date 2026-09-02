@@ -19,9 +19,13 @@
  *     todo con "Unknown field" (E-137). El retiro al banco lo administra el
  *     vendedor desde su dashboard Express. Ver `_connectCaps.ts`.
  *
- * Onboarding: `v2.core.accountLinks.create` con `use_case.account_onboarding`
- * y `return_url`/`refresh_url` que vuelven a la app (`ramgos://connect/...`,
- * configurable con `STRIPE_CONNECT_RETURN_URL_BASE` si Stripe exige https).
+ * Onboarding: `v2.core.accountLinks.create` con `use_case.account_onboarding`.
+ * El `return_url`/`refresh_url` DEBE ser https (Stripe rechaza los esquemas
+ * custom tipo `ramgos://`; sólo tolera http con localhost en modo test). Se
+ * resuelve en `_connectReturnUrl.ts`: el origen que propone el cliente si
+ * pasa la allowlist, si no `STRIPE_CONNECT_RETURN_URL_BASE`, si no
+ * `https://ramgos.app/connect`. La app igual se abre por deep link porque
+ * `ramgos.app` está configurado como universal link / app link.
  *
  * Estado: se lee en vivo con `v2.core.accounts.retrieve(id, {include})` y
  * se persiste en `users.stripeConnectCaps[Test]` para que la UI sea reactiva
@@ -39,8 +43,7 @@ import { assertStripeConfigured, getStripe, hasStripeKey } from "./stripeClient"
 import { stripeModeValidator } from "./schema";
 import type { StripeMode } from "./_stripeEnv";
 import { capsFromAccount, deriveCanPayout, type ConnectCaps } from "./_connectCaps";
-
-const CONNECT_RETURN_URL_BASE = process.env.STRIPE_CONNECT_RETURN_URL_BASE ?? "ramgos://connect";
+import { resolveConnectReturnBase } from "./_connectReturnUrl";
 
 export type ConnectStatus = {
     mode: StripeMode;
@@ -280,14 +283,29 @@ export const ensureConnectAccount = action({
 // ---------------------------------------------------------------------------
 
 export const createOnboardingLink = action({
-    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
+    args: {
+        sessionToken: v.optional(v.string()),
+        mode: stripeModeValidator,
+        userId: v.optional(v.string()),
+        /**
+         * Origen al que volver (web manda `window.location.origin`). Se valida
+         * contra una allowlist en `_connectReturnUrl.ts`: viaja a un tercero,
+         * un origen arbitrario sería un redirect abierto.
+         */
+        returnOrigin: v.optional(v.string()),
+    },
     handler: async (ctx, args): Promise<{ url: string; expiresAt: string | null; returnUrl: string }> => {
         assertStripeConfigured(args.mode);
         const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
         const accountId = readStatus(user, args.mode).accountId;
         if (!accountId) throw new Error("Primero hay que crear la cuenta de pagos (ensureConnectAccount).");
-        const returnUrl = `${CONNECT_RETURN_URL_BASE}/return?mode=${args.mode}`;
-        const refreshUrl = `${CONNECT_RETURN_URL_BASE}/refresh?mode=${args.mode}`;
+        const base = resolveConnectReturnBase({
+            mode: args.mode,
+            requestedOrigin: args.returnOrigin,
+            envBase: process.env.STRIPE_CONNECT_RETURN_URL_BASE,
+        });
+        const returnUrl = `${base}/return?mode=${args.mode}`;
+        const refreshUrl = `${base}/refresh?mode=${args.mode}`;
         try {
             const link = await (getStripe(args.mode) as any).v2.core.accountLinks.create({
                 account: accountId,
