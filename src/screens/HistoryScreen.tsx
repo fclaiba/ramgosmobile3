@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { canConfirmReceipt } from '../../convex/orders/_orderStates';
 import {
     View,
     Text,
@@ -113,8 +114,11 @@ const TYPE_ICON: Record<HistoryType, any> = {
 const ESCROW_META: Record<string, { label: string; color: string }> = {
     held: { label: 'En retención', color: '#D97706' },
     release_scheduled: { label: 'Liberación programada', color: '#2563EB' },
+    release_pending: { label: 'Liberando…', color: '#2563EB' },
     released: { label: 'Liberado', color: '#059669' },
+    refund_pending: { label: 'Reembolsando…', color: '#2563EB' },
     disputed: { label: 'En disputa', color: '#DC2626' },
+    frozen: { label: 'Congelado (disputa Stripe)', color: '#DC2626' },
     refunded: { label: 'Reembolsado', color: '#6B7280' },
 };
 
@@ -226,7 +230,6 @@ export default function HistoryScreen({ navigation, route }: any) {
     const listings = useQuery(api.listings.getFeed) || [];
 
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
-    const releaseEscrowFunds = useAction(api.stripe.releaseEscrowFunds);
 
     const loading =
         orders === undefined ||
@@ -516,8 +519,9 @@ export default function HistoryScreen({ navigation, route }: any) {
         }
         setIsReleasingEscrow((prev) => ({ ...prev, [orderId]: true }));
         try {
-            await releaseEscrowFunds({ orderId: orderId as any, sessionToken, userId: user.id });
-            show('Pago liberado exitosamente al vendedor.', 'success');
+            // "Liberar" es confirmar la recepción: el backend hace el transfer.
+            await confirmReceiptMutation({ orderId: orderId as any, sessionToken, userId: user.id });
+            show('Recepción confirmada. Estamos liberando el pago al vendedor.', 'success');
         } catch (e: any) {
             show(e.message || 'Error al liberar el pago.', 'error');
         } finally {
@@ -535,7 +539,7 @@ export default function HistoryScreen({ navigation, route }: any) {
             return;
         }
         confirmReceiptMutation({ orderId: item.orderId as any, sessionToken, userId: user.id })
-            .then(() => show('Entrega confirmada. El pago se liberará al vendedor', 'success'))
+            .then(() => show('Entrega confirmada. Estamos liberando el pago al vendedor.', 'success'))
             .catch((err: any) => show(err.message ?? 'No pudimos confirmar la entrega', 'error'));
     };
 
@@ -729,7 +733,7 @@ export default function HistoryScreen({ navigation, route }: any) {
             item.status === 'pending' &&
             !!item.bonoCode &&
             !String(item.bonoCode).startsWith('DEMO-');
-        const canConfirm = activeTab === 'purchases' && item.backendStatus === 'paid_escrow';
+        const canConfirm = activeTab === 'purchases' && canConfirmReceipt(String(item.backendStatus)) && (item.escrowState ?? 'held') === 'held';
         const creditRemaining = item.creditRemaining ?? 0;
         const creditTotal = item.creditTotal ?? 100;
         const usesRemaining = item.usesRemaining ?? 0;
@@ -870,7 +874,7 @@ export default function HistoryScreen({ navigation, route }: any) {
         const meta = STATUS_META[selectedItem.status];
         const StatusIcon = meta.icon;
         const isBono = selectedItem.kind === 'bonos' && selectedItem.type === 'bonus';
-        const canConfirm = activeTab === 'purchases' && selectedItem.backendStatus === 'paid_escrow';
+        const canConfirm = activeTab === 'purchases' && canConfirmReceipt(String(selectedItem.backendStatus)) && (selectedItem.escrowState ?? 'held') === 'held';
         const escrowMeta = selectedItem.escrowState ? ESCROW_META[selectedItem.escrowState] : null;
 
         return (

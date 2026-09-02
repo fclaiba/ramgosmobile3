@@ -27,6 +27,7 @@ import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { PaymentProvider } from './src/payments/PaymentProvider';
 import { PaymentModeProvider, usePaymentMode } from './src/contexts/PaymentModeContext';
 import { EscrowProvider } from './src/contexts/EscrowContext';
+import ConnectReturnScreen from './src/screens/ConnectReturnScreen';
 import { NotificationsProvider } from './src/contexts/NotificationsContext';
 import { EscrowSheet } from './src/components/marketplace/EscrowSheet';
 import { CrashHandler } from './src/components/CrashHandler';
@@ -218,6 +219,7 @@ const AppNavigator = () => {
                                 referralCode: (referralCode: string) => referralCode,
                             },
                         },
+                        ConnectReturn: 'connect/:result',
                         CommunityDetail: 'c/:communityId',
                         Communities: 'comunidades',
                         // Estas dos las resuelve `getStateFromPath` a mano, pero
@@ -302,6 +304,7 @@ const AppNavigator = () => {
                     <Stack.Screen name="Payment" component={PaymentScreen} />
                     <Stack.Screen name="Dispute" component={DisputeScreen} />
                     <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
+                    <Stack.Screen name="ConnectReturn" component={ConnectReturnScreen} />
                     <Stack.Screen name="MyListings" component={MyListingsScreen} />
                                         {/* Maps & QR Module */}
                     {/* MapExplorer integrated into Marketplace */}
@@ -390,7 +393,7 @@ function StripeKeyGate() {
                                 </PaymentProvider>
             ) : (
                 <Text style={{ marginTop: 100, textAlign: 'center' }}>
-                    Falta configurar EXPO_PUBLIC_STRIPE_KEY_TEST o EXPO_PUBLIC_STRIPE_KEY_LIVE en .env.local
+                    Falta configurar EXPO_PUBLIC_STRIPE_KEY_TEST / EXPO_PUBLIC_STRIPE_KEY_LIVE (o EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY) en .env.local
                 </Text>
             )}
         </>

@@ -34,17 +34,15 @@ import {
     query,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import Stripe from "stripe";
 import { withStripeBreadcrumb } from "./observability";
 import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import { assertStripeConfigured as assertModeConfigured, getStripe, primaryMode } from "./stripeClient";
+import { stripeModeValidator } from "./schema";
+import type { StripeMode } from "./_stripeEnv";
 
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeKey) {
-    throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
-}
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
+// Suscripciones: usan la cuenta "primaria" (live si está configurada, si no
+// test). El cliente se resuelve perezosamente: nunca se lanza al cargar.
+const stripeFor = (mode?: StripeMode) => getStripe(mode ?? primaryMode());
 
 // Configured Stripe Price IDs (set in Convex env). Business is the main
 // recurring plan; we keep `pro` here too for completeness in case we ever
@@ -52,11 +50,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const PRICE_BUSINESS = process.env.STRIPE_PRICE_BUSINESS_MONTHLY ?? "";
 const PRICE_PRO = process.env.STRIPE_PRICE_PRO_MONTHLY ?? "";
 
-const assertStripeConfigured = () => {
-    if (!process.env.STRIPE_SECRET_KEY) {
-        throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
-    }
-};
+const assertStripeConfigured = () => assertModeConfigured(primaryMode());
 
 const resolvePriceForTier = (tier: "pro" | "business"): string => {
     if (tier === "business") return PRICE_BUSINESS;
@@ -151,6 +145,7 @@ export const internalUpsertSubscription = internalMutation({
 // ---------------------------------------------------------------------------
 export const createSubscriptionCheckout = action({
     args: {
+        mode: v.optional(stripeModeValidator),
         sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
@@ -191,7 +186,7 @@ export const createSubscriptionCheckout = action({
                     email: user.email,
                 },
                 () =>
-                    stripe.customers.create({
+                    stripeFor(args.mode).customers.create({
                         email: user.email,
                         name: user.name,
                         metadata: { ramgosUserId: String(args.userId) },
@@ -216,7 +211,7 @@ export const createSubscriptionCheckout = action({
                 priceId,
             },
             () =>
-                stripe.checkout.sessions.create({
+                stripeFor(args.mode).checkout.sessions.create({
                     mode: "subscription",
                     customer: stripeCustomerId,
                     line_items: [{ price: priceId, quantity: 1 }],
@@ -253,6 +248,7 @@ export const createSubscriptionCheckout = action({
 // ---------------------------------------------------------------------------
 export const cancelSubscription = action({
     args: {
+        mode: v.optional(stripeModeValidator),
         sessionToken: v.optional(v.string()),
         actorId: v.optional(v.any()),
         userId: v.id("users"),
@@ -279,7 +275,7 @@ export const cancelSubscription = action({
                 cancelAtPeriodEnd: true,
             },
             () =>
-                stripe.subscriptions.update(sub.stripeSubscriptionId, {
+                stripeFor(args.mode).subscriptions.update(sub.stripeSubscriptionId, {
                     cancel_at_period_end: true,
                 }),
         );
@@ -318,6 +314,7 @@ export const internalHandleStripeSubscriptionEvent = internalAction({
         eventType: v.string(),
         // Pass the raw subscription object (snapshot) — http.ts decoded it.
         subscription: v.any(),
+        mode: v.optional(stripeModeValidator),
     },
     handler: async (ctx, args): Promise<void> => {
         const sub = args.subscription;

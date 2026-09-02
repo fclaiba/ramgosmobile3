@@ -185,3 +185,16 @@ describe('fallback', () => {
         expect(result.__fallback).toBe('/a/b/c');
     });
 });
+
+describe('Stripe Connect (retorno del onboarding hosted)', () => {
+    it("'connect' está reservado: no se lee como handle de usuario", () => {
+        expect(RESERVED_PATHS).toContain('connect');
+    });
+
+    it('ramgos://connect/return?mode=test cae al resolver de React Navigation (ruta ConnectReturn)', () => {
+        const r = getStateFromPath('ramgos://connect/return?mode=test') as any;
+        // No es un perfil ni un producto: el resolver manual no lo captura.
+        expect(r?.routes?.[0]?.name).not.toBe('CommercialProfile');
+        expect(r?.routes?.[0]?.name).not.toBe('ProductDetail');
+    });
+});

@@ -311,16 +311,26 @@ export const internalApplyDisputeResolution = internalMutation({
     handler: async (ctx, args) => {
         const now = new Date().toISOString();
 
+        /**
+         * Sólo se deja la orden lista para que el camino de Stripe haga el
+         * movimiento real: a favor del comprador → `refund_pending` (y
+         * `internalRefundOrder` reembolsa); a favor del vendedor → vuelve a
+         * `held` y `internalReleaseOrderEscrow` transfiere. Antes se marcaba
+         * `refunded`/`released` sin mover un peso.
+         */
+        const order = await ctx.db.get(args.orderId);
         if (args.resolveInFavorOf === 'buyer') {
             await ctx.db.patch(args.orderId, {
-                status: 'cancelled',
-                escrowState: 'refunded',
+                escrowState: 'refund_pending',
+                escrowPrevState: order?.escrowState ?? 'disputed',
+                escrowRefundError: undefined,
                 updatedAt: now,
             });
         } else {
             await ctx.db.patch(args.orderId, {
-                status: 'completed',
-                escrowState: 'released',
+                status: (order?.escrowPrevStatus as any) ?? 'paid_escrow',
+                escrowState: 'held',
+                escrowReleaseError: undefined,
                 updatedAt: now,
             });
         }
@@ -387,8 +397,17 @@ export const resolveDispute = action({
         });
 
         if (args.resolveInFavorOf === 'seller') {
-            await ctx.runMutation(internal.stripe.internalReleasePayment, {
+            await ctx.runAction(internal.stripe.internalReleaseOrderEscrow, {
                 orderId,
+                trigger: 'dispute_seller',
+                actorUserId: actor.idString,
+            });
+        } else {
+            await ctx.runAction(internal.stripe.internalRefundOrder, {
+                orderId,
+                reason: args.resolutionNote ?? 'dispute_resolved_for_buyer',
+                source: 'dispute_buyer',
+                actorUserId: actor.idString,
             });
         }
 

@@ -29,7 +29,10 @@ import { useToast } from '../contexts/ToastContext';
 import { Wallet, DollarSign, Calendar, Send, AlertCircle, CheckCircle2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAction } from 'convex/react';
+import * as Crypto from 'expo-crypto';
 import { api } from '../../convex/_generated/api';
+import { useConnectOnboarding } from '../hooks/useConnectOnboarding';
+import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 
@@ -58,42 +61,57 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         accountId: string | null;
         availableCents: number;
         pendingCents: number;
+        instantAvailableCents: number;
         currency: string;
     } | null>(null);
     const [refreshing, setRefreshing] = useState(true);
+    const [scheduleUnsupported, setScheduleUnsupported] = useState(false);
 
     const getConnectBalance = useAction(api.connect.getConnectBalance);
+    const getPayoutSchedule = useAction(api.connect.getPayoutSchedule);
     const updatePayoutSchedule = useAction(api.connect.updatePayoutSchedule);
     const requestInstantPayout = useAction(api.connect.requestInstantPayout);
 
+    const { mode } = usePaymentMode();
     const userId = user?.id ?? route.params?.ownerId;
-    const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
+    const targetUserId = userId && userId !== user?.id ? String(userId) : undefined;
+    const connect = useConnectOnboarding(targetUserId ? { userId: targetUserId } : undefined);
+    const stripeConnectAccountId: string | undefined = connect.accountId ?? undefined;
+
+    const loadBalance = async () => {
+        const result = await getConnectBalance({ sessionToken, mode, ...(targetUserId ? { userId: targetUserId } : {}) });
+        setBalance({
+            accountId: result.accountId,
+            availableCents: result.availableCents,
+            pendingCents: result.pendingCents,
+            instantAvailableCents: result.instantAvailableCents,
+            currency: result.currency,
+        });
+    };
 
     useEffect(() => {
         let cancelled = false;
-        if (!userId) {
+        if (!userId || !sessionToken || !stripeConnectAccountId) {
             setRefreshing(false);
             return;
         }
         (async () => {
             try {
-                const result: any = await getConnectBalance({ sessionToken, userId: userId as any });
-                if (!cancelled && result) {
-                    setBalance({
-                        accountId: result.accountId,
-                        availableCents: result.availableCents,
-                        pendingCents: result.pendingCents,
-                        currency: result.currency,
-                    });
+                await loadBalance();
+                const schedule = await getPayoutSchedule({ sessionToken, mode, ...(targetUserId ? { userId: targetUserId } : {}) });
+                if (!cancelled) {
+                    if (schedule.unsupported) setScheduleUnsupported(true);
+                    else if (schedule.interval) setInterval(schedule.interval);
                 }
             } catch (e: any) {
-                console.warn('[Connect V2] getConnectBalance failed', e);
+                console.warn('[Connect] balance/schedule fetch failed', e?.message ?? e);
             } finally {
                 if (!cancelled) setRefreshing(false);
             }
         })();
         return () => { cancelled = true; };
-    }, [userId, getConnectBalance]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId, sessionToken, mode, stripeConnectAccountId]);
 
     const availableUSD = useMemo(
         () => (balance ? balance.availableCents / 100 : 0),
@@ -104,17 +122,23 @@ export default function WithdrawalScreen({ navigation, route }: any) {
         [balance],
     );
 
-    const onboardingMissing = !stripeConnectAccountId || !balance?.accountId;
+    const onboardingMissing = !stripeConnectAccountId || !connect.canPayout;
 
     const handleSchedule = async (next: Interval) => {
         if (!userId) return;
         setScheduleSaving(true);
         try {
-            await updatePayoutSchedule({
+            const r = await updatePayoutSchedule({
                 sessionToken,
-                userId: userId as any,
+                mode,
+                ...(targetUserId ? { userId: targetUserId } : {}),
                 interval: next,
             });
+            if (r.unsupported) {
+                setScheduleUnsupported(true);
+                show('El calendario de payouts se administra desde tu dashboard de Stripe Express.', 'info');
+                return;
+            }
             setInterval(next);
             show(`Payouts ahora se envían en modo "${next}".`, 'success');
         } catch (e: any) {
@@ -142,28 +166,27 @@ export default function WithdrawalScreen({ navigation, route }: any) {
 
         setLoading(true);
         try {
-            const result: any = await requestInstantPayout({
+            const result = await requestInstantPayout({
                 sessionToken,
-                userId: userId as any,
+                mode,
+                ...(targetUserId ? { userId: targetUserId } : {}),
                 amountInCents: Math.round(usd * 100),
                 currency: balance?.currency ?? 'usd',
+                // Idempotencia: un doble tap no genera dos payouts.
+                requestId: Crypto.randomUUID(),
             });
             const arrives = result?.arrivalDate
                 ? new Date(result.arrivalDate * 1000).toLocaleDateString('es-ES')
                 : 'pronto';
-            show(`Payout solicitado. Llega aprox. ${arrives}.`, 'success');
+            show(
+                result.method === 'instant'
+                    ? 'Payout instantáneo enviado. Llega en minutos.'
+                    : `Payout solicitado. Llega aprox. ${arrives}.`,
+                'success',
+            );
             setAmount('');
-            // Re-pull balance.
             try {
-                const fresh: any = await getConnectBalance({ sessionToken, userId: userId as any });
-                if (fresh) {
-                    setBalance({
-                        accountId: fresh.accountId,
-                        availableCents: fresh.availableCents,
-                        pendingCents: fresh.pendingCents,
-                        currency: fresh.currency,
-                    });
-                }
+                await loadBalance();
             } catch (_) { /* best-effort */ }
         } catch (e: any) {
             show(e.message || 'No se pudo procesar el payout.', 'error');
@@ -210,13 +233,23 @@ export default function WithdrawalScreen({ navigation, route }: any) {
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.warningTitle}>Conecta tu cuenta de pagos</Text>
                                 <Text style={styles.warningDesc}>
-                                    Aún no tienes una cuenta de Stripe Connect activa. Completa el onboarding desde el panel principal para habilitar payouts.
+                                    {stripeConnectAccountId
+                                        ? 'Stripe todavía no habilitó los retiros de tu cuenta. Completá el onboarding pendiente desde el panel principal.'
+                                        : 'Aún no tenés una cuenta de Stripe Connect. Completá el onboarding desde el panel principal para habilitar payouts.'}
                                 </Text>
                             </View>
                         </View>
                     ) : (
                         <>
                             {/* Payout schedule */}
+                            {scheduleUnsupported ? (
+                                <View style={styles.formSection}>
+                                    <Text style={styles.sectionTitle}>Calendario automático</Text>
+                                    <Text style={styles.sectionHelp}>
+                                        El calendario de payouts de tu cuenta se administra desde tu dashboard de Stripe Express.
+                                    </Text>
+                                </View>
+                            ) : (
                             <View style={styles.formSection}>
                                 <Text style={styles.sectionTitle}>Calendario automático</Text>
                                 <Text style={styles.sectionHelp}>
@@ -243,6 +276,7 @@ export default function WithdrawalScreen({ navigation, route }: any) {
                                     })}
                                 </View>
                             </View>
+                            )}
 
                             {/* On-demand payout */}
                             <View style={styles.formSection}>

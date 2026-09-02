@@ -1,6 +1,74 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// ---------------------------------------------------------------------------
+// Validadores compartidos del módulo de pagos (Stripe bi-modal).
+// ---------------------------------------------------------------------------
+export const stripeModeValidator = v.union(v.literal('test'), v.literal('live'));
+
+export const connectCapsValidator = v.object({
+    transfersStatus: v.optional(v.string()),
+    payoutsStatus: v.optional(v.string()),
+    requirementsStatus: v.optional(v.string()),
+    onboardingComplete: v.boolean(),
+    updatedAt: v.string(),
+});
+
+export const shippingAddressValidator = v.object({
+    fullName: v.string(),
+    addressLine1: v.string(),
+    addressLine2: v.optional(v.string()),
+    city: v.string(),
+    state: v.optional(v.string()),
+    postalCode: v.string(),
+    country: v.string(),
+    phone: v.optional(v.string()),
+});
+
+export const shippingValidator = v.object({
+    method: v.string(),
+    cost: v.number(),
+    address: shippingAddressValidator,
+});
+
+export const checkoutLineValidator = v.object({
+    listingId: v.string(),
+    sellerId: v.string(),
+    title: v.optional(v.string()),
+    type: v.string(),
+    unitCents: v.number(),
+    quantity: v.number(),
+    image: v.optional(v.string()),
+    sourcePostId: v.optional(v.string()),
+    referralCode: v.optional(v.string()),
+    commissionRate: v.number(),
+    commissionCents: v.number(),
+    influencerId: v.optional(v.string()),
+    influencerRate: v.number(),
+    influencerCents: v.number(),
+});
+
+export const checkoutSellerSplitValidator = v.object({
+    sellerId: v.string(),
+    grossCents: v.number(),
+    shippingCents: v.number(),
+    commissionCents: v.number(),
+    influencerId: v.optional(v.string()),
+    influencerCents: v.number(),
+    feeCents: v.number(),
+    sellerNetCents: v.number(),
+});
+
+export const checkoutSnapshotValidator = v.object({
+    lineItems: v.array(checkoutLineValidator),
+    sellers: v.array(checkoutSellerSplitValidator),
+    shippingCents: v.number(),
+    totalCents: v.number(),
+    feeCents: v.number(),
+    discountCents: v.optional(v.number()),
+    pointsRedeemed: v.optional(v.number()),
+});
+
 // Sticker de una historia (estilo Instagram) — unión discriminada por
 // `type`. Convex no tiene intersection types para `v.union`, así que los
 // campos comunes (id/posición/rotación/escala) se repiten en cada variante.
@@ -102,8 +170,14 @@ export default defineSchema({
         stripeCustomerId: v.optional(v.string()),
         stripeCustomerIdTest: v.optional(v.string()),
         stripeCustomerIdLive: v.optional(v.string()),
+        // Stripe Connect — una cuenta conectada POR MODO (test y live son
+        // cuentas distintas en Stripe). `stripeConnectAccountId` es la live.
         stripeConnectAccountId: v.optional(v.string()),
+        stripeConnectAccountIdTest: v.optional(v.string()),
         stripeConnectStatus: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("rejected"))),
+        stripeConnectStatusTest: v.optional(v.union(v.literal("pending"), v.literal("active"), v.literal("rejected"))),
+        stripeConnectCaps: v.optional(connectCapsValidator),
+        stripeConnectCapsTest: v.optional(connectCapsValidator),
 
         // Seller Metrics
         sellerRating: v.optional(v.number()), // 0-5
@@ -178,6 +252,8 @@ export default defineSchema({
         .index("by_referral_alias", ["referralAlias"])
         .index("by_referred_by_user", ["referredByUserId"])
         .index("by_role", ["role"])
+        .index("by_stripe_connect_account", ["stripeConnectAccountId"])
+        .index("by_stripe_connect_account_test", ["stripeConnectAccountIdTest"])
         // La cola de revisión de KYC del panel de admin recorría la tabla
         // ENTERA con `.collect()` y filtraba en memoria. Con este índice sólo
         // lee los estados revisables. `kycStatus` es opcional, así que los
@@ -385,7 +461,37 @@ export default defineSchema({
             trackingNumber: v.optional(v.string()),
             carrier: v.optional(v.string()),
         })),
-        escrowState: v.optional(v.string()), // 'held', 'released', etc.
+        /**
+         * Estado del escrow. Enum en `convex/orders/_escrowStates.ts`
+         * (held | release_pending | released | refund_pending | refunded |
+         * disputed | frozen). Se mantiene `v.string()` para no invalidar
+         * filas viejas; la máquina de estados valida en runtime.
+         */
+        escrowState: v.optional(v.string()),
+        /** Estado de escrow previo a un congelamiento/reembolso (para restaurar). */
+        escrowPrevState: v.optional(v.string()),
+        /** `status` previo a `release_pending`/`refund_pending` (para revertir). */
+        escrowPrevStatus: v.optional(v.string()),
+        escrowReleaseTrigger: v.optional(v.string()),
+        escrowReleasedAt: v.optional(v.string()),
+        escrowRefundError: v.optional(v.string()),
+        /** Epoch ms a partir del cual el cron puede liberar. Sin valor: no auto-libera. */
+        releaseDueAt: v.optional(v.number()),
+        /** Tipo del primer ítem: product | bono | service | event | rental. */
+        listingType: v.optional(v.string()),
+        /** Modo Stripe con el que se cobró; TODO lo posterior usa este modo. */
+        mode: v.optional(stripeModeValidator),
+        // --- Split en centavos (fuente de verdad para transfers/refunds) ---
+        grossCents: v.optional(v.number()),
+        influencerId: v.optional(v.string()),
+        influencerCents: v.optional(v.number()),
+        providerFeeCents: v.optional(v.number()),
+        sellerNetCents: v.optional(v.number()),
+        stripeChargeId: v.optional(v.string()),
+        stripeDisputeId: v.optional(v.string()),
+        refundedCents: v.optional(v.number()),
+        refundCount: v.optional(v.number()),
+        lastStripeRefundId: v.optional(v.string()),
         /**
          * Por qué falló la liberación de fondos, si falló.
          *
@@ -419,7 +525,9 @@ export default defineSchema({
         .index("by_user", ["userId"])
         .index("by_seller", ["sellerId"])
         .index("by_status", ["status"])
-        .index("by_user_idempotency", ["userId", "idempotencyKey"]),
+        .index("by_user_idempotency", ["userId", "idempotencyKey"])
+        .index("by_stripe_payment_intent", ["stripePaymentIntentId"])
+        .index("by_escrow_state_and_release_due", ["escrowState", "releaseDueAt"]),
 
     // FASE 6 - Ajustes globales administrables
     global_settings: defineTable({
@@ -670,6 +778,7 @@ export default defineSchema({
             v.literal('released_to_seller'),
             v.literal('failed'),
             v.literal('refunded'),
+            v.literal('partially_refunded'),
             v.literal('disputed'),
         ),
         sellerNet: v.number(),
@@ -686,6 +795,23 @@ export default defineSchema({
         metadata: v.optional(v.any()),
         createdAt: v.string(),
         settledAt: v.optional(v.string()),
+        // --- Bi-modal + centavos (los floats USD de arriba se siguen
+        // escribiendo como espejo para dashboards viejos) ---
+        mode: v.optional(stripeModeValidator),
+        cartId: v.optional(v.string()),
+        amountCents: v.optional(v.number()),
+        commissionCents: v.optional(v.number()),
+        influencerCents: v.optional(v.number()),
+        providerFeeEstimatedCents: v.optional(v.number()),
+        providerFeeCents: v.optional(v.number()),
+        sellerNetCents: v.optional(v.number()),
+        refundedCents: v.optional(v.number()),
+        stripeChargeId: v.optional(v.string()),
+        stripeBalanceTransactionId: v.optional(v.string()),
+        attributionRejectedReason: v.optional(v.string()),
+        shipping: v.optional(shippingValidator),
+        /** Lo que se cobró, congelado al crear el PI. El webhook crea las órdenes desde acá. */
+        checkoutSnapshot: v.optional(checkoutSnapshotValidator),
     }).index("by_user", ["userId"])
         .index("by_order", ["orderId"])
         .index("by_seller", ["sellerId"])
@@ -701,10 +827,18 @@ export default defineSchema({
         error: v.optional(v.string()),
         processedAt: v.optional(v.string()),
         createdAt: v.string(),
+        mode: v.optional(stripeModeValidator),
+        payloadStyle: v.optional(v.union(v.literal('snapshot'), v.literal('thin'))),
     }).index("by_stripe_event", ["stripeEventId"]),
 
+    // Transfers de la plataforma a cuentas conectadas (vendedor o influencer).
+    // Una fila por (orden, kind). `sellerId` es el DESTINATARIO (para kind
+    // 'influencer' es el id del influencer; nombre histórico).
     payouts: defineTable({
         paymentId: v.optional(v.string()),
+        orderId: v.optional(v.string()),
+        kind: v.optional(v.union(v.literal('seller'), v.literal('influencer'))),
+        mode: v.optional(stripeModeValidator),
         sellerId: v.string(),
         stripeTransferId: v.optional(v.string()),
         destinationAccountId: v.optional(v.string()),
@@ -712,10 +846,18 @@ export default defineSchema({
         currency: v.literal('USD'),
         status: v.union(
             v.literal('pending'),
+            v.literal('scheduled'),
             v.literal('processing'),
             v.literal('completed'),
             v.literal('failed'),
+            v.literal('cancelled'),
+            v.literal('reversed'),
         ),
+        idempotencyKey: v.optional(v.string()),
+        scheduledAtMs: v.optional(v.number()),
+        attempts: v.optional(v.number()),
+        reversedCents: v.optional(v.number()),
+        stripeReversalIds: v.optional(v.array(v.string())),
         scheduledAt: v.optional(v.string()),
         executedAt: v.optional(v.string()),
         error: v.optional(v.string()),
@@ -724,7 +866,10 @@ export default defineSchema({
     }).index("by_seller", ["sellerId"])
         .index("by_status", ["status"])
         .index("by_payment", ["paymentId"])
-        .index("by_stripe_transfer", ["stripeTransferId"]),
+        .index("by_stripe_transfer", ["stripeTransferId"])
+        .index("by_order_and_kind", ["orderId", "kind"])
+        .index("by_status_and_scheduled", ["status", "scheduledAtMs"])
+        .index("by_idempotency_key", ["idempotencyKey"]),
 
     withdrawals: defineTable({
         userId: v.string(),
@@ -917,6 +1062,7 @@ export default defineSchema({
         notes: v.optional(v.string()),
         createdAt: v.string(),
         resolvedAt: v.optional(v.string()),
+        mode: v.optional(stripeModeValidator),
     })
         .index("by_stripe_bt", ["stripeBalanceTransactionId"])
         .index("by_status", ["status"])
@@ -925,7 +1071,7 @@ export default defineSchema({
     // Reconciliation cursor — single-row table holding the last Stripe
     // Balance Transaction id we processed, so the cron can resume.
     reconciliationCursor: defineTable({
-        scope: v.string(), // 'stripe-bt' fixed value, used as a unique key
+        scope: v.string(), // 'stripe-bt:test' | 'stripe-bt:live' — clave única por modo
         lastBalanceTransactionId: v.optional(v.string()),
         lastRunAt: v.optional(v.string()),
         runsCompleted: v.number(),

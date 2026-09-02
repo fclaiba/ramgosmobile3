@@ -116,7 +116,7 @@ export default function AdminOrderDetailsScreen() {
                     <View style={styles.row}><Text style={{color: subTextColor}}>Vendedor Recibe:</Text><Text style={{color: c.success}}>{formatMoney(order.netAmountCents ? order.netAmountCents / 100 : undefined)}</Text></View>
                 </View>
                 
-                {order.status === "paid_escrow" && order.escrowState === "held" && (
+                {["held", "released", "disputed"].includes(String(order.escrowState)) && (
                     <View style={[styles.card, { backgroundColor: isDark ? 'rgba(220, 38, 38, 0.1)' : '#FEF2F2', borderColor: c.danger }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
                             <AlertTriangle color={c.danger} size={20} />

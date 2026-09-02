@@ -3,12 +3,8 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { assertAdminOrDeveloper, assertSelfOrAdmin, getActorOrNull, requireActor } from "./authHelpers";
-import {
-    canConfirmReceipt,
-    canMarkDelivered,
-    canMarkShipped,
-    ORDER_STATE_ERRORS,
-} from "./orders/_orderStates";
+import { canConfirmReceipt, canMarkDelivered, canMarkShipped, ORDER_STATE_ERRORS, isPaid } from "./orders/_orderStates";
+import { isReleasable } from "./orders/_escrowStates";
 
 const isStorageId = (url?: string | null) =>
     !!url &&
@@ -364,78 +360,73 @@ export const confirmReceipt = mutation({
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
-        // Validate Authority
         if (order.userId !== actor.idString) {
             throw new Error("No autorizado. Solo el comprador puede confirmar recepción.");
         }
-
-        if (!canConfirmReceipt(order.status)) {
+        if (order.escrowState === "released") return { alreadyReleased: true };
+        if (!canConfirmReceipt(order.status) || !isReleasable(order.escrowState, !!order.escrowReleaseError)) {
             throw new Error(ORDER_STATE_ERRORS.notReleasable);
         }
 
+        /**
+         * NO se marca `released` acá: la orden pasa a `release_pending` y es
+         * la acción de Stripe la que la deja en `released` (o la devuelve a
+         * `held` con el error visible si el transfer falla). Antes se marcaba
+         * liberada antes de mover un peso.
+         */
         await ctx.db.patch(args.orderId, {
-            status: "completed",
-            escrowState: "released",
-            updatedAt: new Date().toISOString()
+            escrowState: "release_pending",
+            escrowPrevStatus: order.status,
+            escrowReleaseError: undefined,
+            updatedAt: new Date().toISOString(),
         });
 
-        // Hand off to the Stripe-aware release flow.
-        await ctx.runMutation(internal.stripe.internalReleasePayment, {
+        await ctx.scheduler.runAfter(0, internal.stripe.internalReleaseOrderEscrow, {
             orderId: args.orderId,
+            trigger: "buyer_confirm",
+            actorUserId: actor.idString,
         });
-
-        const shortOrderId = String(args.orderId).slice(-6);
-        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-            sendEmail: true,
-            userId: order.sellerId,
-            title: 'Fondos liberados',
-            body: `El comprador confirmó la recepción del pedido #${shortOrderId}. Tus fondos están disponibles.`,
-            category: 'payment',
-            data: { type: 'escrow_released', orderId: String(args.orderId), amount: order.total },
-        });
+        return { alreadyReleased: false };
     }
 });
 
-// 4. Cancel Order
+// 4. Cancel Order → reembolso real (Stripe) por el monto de ESTA orden.
 export const cancelOrder = mutation({
     args: {
         sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
+        reason: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
 
-        // Validate Authority
         if (order.userId !== actor.idString) {
             throw new Error("No autorizado.");
         }
-
-        // Validate State
-        if (order.status !== 'payment_received') {
+        // Sólo antes del envío y con la plata todavía retenida.
+        if (!isPaid(order.status)) {
             throw new Error("No se puede cancelar la orden en este estado (ya enviada o completada).");
         }
+        if (order.escrowState !== "held" && !(order.escrowState === "refund_pending" && order.escrowRefundError)) {
+            throw new Error("No se puede cancelar: el pago ya fue liberado o está en proceso.");
+        }
 
-        // Update Status
         await ctx.db.patch(args.orderId, {
-            status: "cancelled",
-            escrowState: "refunded", // Implicit refund
-            updatedAt: new Date().toISOString()
+            escrowState: "refund_pending",
+            escrowPrevState: "held",
+            escrowRefundError: undefined,
+            updatedAt: new Date().toISOString(),
         });
 
-        // Restore Stock
-        for (const item of order.items) {
-            const listingId = ctx.db.normalizeId("listings", item.listingId);
-            if (listingId) {
-                const listing = await ctx.db.get(listingId);
-                if (listing) {
-                    await ctx.db.patch(listingId, {
-                        stock: listing.stock + item.quantity
-                    });
-                }
-            }
-        }
+        // El reembolso y la restitución de stock ocurren en internalRefundOrder.
+        await ctx.scheduler.runAfter(0, internal.stripe.internalRefundOrder, {
+            orderId: args.orderId,
+            reason: args.reason ?? "buyer_cancelled",
+            source: "cancel",
+            actorUserId: actor.idString,
+        });
     }
 });
 

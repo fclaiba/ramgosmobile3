@@ -1,304 +1,319 @@
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
-import Stripe from "stripe";
+import type Stripe from "stripe";
+import { getStripe, hasStripeKey, webhookSecretsFor } from "./stripeClient";
+import type { StripeMode } from "./_stripeEnv";
 
 const http = httpRouter();
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 const zendeskEnabled = process.env.ZENDESK_ENABLED === "true";
 const zendeskSubdomain = process.env.ZENDESK_SUBDOMAIN;
 const zendeskEmail = process.env.ZENDESK_EMAIL;
 const zendeskApiToken = process.env.ZENDESK_API_TOKEN;
 
-const stripe = new Stripe(stripeSecretKey!, {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
+// ---------------------------------------------------------------------------
+// Webhooks de Stripe — UNA RUTA POR MODO.
+//
+//   /stripe-webhook       → cuenta LIVE  (secrets STRIPE_WEBHOOK_SECRET*)
+//   /stripe-webhook-test  → cuenta TEST  (secrets STRIPE_WEBHOOK_SECRET_*_TEST)
+//
+// Por qué: el modo se conoce ANTES de verificar la firma, así que sólo se
+// prueban los secretos de ese modo; `stripe listen` (CLI) es test-only y
+// reenvía a una única URL; y un evento con `livemode` distinto al de la ruta
+// se rechaza (400) en vez de procesarse contra el modo equivocado.
+//
+// Estilos de payload:
+//   - Snapshot (V1: payment_intent.*, charge.*, refund.*, transfer.*, ...):
+//     payload completo en `event.data.object`, verificado con
+//     `webhooks.constructEventAsync`.
+//   - Thin (V2: v2.core.account[...]): sólo id + type + related_object,
+//     verificado con `parseEventNotificationAsync` y completado con
+//     `v2.core.events.retrieve(id)` cuando hace falta.
+//
+// Idempotencia: `paymentEvents` por event.id. El evento se registra ANTES de
+// procesar y se marca `processed` sólo si terminó bien; ante error se
+// responde 500 para que Stripe reintente. El procesamiento en sí también es
+// idempotente (órdenes por PI, transfers con idempotencyKey), así que un
+// reintento nunca duplica plata.
+// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// /stripe-webhook — receives Stripe events.
-//
-// Routing strategy:
-//   - V1 events (e.g. `payment_intent.succeeded`, `charge.*`, `account.updated`)
-//     arrive as snapshot events: full payload in event.data.object.
-//   - V2 events (e.g. `v2.core.account[requirements].updated`) arrive as
-//     thin events: only id + type. We must call
-//     `stripe.v2.core.events.retrieve(thinEvent.id)` to get the full payload.
-//
-// We detect V2 by `event.type` starting with `v2.`. Both share the same
-// signature verification (`stripe.webhooks.constructEvent`) and idempotency
-// table (`paymentEvents`).
-// ---------------------------------------------------------------------------
-http.route({
-    path: "/stripe-webhook",
-    method: "POST",
-    handler: httpAction(async (ctx, request) => {
-        if (!stripeSecretKey || !stripeWebhookSecret) {
-            return new Response("Stripe webhook no configurado para este entorno.", { status: 503 });
+type ParsedEvent =
+    | { style: "snapshot"; event: Stripe.Event }
+    | { style: "thin"; notification: any };
+
+async function verifyStripeEvent(
+    mode: StripeMode,
+    body: string,
+    signature: string,
+): Promise<ParsedEvent> {
+    const secrets = webhookSecretsFor(mode);
+    const stripe = getStripe(mode);
+    let raw: any = null;
+    try {
+        raw = JSON.parse(body);
+    } catch {
+        raw = null;
+    }
+    const isThin = raw?.object === "v2.core.event";
+    let lastError: any = null;
+    for (const secret of secrets) {
+        try {
+            if (isThin) {
+                const notification = await (stripe as any).parseEventNotificationAsync(body, signature, secret);
+                return { style: "thin", notification };
+            }
+            const event = await stripe.webhooks.constructEventAsync(body, signature, secret);
+            return { style: "snapshot", event };
+        } catch (err) {
+            lastError = err;
+        }
+    }
+    throw lastError ?? new Error("Sin secretos de webhook configurados");
+}
+
+const stripeWebhookHandler = (mode: StripeMode) =>
+    httpAction(async (ctx, request) => {
+        if (!hasStripeKey(mode) || webhookSecretsFor(mode).length === 0) {
+            return new Response(`Stripe webhook (${mode}) no configurado para este entorno.`, { status: 503 });
         }
 
         const body = await request.text();
-        let event: Stripe.Event;
-
+        const signature = request.headers.get("stripe-signature") ?? "";
+        let parsed: ParsedEvent;
         try {
-            if (stripeWebhookSecret) {
-                const signature = request.headers.get("stripe-signature") as string;
-                event = await stripe.webhooks.constructEventAsync(body, signature, stripeWebhookSecret);
-            } else {
-                console.log("[Development Mock] Skipped Stripe Webhook signature validation");
-                event = JSON.parse(body) as Stripe.Event;
-            }
+            parsed = await verifyStripeEvent(mode, body, signature);
         } catch (err: any) {
-            console.error(`Webhook signature verification failed: ${err.message}`);
+            console.error(`[Webhook ${mode}] Firma inválida: ${err.message}`);
             return new Response(`Webhook Error: ${err.message}`, { status: 400 });
         }
 
-        // Idempotency check — record event before processing
-        const { alreadyProcessed } = await ctx.runMutation(internal.finance.recordPaymentEvent, {
-            stripeEventId: event.id,
-            eventType: event.type,
-            payload: event.data?.object as any,
-        });
+        const eventId: string = parsed.style === "snapshot" ? parsed.event.id : parsed.notification.id;
+        const eventType: string = parsed.style === "snapshot" ? parsed.event.type : parsed.notification.type;
+        const livemode: boolean | undefined =
+            parsed.style === "snapshot" ? parsed.event.livemode : parsed.notification.livemode;
+        if (typeof livemode === "boolean" && livemode !== (mode === "live")) {
+            console.error(`[Webhook ${mode}] Evento ${eventId} con livemode=${livemode} en la ruta equivocada.`);
+            return new Response("livemode no coincide con la ruta", { status: 400 });
+        }
 
+        const { alreadyProcessed } = await ctx.runMutation(internal.finance.recordPaymentEvent, {
+            stripeEventId: eventId,
+            eventType,
+            mode,
+            payloadStyle: parsed.style,
+            payload: parsed.style === "snapshot" ? (parsed.event.data?.object as any) : parsed.notification,
+        });
         if (alreadyProcessed) {
-            console.log(`[Webhook] Already processed event ${event.id} (${event.type}), skipping.`);
+            console.log(`[Webhook ${mode}] Evento ${eventId} (${eventType}) ya procesado.`);
             return new Response(null, { status: 200 });
         }
 
         let processingError: string | undefined;
-        const isV2 = event.type.startsWith("v2.");
-
         try {
-            if (isV2) {
-                // ----- V2 thin event routing -----
-                console.log(`[Webhook V2] Received thin event: ${event.type}. Fetching full payload...`);
-                // En V2 de Stripe, el evento que entra es "delgado" (thin event).
-                // Es indispensable hacer un fetch a la API para traer el payload real seguro.
-                const fullEvent = await stripe.v2.core.events.retrieve(event.id);
-                const relatedId = (fullEvent as any).related_object?.id as string | undefined;
-                console.log(`[Webhook V2] Fetched full event ${fullEvent.type} (related=${relatedId ?? "n/a"})`);
-
-                switch (fullEvent.type as string) {
-                    case "v2.core.account[requirements].updated":
-                    case "v2.core.account[configuration.recipient].capability_status_updated": {
-                        if (relatedId) {
-                            await ctx.runAction(internal.connect.internalApplyV2AccountUpdate, {
-                                accountId: relatedId,
-                            });
-                        }
-                        break;
-                    }
-                    default:
-                        console.log(`[Webhook V2] Unhandled type: ${fullEvent.type}`);
-                }
+            if (parsed.style === "thin") {
+                await handleThinEvent(ctx, mode, parsed.notification);
             } else {
-                // ----- V1 snapshot event routing -----
-                switch (event.type) {
-                    case "payment_intent.succeeded": {
-                        const pi = event.data.object as Stripe.PaymentIntent;
-                        console.log(`[Webhook] PaymentIntent ${pi.id} succeeded (${pi.amount / 100} USD)`);
-
-                        // Multi-vendor cart payment (has cartId in metadata).
-                        // Fase 5: la rama del simulador (metadata.mode === "test",
-                        // convex/payments/actions.ts) fue desconectada — camino único.
-                        const cartId = pi.metadata?.cartId;
-                        const userId = pi.metadata?.userId;
-
-                        // Nota: las compras que arrancan en la red social NO
-                        // tienen rama propia acá. El CommerceTag de un post
-                        // agrega el listing al carrito con la atribución del
-                        // creador (convex/commerce.ts) y la compra sigue por
-                        // este mismo camino multi-vendor. La venta se atribuye
-                        // al post en `internalCreateSubOrder`.
-                        if (cartId && userId) {
-                            console.log(`[Webhook] Processing multi-vendor cart ${cartId} for user ${userId}`);
-                            await ctx.runAction(internal.stripe.internalProcessMultiVendorCart, {
-                                stripePaymentIntentId: pi.id,
-                                userId: userId,
-                                cartId: cartId,
-                                amount: pi.amount,
-                            });
-                            await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
-                                stripePaymentIntentId: pi.id,
-                            });
-                        } else {
-                            // Standard single-order fallback
-                            await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
-                                stripePaymentIntentId: pi.id,
-                                orderId: pi.metadata?.orderId,
-                            });
-
-                            const orderId = pi.metadata?.orderId;
-                            if (orderId) {
-                                try {
-                                    await ctx.runMutation(internal.orders.internalUpdateOrderStatus, {
-                                        orderId: orderId as any,
-                                        status: "payment_received",
-                                    });
-                                } catch (err) {
-                                    console.error("[Webhook] Failed to update order status:", err);
-                                }
-                            }
-                        }
-
-                        await ctx.runAction(internal.stripe.internalNotifyPaymentEvent, {
-                            stripePaymentIntentId: pi.id,
-                            eventType: 'succeeded',
-                        });
-                        break;
-                    }
-
-                    case "payment_intent.payment_failed": {
-                        const pi = event.data.object as Stripe.PaymentIntent;
-                        console.log(`[Webhook] PaymentIntent ${pi.id} failed`);
-                        await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
-                            stripePaymentIntentId: pi.id,
-                            status: "failed",
-                        });
-                        await ctx.runAction(internal.stripe.internalNotifyPaymentEvent, {
-                            stripePaymentIntentId: pi.id,
-                            eventType: 'failed',
-                        });
-                        break;
-                    }
-
-                    case "charge.refunded": {
-                        const charge = event.data.object as any;
-                        const piId = charge.payment_intent as string;
-                        if (piId) {
-                            await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
-                                stripePaymentIntentId: piId,
-                                status: "refunded",
-                            });
-                            await ctx.runAction(internal.stripe.internalNotifyPaymentEvent, {
-                                stripePaymentIntentId: piId,
-                                eventType: 'refunded',
-                            });
-                        }
-                        break;
-                    }
-
-                    case "charge.dispute.created": {
-                        const dispute = event.data.object as any;
-                        const piId = dispute.payment_intent as string;
-                        if (piId) {
-                            await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
-                                stripePaymentIntentId: piId,
-                                status: "disputed",
-                            });
-                            await ctx.runAction(internal.stripe.internalNotifyPaymentEvent, {
-                                stripePaymentIntentId: piId,
-                                eventType: 'disputed',
-                            });
-                        }
-                        break;
-                    }
-
-                    case "account.updated": {
-                        // V1 Connect account event — kept for backward compat.
-                        // V2 path is handled above via thin events.
-                        const account = event.data.object as Stripe.Account;
-                        console.log(`[Webhook] V1 Connect account updated: ${account.id}`);
-                        break;
-                    }
-
-                    // ----- Stripe Subscriptions (Sprint 4) -----
-                    case "customer.subscription.created":
-                    case "customer.subscription.updated":
-                    case "customer.subscription.deleted": {
-                        const sub = event.data.object as any;
-                        await ctx.runAction(
-                            internal.subscriptions.internalHandleStripeSubscriptionEvent,
-                            {
-                                eventType: event.type,
-                                subscription: sub,
-                            },
-                        );
-                        break;
-                    }
-
-                    case "checkout.session.completed": {
-                        const session = event.data.object as any;
-                        console.log(
-                            `[Webhook] Checkout session completed: ${session.id} (mode=${session.mode})`,
-                        );
-                        break;
-                    }
-
-                    case "invoice.payment_succeeded":
-                    case "invoice.payment_failed": {
-                        const invoice = event.data.object as any;
-                        if (invoice.subscription) {
-                            try {
-                                const sub = await stripe.subscriptions.retrieve(
-                                    invoice.subscription as string,
-                                );
-                                await ctx.runAction(
-                                    internal.subscriptions
-                                        .internalHandleStripeSubscriptionEvent,
-                                    {
-                                        eventType: event.type,
-                                        subscription: sub,
-                                    },
-                                );
-                            } catch (e: any) {
-                                console.error(
-                                    `[Webhook] invoice.* sub fetch failed: ${e.message}`,
-                                );
-                            }
-                        }
-                        break;
-                    }
-
-                    // ----- Stripe Identity (KYC/KYB) -----
-                    case "identity.verification_session.verified": {
-                        const session = event.data.object as any;
-                        const userId = session.metadata?.userId;
-                        if (userId) {
-                            await ctx.runMutation(internal.users.internalApproveKYC, {
-                                targetUserId: userId as any,
-                            });
-                            console.log(`[Webhook] KYC Approved for user: ${userId}`);
-                        }
-                        break;
-                    }
-                    case "identity.verification_session.requires_input":
-                    case "identity.verification_session.canceled": {
-                        const session = event.data.object as any;
-                        const userId = session.metadata?.userId;
-                        if (userId) {
-                            await ctx.runMutation(internal.users.internalRejectKYC, {
-                                targetUserId: userId as any,
-                            });
-                            console.log(`[Webhook] KYC Rejected/Requires Input for user: ${userId}`);
-                        }
-                        break;
-                    }
-
-                    default:
-                        console.log(`[Webhook] Unhandled event type: ${event.type}`);
-                }
+                await handleSnapshotEvent(ctx, mode, parsed.event);
             }
         } catch (err: any) {
-            console.error(`[Webhook] Error processing event ${event.id}:`, err);
-            processingError = err.message;
+            console.error(`[Webhook ${mode}] Error procesando ${eventId} (${eventType}):`, err);
+            processingError = err?.message ?? String(err);
         }
 
         await ctx.runMutation(internal.finance.markPaymentEventProcessed, {
-            stripeEventId: event.id,
+            stripeEventId: eventId,
             error: processingError,
         });
 
-        // Ante un fallo se devuelve 500 para que Stripe REINTENTE. Antes se
-        // respondía 200 siempre: un error a mitad de camino dejaba el cobro sin
-        // orden y Stripe, viendo el 200, no volvía a intentarlo nunca.
         if (processingError) {
             return new Response(`Processing error: ${processingError}`, { status: 500 });
         }
-
         return new Response(null, { status: 200 });
-    }),
-});
+    });
+
+async function handleThinEvent(ctx: any, mode: StripeMode, notification: any): Promise<void> {
+    const type: string = notification.type;
+    const stripe = getStripe(mode);
+    switch (type) {
+        case "v2.core.account[requirements].updated":
+        case "v2.core.account[configuration.recipient].capability_status_updated":
+        case "v2.core.account[configuration.recipient].updated":
+        case "v2.core.account.updated": {
+            const accountId: string | undefined = notification.related_object?.id;
+            if (accountId) {
+                await ctx.runAction(internal.connect.internalApplyV2AccountUpdate, { mode, accountId });
+            }
+            break;
+        }
+        case "v2.core.account_link.returned": {
+            // El thin event no trae el account id: hay que traer el evento completo.
+            const full: any = await (stripe as any).v2.core.events.retrieve(notification.id);
+            const accountId: string | undefined = full?.data?.account_id ?? notification.related_object?.id;
+            if (accountId) {
+                await ctx.runAction(internal.connect.internalApplyV2AccountUpdate, { mode, accountId });
+            }
+            break;
+        }
+        default:
+            console.log(`[Webhook ${mode} V2] Tipo no manejado: ${type}`);
+    }
+}
+
+async function handleSnapshotEvent(ctx: any, mode: StripeMode, event: Stripe.Event): Promise<void> {
+    const stripe = getStripe(mode);
+    switch (event.type) {
+        case "payment_intent.succeeded": {
+            const pi = event.data.object as Stripe.PaymentIntent;
+            console.log(`[Webhook ${mode}] PaymentIntent ${pi.id} succeeded (${pi.amount / 100} USD)`);
+            if (pi.metadata?.cartId) {
+                await ctx.runAction(internal.stripe.internalHandlePaymentIntentSucceeded, {
+                    mode,
+                    paymentIntentId: pi.id,
+                });
+            } else {
+                // Legacy: PI sin carrito (orden creada antes del pago).
+                await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
+                    stripePaymentIntentId: pi.id,
+                    orderId: pi.metadata?.orderId,
+                });
+                if (pi.metadata?.orderId) {
+                    try {
+                        await ctx.runMutation(internal.orders.internalUpdateOrderStatus, {
+                            orderId: pi.metadata.orderId as any,
+                            status: "payment_received",
+                        });
+                    } catch (err) {
+                        console.error("[Webhook] No se pudo actualizar la orden legacy:", err);
+                    }
+                }
+            }
+            break;
+        }
+
+        case "payment_intent.payment_failed": {
+            const pi = event.data.object as Stripe.PaymentIntent;
+            await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
+                stripePaymentIntentId: pi.id,
+                status: "failed",
+            });
+            break;
+        }
+
+        case "charge.refunded": {
+            const charge = event.data.object as Stripe.Charge;
+            const piId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+            if (piId) {
+                await ctx.runAction(internal.stripe.internalSyncExternalRefund, {
+                    mode,
+                    paymentIntentId: piId,
+                    amountRefundedCents: charge.amount_refunded,
+                });
+            }
+            break;
+        }
+
+        case "charge.dispute.created": {
+            const dispute = event.data.object as Stripe.Dispute;
+            const piId = typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+            if (piId) {
+                await ctx.runMutation(internal.stripe.internalFreezeOrdersForPaymentIntent, {
+                    stripePaymentIntentId: piId,
+                    disputeId: dispute.id,
+                });
+            }
+            break;
+        }
+
+        case "charge.dispute.closed": {
+            const dispute = event.data.object as Stripe.Dispute;
+            const piId = typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+            if (piId) {
+                await ctx.runAction(internal.stripe.internalResolveStripeDispute, {
+                    mode,
+                    paymentIntentId: piId,
+                    disputeId: dispute.id,
+                    status: dispute.status,
+                });
+            }
+            break;
+        }
+
+        case "charge.dispute.funds_withdrawn":
+        case "charge.dispute.funds_reinstated":
+        case "charge.dispute.updated":
+        case "transfer.created":
+        case "transfer.reversed":
+        case "transfer.updated":
+        case "refund.created":
+        case "refund.updated":
+        case "refund.failed":
+        case "payout.paid":
+        case "payout.failed":
+        case "account.updated": {
+            // Informativos: quedan registrados en paymentEvents para auditoría.
+            console.log(`[Webhook ${mode}] ${event.type} registrado.`);
+            break;
+        }
+
+        // ----- Stripe Subscriptions -----
+        case "customer.subscription.created":
+        case "customer.subscription.updated":
+        case "customer.subscription.deleted": {
+            await ctx.runAction(internal.subscriptions.internalHandleStripeSubscriptionEvent, {
+                eventType: event.type,
+                subscription: event.data.object as any,
+                mode,
+            });
+            break;
+        }
+
+        case "checkout.session.completed": {
+            const session = event.data.object as any;
+            console.log(`[Webhook ${mode}] Checkout session completed: ${session.id} (mode=${session.mode})`);
+            break;
+        }
+
+        case "invoice.payment_succeeded":
+        case "invoice.payment_failed": {
+            const invoice = event.data.object as any;
+            const subId = invoice.subscription ?? invoice.parent?.subscription_details?.subscription;
+            if (subId) {
+                const sub = await stripe.subscriptions.retrieve(String(subId));
+                await ctx.runAction(internal.subscriptions.internalHandleStripeSubscriptionEvent, {
+                    eventType: event.type,
+                    subscription: sub,
+                    mode,
+                });
+            }
+            break;
+        }
+
+        // ----- Stripe Identity (KYC/KYB) -----
+        case "identity.verification_session.verified": {
+            const session = event.data.object as any;
+            const userId = session.metadata?.userId;
+            if (userId) {
+                await ctx.runMutation(internal.users.internalApproveKYC, { targetUserId: userId as any });
+            }
+            break;
+        }
+        case "identity.verification_session.requires_input":
+        case "identity.verification_session.canceled": {
+            const session = event.data.object as any;
+            const userId = session.metadata?.userId;
+            if (userId) {
+                await ctx.runMutation(internal.users.internalRejectKYC, { targetUserId: userId as any });
+            }
+            break;
+        }
+
+        default:
+            console.log(`[Webhook ${mode}] Tipo no manejado: ${event.type}`);
+    }
+}
+
+http.route({ path: "/stripe-webhook", method: "POST", handler: stripeWebhookHandler("live") });
+http.route({ path: "/stripe-webhook-test", method: "POST", handler: stripeWebhookHandler("test") });
 
 // ---------------------------------------------------------------------------
 // /kyc-webhook — ELIMINADO (2026-08-25).

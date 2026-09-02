@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { checkoutSnapshotValidator, shippingValidator, stripeModeValidator } from "./schema";
 import { internalMutation, mutation, query, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { canWithdrawFunds, resolveKycStatus } from "./_kyc";
@@ -159,6 +160,7 @@ export const createPaymentRecord = internalMutation({
             v.literal("released_to_seller"),
             v.literal("failed"),
             v.literal("refunded"),
+            v.literal("partially_refunded"),
             v.literal("disputed"),
         ),
         sellerNet: v.number(),
@@ -171,6 +173,17 @@ export const createPaymentRecord = internalMutation({
         paymentMethodLast4: v.optional(v.string()),
         description: v.optional(v.string()),
         metadata: v.optional(v.any()),
+        // Bi-modal + centavos (ver schema.ts)
+        mode: v.optional(stripeModeValidator),
+        cartId: v.optional(v.string()),
+        amountCents: v.optional(v.number()),
+        commissionCents: v.optional(v.number()),
+        influencerCents: v.optional(v.number()),
+        providerFeeEstimatedCents: v.optional(v.number()),
+        sellerNetCents: v.optional(v.number()),
+        attributionRejectedReason: v.optional(v.string()),
+        shipping: v.optional(shippingValidator),
+        checkoutSnapshot: v.optional(checkoutSnapshotValidator),
     },
     handler: async (ctx, args) => {
         return await ctx.db.insert("payments", {
@@ -191,6 +204,7 @@ export const updatePaymentStatus = internalMutation({
             v.literal("released_to_seller"),
             v.literal("failed"),
             v.literal("refunded"),
+            v.literal("partially_refunded"),
             v.literal("disputed"),
         ),
         settledAt: v.optional(v.string()),
@@ -213,6 +227,7 @@ export const updatePaymentByIntentId = internalMutation({
             v.literal("released_to_seller"),
             v.literal("failed"),
             v.literal("refunded"),
+            v.literal("partially_refunded"),
             v.literal("disputed"),
         ),
         settledAt: v.optional(v.string()),
@@ -285,6 +300,8 @@ export const recordPaymentEvent = internalMutation({
         stripeEventId: v.string(),
         eventType: v.string(),
         payload: v.optional(v.any()),
+        mode: v.optional(stripeModeValidator),
+        payloadStyle: v.optional(v.union(v.literal("snapshot"), v.literal("thin"))),
     },
     handler: async (ctx, args) => {
         /**
@@ -317,6 +334,8 @@ export const recordPaymentEvent = internalMutation({
             eventType: args.eventType,
             processed: false,
             payload: args.payload,
+            mode: args.mode,
+            payloadStyle: args.payloadStyle,
             createdAt: new Date().toISOString(),
         });
         return { alreadyProcessed: false, id };
@@ -652,36 +671,18 @@ export const listStuckEscrows = query({
         assertAdminOrDeveloper(actor);
 
         const days = args.olderThanDays ?? 30;
-        const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+        const cutoffMs = Date.now() - days * 86_400_000;
 
-        // Convex doesn't support OR filters across multiple status values
-        // efficiently with a single index, so we collect the candidate
-        // statuses one by one. This is bounded — the admin tooling caller
-        // expects O(orders-not-completed), which is small in practice.
-        const inEscrowStatuses = [
-            "payment_received",
-            "awaiting_shipment",
-            "in_transit",
-            "delivered",
-        ] as const;
+        // Órdenes retenidas (`held`) cuya fecha de auto-liberación ya venció
+        // hace más de `days` o que no tienen auto-liberación y son viejas.
+        const held = await ctx.db
+            .query("orders")
+            .withIndex("by_escrow_state_and_release_due", (q) => q.eq("escrowState", "held"))
+            .take(500);
 
-        const all = (
-            await Promise.all(
-                inEscrowStatuses.map((status) =>
-                    ctx.db
-                        .query("orders")
-                        .filter((q) => q.eq(q.field("status"), status))
-                        .collect(),
-                ),
-            )
-        ).flat();
-
-        return all
-            .filter((o: any) => {
-                const createdAt = (o._creationTime ?? 0) as number;
-                return new Date(createdAt).toISOString() < cutoff;
-            })
-            .sort((a: any, b: any) => (a._creationTime ?? 0) - (b._creationTime ?? 0));
+        return held
+            .filter((o) => (o._creationTime ?? 0) < cutoffMs)
+            .sort((a, b) => (a._creationTime ?? 0) - (b._creationTime ?? 0));
     },
 });
 
@@ -719,19 +720,19 @@ export const listPendingRefunds = query({
         const actor = await requireActor(ctx, (args as any).sessionToken);
         assertAdminOrDeveloper(actor);
 
-        const cutoff = new Date(
-            Date.now() - (args.windowDays ?? 7) * 86_400_000,
-        ).toISOString();
-        const refunded = await ctx.db
-            .query("payments")
-            .withIndex("by_status", (q) => q.eq("status", "refunded"))
-            .order("desc")
+        // Reembolsos en curso o fallidos (la orden guarda el error).
+        const pending = await ctx.db
+            .query("orders")
+            .withIndex("by_escrow_state_and_release_due", (q) => q.eq("escrowState", "refund_pending"))
             .take(500);
-
-        return refunded.filter((p: any) => {
-            const ts = p.settledAt ?? p.createdAt;
-            return ts >= cutoff;
-        });
+        const cutoffMs = Date.now() - (args.windowDays ?? 7) * 86_400_000;
+        const failed = (
+            await ctx.db
+                .query("orders")
+                .withIndex("by_escrow_state_and_release_due", (q) => q.eq("escrowState", "held"))
+                .take(500)
+        ).filter((o) => !!o.escrowRefundError && (o._creationTime ?? 0) >= cutoffMs);
+        return [...pending, ...failed];
     },
 });
 

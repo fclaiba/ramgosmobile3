@@ -1,1898 +1,1892 @@
 // ---------------------------------------------------------------------------
-// FASE 5 — DECISIÓN DE CAMINO ÚNICO DE PAGOS (2026-07-13)
+// PAGOS — Stripe Connect con Separate Charges & Transfers (SCT).
 //
-// Este módulo (convex/stripe.ts — Stripe REAL en modo TEST) es el ÚNICO camino
-// de pagos activo. El simulador convex/payments/actions.ts quedó DESCARTADO y
-// aislado (sin call sites activos desde UI ni webhook); se elimina en Fase 8d.
+// Modelo:
+//   1. El comprador paga a la cuenta PLATAFORMA (PaymentIntent V1, sin
+//      transfer_data). La plata queda retenida ("escrow") en nuestro balance.
+//   2. El webhook `payment_intent.succeeded` crea UNA orden por vendedor a
+//      partir del snapshot congelado al crear el PI (nunca del carrito vivo).
+//   3. Al liberar (comprador confirma / admin / cron / disputa a favor del
+//      vendedor) se hace UN `transfers.create` al vendedor con
+//      `source_transaction` (el charge) y clave de idempotencia.
+//   4. El influencer cobra 10 días después de liberada la orden (ventana de
+//      clawback), con un transfer por orden y su propia clave.
+//   5. Reembolsos: `refunds.create` sobre el PI por el monto de ESA orden;
+//      si ya se transfirió, `transfers.createReversal` proporcional.
 //
-// Flujo E2E:
-//   PaymentForm → api.stripe.createPaymentIntent → confirm (SDK Stripe cliente)
-//   → webhook /stripe-webhook (convex/http.ts, payment_intent.succeeded)
-//   → internalProcessMultiVendorCart → sub-órdenes escrow "held"
-//   → internalMarkPaymentSucceeded (payments.status = succeeded_in_escrow)
+// Bi-modal: el toggle test/live del app se respeta de punta a punta. El
+// modo se persiste en `payments.mode` / `orders.mode` / `payouts.mode` y
+// TODAS las llamadas posteriores usan `getStripe(order.mode)`.
 //
-// Claves: SOLO sk_test_ / pk_test_ hasta Bloque D (nunca sk_live_).
-// Referencia histórica del módulo previo: MÓDULO_PAGOS_RESPALDO.md.
+// Simulación (`simulate: true`) sólo existe si `ALLOW_STRIPE_MOCK=true` en
+// Convex. Un pago real NUNCA se marca liberado con un transfer ficticio: si
+// Stripe rechaza el transfer, la orden vuelve a `held` con el error visible.
 // ---------------------------------------------------------------------------
 import { v } from "convex/values";
-import { action, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import type Stripe from "stripe";
+import {
+    action,
+    internalAction,
+    internalMutation,
+    internalQuery,
+    query,
+    type MutationCtx,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
-import Stripe from "stripe";
-import { assertSelfOrAdmin, requireActor } from "./authHelpers";
+import type { Doc, Id } from "./_generated/dataModel";
+import { requireActor } from "./authHelpers";
 import { decrementStock, hasEnoughStock, outOfStockMessage, shortfallFor } from "./_inventory";
 import { can, denialMessage } from "./_roles";
 import { buildAuditRecord } from "./_audit";
-import { PLATFORM_COMMISSION_RATE, BONO_COMMISSION_RATE, commissionCentsFor, stripeFeeCentsFor } from "./_fees";
+import { stripeFeeCentsFor } from "./_fees";
+import {
+    allocateExternalRefund,
+    computeCheckoutSplit,
+    DiscountExceedsCommissionError,
+    reapplyActualFee,
+    reversalAmountsFor,
+    type CheckoutSplit,
+} from "./_split";
+import {
+    isMockPaymentIntentId,
+    mockPaymentIntentId,
+    mockRefundId,
+    mockReversalId,
+    mockTransferId,
+    type StripeMode,
+} from "./_stripeEnv";
+import {
+    assertMockAllowed,
+    assertStripeConfigured,
+    getStripe,
+    hasStripeKey,
+    isMockAllowed,
+    stripeEnv,
+} from "./stripeClient";
+import {
+    influencerPayoutDueAt,
+    isRefundable,
+    isReleasable,
+    releaseDueAtFor,
+} from "./orders/_escrowStates";
+import { canConfirmReceipt } from "./orders/_orderStates";
+import { resolveLineAttribution } from "./campaigns";
+import { shippingValidator, stripeModeValidator } from "./schema";
+import { withStripeBreadcrumb } from "./observability";
+import { POINT_VALUE_USD } from "./economy/_rewardRules";
+import { hydrateRewardsState } from "./economy/pointsState";
+import { awardPoints } from "./economy/pointsEngine";
 
-const stripeKeyTest = process.env.STRIPE_SECRET_KEY_TEST ?? process.env.STRIPE_SECRET_KEY;
-const stripeKeyLive = process.env.STRIPE_SECRET_KEY;
+/** Centavos por punto (POINT_VALUE_USD está en dólares). */
+const CENTS_PER_POINT = POINT_VALUE_USD * 100;
+/** Pagos 100% con puntos (sin cargo en Stripe). */
+const POINTS_PI_PREFIX = "pts_";
+const isPointsOnlyPaymentId = (id?: string | null) => !!id && id.startsWith(POINTS_PI_PREFIX);
 
-const isStripeMock =
-    process.env.STRIPE_MOCK_MODE === "true" ||
-    !stripeKeyTest ||
-    stripeKeyTest.includes("mock");
+const nowIso = () => new Date().toISOString();
 
-export const stripeTest = new Stripe(stripeKeyTest ?? "sk_test_mock_fallback", {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
+const releaseTriggerValidator = v.union(
+    v.literal("buyer_confirm"),
+    v.literal("admin_force"),
+    v.literal("dispute_seller"),
+    v.literal("auto_release"),
+    v.literal("bono_redeemed"),
+    v.literal("event_auto"),
+    v.literal("service_auto"),
+);
 
-export const stripeLive = new Stripe(stripeKeyLive ?? "sk_live_mock_fallback", {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
+const refundSourceValidator = v.union(
+    v.literal("cancel"),
+    v.literal("dispute_buyer"),
+    v.literal("admin"),
+    v.literal("stripe_refund"),
+    v.literal("stripe_dispute_lost"),
+);
 
-export const getStripeClient = (mode: "test" | "live" = "test") => {
-    return mode === "live" ? stripeLive : stripeTest;
+/** Cuenta Connect del usuario para el modo dado. */
+const connectAccountFor = (user: Doc<"users"> | null | undefined, mode: StripeMode): string | null => {
+    if (!user) return null;
+    const id = mode === "live" ? user.stripeConnectAccountId : user.stripeConnectAccountIdTest;
+    return id ?? null;
 };
 
-// Mantenemos la instancia global 'stripe' apuntando a test mode para retrocompatibilidad
-// de los procesos de escrow (webhooks, transfers, etc) hasta refactorizarlos.
-const stripe = stripeTest;
+const stripeErrorMessage = (error: any): string =>
+    String(error?.raw?.message || error?.message || error || "Error de Stripe");
 
-
-/**
- * Crea un PaymentIntent en Stripe y persiste el registro en la tabla 'payments'.
- * Cumple con el requerimiento 1.1 del Plan Maestro.
- */
-export const createPaymentIntent = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        amountInCents: v.optional(v.number()),
-        lineItems: v.optional(v.array(v.object({
-            listingId: v.string(),
-            sellerId: v.optional(v.string()),
-            type: v.string(),
-            amountInCents: v.number(),
-            referralCode: v.optional(v.string()),
-            quantity: v.number(),
-            description: v.string(),
-        }))),
-        userId: v.optional(v.string()),
-        sellerId: v.optional(v.string()),
-        commissionRate: v.optional(v.number()),
-        influencerRate: v.optional(v.number()),
-        influencerId: v.optional(v.string()),
-        description: v.optional(v.string()),
-        metadata: v.optional(v.any()),
-        tokenId: v.optional(v.string()),
-        // Titular AR — nombre + documento (DNI/CUIT) para cobros locales
-        cardholderName: v.optional(v.string()),
-        documentNumber: v.optional(v.string()),
-        // Fase 5: transfer_group del carrito. Si viene, el webhook procesa el
-        // carrito multi-vendor (sub-órdenes con escrow "held") al confirmarse el pago.
-        cartId: v.optional(v.string()),
-        /**
-         * Destino de envío.
-         *
-         * Viaja acá porque la orden se crea del lado del servidor, en el
-         * webhook, mucho después de que la pantalla de pago dejó de existir. Se
-         * guarda en el registro de `payments` y `internalProcessMultiVendorCart`
-         * lo recupera por `by_stripe_intent`. No va en la metadata del
-         * PaymentIntent de Stripe: ahí los valores son strings de 500 caracteres
-         * y una dirección serializada es frágil.
-         */
-        shipping: v.optional(v.object({
-            method: v.string(),
-            cost: v.number(),
-            address: v.object({
-                fullName: v.string(),
-                addressLine1: v.string(),
-                addressLine2: v.optional(v.string()),
-                city: v.string(),
-                state: v.optional(v.string()),
-                postalCode: v.string(),
-                country: v.string(),
-                phone: v.optional(v.string()),
-            }),
-        })),
-        // ponytail: UI test mode — never hit Stripe confirm (avoids pk/sk mismatch 404)
-        simulate: v.optional(v.boolean()),
-        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
-    },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        const userId = actor.idString;
-        const useMock = isStripeMock || !!args.simulate;
-        const stripe = getStripeClient(args.mode ?? "test");
-
-        let totalAmountCents = args.amountInCents || 0;
-        if (args.lineItems) {
-            totalAmountCents = args.lineItems.reduce((sum, item) => sum + (item.amountInCents * item.quantity), 0);
-        }
-
-        if (totalAmountCents <= 0) throw new Error("El monto debe ser mayor a 0");
-
-        /**
-         * Revalidación contra la base ANTES de cobrar.
-         *
-         * Es el único momento en que se puede decir que no: después del cobro,
-         * rechazar dejaría dinero tomado sin orden. Cubre el stock (que no se
-         * descontaba en ningún lado, así que el carrito nunca se enteraba) y el
-         * precio (el monto salía del snapshot del cliente y las órdenes del
-         * carrito vivo del webhook).
-         */
-        let isBonoOrder = false;
-        if (args.lineItems && args.lineItems.length > 0) {
-            const { stockIssues, priceIssues, hasBono } = await ctx.runQuery(
-                internal.stripe.internalValidateCartForCheckout,
-                {
-                    lineItems: args.lineItems.map((i) => ({
-                        listingId: i.listingId,
-                        quantity: i.quantity,
-                        amountInCents: i.amountInCents,
-                    })),
-                },
-            );
-            isBonoOrder = !!hasBono;
-
-            if (stockIssues.length > 0) {
-                throw new Error(outOfStockMessage(stockIssues));
-            }
-            if (priceIssues.length > 0) {
-                const first = priceIssues[0];
-                throw new Error(
-                    `El precio de "${first.title}" cambió. Actualizá el carrito y volvé a intentar.`,
-                );
-            }
-        }
-
-        try {
-            // 1. Resolve influencer attribution dynamically based on cart items
-            let resolvedInfluencerId = args.influencerId;
-            let resolvedInfluencerRate = args.influencerRate ?? 0;
-            let resolvedInfluencerAmount = Math.round(totalAmountCents * resolvedInfluencerRate);
-            let attributionRejectedReason: string | null = null;
-
-            if (args.lineItems && args.lineItems.length > 0) {
-                const attribution = await ctx.runQuery(internal.campaigns.internalResolveCartAttribution, {
-                    lineItems: args.lineItems.map(i => ({
-                        listingId: i.listingId,
-                        sellerId: i.sellerId,
-                        referralCode: i.referralCode,
-                        amountInCents: i.amountInCents,
-                        quantity: i.quantity,
-                    })),
-                });
-                
-                if (attribution.influencerId) {
-                    resolvedInfluencerId = attribution.influencerId;
-                    resolvedInfluencerRate = attribution.influencerRate;
-                    resolvedInfluencerAmount = attribution.influencerAmount;
-                } else if ((attribution as any).hasMixedInfluencers) {
-                    // Regla temporal acordada: si hay mezcla de influencers en el checkout,
-                    // no acreditamos referido hasta implementar split multi-influencer.
-                    resolvedInfluencerId = undefined;
-                    resolvedInfluencerRate = 0;
-                    resolvedInfluencerAmount = 0;
-                    attributionRejectedReason =
-                        (attribution as any).attributionRejectedReason ?? "mixed_influencers_in_checkout";
-                }
-            }
-
-            const defaultCommission = isBonoOrder ? BONO_COMMISSION_RATE : PLATFORM_COMMISSION_RATE;
-            const ramgosCommissionRate = args.commissionRate ?? defaultCommission; // 30% bonos, 10% productos
-            const ramgosCommission = commissionCentsFor(totalAmountCents, ramgosCommissionRate);
-            // Tarifa estándar de Stripe (2.9% + 30¢). Asumida por el vendedor.
-            const stripeFeeCents = stripeFeeCentsFor(totalAmountCents);
-            const sellerNet = totalAmountCents - ramgosCommission - resolvedInfluencerAmount - stripeFeeCents;
-
-            let paymentIntentId: string;
-            let clientSecret: string | null;
-            let status: string;
-
-            if (useMock) {
-                // Simulated payment intent: no real Stripe calls.
-                paymentIntentId = `mock_pi_${Date.now()}`;
-                clientSecret = `mock_secret_${paymentIntentId}`;
-                status = "succeeded";
-            } else {
-                // 2. Crear y opcionalmente confirmar el PaymentIntent en Stripe
-                
-                const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
-                const mode = args.mode ?? "test";
-                const modeCustomerId =
-                    mode === "live"
-                        ? (user as any)?.stripeCustomerIdLive
-                        : (user as any)?.stripeCustomerIdTest;
-                const fallbackCustomerId = (user as any)?.stripeCustomerId;
-                const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
-                    amount: totalAmountCents,
-                    currency: "usd",
-                    customer: modeCustomerId || fallbackCustomerId,
-                    metadata: {
-                        userId,
-                        lineItemsCount: args.lineItems?.length || 0,
-                        paymentMode: mode,
-                        // El webhook usa cartId+userId para crear las sub-órdenes
-                        // multi-vendor con escrow "held" (convex/http.ts).
-                        ...(args.cartId ? { cartId: args.cartId } : {}),
-                        ...(attributionRejectedReason
-                            ? { attributionRejectedReason }
-                            : {}),
-                        billingMarket: "US-NY",
-                        ...(args.cardholderName
-                            ? { cardholderName: args.cardholderName.trim().slice(0, 120) }
-                            : {}),
-                        ...(args.documentNumber
-                            ? {
-                                  documentNumber: args.documentNumber.replace(/\D/g, "").slice(0, 20),
-                              }
-                            : {}),
-                    },
-                };
-
-                // Merge client metadata (string values only — Stripe requirement).
-                if (args.metadata && typeof args.metadata === "object") {
-                    for (const [k, v] of Object.entries(args.metadata as Record<string, unknown>)) {
-                        if (v == null) continue;
-                        paymentIntentParams.metadata![k] = String(v).slice(0, 500);
-                    }
-                }
-
-                // Card-only, in-app. No wallets/redirects that kick the user to a browser.
-                paymentIntentParams.payment_method_types = ["card"];
-
-                if (args.tokenId) {
-                    const paymentMethod = await stripe.paymentMethods.create({
-                        type: "card",
-                        card: {
-                            token: args.tokenId,
-                        },
-                    });
-                    paymentIntentParams.payment_method = paymentMethod.id;
-                    paymentIntentParams.confirm = true;
-                }
-
-                const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
-                paymentIntentId = paymentIntent.id;
-                clientSecret = paymentIntent.client_secret;
-                status = paymentIntent.status;
-            }
-
-            // 3. Persistir en la tabla 'payments' de Convex
-            await ctx.runMutation(internal.finance.createPaymentRecord, {
-                userId,
-                amount: totalAmountCents / 100,
-                stripePaymentIntentId: paymentIntentId,
-                status: status === "succeeded" ? "succeeded_in_escrow" : "pending",
-                provider: "stripe",
-                providerFee: stripeFeeCents / 100,
-                sellerNet: sellerNet / 100,
-                ramgosCommission: ramgosCommission / 100,
-                influencerAmount: resolvedInfluencerAmount / 100,
-                commissionRate: ramgosCommissionRate,
-                influencerRate: resolvedInfluencerRate,
-                influencerId: resolvedInfluencerId,
-                description: args.description || args.lineItems?.[0]?.description || "Pago Ramgos",
-                metadata:
-                    attributionRejectedReason || args.shipping
-                        ? {
-                              ...(attributionRejectedReason ? { attributionRejectedReason } : {}),
-                              ...(args.shipping ? { shipping: args.shipping } : {}),
-                          }
-                        : undefined,
-            });
-
-            // Mock mode: no llega webhook, así que procesamos el carrito igual.
-            if (useMock && args.cartId) {
-                await ctx.scheduler.runAfter(0, internal.stripe.internalProcessMultiVendorCart, {
-                    stripePaymentIntentId: paymentIntentId,
-                    userId,
-                    cartId: args.cartId,
-                    amount: totalAmountCents,
-                });
-            }
-
-            // Pago ya confirmado (mock o confirm inmediato): acreditar puntos $1 → 1 pt.
-            // Idempotente vía eventKey purchase_pts_{pi}; el webhook real también llama mark.
-            let pointsAwarded = 0;
-            if (status === "succeeded") {
-                const markResult = await ctx.runMutation(internal.stripe.internalMarkPaymentSucceeded, {
-                    stripePaymentIntentId: paymentIntentId,
-                });
-                pointsAwarded = Number((markResult as any)?.pointsAwarded) || 0;
-            }
-
-            return {
-                clientSecret,
-                paymentIntentId,
-                status,
-                isMock: useMock,
-                pointsAwarded,
-            };
-        } catch (error: any) {
-            console.error("[Stripe] Error al crear/confirmar PaymentIntent:", error);
-            throw new Error(`Error al procesar el pago: ${error.message}`);
-        }
+// ===========================================================================
+// Config pública (el cliente decide qué modos mostrar en el toggle)
+// ===========================================================================
+export const getPublicConfig = query({
+    args: {},
+    handler: async (): Promise<{ modes: { test: boolean; live: boolean }; mockAllowed: boolean }> => {
+        const env = stripeEnv();
+        return {
+            modes: { test: !!env.keys.test, live: !!env.keys.live },
+            mockAllowed: env.mockAllowed,
+        };
     },
 });
 
+// ===========================================================================
+// CHECKOUT
+// ===========================================================================
 
+type StockIssue = { listingId: string; title: string; requested: number; available: number };
 
 /**
- * Lista los métodos de pago guardados del usuario.
+ * Construye el checkout DESDE LA BASE: precio, vendedor, tipo, stock y
+ * atribución de influencer salen de `listings`/`cart`/campañas, nunca del
+ * cliente. Devuelve el split congelado que después usa el webhook.
  */
-export const listPaymentMethods = action({
+export const internalBuildCheckout = internalQuery({
     args: {
-        sessionToken: v.optional(v.string()),
         userId: v.string(),
-        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
+        lineItems: v.array(
+            v.object({
+                listingId: v.string(),
+                quantity: v.number(),
+                referralCode: v.optional(v.string()),
+            }),
+        ),
+        shippingCents: v.number(),
+        pointsToRedeem: v.optional(v.number()),
     },
-    handler: async (ctx, args) => {
-        await requireActor(ctx, (args as any).sessionToken);
-        const mode = args.mode ?? "test";
-        const stripeClient = getStripeClient(mode);
-        
-        // Obtener el usuario mediante internalQuery para acceder al stripeCustomerId
-        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: args.userId });
-        
-        let customerId =
-            mode === "live"
-                ? user?.stripeCustomerIdLive
-                : user?.stripeCustomerIdTest;
-        if (!customerId) {
-            customerId = user?.stripeCustomerId;
-        }
-
-        if (!user || !customerId) {
-            return [];
-        }
-
-        try {
-            const paymentMethods = await stripeClient.paymentMethods.list({
-                customer: customerId,
-                type: 'card',
-            });
-            return paymentMethods.data;
-        } catch (error: any) {
-            if (error.message?.includes('similar object exists in') || error.message?.includes('No such customer')) {
-                console.warn("[Stripe] Mismatch de customer ID (test/live) en listPaymentMethods. Devolviendo lista vacía.");
-                return [];
-            }
-            console.error("[Stripe] Error al listar métodos de pago:", error);
-            throw new Error(`Error al listar métodos de pago: ${error.message}`);
-        }
-    },
-});
-
-/**
- * Inicia la configuración de un nuevo método de pago (tarjeta) guardado.
- */
-export const createSetupIntent = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
-    },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        const userId = actor.idString;
-        const mode = args.mode ?? "test";
-        const stripeClient = getStripeClient(mode);
-
-        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
-        
-        let customerId =
-            mode === "live"
-                ? (user as any)?.stripeCustomerIdLive
-                : (user as any)?.stripeCustomerIdTest;
-        if (!customerId) {
-            customerId = (user as any)?.stripeCustomerId;
-        }
-        if (!customerId) {
-            // Si el usuario no tiene customerId, lo creamos
-            const customer = await stripeClient.customers.create({
-                metadata: { userId },
-            });
-            customerId = customer.id;
-            // Actualizamos el usuario con el customerId
-            await ctx.runMutation(internal.users.updateUserStripeCustomerId, {
-                userId,
-                stripeCustomerId: customerId,
-                mode,
-            });
-        }
-
-        try {
-            const setupIntent = await stripeClient.setupIntents.create({
-                customer: customerId,
-                payment_method_types: ['card'],
-            });
-
-            return {
-                clientSecret: setupIntent.client_secret,
-                isMock: !process.env.STRIPE_SECRET_KEY,
-            };
-        } catch (error: any) {
-            if (error.message?.includes('similar object exists in') || error.message?.includes('No such customer')) {
-                console.warn("[Stripe] Mismatch de customer ID (test/live) en createSetupIntent. Limpiando ID problemático.");
-                throw new Error("El perfil de pagos parece estar en otro entorno (Live/Test). Por favor, intenta de nuevo o contacta soporte.");
-            }
-            console.error("[Stripe] Error al crear SetupIntent:", error);
-            throw new Error(`Error al configurar método de pago: ${error.message}`);
-        }
-    },
-});
-
-/**
- * Elimina (desvincula) un método de pago del usuario.
- */
-export const detachPaymentMethod = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        paymentMethodId: v.string(),
-        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
-    },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        const stripeClient = getStripeClient(args.mode ?? "test");
-
-        try {
-            // IDOR guard: only detach payment methods that belong to the
-            // caller's own Stripe customer.
-            const user = await ctx.runQuery(internal.users.internalGetUserById, { id: actor.idString });
-            const customerId =
-                (args.mode === "live"
-                    ? (user as any)?.stripeCustomerIdLive
-                    : (user as any)?.stripeCustomerIdTest) || (user as any)?.stripeCustomerId;
-            const pm = await stripeClient.paymentMethods.retrieve(args.paymentMethodId);
-            if (!customerId || pm.customer !== customerId) {
-                throw new Error("No autorizado.");
-            }
-            await stripeClient.paymentMethods.detach(args.paymentMethodId);
-        } catch (error: any) {
-            console.error("[Stripe] Error al eliminar método de pago:", error);
-            throw new Error(`Error al eliminar método de pago: ${error.message}`);
-        }
-    },
-});
-
-/**
- * Establece un método de pago como predeterminado (por ejemplo, para facturas de suscripciones).
- */
-export const setDefaultPaymentMethod = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        paymentMethodId: v.string(),
-        mode: v.optional(v.union(v.literal("test"), v.literal("live"))),
-    },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        const userId = actor.idString;
-        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
-        const stripeClient = getStripeClient(args.mode ?? "test");
-        
-        const customerId =
-            (args.mode === "live"
-                ? (user as any)?.stripeCustomerIdLive
-                : (user as any)?.stripeCustomerIdTest) || (user as any)?.stripeCustomerId;
-        if (!user || !customerId) {
-            throw new Error("Usuario no encontrado o sin customer ID de Stripe");
-        }
-
-        try {
-            await stripeClient.customers.update(customerId, {
-                invoice_settings: {
-                    default_payment_method: args.paymentMethodId,
-                },
-            });
-        } catch (error: any) {
-            console.error("[Stripe] Error al establecer método de pago predeterminado:", error);
-            throw new Error(`Error al actualizar tarjeta predeterminada: ${error.message}`);
-        }
-    },
-});
-
-/**
- * Marca un pago como exitoso tras recibir el webhook de Stripe.
- * También acredita puntos de compra: $1 en efectivo = 1 punto (+ bonus de nivel).
- */
-export const internalMarkPaymentSucceeded = internalMutation({
-    args: {
-        stripePaymentIntentId: v.string(),
-        orderId: v.optional(v.string()),
-    },
-    handler: async (ctx, args) => {
-        await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
-            stripePaymentIntentId: args.stripePaymentIntentId,
-            status: "succeeded_in_escrow",
-            settledAt: new Date().toISOString(),
-        });
-
-        const payment = await ctx.db
-            .query("payments")
-            .withIndex("by_stripe_intent", (q) =>
-                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
-            )
-            .first();
-
-        let pointsAwarded = 0;
-        if (payment && payment.userId && payment.amount > 0) {
-            const award = await ctx.runMutation(internal.economy.internalAwardPurchasePoints, {
-                userId: payment.userId,
-                cashAmountUsd: payment.amount,
-                paymentIntentId: args.stripePaymentIntentId,
-                orderId: args.orderId || payment.orderId,
-                description: payment.description
-                    ? `Compra: ${payment.description}`
-                    : undefined,
-            });
-            pointsAwarded = Number((award as any)?.pointsAwarded) || 0;
-
-            await ctx.runMutation(internal.users.internalHandleReferralPurchase, {
-                buyerUserId: payment.userId,
-                amountUSD: Number(payment.amount),
-                paymentIntentId: args.stripePaymentIntentId,
-            });
-
-            if (pointsAwarded > 0) {
-                await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
-            sendEmail: true,
-            userId: payment.userId,
-                    title: "Puntos ganados",
-                    body: `Sumaste +${pointsAwarded} pts por tu compra ($${Number(payment.amount).toFixed(2)}).`,
-                    category: "payment",
-                    data: {
-                        paymentIntentId: args.stripePaymentIntentId,
-                        pointsAwarded,
-                    },
-                });
-            }
-        }
-
-        return { success: true, pointsAwarded };
-    },
-});
-
-/**
- * Notifica al usuario sobre el estado de su pago (Push/Email).
- */
-export const internalNotifyPaymentEvent = internalAction({
-    args: {
-        stripePaymentIntentId: v.string(),
-        eventType: v.string(),
-    },
-    handler: async (ctx, args) => {
-        // Lógica de notificación aquí
-        console.log(`[Notification] Notificando evento ${args.eventType} para PI ${args.stripePaymentIntentId}`);
-    },
-});
-
-/**
- * Crea un link de onboarding para Stripe Connect.
- * Requerido por el check 'stripe.connect.payouts' de la auditoría.
- */
-export const createConnectAccountLink = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        userId: v.id("users"),
-    },
-    handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
-        // SECURITY (Fase 1): identidad desde la sesión, nunca desde args.
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        assertSelfOrAdmin(actor, String(args.userId));
-
-        // Obtenemos la cuenta de Connect del usuario
-        const accountId: string | null = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: args.userId });
-        
-        if (!accountId) {
-            throw new Error("El usuario no tiene una cuenta de Stripe Connect vinculada.");
-        }
-
-        // Delegamos a la accion de Connect V2 existente
-        return await ctx.runAction(internal.connect.internalCreateOnboardingLink, {
-            actorId: args.userId,
-            accountId: accountId,
-        });
-    },
-});
-
-/**
- * Ejecuta un payout manual hacia la cuenta bancaria vinculada en Stripe Connect.
- * Requerido por el check 'stripe.connect.payouts' de la auditoría.
- */
-export const executePayout = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        userId: v.id("users"),
-        amountInCents: v.number(),
-    },
-    handler: async (ctx, args): Promise<{
-        payoutId: string;
-        amountInCents: number;
-        currency: string;
-        status: string;
-        arrivalDate: number | null;
-        isMock: boolean;
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{
+        snapshot: CheckoutSplit;
+        totalCents: number;
+        hasBono: boolean;
+        attributionRejectedReason: string | null;
+        stockIssues: StockIssue[];
     }> => {
-        // SECURITY (Fase 1): sin esto cualquiera podía disparar un payout
-        // hacia la cuenta Connect de cualquier usuario.
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        assertSelfOrAdmin(actor, String(args.userId));
+        const stockIssues: StockIssue[] = [];
 
-        // Delegamos a la accion de Connect V2 existente
-        return await ctx.runAction(internal.connect.internalRequestInstantPayout, {
-            actorId: args.userId,
-            userId: args.userId,
-            amountInCents: args.amountInCents,
-        });
-    },
-});
+        // Puntos: se validan contra el saldo real y se convierten a centavos.
+        let pointsRedeemed = 0;
+        let discountCents = 0;
+        if (args.pointsToRedeem && args.pointsToRedeem > 0) {
+            const state = await ctx.db
+                .query("economyState")
+                .withIndex("by_user", (q) => q.eq("userId", args.userId))
+                .first();
+            const balance = state ? hydrateRewardsState(state.rewardsState).points || 0 : 0;
+            const wanted = Math.floor(args.pointsToRedeem);
+            if (wanted > balance) throw new Error(`No tenés suficientes puntos (saldo: ${balance}).`);
+            discountCents = Math.floor(wanted * CENTS_PER_POINT);
+            pointsRedeemed = Math.round(discountCents / CENTS_PER_POINT);
+        }
+        const cartRows = await ctx.db
+            .query("cart")
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .collect();
+        const cartByListing = new Map(cartRows.map((r) => [String(r.listingId), r]));
 
-/**
- * Libera el pago de una orden retenida en escrow.
- */
-export const internalReleasePayment = internalMutation({
-    args: {
-        orderId: v.id("orders"),
-    },
-    handler: async (ctx, args) => {
-        // Encolar la acción asíncrona de liberación de fondos en Stripe
-        await ctx.scheduler.runAfter(0, internal.stripe.internalReleasePaymentAction, {
-            orderId: args.orderId,
-        });
-    },
-});
+        type PendingLine = {
+            listingId: string;
+            sellerId: string;
+            type: string;
+            unitCents: number;
+            quantity: number;
+            title: string;
+            image?: string;
+            sourcePostId?: string;
+            referralCode?: string;
+            influencerId?: string;
+            influencerRate?: number;
+        };
+        const lines: PendingLine[] = [];
+        const influencerIds = new Set<string>();
+        let hasBono = false;
 
-/**
- * Recupera el pago exitoso de una orden y las cuentas Connect asociadas para el vendedor e influencer.
- */
-export const internalGetPaymentAndAccounts = internalQuery({
-    args: {
-        orderId: v.string(),
-    },
-    handler: async (ctx, args) => {
-        /**
-         * Busca el pago por `orderId`.
-         *
-         * Esta búsqueda devolvía `null` SIEMPRE para el flujo de carrito:
-         * `createPaymentIntent` inserta el registro de pago sin `orderId`
-         * —la orden todavía no existe, se crea después en el webhook— y
-         * `internalCreateSubOrder` nunca hacía el back-link. Con `null`,
-         * `internalReleasePaymentAction` retornaba en silencio mientras
-         * `confirmReceipt` ya había marcado la orden como `completed` /
-         * `released`: la orden decía "pagado al vendedor" y el dinero no se
-         * había movido.
-         *
-         * El back-link ahora se hace al crear la sub-orden. El fallback por
-         * `stripePaymentIntentId` cubre las órdenes creadas antes de este
-         * arreglo, que quedaron sin `orderId` en su pago.
-         */
-        let payment = await ctx.db
-            .query("payments")
-            .withIndex("by_order", (q) => q.eq("orderId", args.orderId))
-            .filter((q) => q.eq(q.field("status"), "succeeded_in_escrow"))
-            .first();
+        for (const item of args.lineItems) {
+            const listingId = ctx.db.normalizeId("listings", item.listingId);
+            if (!listingId) throw new Error(`Producto inválido: ${item.listingId}`);
+            const listing: any = await ctx.db.get(listingId);
+            if (!listing) throw new Error(`Producto no encontrado: ${item.listingId}`);
+            if (listing.status && listing.status !== "active") {
+                throw new Error(`"${listing.title}" ya no está disponible.`);
+            }
+            const quantity = Math.max(1, Math.floor(item.quantity));
+            const title = listing.title || "Producto";
+            const type = String(listing.type || "product").toLowerCase();
+            if (type === "bono") hasBono = true;
 
-        if (!payment) {
-            const orderId = ctx.db.normalizeId("orders", args.orderId);
-            const order: any = orderId ? await ctx.db.get(orderId) : null;
-            if (order?.stripePaymentIntentId) {
-                payment = await ctx.db
-                    .query("payments")
-                    .withIndex("by_stripe_intent", (q) =>
-                        q.eq("stripePaymentIntentId", order.stripePaymentIntentId),
-                    )
-                    .first();
+            if (typeof listing.stock === "number" && !hasEnoughStock(listing.stock, quantity)) {
+                stockIssues.push({ listingId: item.listingId, title, requested: quantity, available: listing.stock });
+            }
+
+            const cartRow: any = cartByListing.get(item.listingId);
+            const referralCode = item.referralCode ?? cartRow?.snapshot?.referralCode ?? undefined;
+            const attribution = referralCode
+                ? await resolveLineAttribution(ctx, {
+                      listingId: item.listingId,
+                      sellerId: String(listing.sellerId),
+                      referralCode,
+                  })
+                : null;
+            if (attribution?.influencerId) influencerIds.add(attribution.influencerId);
+
+            const rawImage =
+                cartRow?.snapshot?.image || listing.image || listing.gallery?.[0] || listing.images?.[0]?.url;
+
+            lines.push({
+                listingId: item.listingId,
+                sellerId: String(listing.sellerId),
+                type,
+                unitCents: Math.round(Number(listing.price || 0) * 100),
+                quantity,
+                title,
+                image: rawImage ? String(rawImage) : undefined,
+                sourcePostId: cartRow?.snapshot?.sourcePostId ? String(cartRow.snapshot.sourcePostId) : undefined,
+                referralCode,
+                influencerId: attribution?.influencerId,
+                influencerRate: attribution?.rate,
+            });
+        }
+
+        // Regla vigente: si más de un influencer gana en el mismo checkout,
+        // no se acredita a ninguno (split multi-influencer pendiente).
+        let attributionRejectedReason: string | null = null;
+        if (influencerIds.size > 1) {
+            attributionRejectedReason = "mixed_influencers_in_checkout";
+            for (const l of lines) {
+                l.influencerId = undefined;
+                l.influencerRate = 0;
             }
         }
 
-        if (!payment) return null;
-
-        let sellerConnectAccountId: string | null = null;
-        if (payment.sellerId) {
-            const sellerIdVal = ctx.db.normalizeId("users", payment.sellerId);
-            if (sellerIdVal) {
-                const seller = await ctx.db.get(sellerIdVal);
-                sellerConnectAccountId = seller?.stripeConnectAccountId ?? null;
+        const provisional =
+            lines.reduce((a, l) => a + l.unitCents * l.quantity, 0) + Math.round(args.shippingCents) - discountCents;
+        let snapshot: CheckoutSplit;
+        try {
+            snapshot = computeCheckoutSplit({
+                lines,
+                shippingCents: args.shippingCents,
+                feeCents: provisional > 0 ? stripeFeeCentsFor(provisional) : 0,
+                discountCents,
+                pointsRedeemed,
+            });
+        } catch (error: any) {
+            if (error instanceof DiscountExceedsCommissionError) {
+                const maxPoints = Math.floor(error.maxDiscountCents / CENTS_PER_POINT);
+                throw new Error(`Podés usar hasta ${maxPoints} puntos en esta compra.`);
             }
-        }
-
-        let influencerConnectAccountId: string | null = null;
-        if (payment.influencerId) {
-            const influencerIdVal = ctx.db.normalizeId("users", payment.influencerId);
-            if (influencerIdVal) {
-                const influencer = await ctx.db.get(influencerIdVal);
-                influencerConnectAccountId = influencer?.stripeConnectAccountId ?? null;
-            }
+            throw error;
         }
 
         return {
-            payment: {
-                _id: payment._id,
-                amount: payment.amount,
-                sellerNet: payment.sellerNet,
-                influencerAmount: payment.influencerAmount,
-                sellerId: payment.sellerId,
-                influencerId: payment.influencerId,
-                stripePaymentIntentId: payment.stripePaymentIntentId,
-            },
-            sellerConnectAccountId,
-            influencerConnectAccountId,
+            snapshot,
+            totalCents: snapshot.totalCents,
+            hasBono,
+            attributionRejectedReason,
+            stockIssues,
         };
     },
 });
 
 /**
- * Registra los payouts en la base de datos y marca que el escrow fue liberado en el pago.
+ * Crea el PaymentIntent y persiste el registro de pago con el snapshot.
+ *
+ * El cliente sólo manda QUÉ compra (listingId + cantidad + ref) y el total
+ * que espera ver; todo el dinero se calcula en el servidor.
  */
+export const createPaymentIntent = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        mode: stripeModeValidator,
+        cartId: v.string(),
+        lineItems: v.array(
+            v.object({
+                listingId: v.string(),
+                quantity: v.number(),
+                referralCode: v.optional(v.string()),
+            }),
+        ),
+        expectedTotalCents: v.number(),
+        pointsToRedeem: v.optional(v.number()),
+        shipping: v.optional(shippingValidator),
+        simulate: v.optional(v.boolean()),
+        tokenId: v.optional(v.string()),
+        cardholderName: v.optional(v.string()),
+        documentNumber: v.optional(v.string()),
+        description: v.optional(v.string()),
+        metadata: v.optional(v.any()),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{
+        clientSecret: string | null;
+        paymentIntentId: string;
+        status: string;
+        isMock: boolean;
+        mode: StripeMode;
+        pointsAwarded: number;
+    }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const userId = actor.idString;
+        const mode = args.mode;
+        const useMock = !!args.simulate;
+        if (useMock) assertMockAllowed();
+        if (args.lineItems.length === 0) throw new Error("El carrito está vacío.");
+
+        const shippingCents = Math.max(0, Math.round(Number(args.shipping?.cost || 0) * 100));
+        const built = await ctx.runQuery(internal.stripe.internalBuildCheckout, {
+            userId,
+            lineItems: args.lineItems,
+            shippingCents,
+            pointsToRedeem: args.pointsToRedeem,
+        });
+        if (built.stockIssues.length > 0) throw new Error(outOfStockMessage(built.stockIssues));
+        if (built.totalCents < 0) throw new Error("El monto debe ser mayor a 0");
+        if (built.totalCents !== Math.round(args.expectedTotalCents)) {
+            throw new Error("El precio cambió. Actualizá el carrito y volvé a intentar.");
+        }
+        // 100% con puntos: no hay cargo en Stripe; el pedido se procesa ya.
+        const pointsOnly = built.totalCents === 0;
+        if (!useMock && !pointsOnly) assertStripeConfigured(mode);
+        if (!pointsOnly && built.totalCents < 50) {
+            throw new Error("El monto mínimo a cobrar con tarjeta es US$ 0,50.");
+        }
+
+        const { snapshot } = built;
+        const totalCents = snapshot.totalCents;
+        const commissionCents = snapshot.sellers.reduce((a, s) => a + s.commissionCents, 0);
+        const influencerCents = snapshot.sellers.reduce((a, s) => a + s.influencerCents, 0);
+        const sellerNetCents = snapshot.sellers.reduce((a, s) => a + s.sellerNetCents, 0);
+        const influencerId = snapshot.sellers.find((s) => s.influencerId)?.influencerId;
+        const influencerRate = snapshot.lineItems.reduce((m, l) => Math.max(m, l.influencerRate), 0);
+        const commissionRate = totalCents > 0 ? commissionCents / totalCents : 0;
+
+        let paymentIntentId: string;
+        let clientSecret: string | null;
+        let status: string;
+
+        if (pointsOnly) {
+            paymentIntentId = `${POINTS_PI_PREFIX}${userId}_${args.cartId}`;
+            clientSecret = null;
+            status = "succeeded";
+        } else if (useMock) {
+            paymentIntentId = mockPaymentIntentId(args.cartId);
+            clientSecret = `mock_secret_${paymentIntentId}`;
+            status = "succeeded";
+        } else {
+            const stripe = getStripe(mode);
+            const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
+            const customerId = customerIdFor(user, mode);
+
+            const metadata: Record<string, string> = {
+                userId,
+                cartId: args.cartId,
+                mode,
+                lineItemsCount: String(args.lineItems.length),
+                billingMarket: "US-NY",
+            };
+            if (built.attributionRejectedReason) metadata.attributionRejectedReason = built.attributionRejectedReason;
+            if (args.cardholderName) metadata.cardholderName = args.cardholderName.trim().slice(0, 120);
+            if (args.documentNumber) metadata.documentNumber = args.documentNumber.replace(/\D/g, "").slice(0, 20);
+            if (args.metadata && typeof args.metadata === "object") {
+                for (const [k, val] of Object.entries(args.metadata as Record<string, unknown>)) {
+                    if (val == null || k in metadata) continue;
+                    metadata[k] = String(val).slice(0, 500);
+                }
+            }
+
+            const params: Stripe.PaymentIntentCreateParams = {
+                amount: totalCents,
+                currency: "usd",
+                customer: customerId,
+                payment_method_types: ["card"],
+                // SCT: el charge entra al grupo del carrito; los transfers
+                // posteriores referencian el mismo `transfer_group`.
+                transfer_group: args.cartId,
+                metadata,
+            };
+            if (args.tokenId) {
+                const pm = await stripe.paymentMethods.create({ type: "card", card: { token: args.tokenId } });
+                params.payment_method = pm.id;
+                params.confirm = true;
+            }
+
+            try {
+                const pi = await withStripeBreadcrumb(
+                    { api: "paymentIntents.create", userId, cartId: args.cartId, mode },
+                    () => stripe.paymentIntents.create(params, { idempotencyKey: `pi:${userId}:${args.cartId}` }),
+                );
+                paymentIntentId = pi.id;
+                clientSecret = pi.client_secret;
+                status = pi.status;
+            } catch (error: any) {
+                console.error("[Stripe] paymentIntents.create failed:", error);
+                throw new Error(`Error al procesar el pago: ${stripeErrorMessage(error)}`);
+            }
+        }
+
+        await ctx.runMutation(internal.finance.createPaymentRecord, {
+            userId,
+            stripePaymentIntentId: paymentIntentId,
+            status: status === "succeeded" ? "succeeded_in_escrow" : "pending",
+            provider: pointsOnly ? "points" : "stripe",
+            amount: totalCents / 100,
+            providerFee: snapshot.feeCents / 100,
+            sellerNet: sellerNetCents / 100,
+            ramgosCommission: commissionCents / 100,
+            influencerAmount: influencerCents / 100,
+            influencerId,
+            commissionRate,
+            influencerRate,
+            description: args.description || snapshot.lineItems[0]?.title || "Pago Ramgos",
+            mode,
+            cartId: args.cartId,
+            amountCents: totalCents,
+            commissionCents,
+            influencerCents,
+            providerFeeEstimatedCents: snapshot.feeCents,
+            sellerNetCents,
+            attributionRejectedReason: built.attributionRejectedReason ?? undefined,
+            shipping: args.shipping,
+            checkoutSnapshot: snapshot,
+        });
+
+        let pointsAwarded = 0;
+        if (useMock || pointsOnly) {
+            // No llega webhook: procesamos el checkout ahora mismo.
+            const result = await ctx.runMutation(internal.stripe.internalProcessPaidCheckout, {
+                stripePaymentIntentId: paymentIntentId,
+                mode,
+            });
+            pointsAwarded = result.pointsAwarded;
+        }
+
+        return { clientSecret, paymentIntentId, status, isMock: useMock, mode, pointsAwarded };
+    },
+});
+
+// ===========================================================================
+// MÉTODOS DE PAGO GUARDADOS (customer por modo)
+// ===========================================================================
+
+const customerIdFor = (user: any, mode: StripeMode): string | undefined =>
+    (mode === "live" ? user?.stripeCustomerIdLive : user?.stripeCustomerIdTest) ||
+    user?.stripeCustomerId ||
+    undefined;
+
+export const listPaymentMethods = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        userId: v.optional(v.string()),
+        mode: stripeModeValidator,
+    },
+    handler: async (ctx, args): Promise<Stripe.PaymentMethod[]> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        if (!hasStripeKey(args.mode)) return [];
+        const stripe = getStripe(args.mode);
+        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: actor.idString });
+        const customerId = customerIdFor(user, args.mode);
+        if (!customerId) return [];
+        try {
+            const list = await stripe.paymentMethods.list({ customer: customerId, type: "card" });
+            return list.data;
+        } catch (error: any) {
+            const msg = stripeErrorMessage(error);
+            if (msg.includes("similar object exists in") || msg.includes("No such customer")) return [];
+            throw new Error(`Error al listar métodos de pago: ${msg}`);
+        }
+    },
+});
+
+export const createSetupIntent = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        mode: stripeModeValidator,
+    },
+    handler: async (ctx, args): Promise<{ clientSecret: string | null; isMock: boolean }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const userId = actor.idString;
+        assertStripeConfigured(args.mode);
+        const stripe = getStripe(args.mode);
+        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
+        let customerId = customerIdFor(user, args.mode);
+        if (!customerId) {
+            const customer = await stripe.customers.create({ metadata: { userId, mode: args.mode } });
+            customerId = customer.id;
+            await ctx.runMutation(internal.users.updateUserStripeCustomerId, {
+                userId,
+                stripeCustomerId: customerId,
+                mode: args.mode,
+            });
+        }
+        try {
+            const si = await stripe.setupIntents.create({ customer: customerId, payment_method_types: ["card"] });
+            return { clientSecret: si.client_secret, isMock: false };
+        } catch (error: any) {
+            const msg = stripeErrorMessage(error);
+            if (msg.includes("similar object exists in") || msg.includes("No such customer")) {
+                throw new Error(
+                    "El perfil de pagos pertenece a otro entorno (test/live). Intentá de nuevo o contactá soporte.",
+                );
+            }
+            throw new Error(`Error al configurar método de pago: ${msg}`);
+        }
+    },
+});
+
+export const detachPaymentMethod = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        paymentMethodId: v.string(),
+        mode: stripeModeValidator,
+    },
+    handler: async (ctx, args): Promise<void> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const stripe = getStripe(args.mode);
+        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: actor.idString });
+        const customerId = customerIdFor(user, args.mode);
+        const pm = await stripe.paymentMethods.retrieve(args.paymentMethodId);
+        if (!customerId || pm.customer !== customerId) throw new Error("No autorizado.");
+        await stripe.paymentMethods.detach(args.paymentMethodId);
+    },
+});
+
+export const setDefaultPaymentMethod = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        paymentMethodId: v.string(),
+        mode: stripeModeValidator,
+    },
+    handler: async (ctx, args): Promise<void> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const stripe = getStripe(args.mode);
+        const user = await ctx.runQuery(internal.users.internalGetUserById, { id: actor.idString });
+        const customerId = customerIdFor(user, args.mode);
+        if (!customerId) throw new Error("Usuario sin perfil de pagos en Stripe.");
+        await stripe.customers.update(customerId, {
+            invoice_settings: { default_payment_method: args.paymentMethodId },
+        });
+    },
+});
+
+// ===========================================================================
+// WEBHOOK: pago confirmado → órdenes
+// ===========================================================================
+
+/**
+ * Recupera el charge y la fee REAL del PaymentIntent y procesa el checkout.
+ * Lo llama el webhook `payment_intent.succeeded`.
+ */
+export const internalHandlePaymentIntentSucceeded = internalAction({
+    args: { mode: stripeModeValidator, paymentIntentId: v.string() },
+    handler: async (ctx, args): Promise<{ created: number; pointsAwarded: number }> => {
+        const stripe = getStripe(args.mode);
+        const pi = await stripe.paymentIntents.retrieve(args.paymentIntentId, {
+            expand: ["latest_charge.balance_transaction"],
+        });
+        const charge = (pi.latest_charge && typeof pi.latest_charge === "object" ? pi.latest_charge : null) as Stripe.Charge | null;
+        const bt =
+            charge && charge.balance_transaction && typeof charge.balance_transaction === "object"
+                ? (charge.balance_transaction as Stripe.BalanceTransaction)
+                : null;
+        return await ctx.runMutation(internal.stripe.internalProcessPaidCheckout, {
+            stripePaymentIntentId: pi.id,
+            mode: args.mode,
+            chargeId: charge?.id,
+            actualFeeCents: bt ? bt.fee : undefined,
+            balanceTransactionId: bt ? bt.id : undefined,
+        });
+    },
+});
+
+/** Resuelve una imagen (storage id o URL) a URL. */
+async function resolveImage(ctx: MutationCtx, image?: string): Promise<string | undefined> {
+    if (!image) return undefined;
+    if (image.startsWith("http") || image.startsWith("blob:") || image.startsWith("data:")) return image;
+    try {
+        const url = await ctx.storage.getUrl(image as any);
+        return url ?? image;
+    } catch {
+        return image;
+    }
+}
+
+/**
+ * Crea las sub-órdenes (una por vendedor) desde el snapshot del pago.
+ * IDEMPOTENTE: si ya hay órdenes para el PI, no crea nada.
+ */
+export const internalProcessPaidCheckout = internalMutation({
+    args: {
+        stripePaymentIntentId: v.string(),
+        mode: stripeModeValidator,
+        chargeId: v.optional(v.string()),
+        actualFeeCents: v.optional(v.number()),
+        balanceTransactionId: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ created: number; pointsAwarded: number }> => {
+        const payment = await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .first();
+        if (!payment) {
+            // El webhook reintenta (500). Si nunca aparece, la reconciliación lo marca.
+            throw new Error(`Pago no encontrado para ${args.stripePaymentIntentId}`);
+        }
+        if (!payment.checkoutSnapshot) {
+            throw new Error(`Pago ${payment._id} sin snapshot de checkout; no se pueden crear órdenes.`);
+        }
+
+        const existing = await ctx.db
+            .query("orders")
+            .withIndex("by_stripe_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .collect();
+        if (existing.length > 0) {
+            for (const o of existing) {
+                if (!o.stripeChargeId && args.chargeId) {
+                    await ctx.db.patch(o._id, { stripeChargeId: args.chargeId, updatedAt: nowIso() });
+                }
+            }
+            if (!payment.stripeChargeId && args.chargeId) {
+                await ctx.db.patch(payment._id, {
+                    stripeChargeId: args.chargeId,
+                    stripeBalanceTransactionId: args.balanceTransactionId,
+                    providerFeeCents: args.actualFeeCents ?? payment.providerFeeCents,
+                });
+            }
+            return { created: 0, pointsAwarded: 0 };
+        }
+
+        const snapshot: CheckoutSplit =
+            args.actualFeeCents != null
+                ? reapplyActualFee(payment.checkoutSnapshot as CheckoutSplit, args.actualFeeCents)
+                : (payment.checkoutSnapshot as CheckoutSplit);
+        const now = Date.now();
+        const nowStr = new Date(now).toISOString();
+        const shipping = payment.shipping;
+        let firstOrderId: Id<"orders"> | null = null;
+
+        for (const seller of snapshot.sellers) {
+            const lines = snapshot.lineItems.filter((l) => l.sellerId === seller.sellerId);
+            const items: Array<{ listingId: string; title: string; quantity: number; price: number; image?: string }> = [];
+            const shortfalls: StockIssue[] = [];
+
+            for (const line of lines) {
+                items.push({
+                    listingId: line.listingId,
+                    title: line.title ?? "Producto",
+                    quantity: line.quantity,
+                    price: line.unitCents / 100,
+                    image: await resolveImage(ctx, line.image),
+                });
+                const listingId = ctx.db.normalizeId("listings", line.listingId);
+                if (!listingId) continue;
+                const listing: any = await ctx.db.get(listingId);
+                if (!listing || typeof listing.stock !== "number") continue;
+                const missing = shortfallFor(listing.stock, line.quantity);
+                if (missing > 0) {
+                    shortfalls.push({
+                        listingId: line.listingId,
+                        title: line.title ?? "Producto",
+                        requested: line.quantity,
+                        available: listing.stock,
+                    });
+                }
+                await ctx.db.patch(listingId, { stock: decrementStock(listing.stock, line.quantity) });
+            }
+
+            const listingType = lines[0]?.type || "product";
+            const orderId = await ctx.db.insert("orders", {
+                userId: payment.userId,
+                sellerId: seller.sellerId,
+                items,
+                total: seller.grossCents / 100,
+                currency: "USD",
+                status: "paid_escrow",
+                escrowState: "held",
+                mode: args.mode,
+                listingType,
+                releaseDueAt: releaseDueAtFor(listingType, now),
+                grossCents: seller.grossCents,
+                commissionCents: seller.commissionCents,
+                influencerId: seller.influencerId,
+                influencerCents: seller.influencerCents,
+                providerFeeCents: seller.feeCents,
+                sellerNetCents: seller.sellerNetCents,
+                netAmountCents: seller.sellerNetCents,
+                refundedCents: 0,
+                refundCount: 0,
+                transferGroup: payment.cartId ?? args.stripePaymentIntentId,
+                stripePaymentIntentId: args.stripePaymentIntentId,
+                stripeChargeId: args.chargeId,
+                ...(shipping ? { shipping: { ...shipping, cost: seller.shippingCents / 100 } } : {}),
+                ...(shortfalls.length > 0 ? { stockShortfall: shortfalls } : {}),
+                createdAt: nowStr,
+                updatedAt: nowStr,
+            });
+            if (!firstOrderId) firstOrderId = orderId;
+            if (shortfalls.length > 0) {
+                console.error(`[Stripe] SOBREVENTA en orden ${orderId}: ${JSON.stringify(shortfalls)}`);
+            }
+
+            const socialItems = lines
+                .filter((l) => l.sourcePostId)
+                .map((l) => ({
+                    listingId: l.listingId,
+                    sourcePostId: String(l.sourcePostId),
+                    quantity: l.quantity,
+                    grossCents: l.grossCents,
+                }));
+            if (socialItems.length > 0) {
+                await ctx.runMutation(internal.commerce.internalRecordSocialSalesForOrder, {
+                    orderId: String(orderId),
+                    buyerUserId: payment.userId,
+                    sellerId: seller.sellerId,
+                    stripePaymentIntentId: args.stripePaymentIntentId,
+                    items: socialItems,
+                });
+            }
+            if (lines.some((l) => l.type === "bono")) {
+                await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, { orderId });
+            }
+        }
+
+        const totalSellerNet = snapshot.sellers.reduce((a, s) => a + s.sellerNetCents, 0);
+        await ctx.db.patch(payment._id, {
+            status: "succeeded_in_escrow",
+            settledAt: nowStr,
+            orderId: firstOrderId ? String(firstOrderId) : payment.orderId,
+            sellerId: payment.sellerId ?? snapshot.sellers[0]?.sellerId,
+            stripeChargeId: args.chargeId,
+            stripeBalanceTransactionId: args.balanceTransactionId,
+            providerFeeCents: snapshot.feeCents,
+            providerFee: snapshot.feeCents / 100,
+            sellerNetCents: totalSellerNet,
+            sellerNet: totalSellerNet / 100,
+            checkoutSnapshot: snapshot,
+        });
+
+        await ctx.runMutation(internal.cart.internalClearCart, { userId: payment.userId });
+
+        // Canje de puntos (idempotente por PI). Si el usuario gastó los puntos
+        // entre el PI y el webhook, el cobro ya ocurrió: se registra y se avisa.
+        if ((snapshot.pointsRedeemed ?? 0) > 0) {
+            const outcome = await awardPoints(ctx, {
+                userId: payment.userId,
+                eventKey: `checkout_redeem_${args.stripePaymentIntentId}`,
+                amount: snapshot.pointsRedeemed!,
+                type: "redeem",
+                source: "purchase",
+                description: `Canje de ${snapshot.pointsRedeemed} puntos (-$${((snapshot.discountCents ?? 0) / 100).toFixed(2)})`,
+                metadata: { paymentIntentId: args.stripePaymentIntentId, discountCents: snapshot.discountCents },
+            });
+            if (outcome.awarded === 0 && outcome.reason !== "duplicate") {
+                console.error(`[Stripe] No se pudieron debitar ${snapshot.pointsRedeemed} puntos de ${payment.userId}: ${outcome.reason}`);
+                await ctx.scheduler.runAfter(0, internal.notifications.internalNotifyAdmins, {
+                    title: "Canje de puntos fallido",
+                    body: `PI ${args.stripePaymentIntentId}: descuento aplicado sin débito de puntos (${outcome.reason}).`,
+                    category: "payment",
+                    data: { paymentIntentId: args.stripePaymentIntentId },
+                });
+            }
+        }
+
+        // Puntos y referidos (idempotentes por PI).
+        let pointsAwarded = 0;
+        if (snapshot.totalCents > 0) {
+            const award = await ctx.runMutation(internal.economy.internalAwardPurchasePoints, {
+                userId: payment.userId,
+                cashAmountUsd: snapshot.totalCents / 100,
+                paymentIntentId: args.stripePaymentIntentId,
+                orderId: firstOrderId ? String(firstOrderId) : undefined,
+                description: payment.description ? `Compra: ${payment.description}` : undefined,
+            });
+            pointsAwarded = Number((award as any)?.pointsAwarded) || 0;
+            await ctx.runMutation(internal.users.internalHandleReferralPurchase, {
+                buyerUserId: payment.userId,
+                amountUSD: snapshot.totalCents / 100,
+                paymentIntentId: args.stripePaymentIntentId,
+            });
+        }
+
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
+            userId: payment.userId,
+            title: "Pago confirmado",
+            body:
+                pointsAwarded > 0
+                    ? `Tu compra de $${(snapshot.totalCents / 100).toFixed(2)} fue confirmada. Sumaste +${pointsAwarded} pts.`
+                    : `Tu compra de $${(snapshot.totalCents / 100).toFixed(2)} fue confirmada.`,
+            category: "payment",
+            data: { paymentIntentId: args.stripePaymentIntentId, pointsAwarded },
+        });
+
+        return { created: snapshot.sellers.length, pointsAwarded };
+    },
+});
+
+/** Camino legacy (PI sin `cartId`): marca el pago y acredita puntos. */
+export const internalMarkPaymentSucceeded = internalMutation({
+    args: { stripePaymentIntentId: v.string(), orderId: v.optional(v.string()) },
+    handler: async (ctx, args): Promise<{ success: boolean; pointsAwarded: number }> => {
+        const payment = await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .first();
+        if (!payment) return { success: false, pointsAwarded: 0 };
+        await ctx.db.patch(payment._id, { status: "succeeded_in_escrow", settledAt: nowIso() });
+        let pointsAwarded = 0;
+        if (payment.amount > 0) {
+            const award = await ctx.runMutation(internal.economy.internalAwardPurchasePoints, {
+                userId: payment.userId,
+                cashAmountUsd: payment.amount,
+                paymentIntentId: args.stripePaymentIntentId,
+                orderId: args.orderId || payment.orderId,
+            });
+            pointsAwarded = Number((award as any)?.pointsAwarded) || 0;
+        }
+        return { success: true, pointsAwarded };
+    },
+});
+
+// ===========================================================================
+// LIBERACIÓN DE ESCROW — camino único
+// ===========================================================================
+
+export const internalGetOrderForAdminEscrow = internalQuery({
+    args: { orderId: v.id("orders") },
+    handler: async (ctx, args): Promise<Doc<"orders"> | null> => ctx.db.get(args.orderId),
+});
+
+type ReleaseBegin =
+    | { alreadyReleased: true }
+    | {
+          alreadyReleased: false;
+          mode: StripeMode;
+          isMock: boolean;
+          sellerId: string;
+          sellerNetCents: number;
+          chargeId?: string;
+          transferGroup: string;
+          destination: string;
+          payoutId: Id<"payouts">;
+      };
+
+export const internalBeginEscrowRelease = internalMutation({
+    args: { orderId: v.id("orders"), trigger: releaseTriggerValidator },
+    handler: async (ctx, args): Promise<ReleaseBegin> => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) throw new Error("Orden no encontrada");
+        if (order.escrowState === "released") return { alreadyReleased: true };
+
+        const fromDispute = args.trigger === "dispute_seller" && order.escrowState === "disputed";
+        if (!fromDispute && !isReleasable(order.escrowState, !!order.escrowReleaseError)) {
+            throw new Error(`La orden no está en condiciones de liberar (escrow: ${order.escrowState ?? "n/a"}).`);
+        }
+        if (!fromDispute && !canConfirmReceipt(order.status) && order.status !== "completed") {
+            throw new Error(`La orden no está en un estado liberable (${order.status}).`);
+        }
+
+        const mode: StripeMode = order.mode ?? "test";
+        const sellerNetCents = order.sellerNetCents ?? order.netAmountCents ?? 0;
+        if (sellerNetCents <= 0) throw new Error("La orden no tiene neto a transferir.");
+        if (!order.stripePaymentIntentId) throw new Error("La orden no tiene PaymentIntent.");
+        const isMock = isMockPaymentIntentId(order.stripePaymentIntentId);
+
+        const sellerUserId = ctx.db.normalizeId("users", order.sellerId);
+        const seller = sellerUserId ? await ctx.db.get(sellerUserId) : null;
+        const destination = isMock ? `mock_acct_${order.sellerId}` : connectAccountFor(seller, mode);
+        if (!destination) {
+            throw new Error(
+                `El vendedor no completó su cuenta de pagos (Stripe Connect, modo ${mode}). No se puede liberar todavía.`,
+            );
+        }
+
+        const now = nowIso();
+        await ctx.db.patch(order._id, {
+            escrowState: "release_pending",
+            escrowPrevStatus: order.escrowPrevStatus ?? order.status,
+            escrowReleaseTrigger: args.trigger,
+            escrowReleaseError: undefined,
+            updatedAt: now,
+        });
+
+        const idempotencyKey = `release:${order._id}:seller`;
+        const existingPayout = await ctx.db
+            .query("payouts")
+            .withIndex("by_order_and_kind", (q) => q.eq("orderId", String(order._id)).eq("kind", "seller"))
+            .first();
+        let payoutId: Id<"payouts">;
+        if (existingPayout) {
+            payoutId = existingPayout._id;
+            await ctx.db.patch(payoutId, {
+                status: "processing",
+                attempts: (existingPayout.attempts ?? 0) + 1,
+                amountInCents: sellerNetCents,
+                destinationAccountId: destination,
+                error: undefined,
+                updatedAt: now,
+            });
+        } else {
+            const payment = await ctx.db
+                .query("payments")
+                .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", order.stripePaymentIntentId))
+                .first();
+            payoutId = await ctx.db.insert("payouts", {
+                paymentId: payment ? String(payment._id) : undefined,
+                orderId: String(order._id),
+                kind: "seller",
+                mode,
+                sellerId: order.sellerId,
+                destinationAccountId: destination,
+                amountInCents: sellerNetCents,
+                currency: "USD",
+                status: "processing",
+                idempotencyKey,
+                attempts: 1,
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return {
+            alreadyReleased: false,
+            mode,
+            isMock,
+            sellerId: order.sellerId,
+            sellerNetCents,
+            chargeId: order.stripeChargeId,
+            transferGroup: order.transferGroup ?? order.stripePaymentIntentId,
+            destination,
+            payoutId,
+        };
+    },
+});
+
 export const internalCompleteEscrowRelease = internalMutation({
     args: {
-        paymentId: v.id("payments"),
         orderId: v.id("orders"),
-        sellerId: v.string(),
-        sellerAmountInCents: v.number(),
-        sellerTransferId: v.optional(v.string()),
-        influencerId: v.optional(v.string()),
-        influencerAmountInCents: v.optional(v.number()),
-        influencerTransferId: v.optional(v.string()),
-        status: v.union(v.literal("completed"), v.literal("failed")),
-        error: v.optional(v.string()),
+        payoutId: v.id("payouts"),
+        transferId: v.string(),
+        actorUserId: v.optional(v.string()),
     },
-    handler: async (ctx, args) => {
-        const payment = await ctx.db.get(args.paymentId);
-        if (payment) {
-            await ctx.db.patch(args.paymentId, {
-                status: args.status === "completed" ? "released_to_seller" : "failed",
-                metadata: {
-                    ...(payment.metadata ?? {}),
-                    escrowReleased: args.status === "completed",
-                    escrowReleaseError: args.error,
-                    releasedAt: new Date().toISOString(),
-                }
-            });
-        }
-
-        // Insert payout record for seller
-        await ctx.db.insert("payouts", {
-            paymentId: String(args.paymentId),
-            sellerId: args.sellerId,
-            stripeTransferId: args.sellerTransferId,
-            amountInCents: args.sellerAmountInCents,
-            currency: "USD",
-            status: args.status,
-            executedAt: new Date().toISOString(),
-            error: args.error,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        });
-
-        // Insert payout record for influencer if present and successful
-        if (args.influencerId && args.influencerAmountInCents && args.influencerAmountInCents > 0) {
-            await ctx.db.insert("payouts", {
-                paymentId: String(args.paymentId),
-                sellerId: args.influencerId,
-                stripeTransferId: args.influencerTransferId,
-                amountInCents: args.influencerAmountInCents,
-                currency: "USD",
-                status: args.status,
-                executedAt: new Date().toISOString(),
-                error: args.error,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            });
-        }
-    },
-});
-
-/**
- * Acción interna que ejecuta las transferencias reales en Stripe Connect.
- */
-/**
- * Marca que la liberación de escrow no se pudo completar.
- *
- * Revierte el estado optimista que dejó `confirmReceipt` para que la orden no
- * quede diciendo "pagado al vendedor" cuando el dinero no se movió.
- */
-export const internalFlagEscrowReleaseFailed = internalMutation({
-    args: { orderId: v.id("orders"), reason: v.string() },
-    handler: async (ctx, args) => {
+    handler: async (ctx, args): Promise<void> => {
         const order = await ctx.db.get(args.orderId);
         if (!order) return;
-        await ctx.db.patch(args.orderId, {
-            escrowState: "held",
-            escrowReleaseError: args.reason,
-            updatedAt: new Date().toISOString(),
+        const now = Date.now();
+        const nowStr = new Date(now).toISOString();
+
+        await ctx.db.patch(order._id, {
+            escrowState: "released",
+            status: "completed",
+            stripeTransferId: args.transferId,
+            escrowReleasedAt: nowStr,
+            escrowReleaseError: undefined,
+            updatedAt: nowStr,
         });
-    },
-});
-
-export const internalReleasePaymentAction = internalAction({
-    args: {
-        orderId: v.id("orders"),
-    },
-    handler: async (ctx, args) => {
-        // 1. Get payment and accounts
-        const data = await ctx.runQuery(internal.stripe.internalGetPaymentAndAccounts, {
-            orderId: args.orderId,
+        await ctx.db.patch(args.payoutId, {
+            status: "completed",
+            stripeTransferId: args.transferId,
+            executedAt: nowStr,
+            error: undefined,
+            updatedAt: nowStr,
         });
 
-        if (!data) {
-            /**
-             * No se encontró el pago.
-             *
-             * Este `return` era MUDO y ocurría SIEMPRE en el flujo de carrito,
-             * porque `payments.orderId` nunca se completaba. Mientras tanto
-             * `confirmReceipt` ya había dejado la orden en `completed` /
-             * `released`: la orden decía "pagado al vendedor" y no se había
-             * transferido nada, sin un solo error visible.
-             *
-             * El back-link de `internalCreateSubOrder` lo resuelve para las
-             * órdenes nuevas. Si igual se llega acá, la orden vuelve a `held` y
-             * queda marcada: es preferible una orden que se ve pendiente a una
-             * que miente diciendo que se pagó.
-             */
-            console.error(`[Stripe Escrow] No se encontró pago exitoso para la orden ${args.orderId}`);
-            await ctx.runMutation(internal.stripe.internalFlagEscrowReleaseFailed, {
-                orderId: args.orderId,
-                reason: "no_payment_record",
-            });
-            return;
-        }
-
-        const { payment, sellerConnectAccountId, influencerConnectAccountId } = data;
-
-        /**
-         * Monto a transferir: el de LA ORDEN, no el del pago compartido.
-         *
-         * `payment` es un único registro por PaymentIntent — en un carrito de
-         * un solo vendedor coincide con la orden, pero en uno multi-vendedor
-         * `payment.sellerNet` es el neto del CARRITO ENTERO. Usarlo acá
-         * transfería el total del carrito a CADA vendedor por separado (2
-         * vendedores → se pagaba el doble de lo cobrado). `order.netAmountCents`
-         * ya viene prorrateado por vendedor desde `internalProcessMultiVendorCart`;
-         * el fallback a `payment.sellerNet` es sólo para órdenes previas a ese
-         * campo.
-         */
-        const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, {
-            orderId: args.orderId,
-        });
-        const sellerAmountInCents =
-            order?.netAmountCents != null ? order.netAmountCents : Math.round(payment.sellerNet * 100);
-        const influencerAmountInCents = payment.influencerAmount ? Math.round(payment.influencerAmount * 100) : 0;
-
-        console.log(`[Stripe Escrow] Iniciando liberación para orden: ${args.orderId}, sellerNet: $${sellerAmountInCents / 100}`);
-
-        try {
-            let sellerTransferId: string;
-            let influencerTransferId: string | undefined;
-
-            const isMockPayment = String(payment.stripePaymentIntentId || "").includes("mock");
-
-            if (isStripeMock || isMockPayment) {
-                sellerTransferId = `mock_transfer_${Date.now()}`;
-                if (influencerAmountInCents > 0) {
-                    influencerTransferId = `mock_transfer_inf_${Date.now()}`;
-                }
-            } else {
-                try {
-                    if (!sellerConnectAccountId) {
-                        throw new Error(`El vendedor no tiene una cuenta de Stripe Connect vinculada.`);
-                    }
-
-                    const sellerTransfer = await stripe.transfers.create({
-                        amount: sellerAmountInCents,
-                        currency: "usd",
-                        destination: sellerConnectAccountId,
-                        transfer_group: String(args.orderId),
-                        metadata: {
-                            orderId: String(args.orderId),
-                            paymentId: String(payment._id),
-                            role: "seller",
-                        },
-                    });
-                    sellerTransferId = sellerTransfer.id;
-
-                    if (influencerAmountInCents > 0 && influencerConnectAccountId) {
-                        // El influencer ya no recibe el payout en este momento.
-                        // El dinero queda en la cuenta de Stripe principal hasta
-                        // el día viernes, cuando un cron job consolida todos los pagos.
-                    }
-                } catch (transferErr: any) {
-                    const msg = String(transferErr?.message || transferErr?.raw?.message || "");
-                    // ponytail: Connect test often lacks transfers capability
-                    if (
-                        msg.includes("capabilities enabled") ||
-                        msg.includes("stripe_transfers") ||
-                        msg.includes("legacy_payments") ||
-                        msg.includes("crypto_transfers")
-                    ) {
-                        sellerTransferId = `demo_mock_transfer_${Date.now()}`;
-                        if (influencerAmountInCents > 0) {
-                            influencerTransferId = `demo_mock_transfer_inf_${Date.now()}`;
-                        }
-                    } else {
-                        throw transferErr;
-                    }
-                }
-            }
-
-            // 4. Complete database update
-            await ctx.runMutation(internal.stripe.internalCompleteEscrowRelease, {
-                paymentId: payment._id,
-                orderId: args.orderId,
-                sellerId: payment.sellerId ?? "",
-                sellerAmountInCents,
-                sellerTransferId,
-                influencerId: payment.influencerId,
-                influencerAmountInCents: influencerAmountInCents > 0 ? influencerAmountInCents : undefined,
-                influencerTransferId,
-                status: "completed",
-            });
-
-            console.log(`[Stripe Escrow] Fondos liberados con éxito para orden ${args.orderId}`);
-        } catch (error: any) {
-            console.error(`[Stripe Escrow Error] Falló liberación para orden ${args.orderId}:`, error);
-            await ctx.runMutation(internal.stripe.internalCompleteEscrowRelease, {
-                paymentId: payment._id,
-                orderId: args.orderId,
-                sellerId: payment.sellerId ?? "",
-                sellerAmountInCents,
-                influencerId: payment.influencerId,
-                influencerAmountInCents: influencerAmountInCents > 0 ? influencerAmountInCents : undefined,
-                status: "failed",
-                error: error.message,
-            });
-        }
-    },
-});
-
-export const internalProcessMultiVendorCart = internalAction({
-    args: {
-        stripePaymentIntentId: v.string(),
-        userId: v.string(),
-        cartId: v.string(), // This is the transfer_group
-        amount: v.number(),
-    },
-    handler: async (ctx, args) => {
-        // Fetch cart items via internal query
-        const cartItems = await ctx.runQuery(internal.stripe.internalGetCartForUser, { userId: args.userId });
-
-        // El destino de envío viajó en el registro de pago (ver el arg
-        // `shipping` de `createPaymentIntent`). Se repite en cada sub-orden
-        // porque cada vendedor despacha por separado y necesita la dirección.
-        const paymentRecord: any = await ctx.runQuery(internal.stripe.internalGetPaymentByIntentId, {
-            stripePaymentIntentId: args.stripePaymentIntentId,
-        });
-        const shipping = paymentRecord?.metadata?.shipping;
-        if (!cartItems || cartItems.length === 0) {
-            console.log(`[Stripe Connect] Cart empty for user ${args.userId}. Skipping multi-vendor split.`);
-            return;
-        }
-
-        /**
-         * Agrupación por vendedor.
-         *
-         * El fallback anterior era `|| "ramgos"`, un string que no es el `_id`
-         * de ningún usuario: `normalizeId("users", "ramgos")` devuelve `null`,
-         * así que todos los caminos de liberación de escrow fallaban y esa
-         * orden quedaba trabada para siempre, sin nadie a quien pagarle.
-         *
-         * Ahora un item sin vendedor identificable se salta y se registra. El
-         * dinero ya se cobró, así que se procesa el resto del carrito en vez de
-         * tirar todo abajo; el item huérfano queda visible en los logs para
-         * resolverlo a mano.
-         */
-        const sellerGroups: Record<string, typeof cartItems> = {};
-        const orphanItems: string[] = [];
-        for (const item of cartItems) {
-            const sellerId = item.snapshot?.sellerId;
-            if (!sellerId) {
-                orphanItems.push(item.listingId);
-                continue;
-            }
-            if (!sellerGroups[sellerId]) sellerGroups[sellerId] = [];
-            sellerGroups[sellerId].push(item);
-        }
-
-        if (orphanItems.length > 0) {
-            console.error(
-                `[Stripe] Items sin vendedor en el carrito de ${args.userId}, no se creó orden para ellos: ${orphanItems.join(", ")}`,
-            );
-        }
-
-        /**
-         * Costo de envío.
-         *
-         * Es un cargo del CARRITO, no de cada vendedor, pero se cobra dentro
-         * del mismo PaymentIntent (`buildLineItems` le agrega una línea
-         * sintética para que el total cuadre). Antes no se guardaba en ninguna
-         * orden, así que `Σ(sub-órdenes) ≠ pi.amount` siempre que hubiera envío
-         * y no quedaba registro de cuánto se había cobrado por él.
-         *
-         * Se adjunta a la PRIMERA sub-orden nada más: repetirlo en todas lo
-         * contaría de más. La dirección sí va en todas, porque cada vendedor
-         * necesita saber adónde despachar.
-         */
-        let shippingCostPending = Number(shipping?.cost) || 0;
-
-        /**
-         * Split real, no recalculado.
-         *
-         * Antes cada sub-orden recalculaba su propia comisión al 12% —
-         * desalineada con el 10% que `createPaymentIntent` YA cobró— y sin
-         * restar ni la tarifa de Stripe ni el corte del influencer. Ese
-         * número quedaba guardado en `orders.netAmountCents`/`commissionCents`
-         * sin que nadie lo usara para transferir... hasta que se lo usó
-         * (`internalReleasePaymentAction` ahora prefiere el neto de la orden
-         * sobre el del pago compartido, porque ESE es el bug real: un
-         * carrito con 2+ vendedores le transferiría a cada uno el neto del
-         * carrito ENTERO). Con el cálculo viejo, esto hubiera sobrepagado a
-         * todos los vendedores. Ahora se prorratea el `sellerNet` y la
-         * `ramgosCommission` que el pago realmente cobró, por la porción de
-         * subtotal de cada vendedor — así la suma de las sub-órdenes cuadra
-         * con lo que Stripe efectivamente retuvo.
-         */
-        const subtotalCentsBySeller: Record<string, number> = {};
-        let totalSubtotalCents = 0;
-        for (const [sellerId, items] of Object.entries(sellerGroups)) {
-            const cents = Math.round(
-                items.reduce((sum: number, i: any) => sum + (i.snapshot?.price || 0) * i.quantity, 0) * 100,
-            );
-            subtotalCentsBySeller[sellerId] = cents;
-            totalSubtotalCents += cents;
-        }
-        const paymentSellerNetCents = Math.round((paymentRecord?.sellerNet ?? 0) * 100);
-        const paymentCommissionCents = Math.round((paymentRecord?.ramgosCommission ?? 0) * 100);
-
-        for (const [sellerId, items] of Object.entries(sellerGroups)) {
-            const shippingForThisOrder = shipping
-                ? { ...shipping, cost: shippingCostPending }
-                : undefined;
-            shippingCostPending = 0;
-
-            const subtotalCents = subtotalCentsBySeller[sellerId] ?? 0;
-            const shareFraction = totalSubtotalCents > 0 ? subtotalCents / totalSubtotalCents : 0;
-
-            // Sin pago cart-level (no debería pasar, pero no es motivo para
-            // tirar toda la orden abajo): cae al 10% plano, sin descuentos.
-            const commission = paymentRecord
-                ? Math.round(paymentCommissionCents * shareFraction)
-                : commissionCentsFor(subtotalCents);
-            const sellerNet = paymentRecord
-                ? Math.round(paymentSellerNetCents * shareFraction)
-                : subtotalCents - commission;
-
-            // Create Order for this seller with escrow fields
-            const orderId = await ctx.runMutation(internal.stripe.internalCreateSubOrder, {
-                userId: args.userId,
-                sellerId,
-                items: items.map((i: any) => ({
-                    listingId: i.listingId,
-                    title: i.snapshot?.title || "Producto",
-                    quantity: i.quantity,
-                    price: i.snapshot?.price || 0,
-                    image: i.snapshot?.image,
-                    // Rides along so the order can be attributed back to the
-                    // post whose CommerceTag put this item in the cart.
-                    sourcePostId: i.snapshot?.sourcePostId,
-                })),
-                total: subtotalCents / 100,
-                netAmountCents: sellerNet,
-                commissionCents: commission,
-                transferGroup: args.cartId,
-                stripePaymentIntentId: args.stripePaymentIntentId,
-                ...(shippingForThisOrder ? { shipping: shippingForThisOrder } : {}),
-            });
-
-            // Emit redeemable bono codes when this sub-order contains bono listings.
-            const hasBono = items.some(
-                (i: any) => String(i.snapshot?.type || "").toLowerCase() === "bono",
-            );
-            if (hasBono && orderId) {
-                await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, {
-                    orderId: orderId as any,
-                });
-            }
-
-            console.log(`[Stripe Connect] Escrow: Sub-order created for seller ${sellerId}. Funds held in platform. Transfer delayed.`);
-        }
-
-        // Clear Cart
-        await ctx.runMutation(internal.cart.internalClearCart, { userId: args.userId });
-    }
-});
-
-
-
-/**
- * Revalida stock y precio contra la base antes de cobrar.
- *
- * El monto del PaymentIntent se arma con el snapshot que el cliente capturó al
- * navegar al checkout, y las sub-órdenes se construyen leyendo el carrito vivo
- * en el momento del webhook. Entre esos dos instantes el catálogo puede haber
- * cambiado: se cobraba una cosa y se creaban órdenes por otra, sin que nadie
- * lo notara.
- *
- * Chequear acá es lo que permite RECHAZAR: el comprador todavía no pagó. Una
- * vez cobrado ya no se puede negar la venta sin dejar dinero huérfano.
- */
-export const internalValidateCartForCheckout = internalQuery({
-    args: {
-        lineItems: v.array(v.object({
-            listingId: v.string(),
-            quantity: v.number(),
-            amountInCents: v.number(),
-        })),
-    },
-    handler: async (ctx, args) => {
-        const stockIssues: Array<{ listingId: string; title: string; requested: number; available: number }> = [];
-        const priceIssues: Array<{ listingId: string; title: string; chargedCents: number; actualCents: number }> = [];
-
-        let hasBono = false;
-        for (const item of args.lineItems) {
-            // La línea sintética de envío no es un listing.
-            if (item.listingId === "shipping") continue;
-
-            const listingId = ctx.db.normalizeId("listings", item.listingId);
-            if (!listingId) continue;
-            const listing: any = await ctx.db.get(listingId);
-            if (!listing) continue;
-
-            if (listing.type === "bono") {
-                hasBono = true;
-            }
-
-            const title = listing.title || "Producto";
-
-            if (typeof listing.stock === "number" && !hasEnoughStock(listing.stock, item.quantity)) {
-                stockIssues.push({
-                    listingId: item.listingId,
-                    title,
-                    requested: item.quantity,
-                    available: listing.stock,
-                });
-            }
-
-            // El precio se compara en centavos para no arrastrar el error de
-            // punto flotante de multiplicar por 100 en dos lugares distintos.
-            const actualCents = Math.round(Number(listing.price || 0) * 100);
-            if (actualCents !== item.amountInCents) {
-                priceIssues.push({
-                    listingId: item.listingId,
-                    title,
-                    chargedCents: item.amountInCents,
-                    actualCents,
+        // Influencer: se programa a +10 días (ventana de clawback).
+        if (order.influencerId && (order.influencerCents ?? 0) > 0) {
+            const existing = await ctx.db
+                .query("payouts")
+                .withIndex("by_order_and_kind", (q) => q.eq("orderId", String(order._id)).eq("kind", "influencer"))
+                .first();
+            if (!existing) {
+                const dueAt = influencerPayoutDueAt(now);
+                await ctx.db.insert("payouts", {
+                    orderId: String(order._id),
+                    kind: "influencer",
+                    mode: order.mode ?? "test",
+                    sellerId: order.influencerId,
+                    amountInCents: order.influencerCents!,
+                    currency: "USD",
+                    status: "scheduled",
+                    idempotencyKey: `release:${order._id}:influencer`,
+                    scheduledAtMs: dueAt,
+                    scheduledAt: new Date(dueAt).toISOString(),
+                    attempts: 0,
+                    createdAt: nowStr,
+                    updatedAt: nowStr,
                 });
             }
         }
 
-        return { stockIssues, priceIssues, hasBono };
-    },
-});
-
-/** Pago por PaymentIntent. Lo usa el webhook para recuperar el envío. */
-export const internalGetPaymentByIntentId = internalQuery({
-    args: { stripePaymentIntentId: v.string() },
-    handler: async (ctx, args) => {
-        return await ctx.db
-            .query("payments")
-            .withIndex("by_stripe_intent", (q) =>
-                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
-            )
-            .first();
-    },
-});
-
-export const internalGetCartForUser = internalQuery({
-    args: { userId: v.string() },
-    handler: async (ctx, args) => {
-        return await ctx.db.query("cart").withIndex("by_user", q => q.eq("userId", args.userId)).collect();
-    }
-});
-
-export const internalCreateSubOrder = internalMutation({
-    args: {
-        userId: v.string(),
-        sellerId: v.string(),
-        items: v.array(v.object({
-            listingId: v.string(),
-            title: v.string(),
-            quantity: v.number(),
-            price: v.number(),
-            image: v.optional(v.string()),
-            sourcePostId: v.optional(v.string()),
-        })),
-        total: v.number(),
-        netAmountCents: v.number(),
-        commissionCents: v.optional(v.number()),
-        transferGroup: v.string(),
-        stripePaymentIntentId: v.string(),
-        shipping: v.optional(v.object({
-            method: v.string(),
-            cost: v.number(),
-            address: v.object({
-                fullName: v.string(),
-                addressLine1: v.string(),
-                addressLine2: v.optional(v.string()),
-                city: v.string(),
-                state: v.optional(v.string()),
-                postalCode: v.string(),
-                country: v.string(),
-                phone: v.optional(v.string()),
-            }),
-        })),
-        // PHASE 5: Rentals
-        checkInDate: v.optional(v.string()),
-        checkOutDate: v.optional(v.string()),
-        guests: v.optional(v.number()),
-    },
-    handler: async (ctx, args) => {
-        // Resolve storage IDs → HTTPS URLs so History/Activity can render immediately.
-        const items = await Promise.all(
-            args.items.map(async (item) => {
-                let image = item.image;
-                if (image && !image.startsWith("http") && !image.startsWith("blob:") && !image.startsWith("data:")) {
-                    try {
-                        const url = await ctx.storage.getUrl(image as any);
-                        if (url) image = url;
-                    } catch {
-                        // keep storage id; getMyOrders will try to resolve later
-                    }
+        // Pago: released_to_seller cuando TODAS las órdenes del PI se liberaron.
+        if (order.stripePaymentIntentId) {
+            const siblings = await ctx.db
+                .query("orders")
+                .withIndex("by_stripe_payment_intent", (q) =>
+                    q.eq("stripePaymentIntentId", order.stripePaymentIntentId),
+                )
+                .collect();
+            const allReleased = siblings.every(
+                (o) => o._id === order._id || o.escrowState === "released" || o.escrowState === "refunded",
+            );
+            if (allReleased) {
+                const payment = await ctx.db
+                    .query("payments")
+                    .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", order.stripePaymentIntentId))
+                    .first();
+                if (payment && payment.status === "succeeded_in_escrow") {
+                    await ctx.db.patch(payment._id, { status: "released_to_seller" });
                 }
-                if (!image && item.listingId) {
-                    const listingId = ctx.db.normalizeId("listings", item.listingId);
-                    if (listingId) {
-                        const listing: any = await ctx.db.get(listingId);
-                        const raw = listing?.image || listing?.gallery?.[0] || listing?.images?.[0]?.url;
-                        if (raw) {
-                            if (String(raw).startsWith("http")) {
-                                image = String(raw);
-                            } else {
-                                try {
-                                    image = (await ctx.storage.getUrl(raw as any)) || String(raw);
-                                } catch {
-                                    image = String(raw);
-                                }
-                            }
-                        }
-                    }
-                }
-                return { ...item, image };
+            }
+        }
+
+        await ctx.db.insert(
+            "audit_logs",
+            buildAuditRecord({
+                actorUserId: args.actorUserId ?? `system:${order.escrowReleaseTrigger ?? "release"}`,
+                targetUserId: order.sellerId,
+                action: "ESCROW_RELEASED",
+                amountCents: order.sellerNetCents ?? order.netAmountCents,
+                metadata: { orderId: String(order._id), transferId: args.transferId, trigger: order.escrowReleaseTrigger },
             }),
         );
 
-        // `orders.items` has no `sourcePostId` field; attribution lives in
-        // `socialPostSales`, recorded right after the insert below.
-        const orderItems = items.map(({ sourcePostId, ...rest }) => rest);
-
-        /**
-         * Descuento de stock — el paso que faltaba por completo.
-         *
-         * Este es el único lugar transaccional del camino que realmente corre
-         * (webhook de Stripe → `internalProcessMultiVendorCart` → acá). Ni esta
-         * mutation ni ninguna otra del recorrido tocaba `listings.stock`, así
-         * que un producto con stock 1 se podía vender indefinidamente.
-         *
-         * NO se lanza excepción si no alcanza: el cobro ya ocurrió y fallar acá
-         * dejaría dinero tomado sin orden asociada, que es peor que la
-         * sobreventa. Se descuenta lo que haya, se acota en 0 y el faltante
-         * queda registrado en la orden para que alguien lo resuelva. La defensa
-         * real está antes, en `createPaymentIntent`, que revalida y rechaza
-         * mientras el comprador todavía no pagó.
-         */
-        const shortfalls: Array<{ listingId: string; title: string; requested: number; available: number }> = [];
-        for (const item of orderItems) {
-            const listingId = ctx.db.normalizeId("listings", item.listingId);
-            if (!listingId) continue;
-            const listing: any = await ctx.db.get(listingId);
-            if (!listing || typeof listing.stock !== "number") continue; // servicios/eventos/bonos no llevan inventario
-
-            const missing = shortfallFor(listing.stock, item.quantity);
-            if (missing > 0) {
-                shortfalls.push({
-                    listingId: item.listingId,
-                    title: item.title,
-                    requested: item.quantity,
-                    available: listing.stock,
-                });
-            }
-            await ctx.db.patch(listingId, { stock: decrementStock(listing.stock, item.quantity) });
-        }
-
-        if (shortfalls.length > 0) {
-            console.error(
-                `[Stripe] SOBREVENTA en la orden de ${args.sellerId}: ${JSON.stringify(shortfalls)}`,
-            );
-        }
-
-        const orderId = await ctx.db.insert("orders", {
-            userId: args.userId,
-            sellerId: args.sellerId,
-            items: orderItems,
-            total: args.total,
-            currency: "USD",
-            status: "paid_escrow", // Delayed payout
-            escrowState: "held",
-            netAmountCents: args.netAmountCents,
-            commissionCents: args.commissionCents,
-            transferGroup: args.transferGroup,
-            stripePaymentIntentId: args.stripePaymentIntentId,
-            ...(args.shipping ? { shipping: args.shipping } : {}),
-            ...(shortfalls.length > 0 ? { stockShortfall: shortfalls } : {}),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+        const shortOrderId = String(order._id).slice(-6);
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
+            userId: order.sellerId,
+            title: "Fondos liberados",
+            body: `Se liberaron los fondos del pedido #${shortOrderId}. Ya están en tu cuenta de Stripe.`,
+            category: "payment",
+            data: { type: "escrow_released", orderId: String(order._id), amount: order.total },
         });
-
-        /**
-         * Back-link pago ↔ orden.
-         *
-         * `createPaymentIntent` crea el registro de pago SIN `orderId` porque la
-         * orden todavía no existe. Sin este patch, `internalGetPaymentAndAccounts`
-         * no encontraba nunca el pago y la liberación de escrow terminaba en
-         * silencio: la orden quedaba marcada como liberada sin transferencia.
-         *
-         * También se completa `sellerId`, que la búsqueda necesita para resolver
-         * la cuenta de Connect a la que hay que transferir.
-         */
-        const paymentRow = await ctx.db
-            .query("payments")
-            .withIndex("by_stripe_intent", (q) =>
-                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
-            )
-            .first();
-        if (paymentRow && !paymentRow.orderId) {
-            await ctx.db.patch(paymentRow._id, {
-                orderId: String(orderId),
-                sellerId: paymentRow.sellerId ?? args.sellerId,
-            });
-        }
-
-        // Social commerce: credit the posts that drove any of these items.
-        const socialItems = items
-            .filter((i: any) => i.sourcePostId)
-            .map((i: any) => ({
-                listingId: i.listingId,
-                sourcePostId: String(i.sourcePostId),
-                quantity: i.quantity,
-                grossCents: Math.round((i.price || 0) * i.quantity * 100),
-            }));
-        if (socialItems.length > 0) {
-            await ctx.runMutation(internal.commerce.internalRecordSocialSalesForOrder, {
-                orderId: String(orderId),
-                buyerUserId: args.userId,
-                sellerId: args.sellerId,
-                stripePaymentIntentId: args.stripePaymentIntentId,
-                items: socialItems,
-            });
-        }
-
-        // Ponytail: Create booking if this is a rental
-        if (args.checkInDate && args.checkOutDate && items.length > 0) {
-            await ctx.db.insert("bookings", {
-                listingId: items[0].listingId,
-                orderId: orderId,
-                buyerId: args.userId,
-                sellerId: args.sellerId,
-                checkInDate: args.checkInDate,
-                checkOutDate: args.checkOutDate,
-                status: "confirmed",
-                guests: args.guests || 1,
-                totalPrice: args.total,
-                createdAt: new Date().toISOString(),
-            });
-        }
-
-        return orderId;
-    }
+    },
 });
 
-export const releaseEscrowFunds = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        orderId: v.id("orders"),
-        userId: v.optional(v.string()),
+export const internalFlagEscrowReleaseFailed = internalMutation({
+    args: { orderId: v.id("orders"), payoutId: v.optional(v.id("payouts")), reason: v.string() },
+    handler: async (ctx, args): Promise<void> => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return;
+        const now = nowIso();
+        await ctx.db.patch(order._id, {
+            escrowState: "held",
+            status: (order.escrowPrevStatus as any) ?? order.status,
+            escrowReleaseError: args.reason,
+            updatedAt: now,
+        });
+        if (args.payoutId) {
+            await ctx.db.patch(args.payoutId, { status: "failed", error: args.reason, updatedAt: now });
+        }
+        await ctx.scheduler.runAfter(0, internal.notifications.internalNotifyAdmins, {
+            title: "Liberación de escrow fallida",
+            body: `Orden ${String(order._id).slice(-6)}: ${args.reason}`,
+            category: "payment",
+            data: { orderId: String(order._id) },
+        });
     },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        const userId = actor.idString;
+});
 
-        // Fetch order info via internal query
-        const order = await ctx.runQuery(internal.stripe.internalGetOrderForEscrow, { orderId: args.orderId, userId });
-        if (!order) throw new Error("Order not found or not authorized");
-        if (order.status !== "paid_escrow" || order.escrowState !== "held") {
-            throw new Error("Order is not in held escrow state");
-        }
-        if (!order.netAmountCents || !order.transferGroup) {
-            throw new Error("Order missing escrow transfer data");
-        }
+/**
+ * ÚNICO camino que mueve plata al vendedor. Lo usan confirmReceipt, admin,
+ * disputas, cron y los módulos de eventos/servicios/bonos.
+ */
+export const internalReleaseOrderEscrow = internalAction({
+    args: {
+        orderId: v.id("orders"),
+        trigger: releaseTriggerValidator,
+        actorUserId: v.optional(v.string()),
+        skipSourceTransaction: v.optional(v.boolean()),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{ released: boolean; transferId?: string; alreadyReleased?: boolean }> => {
+        const begin = await ctx.runMutation(internal.stripe.internalBeginEscrowRelease, {
+            orderId: args.orderId,
+            trigger: args.trigger,
+        });
+        if (begin.alreadyReleased) return { released: true, alreadyReleased: true };
 
-        // ponytail: simulated PIs + Connect without transfers capability → mock release
-        const isMockOrder = String(order.stripePaymentIntentId || order.transferGroup || "").includes("mock");
-        let transferId: string;
-
-        if (isStripeMock || isMockOrder) {
-            transferId = `mock_transfer_${Date.now()}`;
-        } else {
-            try {
-                let sellerConnectAccountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: order.sellerId as any });
-                if (!sellerConnectAccountId) {
-                    const seller = await ctx.runQuery(internal.users.internalGetUserById, { id: order.sellerId as any });
-                    if (!seller || !seller.email) {
-                        throw new Error("El vendedor no tiene un email válido para crear la cuenta Stripe Connect.");
-                    }
-                    const account = await (stripe as any).v2.core.accounts.create({
-                        display_name: (seller as any).name || seller.email,
-                        contact_email: seller.email,
-                        identity: { country: "us" },
-                        dashboard: "express",
-                        defaults: {
-                            responsibilities: {
-                                fees_collector: "application",
-                                losses_collector: "application",
-                            },
-                        },
-                        configuration: {
-                            recipient: {
-                                capabilities: {
-                                    stripe_balance: {
-                                        stripe_transfers: { requested: true },
-                                    },
+        try {
+            let transferId: string;
+            if (begin.isMock) {
+                assertMockAllowed();
+                transferId = mockTransferId(String(args.orderId), "seller");
+            } else {
+                const stripe = getStripe(begin.mode);
+                const transfer = await withStripeBreadcrumb(
+                    { api: "transfers.create", orderId: String(args.orderId), mode: begin.mode, trigger: args.trigger },
+                    () =>
+                        stripe.transfers.create(
+                            {
+                                amount: begin.sellerNetCents,
+                                currency: "usd",
+                                destination: begin.destination,
+                                transfer_group: begin.transferGroup,
+                                ...(begin.chargeId && !args.skipSourceTransaction
+                                    ? { source_transaction: begin.chargeId }
+                                    : {}),
+                                metadata: {
+                                    orderId: String(args.orderId),
+                                    kind: "seller",
+                                    mode: begin.mode,
+                                    trigger: args.trigger,
                                 },
                             },
-                        },
-                    });
-                    sellerConnectAccountId = account.id;
-                    await ctx.runMutation(internal.connect.internalSaveConnectAccount, {
-                        userId: order.sellerId as any,
-                        stripeConnectAccountId: account.id,
-                    });
-                }
-
-                if (!sellerConnectAccountId) {
-                    throw new Error("No se pudo obtener o crear la cuenta Stripe Connect del vendedor.");
-                }
-                const transfer = await stripe.transfers.create({
-                    amount: order.netAmountCents,
-                    currency: "usd",
-                    destination: sellerConnectAccountId,
-                    transfer_group: order.transferGroup,
-                    metadata: {
-                        orderId: String(args.orderId),
-                        action: "escrow_release",
-                    },
-                });
+                            { idempotencyKey: `release:${args.orderId}:seller` },
+                        ),
+                );
                 transferId = transfer.id;
-            } catch (error: any) {
-                const msg = String(error?.message || error?.raw?.message || "");
-                if (
-                    msg.includes("capabilities enabled") ||
-                    msg.includes("stripe_transfers") ||
-                    msg.includes("legacy_payments") ||
-                    msg.includes("crypto_transfers")
-                ) {
-                    // ponytail: test Connect accounts rarely have transfers — mark released anyway
-                    transferId = `demo_mock_transfer_${Date.now()}`;
+            }
+            await ctx.runMutation(internal.stripe.internalCompleteEscrowRelease, {
+                orderId: args.orderId,
+                payoutId: begin.payoutId,
+                transferId,
+                actorUserId: args.actorUserId,
+            });
+            return { released: true, transferId };
+        } catch (error: any) {
+            const reason = stripeErrorMessage(error);
+            console.error(`[Stripe Escrow] Falló la liberación de ${args.orderId}: ${reason}`);
+            await ctx.runMutation(internal.stripe.internalFlagEscrowReleaseFailed, {
+                orderId: args.orderId,
+                payoutId: begin.payoutId,
+                reason,
+            });
+            throw new Error(`No se pudo liberar el pago: ${reason}`);
+        }
+    },
+});
+
+export const internalGetOrdersDueForRelease = internalQuery({
+    args: { now: v.number(), limit: v.optional(v.number()) },
+    handler: async (ctx, args): Promise<Id<"orders">[]> => {
+        const rows = await ctx.db
+            .query("orders")
+            .withIndex("by_escrow_state_and_release_due", (q) =>
+                q.eq("escrowState", "held").lte("releaseDueAt", args.now),
+            )
+            .take(args.limit ?? 100);
+        return rows.filter((o) => o.releaseDueAt !== undefined && !o.escrowReleaseError).map((o) => o._id);
+    },
+});
+
+export const internalCronAutoReleaseEscrows = internalAction({
+    args: {},
+    handler: async (ctx): Promise<{ attempted: number; released: number }> => {
+        const due = await ctx.runQuery(internal.stripe.internalGetOrdersDueForRelease, { now: Date.now() });
+        let released = 0;
+        for (const orderId of due) {
+            try {
+                const r = await ctx.runAction(internal.stripe.internalReleaseOrderEscrow, {
+                    orderId,
+                    trigger: "auto_release",
+                });
+                if (r.released) released += 1;
+            } catch (error) {
+                console.error(`[Cron] auto-release falló para ${orderId}:`, error);
+            }
+        }
+        return { attempted: due.length, released };
+    },
+});
+
+// ===========================================================================
+// INFLUENCER — transfer a los 10 días de liberada la orden
+// ===========================================================================
+
+export const internalListDueInfluencerPayouts = internalQuery({
+    args: { now: v.number(), limit: v.optional(v.number()) },
+    handler: async (ctx, args): Promise<Id<"payouts">[]> => {
+        const rows = await ctx.db
+            .query("payouts")
+            .withIndex("by_status_and_scheduled", (q) => q.eq("status", "scheduled").lte("scheduledAtMs", args.now))
+            .take(args.limit ?? 50);
+        return rows.map((r) => r._id);
+    },
+});
+
+type InfluencerClaim = null | {
+    mode: StripeMode;
+    isMock: boolean;
+    amount: number;
+    destination: string;
+    chargeId?: string;
+    transferGroup: string;
+    orderId: string;
+    influencerId: string;
+};
+
+export const internalClaimScheduledPayout = internalMutation({
+    args: { payoutId: v.id("payouts") },
+    handler: async (ctx, args): Promise<InfluencerClaim> => {
+        const payout = await ctx.db.get(args.payoutId);
+        if (!payout || payout.status !== "scheduled" || !payout.orderId) return null;
+        const orderId = ctx.db.normalizeId("orders", payout.orderId);
+        const order = orderId ? await ctx.db.get(orderId) : null;
+        const now = nowIso();
+        if (!order || order.escrowState !== "released" || payout.amountInCents <= 0) {
+            await ctx.db.patch(payout._id, { status: "cancelled", error: "orden no liberada al vencer", updatedAt: now });
+            return null;
+        }
+        const mode: StripeMode = payout.mode ?? order.mode ?? "test";
+        const isMock = isMockPaymentIntentId(order.stripePaymentIntentId);
+        const influencerUserId = ctx.db.normalizeId("users", payout.sellerId);
+        const influencer = influencerUserId ? await ctx.db.get(influencerUserId) : null;
+        const destination = isMock ? `mock_acct_${payout.sellerId}` : connectAccountFor(influencer, mode);
+        if (!destination) {
+            await ctx.db.patch(payout._id, {
+                status: "failed",
+                error: `El influencer no tiene cuenta Stripe Connect (modo ${mode}).`,
+                attempts: (payout.attempts ?? 0) + 1,
+                updatedAt: now,
+            });
+            return null;
+        }
+        await ctx.db.patch(payout._id, {
+            status: "processing",
+            destinationAccountId: destination,
+            attempts: (payout.attempts ?? 0) + 1,
+            updatedAt: now,
+        });
+        return {
+            mode,
+            isMock,
+            amount: payout.amountInCents,
+            destination,
+            chargeId: order.stripeChargeId,
+            transferGroup: order.transferGroup ?? order.stripePaymentIntentId ?? String(order._id),
+            orderId: String(order._id),
+            influencerId: payout.sellerId,
+        };
+    },
+});
+
+export const internalFinishInfluencerPayout = internalMutation({
+    args: { payoutId: v.id("payouts"), transferId: v.optional(v.string()), error: v.optional(v.string()) },
+    handler: async (ctx, args): Promise<void> => {
+        const payout = await ctx.db.get(args.payoutId);
+        if (!payout) return;
+        const now = nowIso();
+        if (args.transferId) {
+            await ctx.db.patch(payout._id, {
+                status: "completed",
+                stripeTransferId: args.transferId,
+                executedAt: now,
+                error: undefined,
+                updatedAt: now,
+            });
+            if (payout.orderId) {
+                await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                    userId: payout.sellerId,
+                    title: "Comisión acreditada",
+                    body: `Se transfirió tu comisión de $${(payout.amountInCents / 100).toFixed(2)} del pedido #${payout.orderId.slice(-6)}.`,
+                    category: "payment",
+                    data: { type: "influencer_payout", orderId: payout.orderId },
+                });
+            }
+            return;
+        }
+        const attempts = payout.attempts ?? 1;
+        await ctx.db.patch(payout._id, {
+            status: attempts < 5 ? "scheduled" : "failed",
+            error: args.error,
+            updatedAt: now,
+        });
+    },
+});
+
+export const internalPayDueInfluencerPayouts = internalAction({
+    args: {},
+    handler: async (ctx): Promise<{ attempted: number; paid: number }> => {
+        const due = await ctx.runQuery(internal.stripe.internalListDueInfluencerPayouts, { now: Date.now() });
+        let paid = 0;
+        for (const payoutId of due) {
+            const claim = await ctx.runMutation(internal.stripe.internalClaimScheduledPayout, { payoutId });
+            if (!claim) continue;
+            try {
+                let transferId: string;
+                if (claim.isMock) {
+                    assertMockAllowed();
+                    transferId = mockTransferId(claim.orderId, "influencer");
                 } else {
-                    throw error;
+                    const stripe = getStripe(claim.mode);
+                    const transfer = await stripe.transfers.create(
+                        {
+                            amount: claim.amount,
+                            currency: "usd",
+                            destination: claim.destination,
+                            transfer_group: claim.transferGroup,
+                            ...(claim.chargeId ? { source_transaction: claim.chargeId } : {}),
+                            metadata: {
+                                orderId: claim.orderId,
+                                kind: "influencer",
+                                mode: claim.mode,
+                                influencerId: claim.influencerId,
+                            },
+                        },
+                        { idempotencyKey: `release:${claim.orderId}:influencer` },
+                    );
+                    transferId = transfer.id;
                 }
+                await ctx.runMutation(internal.stripe.internalFinishInfluencerPayout, { payoutId, transferId });
+                paid += 1;
+            } catch (error: any) {
+                const msg = stripeErrorMessage(error);
+                console.error(`[Cron] payout influencer ${payoutId} falló: ${msg}`);
+                await ctx.runMutation(internal.stripe.internalFinishInfluencerPayout, { payoutId, error: msg });
+            }
+        }
+        return { attempted: due.length, paid };
+    },
+});
+
+// ===========================================================================
+// REEMBOLSOS
+// ===========================================================================
+
+type RefundBegin = {
+    mode: StripeMode;
+    isMock: boolean;
+    paymentIntentId: string;
+    refundCents: number;
+    n: number;
+    grossCents: number;
+    sellerNetCents: number;
+    influencerCents: number;
+    payouts: Array<{
+        payoutId: Id<"payouts">;
+        kind: "seller" | "influencer";
+        transferId?: string;
+        status: string;
+        amount: number;
+        reversedCents: number;
+    }>;
+};
+
+export const internalBeginOrderRefund = internalMutation({
+    args: { orderId: v.id("orders"), amountCents: v.optional(v.number()) },
+    handler: async (ctx, args): Promise<RefundBegin> => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) throw new Error("Orden no encontrada");
+        if (!isRefundable(order.escrowState, !!order.escrowRefundError)) {
+            throw new Error(`La orden no admite reembolso (escrow: ${order.escrowState ?? "n/a"}).`);
+        }
+        if (!order.stripePaymentIntentId) throw new Error("La orden no tiene PaymentIntent.");
+        const grossCents = order.grossCents ?? Math.round(order.total * 100);
+        const remaining = grossCents - (order.refundedCents ?? 0);
+        if (remaining <= 0) throw new Error("La orden ya fue reembolsada por completo.");
+        const refundCents = Math.min(remaining, Math.round(args.amountCents ?? remaining));
+        if (refundCents <= 0) throw new Error("El monto a reembolsar debe ser mayor a 0.");
+        const n = (order.refundCount ?? 0) + 1;
+        await ctx.db.patch(order._id, {
+            escrowState: "refund_pending",
+            escrowPrevState: order.escrowState === "refund_pending" ? order.escrowPrevState : order.escrowState,
+            refundCount: n,
+            escrowRefundError: undefined,
+            updatedAt: nowIso(),
+        });
+        const payoutRows = await ctx.db
+            .query("payouts")
+            .withIndex("by_order_and_kind", (q) => q.eq("orderId", String(order._id)))
+            .collect();
+        return {
+            mode: order.mode ?? "test",
+            isMock: isMockPaymentIntentId(order.stripePaymentIntentId),
+            paymentIntentId: order.stripePaymentIntentId,
+            refundCents,
+            n,
+            grossCents,
+            sellerNetCents: order.sellerNetCents ?? order.netAmountCents ?? 0,
+            influencerCents: order.influencerCents ?? 0,
+            payouts: payoutRows
+                .filter((p) => p.kind)
+                .map((p) => ({
+                    payoutId: p._id,
+                    kind: p.kind!,
+                    transferId: p.stripeTransferId,
+                    status: p.status,
+                    amount: p.amountInCents,
+                    reversedCents: p.reversedCents ?? 0,
+                })),
+        };
+    },
+});
+
+export const internalCompleteOrderRefund = internalMutation({
+    args: {
+        orderId: v.id("orders"),
+        refundCents: v.number(),
+        refundId: v.optional(v.string()),
+        source: refundSourceValidator,
+        reason: v.string(),
+        actorUserId: v.optional(v.string()),
+        reversals: v.array(
+            v.object({
+                payoutId: v.id("payouts"),
+                amount: v.number(),
+                reversalId: v.optional(v.string()),
+                cancelled: v.optional(v.boolean()),
+            }),
+        ),
+        /** Orden pagada 100% con puntos: se devuelven puntos, no dinero. */
+        refundPoints: v.optional(v.number()),
+    },
+    handler: async (ctx, args): Promise<void> => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return;
+        const now = nowIso();
+
+        if (args.refundPoints && args.refundPoints > 0) {
+            await awardPoints(ctx, {
+                userId: order.userId,
+                eventKey: `refund_points_${order._id}_${order.refundCount ?? 0}`,
+                amount: args.refundPoints,
+                type: "earn",
+                source: "purchase",
+                description: `Devolución de ${args.refundPoints} puntos (pedido #${String(order._id).slice(-6)})`,
+                metadata: { orderId: String(order._id) },
+            });
+        }
+        const grossCents = order.grossCents ?? Math.round(order.total * 100);
+        const refundedCents = (order.refundedCents ?? 0) + args.refundCents;
+        const full = refundedCents >= grossCents;
+
+        await ctx.db.patch(order._id, {
+            refundedCents,
+            lastStripeRefundId: args.refundId ?? order.lastStripeRefundId,
+            escrowRefundError: undefined,
+            ...(full
+                ? { escrowState: "refunded", status: "cancelled" as const }
+                : { escrowState: order.escrowPrevState ?? "held" }),
+            updatedAt: now,
+        });
+
+        if (full && (order.listingType ?? "product") === "product") {
+            for (const item of order.items) {
+                const listingId = ctx.db.normalizeId("listings", item.listingId);
+                if (!listingId) continue;
+                const listing: any = await ctx.db.get(listingId);
+                if (!listing || typeof listing.stock !== "number") continue;
+                await ctx.db.patch(listingId, { stock: listing.stock + item.quantity });
             }
         }
 
-        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, {
-            orderId: args.orderId,
-            stripeTransferId: transferId,
-        });
+        for (const r of args.reversals) {
+            const payout = await ctx.db.get(r.payoutId);
+            if (!payout) continue;
+            if (r.cancelled) {
+                await ctx.db.patch(payout._id, { status: "cancelled", error: "orden reembolsada", updatedAt: now });
+                continue;
+            }
+            if (r.amount <= 0) continue;
+            const reversed = (payout.reversedCents ?? 0) + r.amount;
+            await ctx.db.patch(payout._id, {
+                reversedCents: reversed,
+                stripeReversalIds: [...(payout.stripeReversalIds ?? []), ...(r.reversalId ? [r.reversalId] : [])],
+                status: reversed >= payout.amountInCents ? "reversed" : payout.status,
+                updatedAt: now,
+            });
+        }
 
-        return { success: true, transferId };
-    }
-});
-
-export const internalGetOrderForEscrow = internalQuery({
-    args: { orderId: v.id("orders"), userId: v.string() },
-    handler: async (ctx, args) => {
-        const order = await ctx.db.get(args.orderId);
-        // Only buyer (or admin, but here buyer) can release
-        if (!order || order.userId !== args.userId) return null;
-        return order;
-    }
-});
-
-export const internalConfirmOrderEscrow = internalMutation({
-    args: { 
-        orderId: v.id("orders"), 
-        stripeTransferId: v.optional(v.string()),
-        status: v.optional(v.string()),
-        escrowState: v.optional(v.string()),
-    },
-    handler: async (ctx, args) => {
-        const status = args.status ? args.status as any : "completed";
-        const escrowState = args.escrowState ? args.escrowState as any : "released";
-        
-        await ctx.db.patch(args.orderId, {
-            status,
-            escrowState,
-            ...(args.stripeTransferId ? { stripeTransferId: args.stripeTransferId } : {}),
-            updatedAt: new Date().toISOString(),
-        });
-        
-        // Sync payment status if it's a refund or cancellation
-        if (status === "cancelled" || escrowState === "refunded") {
-            const payments = await ctx.db
-                .query("payments")
-                .withIndex("by_order", q => q.eq("orderId", args.orderId))
+        // Pago agregado por PI.
+        if (order.stripePaymentIntentId) {
+            const siblings = await ctx.db
+                .query("orders")
+                .withIndex("by_stripe_payment_intent", (q) =>
+                    q.eq("stripePaymentIntentId", order.stripePaymentIntentId),
+                )
                 .collect();
-            for (const payment of payments) {
+            const totalRefunded = siblings.reduce(
+                (a, o) => a + (o._id === order._id ? refundedCents : (o.refundedCents ?? 0)),
+                0,
+            );
+            const totalGross = siblings.reduce((a, o) => a + (o.grossCents ?? Math.round(o.total * 100)), 0);
+            const payment = await ctx.db
+                .query("payments")
+                .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", order.stripePaymentIntentId))
+                .first();
+            if (payment) {
                 await ctx.db.patch(payment._id, {
-                    status: "refunded"
+                    refundedCents: totalRefunded,
+                    status:
+                        totalRefunded >= totalGross
+                            ? "refunded"
+                            : totalRefunded > 0
+                              ? "partially_refunded"
+                              : payment.status,
                 });
             }
         }
-    }
+
+        await ctx.db.insert(
+            "audit_logs",
+            buildAuditRecord({
+                actorUserId: args.actorUserId ?? `system:${args.source}`,
+                targetUserId: order.userId,
+                action: "ESCROW_REFUNDED",
+                amountCents: args.refundCents,
+                metadata: {
+                    orderId: String(order._id),
+                    refundId: args.refundId,
+                    source: args.source,
+                    reason: args.reason,
+                    full,
+                },
+            }),
+        );
+
+        await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+            sendEmail: true,
+            userId: order.userId,
+            title: full ? "Reembolso realizado" : "Reembolso parcial realizado",
+            body: `Te devolvimos $${(args.refundCents / 100).toFixed(2)} del pedido #${String(order._id).slice(-6)}. Verás el crédito en tu tarjeta en 5-10 días hábiles.`,
+            category: "payment",
+            data: { type: "refund", orderId: String(order._id), amountCents: args.refundCents },
+        });
+    },
 });
 
-export const internalRecordEscrowAudit = internalMutation({
-    args: {
-        actorUserId: v.string(),
-        targetUserId: v.optional(v.string()),
-        action: v.union(v.literal("ESCROW_RELEASED"), v.literal("ESCROW_REFUNDED")),
-        amountCents: v.optional(v.number()),
-        metadata: v.optional(v.any()),
-    },
-    handler: async (ctx, args) => {
-        await ctx.db.insert("audit_logs", buildAuditRecord(args));
+export const internalFlagOrderRefundFailed = internalMutation({
+    args: { orderId: v.id("orders"), reason: v.string() },
+    handler: async (ctx, args): Promise<void> => {
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return;
+        await ctx.db.patch(order._id, {
+            escrowState: order.escrowPrevState ?? "held",
+            escrowRefundError: args.reason,
+            updatedAt: nowIso(),
+        });
+        await ctx.scheduler.runAfter(0, internal.notifications.internalNotifyAdmins, {
+            title: "Reembolso fallido",
+            body: `Orden ${String(order._id).slice(-6)}: ${args.reason}`,
+            category: "payment",
+            data: { orderId: String(order._id) },
+        });
     },
 });
+
+/**
+ * ÚNICO camino que devuelve plata al comprador. `externalRefund: true`
+ * significa que el dinero ya salió por Stripe (dashboard / disputa perdida)
+ * y sólo hay que revertir transfers y contabilizar.
+ */
+export const internalRefundOrder = internalAction({
+    args: {
+        orderId: v.id("orders"),
+        amountCents: v.optional(v.number()),
+        reason: v.string(),
+        source: refundSourceValidator,
+        externalRefund: v.optional(v.boolean()),
+        actorUserId: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ refunded: boolean; refundCents: number; refundId?: string }> => {
+        const begin = await ctx.runMutation(internal.stripe.internalBeginOrderRefund, {
+            orderId: args.orderId,
+            amountCents: args.amountCents,
+        });
+        try {
+            let refundId: string | undefined;
+            const pointsOnly = isPointsOnlyPaymentId(begin.paymentIntentId);
+            if (!args.externalRefund && !pointsOnly) {
+                if (begin.isMock) {
+                    assertMockAllowed();
+                    refundId = mockRefundId(String(args.orderId), begin.n);
+                } else {
+                    const stripe = getStripe(begin.mode);
+                    const refund = await withStripeBreadcrumb(
+                        { api: "refunds.create", orderId: String(args.orderId), mode: begin.mode },
+                        () =>
+                            stripe.refunds.create(
+                                {
+                                    payment_intent: begin.paymentIntentId,
+                                    amount: begin.refundCents,
+                                    reason: "requested_by_customer",
+                                    metadata: { orderId: String(args.orderId), n: String(begin.n), source: args.source },
+                                },
+                                { idempotencyKey: `refund:${args.orderId}:${begin.n}` },
+                            ),
+                    );
+                    refundId = refund.id;
+                }
+            }
+
+            const sellerPayout = begin.payouts.find((p) => p.kind === "seller");
+            const influencerPayout = begin.payouts.find((p) => p.kind === "influencer");
+            const amounts = reversalAmountsFor(begin.refundCents, {
+                grossCents: begin.grossCents,
+                sellerNetCents: begin.sellerNetCents,
+                influencerCents: begin.influencerCents,
+                sellerReversedCents: sellerPayout?.reversedCents,
+                influencerReversedCents: influencerPayout?.reversedCents,
+            });
+            const isFull = begin.refundCents >= begin.grossCents;
+
+            const reversals: Array<{ payoutId: Id<"payouts">; amount: number; reversalId?: string; cancelled?: boolean }> = [];
+            for (const p of begin.payouts) {
+                const amount = p.kind === "seller" ? amounts.seller : amounts.influencer;
+                if (p.status === "scheduled") {
+                    // Influencer todavía no cobró: se cancela (total) o se descuenta (parcial).
+                    reversals.push({ payoutId: p.payoutId, amount: 0, cancelled: isFull || amount >= p.amount });
+                    continue;
+                }
+                if (p.status !== "completed" && p.status !== "reversed") continue;
+                if (!p.transferId || amount <= 0) continue;
+                let reversalId: string;
+                if (begin.isMock || p.transferId.startsWith("mock_")) {
+                    reversalId = mockReversalId(String(args.orderId), p.kind, begin.n);
+                } else {
+                    const stripe = getStripe(begin.mode);
+                    const rev = await stripe.transfers.createReversal(
+                        p.transferId,
+                        { amount, metadata: { orderId: String(args.orderId), kind: p.kind, n: String(begin.n) } },
+                        { idempotencyKey: `reversal:${args.orderId}:${p.kind}:${begin.n}` },
+                    );
+                    reversalId = rev.id;
+                }
+                reversals.push({ payoutId: p.payoutId, amount, reversalId });
+            }
+
+            await ctx.runMutation(internal.stripe.internalCompleteOrderRefund, {
+                orderId: args.orderId,
+                refundCents: begin.refundCents,
+                refundId: pointsOnly ? `points_refund_${args.orderId}_${begin.n}` : refundId,
+                source: args.source,
+                reason: args.reason,
+                actorUserId: args.actorUserId,
+                reversals,
+                refundPoints: pointsOnly ? Math.round(begin.refundCents / CENTS_PER_POINT) : undefined,
+            });
+            return { refunded: true, refundCents: begin.refundCents, refundId };
+        } catch (error: any) {
+            const reason = stripeErrorMessage(error);
+            console.error(`[Stripe Refund] Falló el reembolso de ${args.orderId}: ${reason}`);
+            await ctx.runMutation(internal.stripe.internalFlagOrderRefundFailed, { orderId: args.orderId, reason });
+            throw new Error(`No se pudo reembolsar: ${reason}`);
+        }
+    },
+});
+
+export const internalGetOrdersForPaymentIntent = internalQuery({
+    args: { stripePaymentIntentId: v.string() },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<Array<{ id: Id<"orders">; grossCents: number; refundedCents: number; escrowState?: string }>> => {
+        const rows = await ctx.db
+            .query("orders")
+            .withIndex("by_stripe_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .collect();
+        return rows.map((o) => ({
+            id: o._id,
+            grossCents: o.grossCents ?? Math.round(o.total * 100),
+            refundedCents: o.refundedCents ?? 0,
+            escrowState: o.escrowState,
+        }));
+    },
+});
+
+/** `charge.refunded`: reembolso iniciado FUERA de la app (Dashboard de Stripe). */
+export const internalSyncExternalRefund = internalAction({
+    args: { mode: stripeModeValidator, paymentIntentId: v.string(), amountRefundedCents: v.number() },
+    handler: async (ctx, args): Promise<{ applied: number }> => {
+        const orders = await ctx.runQuery(internal.stripe.internalGetOrdersForPaymentIntent, {
+            stripePaymentIntentId: args.paymentIntentId,
+        });
+        if (orders.length === 0) {
+            await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
+                stripePaymentIntentId: args.paymentIntentId,
+                status: "refunded",
+            });
+            return { applied: 0 };
+        }
+        const local = orders.reduce((a, o) => a + o.refundedCents, 0);
+        const delta = args.amountRefundedCents - local;
+        if (delta <= 0) return { applied: 0 }; // eco de un reembolso nuestro
+        const allocation = allocateExternalRefund(
+            delta,
+            orders.map((o) => ({ id: String(o.id), grossCents: o.grossCents, refundedCents: o.refundedCents })),
+        );
+        let applied = 0;
+        for (const o of orders) {
+            const amount = allocation[String(o.id)] ?? 0;
+            if (amount <= 0) continue;
+            if (o.escrowState === "refund_pending") continue; // en curso desde la app
+            await ctx.runAction(internal.stripe.internalRefundOrder, {
+                orderId: o.id,
+                amountCents: amount,
+                reason: "stripe_dashboard_refund",
+                source: "stripe_refund",
+                externalRefund: true,
+            });
+            applied += amount;
+        }
+        return { applied };
+    },
+});
+
+/** `charge.dispute.created`: congela todas las órdenes del PI. */
+export const internalFreezeOrdersForPaymentIntent = internalMutation({
+    args: { stripePaymentIntentId: v.string(), disputeId: v.string() },
+    handler: async (ctx, args): Promise<{ frozen: number }> => {
+        const rows = await ctx.db
+            .query("orders")
+            .withIndex("by_stripe_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .collect();
+        const now = nowIso();
+        let frozen = 0;
+        for (const o of rows) {
+            if (o.escrowState === "refunded" || o.escrowState === "frozen") continue;
+            await ctx.db.patch(o._id, {
+                escrowState: "frozen",
+                escrowPrevState: o.escrowState ?? "held",
+                stripeDisputeId: args.disputeId,
+                updatedAt: now,
+            });
+            frozen += 1;
+        }
+        const payment = await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .first();
+        if (payment) await ctx.db.patch(payment._id, { status: "disputed" });
+        await ctx.scheduler.runAfter(0, internal.notifications.internalNotifyAdmins, {
+            title: "Disputa (chargeback) en Stripe",
+            body: `PI ${args.stripePaymentIntentId}: ${frozen} orden(es) congeladas. Disputa ${args.disputeId}.`,
+            category: "dispute",
+            data: { paymentIntentId: args.stripePaymentIntentId, disputeId: args.disputeId },
+        });
+        return { frozen };
+    },
+});
+
+export const internalUnfreezeOrdersForPaymentIntent = internalMutation({
+    args: { stripePaymentIntentId: v.string() },
+    handler: async (ctx, args): Promise<{ restored: number }> => {
+        const rows = await ctx.db
+            .query("orders")
+            .withIndex("by_stripe_payment_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .collect();
+        const now = nowIso();
+        let restored = 0;
+        for (const o of rows) {
+            if (o.escrowState !== "frozen") continue;
+            await ctx.db.patch(o._id, {
+                escrowState: o.escrowPrevState ?? "held",
+                escrowPrevState: undefined,
+                updatedAt: now,
+            });
+            restored += 1;
+        }
+        const payment = await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) => q.eq("stripePaymentIntentId", args.stripePaymentIntentId))
+            .first();
+        if (payment && payment.status === "disputed") {
+            const allReleased = rows.every((o) => o.escrowPrevState === "released" || o.escrowState === "released");
+            await ctx.db.patch(payment._id, { status: allReleased ? "released_to_seller" : "succeeded_in_escrow" });
+        }
+        return { restored };
+    },
+});
+
+/** `charge.dispute.closed`: won → restaurar; lost → Stripe ya retiró los fondos. */
+export const internalResolveStripeDispute = internalAction({
+    args: {
+        mode: stripeModeValidator,
+        paymentIntentId: v.string(),
+        disputeId: v.string(),
+        status: v.string(),
+    },
+    handler: async (ctx, args): Promise<{ outcome: string }> => {
+        if (args.status === "won" || args.status === "warning_closed") {
+            await ctx.runMutation(internal.stripe.internalUnfreezeOrdersForPaymentIntent, {
+                stripePaymentIntentId: args.paymentIntentId,
+            });
+            return { outcome: "restored" };
+        }
+        if (args.status === "lost") {
+            const orders = await ctx.runQuery(internal.stripe.internalGetOrdersForPaymentIntent, {
+                stripePaymentIntentId: args.paymentIntentId,
+            });
+            for (const o of orders) {
+                if (o.grossCents - o.refundedCents <= 0) continue;
+                await ctx.runAction(internal.stripe.internalRefundOrder, {
+                    orderId: o.id,
+                    reason: `stripe_dispute_lost:${args.disputeId}`,
+                    source: "stripe_dispute_lost",
+                    externalRefund: true,
+                });
+            }
+            return { outcome: "refunded" };
+        }
+        return { outcome: `ignored:${args.status}` };
+    },
+});
+
+// ===========================================================================
+// ADMIN
+// ===========================================================================
 
 export const adminForceReleaseEscrow = action({
     args: {
         sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
+        skipSourceTransaction: v.optional(v.boolean()),
     },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        // Mueve dinero real e irreversible: reservado al titular. Antes lo
-        // aceptaba también `developer`, que es el rol del programador.
-        if (!can(actor.role, 'release_escrow')) {
-            throw new Error(denialMessage('release_escrow'));
-        }
-
-        const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, { orderId: args.orderId });
-        if (!order) throw new Error("Order not found");
-        if (order.status !== "paid_escrow" || order.escrowState !== "held") {
-            throw new Error("Order is not in held escrow state");
-        }
-        if (!order.netAmountCents || !order.transferGroup) {
-            throw new Error("Order missing escrow transfer data");
-        }
-
-        // ponytail: orders paid via mock PaymentIntents can't be transferred on real Stripe.
-        const isMockOrder = String(order.stripePaymentIntentId || order.transferGroup || '').includes('mock');
-        let transferId: string;
-
-        if (isStripeMock || isMockOrder) {
-            transferId = `mock_transfer_${Date.now()}`;
-        } else {
-            const sellerConnectAccountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { userId: order.sellerId as any });
-            if (!sellerConnectAccountId) {
-                throw new Error("Seller does not have an active Connect account");
-            }
-
-            try {
-                // Execute delayed transfer (Forced by Admin)
-                const transfer = await stripe.transfers.create({
-                    amount: order.netAmountCents,
-                    currency: "usd",
-                    destination: sellerConnectAccountId,
-                    transfer_group: order.transferGroup,
-                    metadata: {
-                        orderId: String(args.orderId),
-                        forcedByAdmin: "true",
-                    },
-                });
-                transferId = transfer.id;
-            } catch (error: any) {
-                // ponytail: Connect test accounts often lack transfers capability — mock and continue
-                const msg = String(error?.message || error?.raw?.message || '');
-                if (
-                    msg.includes('capabilities enabled') ||
-                    msg.includes('stripe_transfers') ||
-                    msg.includes('legacy_payments')
-                ) {
-                    console.log('Demo Mode: Bypassing Stripe capability error and mocking transfer.');
-                    transferId = `demo_mock_transfer_${Date.now()}`;
-                } else {
-                    throw new Error(
-                        msg || 'No se pudo liberar el escrow. Revisá la cuenta Connect del vendedor.',
-                    );
-                }
-            }
-        }
-
-        // Patch order status to completed
-        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, {
+    handler: async (ctx, args): Promise<{ success: boolean; transferId?: string }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        if (!can(actor.role, "release_escrow")) throw new Error(denialMessage("release_escrow"));
+        const result = await ctx.runAction(internal.stripe.internalReleaseOrderEscrow, {
             orderId: args.orderId,
-            stripeTransferId: transferId,
-            status: "completed"
-        });
-
-        await ctx.runMutation(internal.stripe.internalRecordEscrowAudit, {
+            trigger: "admin_force",
             actorUserId: actor.idString,
-            targetUserId: String(order.sellerId),
-            action: "ESCROW_RELEASED",
-            amountCents: order.netAmountCents,
-            metadata: { orderId: String(args.orderId), transferId },
+            skipSourceTransaction: args.skipSourceTransaction,
         });
-
-        return { success: true, transferId };
-    }
+        return { success: result.released, transferId: result.transferId };
+    },
 });
 
 export const adminRefundEscrow = action({
     args: {
         sessionToken: v.optional(v.string()),
         orderId: v.id("orders"),
-        returnFeeAmountCents: v.optional(v.number()), // El cargo de gestión (en centavos)
+        returnFeeAmountCents: v.optional(v.number()),
+        reason: v.optional(v.string()),
     },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        // Devuelve dinero al comprador: reservado al titular.
-        if (!can(actor.role, 'refund')) {
-            throw new Error(denialMessage('refund'));
-        }
-
+    handler: async (ctx, args): Promise<{ success: boolean; refundId?: string; refundCents: number }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        if (!can(actor.role, "refund")) throw new Error(denialMessage("refund"));
         const order = await ctx.runQuery(internal.stripe.internalGetOrderForAdminEscrow, { orderId: args.orderId });
-        if (!order) throw new Error("Order not found");
-        if (order.status !== "paid_escrow" || order.escrowState !== "held") {
-            throw new Error("Order is not in held escrow state");
-        }
-        if (!order.stripePaymentIntentId) {
-            throw new Error("Order missing payment intent ID, cannot refund");
-        }
-
-        const isMockOrder = String(order.stripePaymentIntentId || '').includes('mock');
-        let refundId: string;
-
-        if (isStripeMock || isMockOrder) {
-            refundId = `mock_refund_${Date.now()}`;
-        } else {
-            // Separate Charges and Transfers: buyer's money sits on the platform,
-            // so we partial-refund from the original PaymentIntent.
-            const totalAmountCents = Math.round(order.total * 100);
-            const refundAmount = args.returnFeeAmountCents 
-                ? totalAmountCents - args.returnFeeAmountCents 
-                : totalAmountCents;
-                
-            if (refundAmount <= 0) {
-                throw new Error("El cargo de gestión no puede ser mayor o igual al total de la orden");
-            }
-            
-            const refund = await stripe.refunds.create({
-                payment_intent: order.stripePaymentIntentId,
-                amount: refundAmount,
-                reason: "requested_by_customer"
-            });
-            refundId = refund.id;
-        }
-
-        // Patch order status to cancelled and refund escrow state
-        await ctx.runMutation(internal.stripe.internalConfirmOrderEscrow, {
+        if (!order) throw new Error("Orden no encontrada");
+        const grossCents = order.grossCents ?? Math.round(order.total * 100);
+        const remaining = grossCents - (order.refundedCents ?? 0);
+        const amountCents = remaining - (args.returnFeeAmountCents ?? 0);
+        if (amountCents <= 0) throw new Error("El cargo de gestión no puede ser mayor o igual al monto reembolsable.");
+        const result = await ctx.runAction(internal.stripe.internalRefundOrder, {
             orderId: args.orderId,
-            status: "cancelled",
-            escrowState: "refunded"
-        });
-
-        await ctx.runMutation(internal.stripe.internalRecordEscrowAudit, {
+            amountCents,
+            reason: args.reason ?? "admin_refund",
+            source: "admin",
             actorUserId: actor.idString,
-            targetUserId: String(order.userId),
-            action: "ESCROW_REFUNDED",
-            amountCents: Math.round((order as any).total * 100),
-            metadata: { orderId: String(args.orderId), refundId, returnFeeAmountCents: args.returnFeeAmountCents },
         });
-
-        return { success: true, refundId };
-    }
-});
-
-export const internalGetOrderForAdminEscrow = internalQuery({
-    args: { orderId: v.id("orders") },
-    handler: async (ctx, args) => {
-        return await ctx.db.get(args.orderId);
-    }
-});
-
-export const internalGetEligibleOrdersForRelease = internalQuery({
-    args: {},
-    handler: async (ctx) => {
-        // Query orders that are in "paid_escrow" and "held"
-        const orders = await ctx.db
-            .query("orders")
-            .filter((q) => 
-                q.and(
-                    q.eq(q.field("status"), "paid_escrow"),
-                    q.eq(q.field("escrowState"), "held")
-                )
-            )
-            .collect();
-        
-        const eligibleOrderIds: (typeof orders[number]["_id"])[] = [];
-        const now = Date.now();
-        const TEN_DAYS = 10 * 24 * 60 * 60 * 1000;
-        const ONE_DAY = 24 * 60 * 60 * 1000;
-
-        for (const order of orders) {
-            const age = now - new Date(order.createdAt || 0).getTime();
-            
-            if (!order.items || order.items.length === 0) continue;
-            
-            // Fetch listing of first item — listingId is stored as string
-            const listingDoc = await ctx.db
-                .query("listings")
-                .filter((q) => q.eq(q.field("_id"), order.items[0].listingId))
-                .first();
-            if (!listingDoc) continue;
-            
-            if (listingDoc.type === "product" && age >= TEN_DAYS) {
-                eligibleOrderIds.push(order._id);
-            } else if (listingDoc.type === "bono" && age >= ONE_DAY) {
-                eligibleOrderIds.push(order._id);
-            }
-        }
-        
-        return eligibleOrderIds;
-    }
-});
-
-export const internalCronAutoReleaseEscrows = internalAction({
-    args: {},
-    handler: async (ctx) => {
-        const eligibleOrders = await ctx.runQuery(internal.stripe.internalGetEligibleOrdersForRelease);
-        
-        for (const orderId of eligibleOrders) {
-            try {
-                // orderId ya es Id<"orders"> (string compatible) — lo pasamos directo
-                await ctx.runAction(internal.stripe.internalReleasePaymentAction, { orderId });
-            } catch (error) {
-                console.error(`Failed to auto-release order ${orderId}`, error);
-            }
-        }
-    }
-});
-export const internalGetPendingInfluencerPayouts = internalQuery({
-    args: {},
-    handler: async (ctx) => {
-        // 1. Pagos pendientes (ventas válidas que no han sido pagadas al influencer)
-        const pendingPayments = await ctx.db
-            .query("payments")
-            .withIndex("by_status", q => q.eq("status", "released_to_seller"))
-            .filter((q) => 
-                q.and(
-                    q.neq(q.field("influencerId"), undefined),
-                    q.gt(q.field("influencerAmount"), 0),
-                    q.neq(q.field("influencerPaidOut"), true)
-                )
-            )
-            .collect();
-            
-        // 2. Saldos negativos (ventas que fueron reembolsadas, pero el influencer ya había cobrado)
-        const clawbackPayments = await ctx.db
-            .query("payments")
-            .withIndex("by_status", q => q.eq("status", "refunded"))
-            .filter((q) => 
-                q.and(
-                    q.neq(q.field("influencerId"), undefined),
-                    q.eq(q.field("influencerPaidOut"), true),
-                    q.neq(q.field("influencerClawbackApplied"), true)
-                )
-            )
-            .collect();
-            
-        // Aggregate by influencer
-        const influencerMap = new Map<string, { amountCents: number, pendingIds: string[], clawbackIds: string[] }>();
-        
-        for (const payment of pendingPayments) {
-            if (!payment.influencerId) continue;
-            const current = influencerMap.get(payment.influencerId) || { amountCents: 0, pendingIds: [], clawbackIds: [] };
-            current.amountCents += Math.round(payment.influencerAmount * 100);
-            current.pendingIds.push(payment._id);
-            influencerMap.set(payment.influencerId, current);
-        }
-        
-        for (const payment of clawbackPayments) {
-            if (!payment.influencerId) continue;
-            const current = influencerMap.get(payment.influencerId) || { amountCents: 0, pendingIds: [], clawbackIds: [] };
-            current.amountCents -= Math.round(payment.influencerAmount * 100); // Restar saldo negativo
-            current.clawbackIds.push(payment._id);
-            influencerMap.set(payment.influencerId, current);
-        }
-        
-        const payouts = [];
-        for (const [influencerId, data] of influencerMap.entries()) {
-            // Solo transferir si el neto es mayor a 0.
-            // Si es menor a 0, la deuda se arrastra a la siguiente semana (no procesamos el clawback aún).
-            if (data.amountCents > 0) {
-                payouts.push({
-                    influencerId,
-                    amountCents: data.amountCents,
-                    paymentIds: data.pendingIds,
-                    clawbackIds: data.clawbackIds
-                });
-            }
-        }
-        
-        return payouts;
-    }
-});
-
-export const internalMarkInfluencerPaymentsPaid = internalMutation({
-    args: {
-        paymentIds: v.array(v.id("payments")),
-        clawbackIds: v.array(v.id("payments")),
+        return { success: result.refunded, refundId: result.refundId, refundCents: result.refundCents };
     },
-    handler: async (ctx, args) => {
-        for (const pid of args.paymentIds) {
-            await ctx.db.patch(pid, {
-                influencerPaidOut: true,
-            });
-        }
-        for (const cid of args.clawbackIds) {
-            await ctx.db.patch(cid, {
-                influencerClawbackApplied: true,
-            });
-        }
-    }
 });
 
-export const internalCronPayInfluencers = internalAction({
-    args: {},
-    handler: async (ctx) => {
-        const payouts = await ctx.runQuery(internal.stripe.internalGetPendingInfluencerPayouts);
-        
-        for (const payout of payouts) {
-            try {
-                // Get connect account
-                const accountId = await ctx.runQuery(internal.connect.internalGetConnectAccountId, { 
-                    userId: payout.influencerId as any 
-                });
-                
-                if (!accountId) {
-                    console.error(`[Influencer Payout] No Connect Account for influencer ${payout.influencerId}`);
-                    continue;
-                }
-                
-                // Transfer funds
-                const isStripeMock = process.env.STRIPE_MOCK_MODE === "true";
-                if (!isStripeMock) {
-                    await stripe.transfers.create({
-                        amount: payout.amountCents,
-                        currency: "usd",
-                        destination: accountId,
-                        metadata: {
-                            role: "influencer",
-                            type: "weekly_payout",
-                            influencerId: payout.influencerId,
-                        },
-                    });
-                }
-                
-                // Mark as paid and clawbacks as applied
-                await ctx.runMutation(internal.stripe.internalMarkInfluencerPaymentsPaid, {
-                    paymentIds: payout.paymentIds as any[],
-                    clawbackIds: payout.clawbackIds as any[],
-                });
-                
-                console.log(`[Influencer Payout] Paid ${payout.amountCents/100} to ${payout.influencerId}`);
-            } catch (error) {
-                console.error(`[Influencer Payout Error] Failed for ${payout.influencerId}:`, error);
-            }
-        }
-    }
+/** Diagnóstico: qué modos y flags ve el backend. */
+export const adminGetStripeStatus = action({
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{ modes: StripeMode[]; mockAllowed: boolean; webhookSecrets: Record<StripeMode, number> }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        if (actor.role !== "admin" && actor.role !== "developer") throw new Error("No autorizado.");
+        const env = stripeEnv();
+        return {
+            modes: env.availableModes,
+            mockAllowed: isMockAllowed(),
+            webhookSecrets: { test: env.webhookSecrets.test.length, live: env.webhookSecrets.live.length },
+        };
+    },
 });

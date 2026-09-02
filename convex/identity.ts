@@ -1,12 +1,7 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { requireActor } from "./authHelpers";
-import Stripe from "stripe";
-
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-const stripe = new Stripe(stripeKey!, {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
+import { getStripe, hasStripeKey, primaryMode } from "./stripeClient";
 
 /**
  * Initializes a KYC/KYB session using Stripe Identity.
@@ -30,11 +25,12 @@ export const startKyc = action({
     handler: async (ctx, args) => {
         const actor = await requireActor(ctx, (args as any).sessionToken);
 
-        if (!stripeKey) {
+        if (!hasStripeKey(primaryMode())) {
             throw new Error(
                 "KYC no configurado. Define STRIPE_SECRET_KEY en Convex.",
             );
         }
+        const stripe = getStripe(primaryMode());
         try {
             // Map Ramgos account type to Stripe Identity required document types.
             // 'driving_license' | 'passport' | 'id_card' — all are valid for consumers.

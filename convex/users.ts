@@ -1392,33 +1392,6 @@ export const updateSubscription = mutation({
     }
 });
 
-export const saveStripeConnectAccount = mutation({
-    args: {
-        sessionToken: v.optional(v.string()),
-        id: v.id("users"),
-        stripeConnectAccountId: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const actor = await requireActor(ctx, (args as any).sessionToken);
-        assertSelfOrAdmin(actor, String(args.id));
-        await ctx.db.patch(args.id, {
-            stripeConnectAccountId: args.stripeConnectAccountId,
-        } as any);
-    }
-});
-
-export const internalUpdateStripeConnectId = internalMutation({
-    args: {
-        userId: v.id("users"),
-        stripeConnectAccountId: v.string(),
-    },
-    handler: async (ctx, args) => {
-        await ctx.db.patch(args.userId, {
-            stripeConnectAccountId: args.stripeConnectAccountId,
-        } as any);
-    }
-});
-
 // ---------------------------------------------------------------------------
 // Influencer attribution helpers.
 // ---------------------------------------------------------------------------

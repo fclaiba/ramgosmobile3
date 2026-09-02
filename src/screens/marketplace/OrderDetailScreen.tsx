@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { canConfirmReceipt } from '../../../convex/orders/_orderStates';
 import {
     View,
     Text,
@@ -160,7 +161,8 @@ export default function OrderDetailScreen() {
         if (role !== 'buyer') return false;
         if (!order?.escrow) return false;
         if (order?.deliveryConfirmedAt) return false;
-        return order.escrow.state === 'held' || order.status === 'delivered' || order.status === 'paid_escrow';
+        // Única regla (igual que el backend): la plata tiene que estar retenida.
+        return order.escrow.state === 'held' && canConfirmReceipt(order.status);
     }, [order, role]);
 
     const canReview = useMemo(() => {
@@ -204,7 +206,7 @@ export default function OrderDetailScreen() {
         setConfirming(true);
         try {
             await confirmReceiptMutation({ orderId: order.id as any, sessionToken, userId: user.id });
-            show('Entrega confirmada. El pago se liberará al vendedor.', 'success');
+            show('Entrega confirmada. Estamos liberando el pago al vendedor.', 'success');
         } catch (err: any) {
             show(err.message || 'No pudimos confirmar la entrega', 'error');
         } finally {

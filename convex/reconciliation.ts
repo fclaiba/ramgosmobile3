@@ -24,38 +24,24 @@
 import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import Stripe from "stripe";
+import { getStripe, stripeEnv } from "./stripeClient";
+import { stripeModeValidator } from "./schema";
+import type { StripeMode } from "./_stripeEnv";
 
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-
-/**
- * El cliente se construye siempre, y la ausencia de clave se chequea DENTRO de
- * cada handler.
- *
- * Antes esto era un `throw` en el nivel superior del módulo: en un deployment
- * sin `STRIPE_SECRET_KEY` el módulo entero fallaba al cargar, y con él todas
- * sus funciones — no sólo la que necesitaba la clave.
- */
-const stripe = new Stripe(stripeKey ?? "sk_test_unconfigured", {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
-
-function assertStripeConfigured() {
-    if (!stripeKey) {
-        throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
-    }
-}
+// Bi-modal: se reconcilia cada modo con clave configurada, con su propio
+// cursor (`scope = stripe-bt:<mode>`). El cliente se resuelve perezosamente.
+const cursorScope = (mode: StripeMode) => `stripe-bt:${mode}`;
 
 // ---------------------------------------------------------------------------
 // Cursor helpers (single-row table keyed by `scope='stripe-bt'`)
 // ---------------------------------------------------------------------------
 
 export const internalGetCursor = internalQuery({
-    args: {},
-    handler: async (ctx): Promise<{ id: string; lastBt: string | null } | null> => {
+    args: { mode: stripeModeValidator },
+    handler: async (ctx, args): Promise<{ id: string; lastBt: string | null } | null> => {
         const row = await ctx.db
             .query("reconciliationCursor")
-            .withIndex("by_scope", (q) => q.eq("scope", "stripe-bt"))
+            .withIndex("by_scope", (q) => q.eq("scope", cursorScope(args.mode)))
             .first();
         if (!row) return null;
         return {
@@ -67,12 +53,13 @@ export const internalGetCursor = internalQuery({
 
 export const internalUpsertCursor = internalMutation({
     args: {
+        mode: stripeModeValidator,
         lastBalanceTransactionId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const existing = await ctx.db
             .query("reconciliationCursor")
-            .withIndex("by_scope", (q) => q.eq("scope", "stripe-bt"))
+            .withIndex("by_scope", (q) => q.eq("scope", cursorScope(args.mode)))
             .first();
 
         if (existing) {
@@ -83,7 +70,7 @@ export const internalUpsertCursor = internalMutation({
             });
         } else {
             await ctx.db.insert("reconciliationCursor", {
-                scope: "stripe-bt",
+                scope: cursorScope(args.mode),
                 lastBalanceTransactionId: args.lastBalanceTransactionId,
                 lastRunAt: new Date().toISOString(),
                 runsCompleted: 1,
@@ -143,6 +130,7 @@ export const internalCreateFlag = internalMutation({
         reason: v.string(),
         amountInCents: v.number(),
         currency: v.string(),
+        mode: v.optional(stripeModeValidator),
     },
     handler: async (ctx, args) => {
         // Idempotent: don't double-flag the same BT id.
@@ -163,6 +151,7 @@ export const internalCreateFlag = internalMutation({
             reason: args.reason,
             amountInCents: args.amountInCents,
             currency: args.currency,
+            mode: args.mode,
             status: "open",
             createdAt: new Date().toISOString(),
         });
@@ -179,12 +168,32 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
         // run; daily volume should stay below this for the foreseeable
         // future. For backfills, raise it temporarily via the dashboard.
         maxEntries: v.optional(v.number()),
+        mode: v.optional(stripeModeValidator),
     },
     handler: async (ctx, args): Promise<{ scanned: number; flagged: number }> => {
-        const max = Math.min(args.maxEntries ?? 200, 1000);
+        const modes: StripeMode[] = args.mode ? [args.mode] : stripeEnv().availableModes;
+        let scanned = 0;
+        let flagged = 0;
+        for (const mode of modes) {
+            const r = await reconcileMode(ctx, mode, args.maxEntries);
+            scanned += r.scanned;
+            flagged += r.flagged;
+        }
+        return { scanned, flagged };
+    },
+});
+
+async function reconcileMode(
+    ctx: any,
+    mode: StripeMode,
+    maxEntries?: number,
+): Promise<{ scanned: number; flagged: number }> {
+    {
+        const stripe = getStripe(mode);
+        const max = Math.min(maxEntries ?? 200, 1000);
 
         const cursor: { id: string; lastBt: string | null } | null =
-            await ctx.runQuery(internal.reconciliation.internalGetCursor, {});
+            await ctx.runQuery(internal.reconciliation.internalGetCursor, { mode });
         const startingAfter = cursor?.lastBt ?? undefined;
 
         let scanned = 0;
@@ -257,6 +266,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                                 internal.reconciliation.internalCreateFlag,
                                 {
                                     stripeBalanceTransactionId: bt.id,
+                                    mode,
                                     sourceType: bt.type,
                                     sourceId,
                                     reason: "no_local_payment",
@@ -288,6 +298,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                                 internal.reconciliation.internalCreateFlag,
                                 {
                                     stripeBalanceTransactionId: bt.id,
+                                    mode,
                                     sourceType: bt.type,
                                     sourceId,
                                     relatedPaymentId: String(local._id),
@@ -301,7 +312,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
 
                         // Amount sanity check — Stripe BT.amount is in cents.
                         // local.amount is in USD (float). Coerce to cents.
-                        const localCents = Math.round(local.amount * 100);
+                        const localCents = local.amountCents ?? Math.round(local.amount * 100);
                         if (
                             bt.type === "charge" &&
                             Math.abs(bt.amount - localCents) > 1
@@ -310,6 +321,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                                 internal.reconciliation.internalCreateFlag,
                                 {
                                     stripeBalanceTransactionId: bt.id,
+                                    mode,
                                     sourceType: bt.type,
                                     sourceId,
                                     relatedPaymentId: String(local._id),
@@ -326,6 +338,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                             internal.reconciliation.internalCreateFlag,
                             {
                                 stripeBalanceTransactionId: bt.id,
+                                    mode,
                                 sourceType: bt.type,
                                 sourceId,
                                 reason: "no_payment_intent",
@@ -349,6 +362,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                             internal.reconciliation.internalCreateFlag,
                             {
                                 stripeBalanceTransactionId: bt.id,
+                                    mode,
                                 sourceType: bt.type,
                                 sourceId,
                                 reason: "no_local_payout",
@@ -373,6 +387,7 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
                         internal.reconciliation.internalCreateFlag,
                         {
                             stripeBalanceTransactionId: bt.id,
+                                    mode,
                             sourceType: bt.type,
                             sourceId: sourceId ?? undefined,
                             reason: `stripe_${bt.type}`,
@@ -391,12 +406,13 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
         }
 
         await ctx.runMutation(internal.reconciliation.internalUpsertCursor, {
+            mode,
             lastBalanceTransactionId: lastSeenId,
         });
 
         console.log(
-            `[Reconciliation] scanned=${scanned} flagged=${flagged} cursor=${lastSeenId ?? "—"}`,
+            `[Reconciliation ${mode}] scanned=${scanned} flagged=${flagged} cursor=${lastSeenId ?? "—"}`,
         );
         return { scanned, flagged };
-    },
-});
+    }
+}

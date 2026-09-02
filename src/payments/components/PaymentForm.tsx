@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { POINT_VALUE_USD } from '../../../convex/economy/_rewardRules';
+import { PLATFORM_COMMISSION_RATE } from '../../../convex/_fees';
 import {
     View,
     Text,
@@ -27,7 +29,11 @@ import {
 } from './CardholderFields';
 import { Radius, colors } from '../../theme/tokens';
 
-const POINT_USD = 0.01;
+// Mismo valor que el servidor (convex/economy/_rewardRules.ts). El descuento
+// lo absorbe la comisión de la plataforma, así que el máximo usable es la
+// comisión estándar sobre el total.
+const POINT_USD = POINT_VALUE_USD;
+const MAX_POINTS_FRACTION = PLATFORM_COMMISSION_RATE;
 
 function mapStripePm(pm: any): WalletCard {
     const brand = pm.card?.brand || 'card';
@@ -50,7 +56,7 @@ function mapStripePm(pm: any): WalletCard {
 interface PaymentFormProps {
     amount: number;
     currency: string;
-    cartId?: string;
+    cartId: string;
     lineItems?: Array<{
         listingId: string;
         sellerId?: string;
@@ -113,7 +119,7 @@ export function PaymentForm({
     const [applyPoints, setApplyPoints] = useState(false);
     const { show } = useToast();
     const { sessionToken } = useAuth();
-    const { mode, isLive } = usePaymentMode();
+    const { mode, useRealStripe, mockAllowed } = usePaymentMode();
     const { confirmSetupIntent, confirmPayment } = useStripe();
     const createSetupIntent = useAction(api.stripe.createSetupIntent);
     const listPaymentMethods = useAction(api.stripe.listPaymentMethods);
@@ -122,7 +128,7 @@ export function PaymentForm({
     const [billing, setBilling] = useState<CardholderBilling>({ fullName: '', postalCode: '' });
 
     const refreshRealCards = useCallback(async () => {
-        if (!isLive || !sessionToken || !userId) return;
+        if (!useRealStripe || !sessionToken || !userId) return;
         try {
             const cards = await listPaymentMethods({ sessionToken, userId, mode });
             setRealCards((cards || []).map(mapStripePm));
@@ -130,10 +136,10 @@ export function PaymentForm({
             console.error('Error loading real cards', e);
             setRealCards([]);
         }
-    }, [isLive, sessionToken, userId, mode, listPaymentMethods]);
+    }, [useRealStripe, sessionToken, userId, mode, listPaymentMethods]);
 
     useEffect(() => {
-        if (isLive) {
+        if (useRealStripe) {
             setSelectedId('');
             setSelectedCard(null);
             void refreshRealCards();
@@ -142,7 +148,7 @@ export function PaymentForm({
             setSelectedId(STRIPE_TEST_CARDS[0].id);
             setSelectedCard(STRIPE_TEST_CARDS[0]);
         }
-    }, [isLive, refreshRealCards]);
+    }, [useRealStripe, refreshRealCards]);
 
     const { points, redeemPoints } = usePoints();
     const isDark = !!theme?.dark || theme?.colors?.background === '#1E293B';
@@ -154,13 +160,13 @@ export function PaymentForm({
         if (!applyPoints) return 0;
         const n = Math.floor(Number(pointsInput || points));
         if (!Number.isFinite(n) || n <= 0) return 0;
-        return Math.min(n, Math.max(0, points), Math.floor(amount / POINT_USD));
+        return Math.min(n, Math.max(0, points), Math.floor((amount * MAX_POINTS_FRACTION) / POINT_USD));
     }, [applyPoints, pointsInput, points, amount]);
 
     const discountUsd = pointsToUse * POINT_USD;
     const chargeAmount = Math.max(0, Math.round((amount - discountUsd) * 100) / 100);
-    const billingOk = !isLive || isValidCardholder(billing);
-    const hasCard = isLive
+    const billingOk = !useRealStripe || isValidCardholder(billing);
+    const hasCard = useRealStripe
         ? !!selectedId && selectedId.startsWith('pm_')
         : !!selectedCard && !!selectedId;
     const canPay =
@@ -169,33 +175,17 @@ export function PaymentForm({
         (chargeAmount > 0 || pointsToUse > 0) &&
         (chargeAmount <= 0 || hasCard);
 
-    const buildLineItems = (payAmount: number) => {
-        const items = (lineItems ?? []).map((i) => ({
+    /**
+     * El servidor calcula TODO el dinero desde la base (precio, vendedor,
+     * tipo, comisión, influencer). El cliente sólo dice qué compra y cuánto
+     * espera pagar (`expectedTotalCents`) para detectar cambios de precio.
+     */
+    const buildLineItems = () =>
+        (lineItems ?? []).map((i) => ({
             listingId: i.listingId,
-            sellerId: i.sellerId,
-            // El tipo real: hardcodear 'product' mandaba bonos, eventos y
-            // servicios etiquetados mal hasta la atribución de campañas.
-            type: i.type || 'product',
-            amountInCents: Math.round(i.price * 100),
-            referralCode: i.referralCode,
             quantity: i.quantity,
-            description: i.title,
+            ...(i.referralCode ? { referralCode: i.referralCode } : {}),
         }));
-        const itemsTotal = items.reduce((s, i) => s + i.amountInCents * i.quantity, 0);
-        const amountCents = Math.round(payAmount * 100);
-        if (items.length > 0 && amountCents > itemsTotal) {
-            items.push({
-                listingId: 'shipping',
-                sellerId: undefined,
-                type: 'shipping',
-                amountInCents: amountCents - itemsTotal,
-                referralCode: undefined,
-                quantity: 1,
-                description: 'Costo de envío',
-            });
-        }
-        return items;
-    };
 
     const handleSecureSave = async () => {
         if (!isValidCardholder(billing)) {
@@ -254,20 +244,17 @@ export function PaymentForm({
         setLoading(true);
         onError(null);
         try {
-            if (chargeAmount <= 0 && pointsToUse > 0) {
-                const redeem = await redeemPoints(pointsToUse, cartId);
-                if (!redeem.success) throw new Error(redeem.message || 'No se pudieron usar los puntos');
-                show('Pagado con puntos', 'success');
-                onSuccess(`pts_${Date.now()}`, { pointsRedeemed: pointsToUse });
-                return;
-            }
-
-            const items = buildLineItems(chargeAmount);
+            const items = buildLineItems();
+            if (items.length === 0) throw new Error('El carrito está vacío');
             const result = await createPaymentIntent({
                 sessionToken,
-                amountInCents: Math.round(chargeAmount * 100),
-                lineItems: items.length > 0 ? items : undefined,
+                mode,
                 cartId,
+                lineItems: items,
+                // Total que el usuario vio (ya con descuento de puntos). Si el
+                // servidor calcula otro, rechaza: "el precio cambió".
+                expectedTotalCents: Math.round(chargeAmount * 100),
+                pointsToRedeem: pointsToUse > 0 ? pointsToUse : undefined,
                 // El destino viaja con el pago porque la orden se crea del lado
                 // del servidor, en el webhook, mucho después de que esta
                 // pantalla dejó de existir. Sin esto el vendedor no sabe adónde
@@ -279,9 +266,9 @@ export function PaymentForm({
                           address: shippingDestination,
                       }
                     : undefined,
-                simulate: !isLive,
-                mode,
-                metadata: isLive
+                // Sólo simula si el backend lo permite (ALLOW_STRIPE_MOCK).
+                simulate: !useRealStripe,
+                metadata: useRealStripe
                     ? {
                           cardholderName: billing.fullName.trim(),
                           billingCountry: 'US',
@@ -293,9 +280,9 @@ export function PaymentForm({
                     : undefined,
             });
 
-            if (isLive && result.clientSecret) {
+            if (useRealStripe && result.clientSecret) {
                 if (!selectedId.startsWith('pm_')) {
-                    throw new Error('Seleccioná una tarjeta del carrusel para pagar');
+                    throw new Error('Seleccioná una tarjeta guardada para pagar');
                 }
 
                 const { error: confirmError } = await confirmPayment(result.clientSecret, {
@@ -308,7 +295,6 @@ export function PaymentForm({
                 if (confirmError) throw new Error(confirmError.message);
             }
 
-            if (pointsToUse > 0) await redeemPoints(pointsToUse, result.paymentIntentId);
             const pts = Number((result as any)?.pointsAwarded) || 0;
             show(pts > 0 ? `Pago OK · +${pts} pts` : 'Pago OK', 'success');
             onSuccess(result.paymentIntentId, { pointsRedeemed: pointsToUse });
@@ -331,20 +317,20 @@ export function PaymentForm({
             <PaymentModeToggle isDark={isDark} />
 
             <Text style={[styles.sectionLabel, { color: textColor }]}>
-                {isLive ? 'Tus tarjetas' : 'Tarjetas de prueba'}
+                {useRealStripe ? 'Tus tarjetas' : 'Tarjetas simuladas'}
             </Text>
             <Text style={[styles.hint, { color: muted }]}>
-                {isLive
+                {useRealStripe
                     ? 'Mismo carrusel · producción Stripe in-app · KYC requerido'
                     : 'Mismo carrusel · simulación local · sin cobro real'}
             </Text>
 
-            {isLive ? (
+            {useRealStripe ? (
                 <CardholderFields value={billing} onChange={setBilling} isDark={isDark} />
             ) : null}
 
             <SimulatedCardsPanel
-                key={isLive ? 'live' : 'test'}
+                key={useRealStripe ? 'live' : 'test'}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 onSelectedCard={onSelectedCard}
@@ -352,13 +338,13 @@ export function PaymentForm({
                 textColor={textColor}
                 muted={muted}
                 isDark={isDark}
-                includePresets={!isLive}
-                externalCards={isLive ? realCards : []}
-                secureAdd={isLive}
+                includePresets={!useRealStripe}
+                externalCards={useRealStripe ? realCards : []}
+                secureAdd={useRealStripe}
                 secureSaving={addingCard}
-                onSecureSave={isLive ? handleSecureSave : undefined}
+                onSecureSave={useRealStripe ? handleSecureSave : undefined}
                 secureAddSlot={
-                    isLive ? (
+                    useRealStripe ? (
                         <LiquidCardInput
                             isDark={isDark}
                             accentColor={accent}
@@ -371,7 +357,7 @@ export function PaymentForm({
                     ) : undefined
                 }
                 formHint={
-                    isLive
+                    useRealStripe
                         ? 'Producción · CardField in-app (sin Link)'
                         : 'Modo simulado · cualquier marca'
                 }
@@ -385,7 +371,7 @@ export function PaymentForm({
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.pointsTitle, { color: textColor }]}>Usar puntos Ramgos</Text>
                         <Text style={[styles.pointsSub, { color: muted }]}>
-                            {points} pts · máx. -${Math.min(points * POINT_USD, amount).toFixed(2)}
+                            {points} pts · máx. -${Math.min(points * POINT_USD, amount * MAX_POINTS_FRACTION).toFixed(2)}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -393,7 +379,7 @@ export function PaymentForm({
                             setApplyPoints((v) => !v);
                             if (!applyPoints) {
                                 setPointsInput(
-                                    String(Math.min(points, Math.floor(amount / POINT_USD))),
+                                    String(Math.min(points, Math.floor((amount * MAX_POINTS_FRACTION) / POINT_USD))),
                                 );
                             }
                         }}

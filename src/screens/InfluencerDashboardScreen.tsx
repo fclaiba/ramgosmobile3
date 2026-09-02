@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useConnectOnboarding } from '../hooks/useConnectOnboarding';
 import { View, ScrollView, Text, StyleSheet, useWindowDimensions, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -38,72 +39,16 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const wallet = getWalletByOwner(influencerId) ?? getWalletByOwner('influencer_demo');
     const { show } = useToast();
 
-    // Stripe Connect V2 — mismo flujo que BusinessDashboardScreen (única
-    // fuente de onboarding). Antes esta pantalla no tenía ningún botón para
-    // vincular cuenta de pagos: el influencer no podía cobrar nunca.
-    const _api = api as any;
-    const ensureConnectAccountAction = useAction(_api.connect?.ensureConnectAccount as any);
-    const createOnboardingLinkAction = useAction(_api.connect?.createOnboardingLink as any);
-    const getAccountStatusAction = useAction(_api.connect?.getAccountStatus as any);
-    const [connectLoading, setConnectLoading] = useState(false);
-    const [connectStatus, setConnectStatus] = useState<{
-        readyToReceivePayments: boolean;
-        onboardingComplete: boolean;
-    } | null>(null);
-    const stripeConnectAccountId: string | undefined = (user as any)?.stripeConnectAccountId;
-
-    useEffect(() => {
-        let cancelled = false;
-        if (!stripeConnectAccountId) {
-            setConnectStatus(null);
-            return;
-        }
-        (async () => {
-            try {
-                const status = await getAccountStatusAction({
-                    accountId: stripeConnectAccountId,
-                    sessionToken,
-                });
-                if (!cancelled && status) {
-                    setConnectStatus({
-                        readyToReceivePayments: !!(status as any).readyToReceivePayments,
-                        onboardingComplete: !!(status as any).onboardingComplete,
-                    });
-                }
-            } catch (err) {
-                console.warn('[Connect V2] influencer status fetch failed', err);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [stripeConnectAccountId, getAccountStatusAction]);
-
+    // Stripe Connect — hook compartido con BusinessDashboardScreen.
+    const connect = useConnectOnboarding({ displayName: influencerName });
+    const connectLoading = connect.loading;
+    const stripeConnectAccountId: string | undefined = connect.accountId ?? undefined;
+    const connectStatus = connect.status
+        ? { readyToReceivePayments: connect.status.readyToReceivePayments, onboardingComplete: !!connect.status.caps?.onboardingComplete }
+        : null;
     const handleInfluencerConnectOnboarding = async () => {
-        const connectUserId = (user as any)?._id || (user as any)?.id || (user as any)?.uid;
-        if (!user || !connectUserId) {
-            show('Inicia sesión primero', 'error');
-            return;
-        }
-        setConnectLoading(true);
-        try {
-            const ensured = await ensureConnectAccountAction({
-                userId: connectUserId,
-                sessionToken,
-                displayName: influencerName || 'Ramgos influencer',
-                contactEmail: user.email,
-            });
-            const accountId = (ensured as any)?.accountId;
-            if (!accountId) throw new Error('No se obtuvo accountId de Stripe.');
-
-            const link = await createOnboardingLinkAction({ accountId, sessionToken });
-            const url = (link as any)?.url;
-            if (url) await Linking.openURL(url);
-        } catch (e: any) {
-            show(e.message || 'Error al iniciar onboarding de Stripe', 'error');
-        } finally {
-            setConnectLoading(false);
-        }
+        const ok = await connect.start();
+        if (!ok && connect.error) show(connect.error, 'error');
     };
 
     // UI State

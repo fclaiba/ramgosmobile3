@@ -290,16 +290,16 @@ export const internalAutoReleaseEvents = internalMutation({
             if (!order) continue;
 
             if (
-                order.status === "payment_received" ||
-                order.status === "delivered"
+                order.escrowState === "held" &&
+                !order.escrowReleaseError &&
+                (order.status === "payment_received" ||
+                    order.status === "paid_escrow" ||
+                    order.status === "delivered")
             ) {
-                await ctx.db.patch(orderNormId, {
-                    status: "completed",
-                    escrowState: "released",
-                    updatedAt: new Date().toISOString(),
-                });
-                await ctx.runMutation(internal.stripe.internalReleasePayment, {
+                // El transfer real y el cambio a `released` los hace stripe.ts.
+                await ctx.scheduler.runAfter(0, internal.stripe.internalReleaseOrderEscrow, {
                     orderId: orderNormId,
+                    trigger: "event_auto",
                 });
                 released++;
             }
@@ -332,23 +332,12 @@ export const internalAutoReleaseServices = internalMutation({
         let released = 0;
         for (const order of orders) {
             if (order.updatedAt > cutoffISO) continue;
-            // Determine if any payment line is a service
-            const payments = await ctx.db
-                .query("payments")
-                .withIndex("by_order", (q) => q.eq("orderId", String(order._id)))
-                .collect();
-            const hasService = payments.some(
-                (p) => (p.metadata as any)?.type === "service",
-            );
-            if (!hasService) continue;
+            if (order.listingType !== "service") continue;
+            if (order.escrowState !== "held" || order.escrowReleaseError) continue;
 
-            await ctx.db.patch(order._id, {
-                status: "completed",
-                escrowState: "released",
-                updatedAt: new Date().toISOString(),
-            });
-            await ctx.runMutation(internal.stripe.internalReleasePayment, {
+            await ctx.scheduler.runAfter(0, internal.stripe.internalReleaseOrderEscrow, {
                 orderId: order._id,
+                trigger: "service_auto",
             });
             released++;
         }

@@ -20,7 +20,7 @@ type Props = {
  * producción) desde acá.
  */
 export function PaymentModeToggle({ isDark = false }: Props) {
-    const { mode, setMode, isLive } = usePaymentMode();
+    const { mode, setMode, isLive, availableModes, mockAllowed } = usePaymentMode();
     const { user } = useAuth();
     const canChangeMode = user?.role === 'admin' || (user as any)?.isTest === true;
     const glass = glassTokens(isDark);
@@ -28,8 +28,22 @@ export function PaymentModeToggle({ isDark = false }: Props) {
 
     const select = (next: PaymentMode) => {
         if (!canChangeMode) return;
+        if (!availableModes.includes(next)) return;
         if (next !== mode) setMode(next);
     };
+
+    const testLabel = mockAllowed ? 'Simulado: tarjetas de prueba, sin cobro real' : 'Prueba: Stripe TEST (4242 4242 4242 4242), sin cobro real';
+    const modeLabel = isLive ? 'Producción: cobro real con Stripe LIVE' : testLabel;
+
+    // Con un solo modo configurado no hay nada que elegir.
+    if (availableModes.length <= 1) {
+        return (
+            <View style={styles.wrap}>
+                <Text style={[styles.heading, { color: c.text }]}>Modo de pago</Text>
+                <Text style={[styles.sub, { color: c.textMuted }]}>{modeLabel}</Text>
+            </View>
+        );
+    }
 
     if (!canChangeMode) {
         // Usuario final: sólo lectura. Nada que tocar acá — el modo lo
@@ -37,11 +51,7 @@ export function PaymentModeToggle({ isDark = false }: Props) {
         return (
             <View style={styles.wrap}>
                 <Text style={[styles.heading, { color: c.text }]}>Modo de pago</Text>
-                <Text style={[styles.sub, { color: c.textMuted }]}>
-                    {isLive
-                        ? 'Producción: cobro real con Stripe LIVE'
-                        : 'Simulado: tarjetas de prueba, sin cobro real'}
-                </Text>
+                <Text style={[styles.sub, { color: c.textMuted }]}>{modeLabel}</Text>
             </View>
         );
     }
@@ -49,11 +59,7 @@ export function PaymentModeToggle({ isDark = false }: Props) {
     return (
         <View style={styles.wrap}>
             <Text style={[styles.heading, { color: c.text }]}>Modo de pago</Text>
-            <Text style={[styles.sub, { color: c.textMuted }]}>
-                {isLive
-                    ? 'Producción: cobro real con Stripe LIVE'
-                    : 'Simulado: tarjetas de prueba, sin cobro real'}
-            </Text>
+            <Text style={[styles.sub, { color: c.textMuted }]}>{modeLabel}</Text>
 
             <View
                 style={[
@@ -87,7 +93,7 @@ export function PaymentModeToggle({ isDark = false }: Props) {
                             !isLive && styles.segTextActive,
                         ]}
                     >
-                        Simulado
+                        {mockAllowed ? 'Simulado' : 'Prueba'}
                     </Text>
                 </TouchableOpacity>
 

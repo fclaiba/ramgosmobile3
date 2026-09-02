@@ -303,27 +303,13 @@ export const redeemBono = mutation({
             const orderNormId = ctx.db.normalizeId("orders", bono.orderId);
             if (orderNormId) {
                 const order = await ctx.db.get(orderNormId);
-                if (
-                    order &&
-                    (order.status === "payment_received" ||
-                        order.status === "delivered" ||
-                        order.status === "paid_escrow" ||
-                        order.escrowState === "held")
-                ) {
-                    await ctx.db.patch(orderNormId, {
-                        status: "completed",
-                        escrowState: "released",
-                        updatedAt: new Date().toISOString(),
+                if (order && order.escrowState === "held" && !order.escrowReleaseError) {
+                    // La liberación real (transfer) la hace stripe.ts; el bono
+                    // queda canjeado aunque el transfer falle (queda visible).
+                    await ctx.scheduler.runAfter(0, internal.stripe.internalReleaseOrderEscrow, {
+                        orderId: orderNormId,
+                        trigger: "bono_redeemed",
                     });
-                    try {
-                        await ctx.runMutation(
-                            internal.stripe.internalReleasePayment,
-                            { orderId: orderNormId },
-                        );
-                    } catch (err) {
-                        // Escrow release is best-effort after redeem; bono stays redeemed.
-                        console.warn("[Bonos] Escrow release after redeem failed:", err);
-                    }
                 }
             }
         }

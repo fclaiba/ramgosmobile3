@@ -51,6 +51,7 @@ export const RESERVED_PATHS = [
     'c',
     'i',
     'comunidades',
+    'connect',
 ] as const;
 
 /**
