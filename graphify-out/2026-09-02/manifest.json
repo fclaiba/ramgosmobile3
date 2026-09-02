@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "convex/_generated/api.d.ts": {
-    "mtime": 1788386559.8185413,
-    "ast_hash": "f6b9237594d2cc20c11152044d05577c",
+    "mtime": 1788389638.4585264,
+    "ast_hash": "6800d9254fc6761c7beed39e8df0cf47",
     "semantic_hash": ""
   },
   "convex/_generated/api.js": {
@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "convex/connect.ts": {
-    "mtime": 1788388532.3953173,
-    "ast_hash": "4787c0c90d46fa78a375415e59239dc3",
+    "mtime": 1788389526.3125303,
+    "ast_hash": "a1530558fd433c249619481d8f2f727b",
     "semantic_hash": ""
   },
   "convex/crons.ts": {
@@ -2505,8 +2505,8 @@
     "semantic_hash": ""
   },
   "docs/PAYMENTS_SETUP.md": {
-    "mtime": 1788388557.4883676,
-    "ast_hash": "da7c0ec7c827a7841fa994f96a1e2820",
+    "mtime": 1788389564.99024,
+    "ast_hash": "1e2f665df2f0297087094d184cfda59f",
     "semantic_hash": ""
   },
   "docs/PENDIENTES_FRONT_BACK.md": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788388691.3152652,
-    "ast_hash": "064874c12c8903cf96a80482fc2d4b02",
+    "mtime": 1788389675.264899,
+    "ast_hash": "c090643a9837059c8a1353a571e52401",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -3785,8 +3785,8 @@
     "semantic_hash": ""
   },
   "src/hooks/useConnectOnboarding.ts": {
-    "mtime": 1788384592.4303682,
-    "ast_hash": "fbc511ac17d8e5a9d9d64559ae3c3760",
+    "mtime": 1788389538.268242,
+    "ast_hash": "84b1ea84edad8b8f8cc3f5ca96847dc9",
     "semantic_hash": ""
   },
   "src/hooks/useFeedFocus.tsx": {
@@ -3940,13 +3940,23 @@
     "semantic_hash": ""
   },
   "convex/__tests__/connectCaps.test.ts": {
-    "mtime": 1788388549.9489694,
-    "ast_hash": "b2ad28fdf33431b6e2525a5631df56c8",
+    "mtime": 1788388758.82747,
+    "ast_hash": "841259ca0d8f100097c9d2c6e99c36cc",
     "semantic_hash": ""
   },
   "convex/_connectCaps.ts": {
-    "mtime": 1788388499.7175055,
-    "ast_hash": "5f8d4a1c66062e6f7057dd21b1cbd316",
+    "mtime": 1788388758.8280566,
+    "ast_hash": "46dd92b61375c36d42f7431cfffe30eb",
+    "semantic_hash": ""
+  },
+  "convex/__tests__/connectReturnUrl.test.ts": {
+    "mtime": 1788389558.3122897,
+    "ast_hash": "84fe6791930dee79335c52a8ff146303",
+    "semantic_hash": ""
+  },
+  "convex/_connectReturnUrl.ts": {
+    "mtime": 1788389502.8717344,
+    "ast_hash": "54147e783d13047563025ac50cbb6766",
     "semantic_hash": ""
   }
 }

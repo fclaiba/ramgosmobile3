@@ -285,8 +285,8 @@
     "semantic_hash": ""
   },
   "convex/schema.ts": {
-    "mtime": 1788384592.3591301,
-    "ast_hash": "502c6c44faddc04cf0bfedbd9e9da211",
+    "mtime": 1788393345.6123784,
+    "ast_hash": "f9c6bd357022f6f4676413b1fa569f3c",
     "semantic_hash": ""
   },
   "convex/seed.ts": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788389675.264899,
-    "ast_hash": "c090643a9837059c8a1353a571e52401",
+    "mtime": 1788393485.8290684,
+    "ast_hash": "3a0fe49a10eb0e6cc27e5d7df1bd15c8",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -3957,6 +3957,11 @@
   "convex/_connectReturnUrl.ts": {
     "mtime": 1788389502.8717344,
     "ast_hash": "54147e783d13047563025ac50cbb6766",
+    "semantic_hash": ""
+  },
+  "convex/__tests__/checkoutSnapshotShape.test.ts": {
+    "mtime": 1788393367.5932786,
+    "ast_hash": "651bdb68f7171af0c652778cdbda87c5",
     "semantic_hash": ""
   }
 }

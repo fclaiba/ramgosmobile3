@@ -41,6 +41,11 @@ export const checkoutLineValidator = v.object({
     image: v.optional(v.string()),
     sourcePostId: v.optional(v.string()),
     referralCode: v.optional(v.string()),
+    // `unitCents * quantity`, congelado: es la base sobre la que se
+    // calcularon commissionCents e influencerCents de ESTA línea. `_split.ts`
+    // (SplitLine) siempre lo produce; sin declararlo acá, el snapshot entero
+    // era rechazado al persistir el pago y el checkout no podía completarse.
+    grossCents: v.number(),
     commissionRate: v.number(),
     commissionCents: v.number(),
     influencerId: v.optional(v.string()),
