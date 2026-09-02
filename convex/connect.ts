@@ -1,160 +1,270 @@
 /**
- * Stripe Connect V2 — accounts, onboarding links, live status reads.
+ * Stripe Connect V2 — cuentas conectadas, onboarding, estado, balance y payouts.
  *
- * V2 differs from classic V1 Connect in that:
- *   - Account creation never takes top-level `type: 'express'/'standard'/'custom'`.
- *   - Capabilities live under `configuration.recipient.capabilities`.
- *   - Onboarding links use `v2.core.accountLinks.create` with `use_case`.
- *   - Status reads use `v2.core.accounts.retrieve(id, { include: [...] })`.
- *   - Account / capability changes are delivered as *thin events*; full
- *     payloads are pulled via `v2.core.events.retrieve(thinEvent.id)` and
- *     are routed in `convex/http.ts` (see /stripe-webhook).
+ * BI-MODAL: una cuenta conectada por modo. En Stripe, test y live son
+ * universos separados (los `acct_` no se comparten), así que el usuario
+ * guarda `stripeConnectAccountId` (live) y `stripeConnectAccountIdTest`.
+ * Todas las acciones públicas reciben `mode` y usan `getStripe(mode)`.
  *
- * Responsibilities model:
- *   - fees_collector: 'application'   (Ramgos collects Stripe fees from buyers)
- *   - losses_collector: 'application' (NOT a business choice — Stripe rejects
- *                                      'stripe' with "Losses collector can only
- *                                      be 'application' for the set of
- *                                      configurations this account has" given
- *                                      our `configuration.recipient` +
- *                                      `stripe_balance.stripe_transfers`
- *                                      capability. Do not revert this thinking
- *                                      it's a risk-model preference.)
+ * Forma de cuenta (V2, sin `type` de V1):
+ *   - `dashboard: 'express'`  → el vendedor administra su banco/payouts en
+ *     el dashboard Express.
+ *   - `defaults.responsibilities`: fees_collector 'application' y
+ *     losses_collector 'application' (Stripe lo exige para
+ *     `configuration.recipient` con `stripe_balance.stripe_transfers`).
+ *   - `configuration.recipient.capabilities.stripe_balance`:
+ *       stripe_transfers → puede RECIBIR transfers de la plataforma (SCT).
+ *       payouts          → puede RETIRAR a su banco. (Sin esto el dinero
+ *                          entraba a la cuenta pero no podía salir.)
  *
- * PaymentIntents stay on V1 in `convex/stripe.ts` because Separate Charges
- * + Transfers don't require V2-specific payment APIs. Both APIs coexist
- * peacefully on the same Stripe account / SDK instance.
+ * Onboarding: `v2.core.accountLinks.create` con `use_case.account_onboarding`
+ * y `return_url`/`refresh_url` que vuelven a la app (`ramgos://connect/...`,
+ * configurable con `STRIPE_CONNECT_RETURN_URL_BASE` si Stripe exige https).
  *
- * Auth model in this file: actions cannot use `ctx.db` directly, so the
- * actor lookup is done via `internal.connect.internalGetActorRole` query.
+ * Estado: se lee en vivo con `v2.core.accounts.retrieve(id, {include})` y
+ * se persiste en `users.stripeConnectCaps[Test]` para que la UI sea reactiva
+ * (`getMyConnectStatus`). Los thin events V2 (`http.ts`) llaman a
+ * `internalApplyV2AccountUpdate` con el mismo camino.
  */
 
 import { v } from "convex/values";
-import {
-    action,
-    internalAction,
-    internalMutation,
-    internalQuery,
-} from "./_generated/server";
+import { action, internalAction, internalMutation, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import Stripe from "stripe";
+import type { Doc, Id } from "./_generated/dataModel";
 import { withStripeBreadcrumb } from "./observability";
-import { requireActor, AuthActor } from "./authHelpers";
+import { requireActor } from "./authHelpers";
+import { assertStripeConfigured, getStripe, hasStripeKey } from "./stripeClient";
+import { stripeModeValidator } from "./schema";
+import type { StripeMode } from "./_stripeEnv";
 
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeKey) {
-    throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
-}
+const CONNECT_RETURN_URL_BASE = process.env.STRIPE_CONNECT_RETURN_URL_BASE ?? "ramgos://connect";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2026-06-24.dahlia" as any,
-});
-
-const assertStripeConfigured = () => {
-    if (!process.env.STRIPE_SECRET_KEY) {
-        throw new Error("Stripe no configurado. Define STRIPE_SECRET_KEY en Convex.");
-    }
+type ConnectCaps = {
+    transfersStatus?: string;
+    payoutsStatus?: string;
+    requirementsStatus?: string;
+    onboardingComplete: boolean;
+    updatedAt: string;
 };
 
-// ---------------------------------------------------------------------------
-// Internal helpers — actions cannot read the DB directly, so we use these
-// internal queries / mutations to read users and persist results.
-// ---------------------------------------------------------------------------
+export type ConnectStatus = {
+    mode: StripeMode;
+    accountId: string | null;
+    status: "none" | "pending" | "active" | "rejected";
+    caps: ConnectCaps | null;
+    readyToReceivePayments: boolean;
+    canPayout: boolean;
+};
 
-export const internalSaveConnectAccount = internalMutation({
-    args: {
-        userId: v.id("users"),
-        stripeConnectAccountId: v.string(),
-    },
-    handler: async (ctx, args) => {
-        await ctx.db.patch(args.userId, {
-            stripeConnectAccountId: args.stripeConnectAccountId,
-        } as any);
-    },
-});
+const fieldsFor = (mode: StripeMode) =>
+    mode === "live"
+        ? { idField: "stripeConnectAccountId", statusField: "stripeConnectStatus", capsField: "stripeConnectCaps" }
+        : {
+              idField: "stripeConnectAccountIdTest",
+              statusField: "stripeConnectStatusTest",
+              capsField: "stripeConnectCapsTest",
+          };
+
+const readStatus = (user: Doc<"users"> | null, mode: StripeMode): ConnectStatus => {
+    const f = fieldsFor(mode);
+    const accountId = ((user as any)?.[f.idField] as string | undefined) ?? null;
+    const caps = ((user as any)?.[f.capsField] as ConnectCaps | undefined) ?? null;
+    const status =
+        ((user as any)?.[f.statusField] as "pending" | "active" | "rejected" | undefined) ??
+        (accountId ? "pending" : "none");
+    return {
+        mode,
+        accountId,
+        status: accountId ? status : "none",
+        caps,
+        readyToReceivePayments: caps?.transfersStatus === "active",
+        canPayout: caps?.payoutsStatus === "active",
+    };
+};
+
+const stripeErrorMessage = (error: any): string =>
+    String(error?.raw?.message || error?.message || error || "Error de Stripe");
+
+/** Extrae capacidades/requisitos de una cuenta V2 ya recuperada. */
+const capsFromAccount = (account: any): ConnectCaps => {
+    const sb = account?.configuration?.recipient?.capabilities?.stripe_balance;
+    const requirementsStatus: string | undefined =
+        account?.requirements?.summary?.minimum_deadline?.status ?? undefined;
+    return {
+        transfersStatus: sb?.stripe_transfers?.status ?? undefined,
+        payoutsStatus: sb?.payouts?.status ?? undefined,
+        requirementsStatus,
+        onboardingComplete: requirementsStatus !== "currently_due" && requirementsStatus !== "past_due",
+        updatedAt: new Date().toISOString(),
+    };
+};
+
+const retrieveAccount = (mode: StripeMode, accountId: string) =>
+    (getStripe(mode) as any).v2.core.accounts.retrieve(accountId, {
+        include: ["configuration.recipient", "requirements"],
+    });
+
+// ---------------------------------------------------------------------------
+// Internos (DB)
+// ---------------------------------------------------------------------------
 
 export const internalGetConnectAccountId = internalQuery({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), mode: stripeModeValidator },
     handler: async (ctx, args): Promise<string | null> => {
         const user = await ctx.db.get(args.userId);
-        if (!user) return null;
-        return ((user as any).stripeConnectAccountId as string) ?? null;
+        return readStatus(user, args.mode).accountId;
     },
 });
 
-export const internalGetActorRole = internalQuery({
-    args: { actorId: v.any() },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{ role: string; email: string | null } | null> => {
-        const user = await ctx.db.get(args.actorId);
-        if (!user) return null;
-        return {
-            role: (user as any).role ?? "consumer",
-            email: (user as any).email ?? null,
+export const internalGetConnectStatus = internalQuery({
+    args: { userId: v.id("users"), mode: stripeModeValidator },
+    handler: async (ctx, args): Promise<ConnectStatus> => readStatus(await ctx.db.get(args.userId), args.mode),
+});
+
+export const internalSaveConnectAccount = internalMutation({
+    args: { userId: v.id("users"), mode: stripeModeValidator, accountId: v.string() },
+    handler: async (ctx, args): Promise<void> => {
+        const f = fieldsFor(args.mode);
+        await ctx.db.patch(args.userId, { [f.idField]: args.accountId, [f.statusField]: "pending" } as any);
+    },
+});
+
+/** Persiste capacidades leídas de Stripe (por índice, no por scan). */
+export const internalSaveConnectFlags = internalMutation({
+    args: {
+        mode: stripeModeValidator,
+        accountId: v.string(),
+        transfersStatus: v.optional(v.string()),
+        payoutsStatus: v.optional(v.string()),
+        requirementsStatus: v.optional(v.string()),
+    },
+    handler: async (ctx, args): Promise<{ userId: string | null; status: string }> => {
+        const user =
+            args.mode === "live"
+                ? await ctx.db
+                      .query("users")
+                      .withIndex("by_stripe_connect_account", (q) => q.eq("stripeConnectAccountId", args.accountId))
+                      .first()
+                : await ctx.db
+                      .query("users")
+                      .withIndex("by_stripe_connect_account_test", (q) =>
+                          q.eq("stripeConnectAccountIdTest", args.accountId),
+                      )
+                      .first();
+        if (!user) {
+            console.warn(`[Connect ${args.mode}] Ningún usuario con cuenta ${args.accountId}`);
+            return { userId: null, status: "unknown" };
+        }
+        const f = fieldsFor(args.mode);
+        const onboardingComplete =
+            args.requirementsStatus !== "currently_due" && args.requirementsStatus !== "past_due";
+        const caps: ConnectCaps = {
+            transfersStatus: args.transfersStatus,
+            payoutsStatus: args.payoutsStatus,
+            requirementsStatus: args.requirementsStatus,
+            onboardingComplete,
+            updatedAt: new Date().toISOString(),
         };
+        const status: "pending" | "active" =
+            args.transfersStatus === "active" && onboardingComplete ? "active" : "pending";
+        const prev = (user as any)[f.statusField];
+        await ctx.db.patch(user._id, { [f.capsField]: caps, [f.statusField]: status } as any);
+        if (prev !== status) {
+            await ctx.db.insert("audit_logs", {
+                actorUserId: "system:stripe-webhook",
+                targetUserId: String(user._id),
+                action: status === "active" ? "STRIPE_CONNECT_PAYOUTS_ENABLED" : "STRIPE_CONNECT_PAYOUTS_DISABLED",
+                timestamp: new Date().toISOString(),
+                metadata: { accountId: args.accountId, mode: args.mode, caps },
+            });
+            if (status === "active") {
+                await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                    userId: String(user._id),
+                    title: "Cuenta de pagos lista",
+                    body: "Tu cuenta de Stripe quedó habilitada para recibir pagos.",
+                    category: "payment",
+                    data: { type: "connect_active", mode: args.mode },
+                });
+            }
+        }
+        return { userId: String(user._id), status };
     },
 });
 
-// SECURITY (Fase 1): identity comes from the server-issued session token —
-// never from a client-supplied actorId (that was an IDOR: any caller could
-// impersonate any user by sending their id).
-const assertSelfOrAdminAction = async (
+// ---------------------------------------------------------------------------
+// Resolución del usuario objetivo (self o admin)
+// ---------------------------------------------------------------------------
+
+const resolveTargetUser = async (
     ctx: any,
     sessionToken: string | undefined,
-    targetUserId: string,
-): Promise<AuthActor> => {
+    userId?: string,
+): Promise<{ actorId: string; targetId: Id<"users">; user: Doc<"users"> }> => {
     const actor = await requireActor(ctx, sessionToken);
-    const isSelf = actor.idString === String(targetUserId);
+    const targetStr = userId ?? actor.idString;
+    const isSelf = targetStr === actor.idString;
     const isAdmin = actor.role === "admin" || actor.role === "developer";
-    if (!isSelf && !isAdmin) {
-        throw new Error("No autorizado.");
-    }
-    return actor;
+    if (!isSelf && !isAdmin) throw new Error("No autorizado.");
+    const user = await ctx.runQuery(internal.users.internalGetUserById, { id: targetStr });
+    if (!user) throw new Error("Usuario no encontrado.");
+    return { actorId: actor.idString, targetId: user._id as Id<"users">, user };
 };
 
 // ---------------------------------------------------------------------------
-// createConnectAccount — V2 account creation for sellers/influencers.
-// Persists `users.stripeConnectAccountId` once Stripe returns the new id.
+// Estado reactivo (fuente única del cliente)
 // ---------------------------------------------------------------------------
-export const createConnectAccount = action({
+
+export const getMyConnectStatus = query({
+    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
+    handler: async (ctx, args): Promise<ConnectStatus & { modeConfigured: boolean }> => {
+        const actor = await requireActor(ctx, args.sessionToken);
+        const targetStr = args.userId ?? actor.idString;
+        if (targetStr !== actor.idString && actor.role !== "admin" && actor.role !== "developer") {
+            throw new Error("No autorizado.");
+        }
+        const id = ctx.db.normalizeId("users", targetStr);
+        const user = id ? await ctx.db.get(id) : null;
+        return { ...readStatus(user, args.mode), modeConfigured: hasStripeKey(args.mode) };
+    },
+});
+
+// ---------------------------------------------------------------------------
+// Crear / asegurar cuenta
+// ---------------------------------------------------------------------------
+
+export const ensureConnectAccount = action({
     args: {
         sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        userId: v.id("users"),
-        displayName: v.string(),
-        contactEmail: v.string(),
-        country: v.optional(v.string()), // ISO-3166 alpha-2; defaults to 'us'
+        mode: stripeModeValidator,
+        userId: v.optional(v.string()),
+        displayName: v.optional(v.string()),
+        contactEmail: v.optional(v.string()),
+        country: v.optional(v.string()), // ISO-3166 alpha-2; default 'us'
     },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{ accountId: string; isMock: boolean }> => {
-        assertStripeConfigured();
-        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
+    handler: async (ctx, args): Promise<{ accountId: string; created: boolean }> => {
+        assertStripeConfigured(args.mode);
+        const { targetId, user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const existing = readStatus(user, args.mode).accountId;
+        if (existing) return { accountId: existing, created: false };
+
+        const displayName = args.displayName || (user as any).name || (user as any).username || "Ramgos seller";
+        const contactEmail = args.contactEmail || (user as any).email;
+        if (!contactEmail) throw new Error("El usuario no tiene email; es obligatorio para Stripe Connect.");
+        const stripe = getStripe(args.mode) as any;
 
         try {
-            // EXACT shape required by V2 — no top-level `type`. Capabilities
-            // live under configuration.recipient.
             const account: any = await withStripeBreadcrumb(
-                {
-                    api: "v2.core.accounts.create",
-                    userId: String(args.userId),
-                    country: (args.country ?? "us").toLowerCase(),
-                },
+                { api: "v2.core.accounts.create", userId: String(targetId), mode: args.mode },
                 () =>
-                    (stripe as any).v2.core.accounts.create({
-                        display_name: args.displayName,
-                        contact_email: args.contactEmail,
-                        identity: {
-                            country: (args.country ?? "us").toLowerCase(),
-                        },
+                    stripe.v2.core.accounts.create({
+                        display_name: displayName,
+                        contact_email: contactEmail,
+                        identity: { country: (args.country ?? "us").toLowerCase() },
                         dashboard: "express",
                         defaults: {
                             responsibilities: {
                                 fees_collector: "application",
-                                // Stripe exige "application" para esta config de cuenta.
+                                // Stripe exige "application" para recipient + stripe_transfers.
                                 losses_collector: "application",
                             },
                         },
@@ -162,340 +272,112 @@ export const createConnectAccount = action({
                             recipient: {
                                 capabilities: {
                                     stripe_balance: {
-                                        stripe_transfers: {
-                                            requested: true,
-                                        },
+                                        stripe_transfers: { requested: true },
+                                        payouts: { requested: true },
                                     },
                                 },
                             },
                         },
+                        metadata: { userId: String(targetId), mode: args.mode },
                     }),
             );
-
             await ctx.runMutation(internal.connect.internalSaveConnectAccount, {
-                userId: args.userId,
-                stripeConnectAccountId: account.id,
+                userId: targetId,
+                mode: args.mode,
+                accountId: account.id,
             });
-
-            return { accountId: account.id, isMock: false };
+            return { accountId: account.id, created: true };
         } catch (error: any) {
-            console.error("[Connect V2] createConnectAccount error:", error);
-            throw new Error(
-                `No se pudo crear la cuenta Stripe Connect: ${error.message}`,
-            );
+            console.error(`[Connect ${args.mode}] accounts.create error:`, error);
+            throw new Error(`No se pudo crear la cuenta de Stripe Connect: ${stripeErrorMessage(error)}`);
         }
     },
 });
 
 // ---------------------------------------------------------------------------
-// createOnboardingLink — V2 account link for KYC/onboarding.
-// Returns a short-lived URL the user opens (in-app browser / WebView).
+// Onboarding
 // ---------------------------------------------------------------------------
+
 export const createOnboardingLink = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        accountId: v.string(),
-    },
-    handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
-        assertStripeConfigured();
-
-        // Auth: any valid session may request a link. The target is the
-        // account itself, validated server-side by Stripe — a random
-        // accountId just yields a link that's useless to the caller.
-        await requireActor(ctx, (args as any).sessionToken);
-
+    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
+    handler: async (ctx, args): Promise<{ url: string; expiresAt: string | null; returnUrl: string }> => {
+        assertStripeConfigured(args.mode);
+        const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) throw new Error("Primero hay que crear la cuenta de pagos (ensureConnectAccount).");
+        const returnUrl = `${CONNECT_RETURN_URL_BASE}/return?mode=${args.mode}`;
+        const refreshUrl = `${CONNECT_RETURN_URL_BASE}/refresh?mode=${args.mode}`;
         try {
-            const link = await (stripe as any).v2.core.accountLinks.create({
-                account: args.accountId,
+            const link = await (getStripe(args.mode) as any).v2.core.accountLinks.create({
+                account: accountId,
                 use_case: {
                     type: "account_onboarding",
                     account_onboarding: {
                         configurations: ["recipient"],
-                        // Deep links into the app. The dashboard screens listen
-                        // for these and re-poll account status on return.
-                        refresh_url: "ramgos://onboarding/refresh",
-                        return_url: "ramgos://onboarding/complete",
+                        refresh_url: refreshUrl,
+                        return_url: returnUrl,
                     },
                 },
             });
-            return { url: link.url, isMock: false };
+            return { url: link.url, expiresAt: link.expires_at ?? null, returnUrl };
         } catch (error: any) {
-            console.error("[Connect V2] createOnboardingLink error:", error);
-            throw new Error(
-                `No se pudo generar el link de onboarding: ${error.message}`,
-            );
+            console.error(`[Connect ${args.mode}] accountLinks.create error:`, error);
+            throw new Error(`No se pudo generar el link de onboarding: ${stripeErrorMessage(error)}`);
         }
     },
 });
 
-// ---------------------------------------------------------------------------
-// getAccountStatus — LIVE read from Stripe (no DB cache, per the brief).
-// Used by dashboard banners to know if the seller can receive payments yet.
-// ---------------------------------------------------------------------------
+/** Lectura en vivo desde Stripe + persistencia (la UI reactiva se actualiza sola). */
 export const getAccountStatus = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        accountId: v.string(),
-    },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{
-        accountId: string;
-        readyToReceivePayments: boolean;
-        onboardingComplete: boolean;
-        requirementsStatus: string | null;
-        transfersStatus: string | null;
-        isMock: boolean;
-    }> => {
-        assertStripeConfigured();
-        await requireActor(ctx, (args as any).sessionToken);
-
+    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
+    handler: async (ctx, args): Promise<ConnectStatus> => {
+        assertStripeConfigured(args.mode);
+        const { targetId, user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const current = readStatus(user, args.mode);
+        if (!current.accountId) return current;
         try {
-            const account = await (stripe as any).v2.core.accounts.retrieve(
-                args.accountId,
-                { include: ["configuration.recipient", "requirements"] },
-            );
-
-            const transfersStatus =
-                account?.configuration?.recipient?.capabilities?.stripe_balance
-                    ?.stripe_transfers?.status ?? null;
-            const readyToReceivePayments = transfersStatus === "active";
-
-            const requirementsStatus =
-                account?.requirements?.summary?.minimum_deadline?.status ?? null;
-            const onboardingComplete =
-                requirementsStatus !== "currently_due" &&
-                requirementsStatus !== "past_due";
-
-            return {
-                accountId: args.accountId,
-                readyToReceivePayments,
-                onboardingComplete,
-                requirementsStatus,
-                transfersStatus,
-                isMock: false,
-            };
-        } catch (error: any) {
-            console.error("[Connect V2] getAccountStatus error:", error);
-            throw new Error(
-                `No se pudo leer el estado de la cuenta: ${error.message}`,
-            );
-        }
-    },
-});
-
-// ---------------------------------------------------------------------------
-// ensureConnectAccount — convenience wrapper used by dashboards.
-// If the user already has a Connect account id, returns it; otherwise
-// creates a brand new V2 account on the fly.
-// ---------------------------------------------------------------------------
-export const ensureConnectAccount = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        userId: v.id("users"),
-        displayName: v.string(),
-        contactEmail: v.string(),
-        country: v.optional(v.string()),
-    },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{ accountId: string; created: boolean }> => {
-        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
-
-        const existing: string | null = await ctx.runQuery(
-            internal.connect.internalGetConnectAccountId,
-            { userId: args.userId },
-        );
-
-        if (existing) {
-            return { accountId: existing, created: false };
-        }
-
-        const result: { accountId: string; isMock: boolean } = await ctx.runAction(
-            internal.connect.internalCreateConnectAccountAction as any,
-            {
-                userId: args.userId,
-                displayName: args.displayName,
-                contactEmail: args.contactEmail,
-                country: args.country,
-            },
-        );
-        return { accountId: result.accountId, created: true };
-    },
-});
-
-// Internal version (no actor check — caller is responsible) so the public
-// ensureConnectAccount action can chain into account creation without
-// re-validating the actor twice.
-export const internalCreateConnectAccountAction = internalAction({
-    args: {
-        userId: v.id("users"),
-        displayName: v.string(),
-        contactEmail: v.string(),
-        country: v.optional(v.string()),
-    },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{ accountId: string; isMock: boolean }> => {
-        assertStripeConfigured();
-
-        const account = await (stripe as any).v2.core.accounts.create({
-            display_name: args.displayName,
-            contact_email: args.contactEmail,
-            identity: { country: (args.country ?? "us").toLowerCase() },
-            dashboard: "express",
-            defaults: {
-                responsibilities: {
-                    fees_collector: "application",
-                    // Stripe exige "application" para esta config de cuenta.
-                    losses_collector: "application",
-                },
-            },
-            configuration: {
-                recipient: {
-                    capabilities: {
-                        stripe_balance: {
-                            stripe_transfers: { requested: true },
-                        },
-                    },
-                },
-            },
-        });
-
-        await ctx.runMutation(internal.connect.internalSaveConnectAccount, {
-            userId: args.userId,
-            stripeConnectAccountId: account.id,
-        });
-
-        return { accountId: account.id, isMock: false };
-    },
-});
-
-// ---------------------------------------------------------------------------
-// internalApplyV2AccountUpdate — webhook handler for V2 account thin events.
-// Called from `convex/http.ts` /stripe-webhook when a v2.core.account[*]
-// event arrives. Re-fetches the account, derives onboarding flags, and
-// records an audit log entry.
-// ---------------------------------------------------------------------------
-export const internalApplyV2AccountUpdate = internalAction({
-    args: { accountId: v.string() },
-    handler: async (ctx, args): Promise<void> => {
-        try {
-            const account = await (stripe as any).v2.core.accounts.retrieve(
-                args.accountId,
-                { include: ["configuration.recipient", "requirements"] },
-            );
-
-            const transfersStatus =
-                account?.configuration?.recipient?.capabilities?.stripe_balance
-                    ?.stripe_transfers?.status ?? null;
-            const requirementsStatus =
-                account?.requirements?.summary?.minimum_deadline?.status ?? null;
-
-            const readyToReceivePayments = transfersStatus === "active";
-            const onboardingComplete =
-                requirementsStatus !== "currently_due" &&
-                requirementsStatus !== "past_due";
-
+            const account = await retrieveAccount(args.mode, current.accountId);
+            const caps = capsFromAccount(account);
             await ctx.runMutation(internal.connect.internalSaveConnectFlags, {
-                stripeConnectAccountId: args.accountId,
-                payoutsEnabled: readyToReceivePayments,
-                onboardingComplete,
+                mode: args.mode,
+                accountId: current.accountId,
+                transfersStatus: caps.transfersStatus,
+                payoutsStatus: caps.payoutsStatus,
+                requirementsStatus: caps.requirementsStatus,
+            });
+            return await ctx.runQuery(internal.connect.internalGetConnectStatus, {
+                userId: targetId,
+                mode: args.mode,
             });
         } catch (error: any) {
-            console.error(
-                `[Connect V2 webhook] applyV2AccountUpdate error for ${args.accountId}:`,
-                error,
-            );
+            console.error(`[Connect ${args.mode}] accounts.retrieve error:`, error);
+            throw new Error(`No se pudo leer el estado de la cuenta: ${stripeErrorMessage(error)}`);
         }
     },
 });
 
-// We don't have an index on stripeConnectAccountId yet. For the current
-// scale (hundreds of sellers) the filter scan stays well within Convex
-// per-mutation limits. For 1k+ sellers, add an index on `users` for
-// `stripeConnectAccountId` and switch this to a withIndex query.
-export const internalSaveConnectFlags = internalMutation({
-    args: {
-        stripeConnectAccountId: v.string(),
-        payoutsEnabled: v.boolean(),
-        onboardingComplete: v.boolean(),
-    },
-    handler: async (ctx, args) => {
-        const user = await ctx.db
-            .query("users")
-            .filter((q) =>
-                q.eq(q.field("stripeConnectAccountId"), args.stripeConnectAccountId),
-            )
-            .first();
-        if (!user) {
-            console.warn(
-                `[Connect V2] No user with stripeConnectAccountId=${args.stripeConnectAccountId}`,
-            );
-            return;
-        }
-        // Audit log keeps an immutable trace of onboarding transitions
-        // without forcing extra columns onto the users table.
-        await ctx.db.insert("audit_logs", {
-            actorUserId: "system:stripe-webhook",
-            targetUserId: String(user._id),
-            action: args.payoutsEnabled
-                ? "STRIPE_CONNECT_PAYOUTS_ENABLED"
-                : "STRIPE_CONNECT_PAYOUTS_DISABLED",
-            timestamp: new Date().toISOString(),
-            metadata: {
-                accountId: args.stripeConnectAccountId,
-                onboardingComplete: args.onboardingComplete,
-            },
-        });
-
-        // Sync back to users table
-        let newStatus: "pending" | "active" | "rejected" = "pending";
-        if (args.payoutsEnabled && args.onboardingComplete) {
-            newStatus = "active";
-        }
-        await ctx.db.patch(user._id, {
-            stripeConnectStatus: newStatus
+/** Webhook V2: vuelve a leer la cuenta y persiste. Los errores propagan (→ 500 → reintento). */
+export const internalApplyV2AccountUpdate = internalAction({
+    args: { mode: stripeModeValidator, accountId: v.string() },
+    handler: async (ctx, args): Promise<void> => {
+        const account = await retrieveAccount(args.mode, args.accountId);
+        const caps = capsFromAccount(account);
+        await ctx.runMutation(internal.connect.internalSaveConnectFlags, {
+            mode: args.mode,
+            accountId: args.accountId,
+            transfersStatus: caps.transfersStatus,
+            payoutsStatus: caps.payoutsStatus,
+            requirementsStatus: caps.requirementsStatus,
         });
     },
 });
 
-// ===========================================================================
-// Sprint 6 — Withdrawals via Stripe Connect payouts
-// ===========================================================================
-//
-// Replaces the legacy ACH form (`WithdrawalScreen`) which only flipped a
-// status flag and never moved money. Sellers + influencers with onboarded
-// Connect accounts get:
-//   - getConnectBalance:      live read of available + pending on the
-//                             connected account (no DB cache).
-//   - updatePayoutSchedule:   switch between daily / weekly / monthly /
-//                             manual auto-payouts.
-//   - requestInstantPayout:   on-demand standard payout from connected
-//                             account balance to their bank.
-//
-// All three are SCA-safe: they hit the connected account balance, not the
-// platform balance, and the connected account is the legal owner of the
-// funds at this point (post-transfer in our model).
-//
-// Rate limiting: a hostile influencer could spam requestInstantPayout, but
-// Stripe rejects payouts that exceed available balance, and our wallet
-// already gates this server-side via assertSelfOrAdminAction. We don't add
-// a second rate limit layer here — Convex caps per-user mutation rate.
+// ---------------------------------------------------------------------------
+// Balance y payouts de la cuenta conectada
 // ---------------------------------------------------------------------------
 
 export const getConnectBalance = action({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        userId: v.id("users"),
-    },
+    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
     handler: async (
         ctx,
         args,
@@ -503,60 +385,72 @@ export const getConnectBalance = action({
         accountId: string | null;
         availableCents: number;
         pendingCents: number;
+        instantAvailableCents: number;
         currency: string;
-        isMock: boolean;
     }> => {
-        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
-
-        const accountId: string | null = await ctx.runQuery(
-            internal.connect.internalGetConnectAccountId,
-            { userId: args.userId },
-        );
-
+        const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const accountId = readStatus(user, args.mode).accountId;
         if (!accountId) {
-            return {
-                accountId: null,
-                availableCents: 0,
-                pendingCents: 0,
-                currency: "usd",
-                isMock: false,
-            };
+            return { accountId: null, availableCents: 0, pendingCents: 0, instantAvailableCents: 0, currency: "usd" };
         }
-
+        assertStripeConfigured(args.mode);
         try {
-            // Stripe-Account header scopes the read to the connected account.
             const balance: any = await withStripeBreadcrumb(
-                { api: "balance.retrieve", accountId },
-                () =>
-                    stripe.balance.retrieve(undefined, {
-                        stripeAccount: accountId,
-                    }),
+                { api: "balance.retrieve", accountId, mode: args.mode },
+                () => getStripe(args.mode).balance.retrieve(undefined, { stripeAccount: accountId }),
             );
-
-            const sumByCurrency = (
-                arr: Array<{ amount: number; currency: string }> | undefined,
-            ) => {
+            const pick = (arr?: Array<{ amount: number; currency: string }>) => {
                 if (!arr || arr.length === 0) return { amount: 0, currency: "usd" };
-                // We assume USD-only per the plan's out-of-scope note.
                 const usd = arr.find((b) => b.currency === "usd") ?? arr[0];
                 return { amount: usd.amount, currency: usd.currency };
             };
-
-            const available = sumByCurrency(balance.available);
-            const pending = sumByCurrency(balance.pending);
-
+            const available = pick(balance.available);
             return {
                 accountId,
                 availableCents: available.amount,
-                pendingCents: pending.amount,
+                pendingCents: pick(balance.pending).amount,
+                instantAvailableCents: pick(balance.instant_available).amount,
                 currency: available.currency,
-                isMock: false,
             };
         } catch (error: any) {
-            console.error("[Connect V2] getConnectBalance error:", error);
-            throw new Error(
-                `No se pudo leer el balance de Stripe Connect: ${error.message}`,
-            );
+            throw new Error(`No se pudo leer el balance de Stripe Connect: ${stripeErrorMessage(error)}`);
+        }
+    },
+});
+
+const payoutIntervalValidator = v.union(
+    v.literal("manual"),
+    v.literal("daily"),
+    v.literal("weekly"),
+    v.literal("monthly"),
+);
+
+export const getPayoutSchedule = action({
+    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{
+        interval: "manual" | "daily" | "weekly" | "monthly" | null;
+        delayDays: number | null;
+        unsupported: boolean;
+    }> => {
+        const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) return { interval: null, delayDays: null, unsupported: false };
+        assertStripeConfigured(args.mode);
+        try {
+            const acct: any = await getStripe(args.mode).accounts.retrieve(accountId);
+            const schedule = acct?.settings?.payouts?.schedule;
+            return {
+                interval: (schedule?.interval as any) ?? null,
+                delayDays: typeof schedule?.delay_days === "number" ? schedule.delay_days : null,
+                unsupported: false,
+            };
+        } catch {
+            // Las cuentas V2 pueden no exponer settings por la API V1: la UI
+            // deriva al dashboard Express.
+            return { interval: null, delayDays: null, unsupported: true };
         }
     },
 });
@@ -564,56 +458,37 @@ export const getConnectBalance = action({
 export const updatePayoutSchedule = action({
     args: {
         sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        userId: v.id("users"),
-        // 'manual' disables auto-payouts (sellers must call requestInstantPayout).
-        interval: v.union(
-            v.literal("manual"),
-            v.literal("daily"),
-            v.literal("weekly"),
-            v.literal("monthly"),
-        ),
+        mode: stripeModeValidator,
+        userId: v.optional(v.string()),
+        interval: payoutIntervalValidator,
+        delayDays: v.optional(v.number()),
     },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{ updated: boolean; isMock: boolean }> => {
-        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
-
-        const accountId: string | null = await ctx.runQuery(
-            internal.connect.internalGetConnectAccountId,
-            { userId: args.userId },
-        );
-        if (!accountId) {
-            throw new Error(
-                "No tienes una cuenta de Stripe Connect. Completa el onboarding primero.",
-            );
-        }
-
+    handler: async (ctx, args): Promise<{ updated: boolean; unsupported: boolean; message?: string }> => {
+        assertStripeConfigured(args.mode);
+        const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) throw new Error("No tenés una cuenta de Stripe Connect. Completá el onboarding primero.");
         try {
-            // Note: payout schedule lives on the V1 Account API even with
-            // V2 accounts — Stripe exposes it under `settings.payouts`.
             await withStripeBreadcrumb(
-                {
-                    api: "accounts.update",
-                    accountId,
-                    payoutSchedule: args.interval,
-                },
+                { api: "accounts.update", accountId, mode: args.mode, interval: args.interval },
                 () =>
-                    stripe.accounts.update(accountId, {
+                    getStripe(args.mode).accounts.update(accountId, {
                         settings: {
                             payouts: {
-                                schedule: { interval: args.interval },
+                                schedule: {
+                                    interval: args.interval,
+                                    ...(args.delayDays !== undefined ? { delay_days: args.delayDays } : {}),
+                                },
                             },
                         },
                     }),
             );
-            return { updated: true, isMock: false };
+            return { updated: true, unsupported: false };
         } catch (error: any) {
-            console.error("[Connect V2] updatePayoutSchedule error:", error);
-            throw new Error(
-                `No se pudo actualizar el calendario de payout: ${error.message}`,
-            );
+            const message = stripeErrorMessage(error);
+            console.error(`[Connect ${args.mode}] accounts.update error:`, error);
+            // Fallback documentado: la cuenta V2 no acepta el update V1 → dashboard Express.
+            return { updated: false, unsupported: true, message };
         }
     },
 });
@@ -621,120 +496,12 @@ export const updatePayoutSchedule = action({
 export const requestInstantPayout = action({
     args: {
         sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        userId: v.id("users"),
-        amountInCents: v.number(),
-        currency: v.optional(v.string()), // 'usd' default
-    },
-    handler: async (
-        ctx,
-        args,
-    ): Promise<{
-        payoutId: string;
-        amountInCents: number;
-        currency: string;
-        status: string;
-        arrivalDate: number | null;
-        isMock: boolean;
-    }> => {
-        await assertSelfOrAdminAction(ctx, (args as any).sessionToken, String(args.userId));
-
-        if (args.amountInCents < 100) {
-            throw new Error("Monto inválido. Mínimo 100 centavos (USD $1).");
-        }
-
-        const accountId: string | null = await ctx.runQuery(
-            internal.connect.internalGetConnectAccountId,
-            { userId: args.userId },
-        );
-        if (!accountId) {
-            throw new Error(
-                "No tienes una cuenta de Stripe Connect. Completa el onboarding primero.",
-            );
-        }
-
-        try {
-            // `stripe.payouts.create` on the connected account uses standard
-            // (free) payout rails by default; pass `method: 'instant'` to
-            // pay the instant-payout fee and arrive within minutes (only
-            // available for eligible debit cards). We default to standard.
-            const payout = await withStripeBreadcrumb(
-                {
-                    api: "payouts.create",
-                    accountId,
-                    amountInCents: args.amountInCents,
-                    currency: args.currency ?? "usd",
-                    triggeredBy: String(args.userId),
-                },
-                () =>
-                    stripe.payouts.create(
-                        {
-                            amount: args.amountInCents,
-                            currency: args.currency ?? "usd",
-                            metadata: {
-                                triggeredBy: String(args.userId),
-                                source: "ramgos-app:requestInstantPayout",
-                            },
-                        },
-                        { stripeAccount: accountId },
-                    ),
-            );
-            return {
-                payoutId: payout.id,
-                amountInCents: payout.amount,
-                currency: payout.currency,
-                status: payout.status,
-                arrivalDate: payout.arrival_date ?? null,
-                isMock: false,
-            };
-        } catch (error: any) {
-            console.error("[Connect V2] requestInstantPayout error:", error);
-            throw new Error(
-                `No se pudo solicitar el payout: ${error.message}`,
-            );
-        }
-    },
-});
-
-export const internalCreateOnboardingLink = internalAction({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        accountId: v.string(),
-    },
-    handler: async (ctx, args): Promise<{ url: string; isMock: boolean }> => {
-        assertStripeConfigured();
-        if (!args.actorId) throw new Error("No autorizado.");
-
-        try {
-            const link = await (stripe as any).v2.core.accountLinks.create({
-                account: args.accountId,
-                use_case: {
-                    type: "account_onboarding",
-                    account_onboarding: {
-                        configurations: ["recipient"],
-                        refresh_url: "ramgos://onboarding/refresh",
-                        return_url: "ramgos://onboarding/complete",
-                    },
-                },
-            });
-            return { url: link.url, isMock: false };
-        } catch (error: any) {
-            console.error("[Connect V2] createOnboardingLink error:", error);
-            throw new Error(
-                `No se pudo generar el link de onboarding: ${error.message}`,
-            );
-        }
-    },
-});
-
-export const internalRequestInstantPayout = internalAction({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        userId: v.id("users"),
+        mode: stripeModeValidator,
+        userId: v.optional(v.string()),
         amountInCents: v.number(),
         currency: v.optional(v.string()),
+        /** Id único por intento (uuid del cliente) → idempotencia en Stripe. */
+        requestId: v.optional(v.string()),
     },
     handler: async (
         ctx,
@@ -744,39 +511,35 @@ export const internalRequestInstantPayout = internalAction({
         amountInCents: number;
         currency: string;
         status: string;
+        method: "instant" | "standard";
         arrivalDate: number | null;
-        isMock: boolean;
     }> => {
-        const accountId: string | null = await ctx.runQuery(
-            internal.connect.internalGetConnectAccountId,
-            { userId: args.userId },
-        );
-        if (!accountId) {
-            throw new Error(
-                "No tienes una cuenta de Stripe Connect. Completa el onboarding primero.",
-            );
-        }
-
+        assertStripeConfigured(args.mode);
+        const { actorId, targetId, user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        if (args.amountInCents < 100) throw new Error("Monto inválido. Mínimo USD $1.");
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) throw new Error("No tenés una cuenta de Stripe Connect. Completá el onboarding primero.");
+        const stripe = getStripe(args.mode);
+        const currency = (args.currency ?? "usd").toLowerCase();
         try {
-            const payout: any = await withStripeBreadcrumb(
-                {
-                    api: "payouts.create",
-                    accountId,
-                    amountInCents: args.amountInCents,
-                    currency: args.currency ?? "usd",
-                    triggeredBy: String(args.userId),
-                },
+            const balance: any = await stripe.balance.retrieve(undefined, { stripeAccount: accountId });
+            const instant =
+                (balance.instant_available ?? []).find((b: any) => b.currency === currency)?.amount ?? 0;
+            const method: "instant" | "standard" = instant >= args.amountInCents ? "instant" : "standard";
+            const payout = await withStripeBreadcrumb(
+                { api: "payouts.create", accountId, mode: args.mode, amountInCents: args.amountInCents, method },
                 () =>
                     stripe.payouts.create(
                         {
                             amount: args.amountInCents,
-                            currency: args.currency ?? "usd",
-                            metadata: {
-                                triggeredBy: String(args.userId),
-                                source: "ramgos-app:requestInstantPayout",
-                            },
+                            currency,
+                            method,
+                            metadata: { triggeredBy: actorId, userId: String(targetId), source: "ramgos-app" },
                         },
-                        { stripeAccount: accountId },
+                        {
+                            stripeAccount: accountId,
+                            ...(args.requestId ? { idempotencyKey: `payout:${targetId}:${args.requestId}` } : {}),
+                        },
                     ),
             );
             return {
@@ -784,14 +547,12 @@ export const internalRequestInstantPayout = internalAction({
                 amountInCents: payout.amount,
                 currency: payout.currency,
                 status: payout.status,
+                method,
                 arrivalDate: payout.arrival_date ?? null,
-                isMock: false,
             };
         } catch (error: any) {
-            console.error("[Connect V2] requestInstantPayout error:", error);
-            throw new Error(
-                `No se pudo solicitar el payout: ${error.message}`,
-            );
+            console.error(`[Connect ${args.mode}] payouts.create error:`, error);
+            throw new Error(`No se pudo solicitar el payout: ${stripeErrorMessage(error)}`);
         }
     },
 });

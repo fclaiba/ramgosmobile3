@@ -625,10 +625,61 @@ export const listAllCampaigns = query({
  * Calculates cart-level influencer attribution based on active campaigns,
  * open promotion flags, and whitelists.
  */
+/**
+ * Atribución de UNA línea del checkout: ¿el `referralCode` corresponde a un
+ * influencer con derecho a comisión sobre este listing/vendedor? Devuelve el
+ * rate resuelto (campaña activa → promoción abierta → whitelist) o null.
+ *
+ * Helper puro sobre `ctx.db` para que `stripe.internalBuildCheckout` lo use
+ * dentro de su propia transacción (sin llamadas anidadas).
+ */
+export async function resolveLineAttribution(
+    ctx: any,
+    line: { listingId: string; sellerId: string; referralCode?: string | null },
+): Promise<{ influencerId: string; rate: number } | null> {
+    if (!line.referralCode || !line.sellerId || !line.listingId) return null;
+
+    // Resuelve handle, alias vanity y código legacy — las tres formas que
+    // puede tomar un `?ref=`.
+    const influencer: any = await findUserByReferralInput(ctx, line.referralCode);
+    if (!influencer || influencer.role !== 'influencer') return null;
+    if (String(influencer._id) === String(line.sellerId)) return null; // no auto-comisión
+
+    // 1. Campaña activa entre influencer y negocio.
+    const campaigns = await ctx.db
+        .query('influencerCampaigns')
+        .withIndex('by_influencer_business', (q: any) =>
+            q.eq('influencerId', influencer._id).eq('businessId', line.sellerId),
+        )
+        .collect();
+    const activeCampaign = campaigns.find((c: any) => c.status === 'active');
+    if (activeCampaign && activeCampaign.commissionRate > 0) {
+        return { influencerId: String(influencer._id), rate: activeCampaign.commissionRate };
+    }
+
+    // 2. Promoción abierta del listing o whitelist.
+    const normId = ctx.db.normalizeId('listings', line.listingId);
+    const listing: any = normId ? await ctx.db.get(normId) : null;
+    if (!listing || !listing.openCommissionRate || listing.openCommissionRate <= 0) return null;
+    if (listing.openPromotion === true) {
+        return { influencerId: String(influencer._id), rate: listing.openCommissionRate };
+    }
+    const whitelistEntry = await ctx.db
+        .query('influencerWhitelists')
+        .withIndex('by_business_and_influencer', (q: any) =>
+            q.eq('businessId', line.sellerId).eq('influencerId', influencer._id),
+        )
+        .first();
+    if (whitelistEntry && whitelistEntry.status === 'active') {
+        return { influencerId: String(influencer._id), rate: listing.openCommissionRate };
+    }
+    return null;
+}
+
 export const internalResolveCartAttribution = internalQuery({
     args: {
         lineItems: v.array(v.object({
-            listingId: v.optional(v.string()), // Added for listing lookup
+            listingId: v.optional(v.string()),
             sellerId: v.optional(v.string()),
             referralCode: v.optional(v.string()),
             amountInCents: v.number(),
@@ -636,95 +687,42 @@ export const internalResolveCartAttribution = internalQuery({
         })),
     },
     handler: async (ctx, args) => {
-        const influencerTotals = new Map<
-            string,
-            { amountInCents: number; maxRate: number; items: number }
-        >();
+        const influencerTotals = new Map<string, { amountInCents: number; maxRate: number; items: number }>();
 
         for (const item of args.lineItems) {
-            if (!item.referralCode || !item.sellerId || !item.listingId) continue;
-            
-            // Resuelve handle, alias vanity y código legacy — las tres formas
-            // que puede tomar un `?ref=`. Antes miraba sólo el índice legacy
-            // `by_referral_code`, así que un enlace compartido desde el botón
-            // de compartir (que emite alias o handle, ver `preferredShareCode`)
-            // no atribuía la venta a nadie.
-            const influencer: any = await findUserByReferralInput(ctx, item.referralCode);
-
-            if (!influencer || influencer.role !== 'influencer') continue;
-
-            // 1. Try Custom Active Campaign first
-            const campaigns = await ctx.db
-                .query('influencerCampaigns')
-                .withIndex('by_influencer_business', (q) =>
-                    q
-                        .eq('influencerId', influencer._id)
-                        .eq('businessId', item.sellerId as string)
-                )
-                .collect();
-            
-            const activeCampaign = campaigns.find((c: any) => c.status === 'active');
-            let resolvedRate = 0;
-
-            if (activeCampaign) {
-                resolvedRate = activeCampaign.commissionRate;
-            } else {
-                // 2. Fallback to Open Promotion or Whitelist logic
-                const normId = ctx.db.normalizeId('listings', item.listingId);
-                const listing: any = normId ? await ctx.db.get(normId) : null;
-                
-                if (listing && listing.openCommissionRate && listing.openCommissionRate > 0) {
-                    if (listing.openPromotion === true) {
-                        // Inscription is free
-                        resolvedRate = listing.openCommissionRate;
-                    } else {
-                        // Requires Whitelist
-                        const whitelistEntry = await ctx.db
-                            .query("influencerWhitelists")
-                            .withIndex("by_business_and_influencer", (q) => 
-                                q.eq("businessId", item.sellerId as string).eq("influencerId", influencer._id)
-                            )
-                            .first();
-                            
-                        if (whitelistEntry && whitelistEntry.status === 'active') {
-                            resolvedRate = listing.openCommissionRate;
-                        }
-                    }
-                }
-            }
-
-            if (resolvedRate > 0) {
-                const itemTotal = item.amountInCents * item.quantity;
-                const current = influencerTotals.get(String(influencer._id));
-                const earned = Math.round(itemTotal * resolvedRate);
-                influencerTotals.set(String(influencer._id), {
-                    amountInCents: (current?.amountInCents || 0) + earned,
-                    maxRate: Math.max(current?.maxRate || 0, resolvedRate),
-                    items: (current?.items || 0) + 1,
-                });
-            }
+            if (!item.listingId || !item.sellerId) continue;
+            const resolved = await resolveLineAttribution(ctx, {
+                listingId: item.listingId,
+                sellerId: item.sellerId,
+                referralCode: item.referralCode,
+            });
+            if (!resolved) continue;
+            const itemTotal = item.amountInCents * item.quantity;
+            const current = influencerTotals.get(resolved.influencerId);
+            const earned = Math.round(itemTotal * resolved.rate);
+            influencerTotals.set(resolved.influencerId, {
+                amountInCents: (current?.amountInCents || 0) + earned,
+                maxRate: Math.max(current?.maxRate || 0, resolved.rate),
+                items: (current?.items || 0) + 1,
+            });
         }
 
         const influencerIds = Array.from(influencerTotals.keys());
-        const totalInfluencerAmount = Array.from(influencerTotals.values()).reduce(
-            (sum, row) => sum + row.amountInCents,
-            0,
-        );
-        const hasMixedInfluencers = influencerIds.length > 1;
+        const breakdown = influencerIds.map((id) => ({
+            influencerId: id,
+            amountInCents: influencerTotals.get(id)?.amountInCents || 0,
+            maxRate: influencerTotals.get(id)?.maxRate || 0,
+            items: influencerTotals.get(id)?.items || 0,
+        }));
 
-        if (hasMixedInfluencers) {
+        if (influencerIds.length > 1) {
             return {
                 influencerId: undefined,
                 influencerAmount: 0,
                 influencerRate: 0,
                 hasMixedInfluencers: true,
                 attributionRejectedReason: "mixed_influencers_in_checkout",
-                influencerBreakdown: influencerIds.map((id) => ({
-                    influencerId: id,
-                    amountInCents: influencerTotals.get(id)?.amountInCents || 0,
-                    maxRate: influencerTotals.get(id)?.maxRate || 0,
-                    items: influencerTotals.get(id)?.items || 0,
-                })),
+                influencerBreakdown: breakdown,
             };
         }
 
@@ -732,20 +730,11 @@ export const internalResolveCartAttribution = internalQuery({
         const winner = winnerId ? influencerTotals.get(winnerId) : undefined;
         return {
             influencerId: winnerId,
-            influencerAmount: winner?.amountInCents || totalInfluencerAmount,
+            influencerAmount: winner?.amountInCents || 0,
             influencerRate: winner?.maxRate || 0,
             hasMixedInfluencers: false,
             attributionRejectedReason: null,
-            influencerBreakdown: winnerId
-                ? [
-                      {
-                          influencerId: winnerId,
-                          amountInCents: winner?.amountInCents || 0,
-                          maxRate: winner?.maxRate || 0,
-                          items: winner?.items || 0,
-                      },
-                  ]
-                : [],
+            influencerBreakdown: breakdown,
         };
     }
 });
