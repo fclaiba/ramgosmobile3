@@ -12,10 +12,12 @@
  *   - `defaults.responsibilities`: fees_collector 'application' y
  *     losses_collector 'application' (Stripe lo exige para
  *     `configuration.recipient` con `stripe_balance.stripe_transfers`).
- *   - `configuration.recipient.capabilities.stripe_balance`:
- *       stripe_transfers → puede RECIBIR transfers de la plataforma (SCT).
- *       payouts          → puede RETIRAR a su banco. (Sin esto el dinero
- *                          entraba a la cuenta pero no podía salir.)
+ *   - `configuration.recipient.capabilities.stripe_balance.stripe_transfers`
+ *     → puede RECIBIR transfers de la plataforma (SCT). Es la ÚNICA
+ *     capability solicitable acá: `payouts` existe en la RESPUESTA pero no
+ *     en los params de create/update, y mandarla hace que Stripe rechace
+ *     todo con "Unknown field" (E-137). El retiro al banco lo administra el
+ *     vendedor desde su dashboard Express. Ver `_connectCaps.ts`.
  *
  * Onboarding: `v2.core.accountLinks.create` con `use_case.account_onboarding`
  * y `return_url`/`refresh_url` que vuelven a la app (`ramgos://connect/...`,
@@ -36,16 +38,9 @@ import { requireActor } from "./authHelpers";
 import { assertStripeConfigured, getStripe, hasStripeKey } from "./stripeClient";
 import { stripeModeValidator } from "./schema";
 import type { StripeMode } from "./_stripeEnv";
+import { capsFromAccount, deriveCanPayout, type ConnectCaps } from "./_connectCaps";
 
 const CONNECT_RETURN_URL_BASE = process.env.STRIPE_CONNECT_RETURN_URL_BASE ?? "ramgos://connect";
-
-type ConnectCaps = {
-    transfersStatus?: string;
-    payoutsStatus?: string;
-    requirementsStatus?: string;
-    onboardingComplete: boolean;
-    updatedAt: string;
-};
 
 export type ConnectStatus = {
     mode: StripeMode;
@@ -78,26 +73,12 @@ const readStatus = (user: Doc<"users"> | null, mode: StripeMode): ConnectStatus 
         status: accountId ? status : "none",
         caps,
         readyToReceivePayments: caps?.transfersStatus === "active",
-        canPayout: caps?.payoutsStatus === "active",
+        canPayout: deriveCanPayout(caps),
     };
 };
 
 const stripeErrorMessage = (error: any): string =>
     String(error?.raw?.message || error?.message || error || "Error de Stripe");
-
-/** Extrae capacidades/requisitos de una cuenta V2 ya recuperada. */
-const capsFromAccount = (account: any): ConnectCaps => {
-    const sb = account?.configuration?.recipient?.capabilities?.stripe_balance;
-    const requirementsStatus: string | undefined =
-        account?.requirements?.summary?.minimum_deadline?.status ?? undefined;
-    return {
-        transfersStatus: sb?.stripe_transfers?.status ?? undefined,
-        payoutsStatus: sb?.payouts?.status ?? undefined,
-        requirementsStatus,
-        onboardingComplete: requirementsStatus !== "currently_due" && requirementsStatus !== "past_due",
-        updatedAt: new Date().toISOString(),
-    };
-};
 
 const retrieveAccount = (mode: StripeMode, accountId: string) =>
     (getStripe(mode) as any).v2.core.accounts.retrieve(accountId, {
@@ -272,8 +253,8 @@ export const ensureConnectAccount = action({
                             recipient: {
                                 capabilities: {
                                     stripe_balance: {
+                                        // Única capability solicitable acá (ver cabecera + _connectCaps.ts).
                                         stripe_transfers: { requested: true },
-                                        payouts: { requested: true },
                                     },
                                 },
                             },

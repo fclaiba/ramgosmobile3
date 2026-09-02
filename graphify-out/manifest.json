@@ -50,7 +50,7 @@
     "semantic_hash": "0f8e010160ffb9c0d1da286b997e1921"
   },
   "App.tsx": {
-    "mtime": 1788382006.8265061,
+    "mtime": 1788384592.3353918,
     "ast_hash": "64d295ff7e07808e46e3b26ac664f907",
     "semantic_hash": ""
   },
@@ -100,7 +100,7 @@
     "semantic_hash": ""
   },
   "convex/_generated/api.d.ts": {
-    "mtime": 1788382142.668525,
+    "mtime": 1788386559.8185413,
     "ast_hash": "f6b9237594d2cc20c11152044d05577c",
     "semantic_hash": ""
   },
@@ -145,12 +145,12 @@
     "semantic_hash": ""
   },
   "convex/bonos.ts": {
-    "mtime": 1788382006.837265,
+    "mtime": 1788384592.34375,
     "ast_hash": "ae3a14e4f135631b0e01c7ec2ddfb90e",
     "semantic_hash": ""
   },
   "convex/campaigns.ts": {
-    "mtime": 1788382006.8391058,
+    "mtime": 1788384592.3451328,
     "ast_hash": "5bc8224967f6d5858275ccfccb7d478f",
     "semantic_hash": ""
   },
@@ -160,12 +160,12 @@
     "semantic_hash": ""
   },
   "convex/connect.ts": {
-    "mtime": 1788382006.84052,
-    "ast_hash": "791fc2e16eeef2699c9e076f99334daa",
+    "mtime": 1788388532.3953173,
+    "ast_hash": "4787c0c90d46fa78a375415e59239dc3",
     "semantic_hash": ""
   },
   "convex/crons.ts": {
-    "mtime": 1788382006.8415208,
+    "mtime": 1788384592.3472517,
     "ast_hash": "5b39dc88fe42970926f8956c352803f7",
     "semantic_hash": ""
   },
@@ -180,7 +180,7 @@
     "semantic_hash": ""
   },
   "convex/disputes.ts": {
-    "mtime": 1788382006.843042,
+    "mtime": 1788384592.3482554,
     "ast_hash": "a34f824a78f57fcc2968540d1e861d69",
     "semantic_hash": ""
   },
@@ -190,7 +190,7 @@
     "semantic_hash": ""
   },
   "convex/events.ts": {
-    "mtime": 1788382006.8440459,
+    "mtime": 1788384592.35032,
     "ast_hash": "bab23c0b5cb4d120198c93b752016d23",
     "semantic_hash": ""
   },
@@ -205,7 +205,7 @@
     "semantic_hash": ""
   },
   "convex/finance.ts": {
-    "mtime": 1788382006.845054,
+    "mtime": 1788384592.351922,
     "ast_hash": "2b2fef86339b05ef99cd9e0fd0385716",
     "semantic_hash": ""
   },
@@ -220,7 +220,7 @@
     "semantic_hash": ""
   },
   "convex/http.ts": {
-    "mtime": 1788382033.619694,
+    "mtime": 1788384592.3529222,
     "ast_hash": "e32212e49b100d24d0f1ced2bcbd0514",
     "semantic_hash": ""
   },
@@ -235,7 +235,7 @@
     "semantic_hash": ""
   },
   "convex/identity.ts": {
-    "mtime": 1788382006.8489952,
+    "mtime": 1788384592.3539226,
     "ast_hash": "a858f7d1c3262f9f69e0596141b878fe",
     "semantic_hash": ""
   },
@@ -265,7 +265,7 @@
     "semantic_hash": "1e5099f5051bbffd3dccd7a4101d4ea2"
   },
   "convex/orders.ts": {
-    "mtime": 1788382006.8499947,
+    "mtime": 1788384592.3561242,
     "ast_hash": "78fd17766a3bd1465ee47e0580838580",
     "semantic_hash": ""
   },
@@ -275,7 +275,7 @@
     "semantic_hash": ""
   },
   "convex/reconciliation.ts": {
-    "mtime": 1788382006.852834,
+    "mtime": 1788384592.3578176,
     "ast_hash": "e8fe9d4525e96aaefcc85fd11cde4bfa",
     "semantic_hash": ""
   },
@@ -285,7 +285,7 @@
     "semantic_hash": ""
   },
   "convex/schema.ts": {
-    "mtime": 1788382006.8548417,
+    "mtime": 1788384592.3591301,
     "ast_hash": "502c6c44faddc04cf0bfedbd9e9da211",
     "semantic_hash": ""
   },
@@ -320,12 +320,12 @@
     "semantic_hash": ""
   },
   "convex/stripe.ts": {
-    "mtime": 1788382300.3418295,
+    "mtime": 1788384592.3603678,
     "ast_hash": "81825ba4eec85c328fdcbc768d4620a6",
     "semantic_hash": ""
   },
   "convex/subscriptions.ts": {
-    "mtime": 1788382006.8589363,
+    "mtime": 1788384592.3626962,
     "ast_hash": "7144c3a4a61dea51de92bf360c867a91",
     "semantic_hash": ""
   },
@@ -340,7 +340,7 @@
     "semantic_hash": ""
   },
   "convex/users.ts": {
-    "mtime": 1788382006.8599389,
+    "mtime": 1788384592.3636963,
     "ast_hash": "589f1e6a365b4b613178334770cca4a7",
     "semantic_hash": ""
   },
@@ -405,8 +405,8 @@
     "semantic_hash": "0074169ae7f73e00780027d9fb78fc29"
   },
   "package.json": {
-    "mtime": 1788241305.3530185,
-    "ast_hash": "8b48a10910a54e55af67f9eb59bbfb33",
+    "mtime": 1788387545.2738223,
+    "ast_hash": "099bdde0d7d91022f3c8a2b9d2f4f0a1",
     "semantic_hash": ""
   },
   "ref_tools/app/api/account-status/[accountId]/route.js": {
@@ -545,7 +545,7 @@
     "semantic_hash": "83e02a75712285ace5edadc1141a88b1"
   },
   "scripts/check-readiness.js": {
-    "mtime": 1788382006.8664496,
+    "mtime": 1788384592.4269214,
     "ast_hash": "0f1f283e8c2f6d01b94202ab8621d2cf",
     "semantic_hash": ""
   },
@@ -925,7 +925,7 @@
     "semantic_hash": ""
   },
   "src/components/marketplace/EscrowSheet.tsx": {
-    "mtime": 1788382006.8674486,
+    "mtime": 1788384592.4282131,
     "ast_hash": "5f23366f22ac2075926edf3829a674b7",
     "semantic_hash": ""
   },
@@ -1135,7 +1135,7 @@
     "semantic_hash": ""
   },
   "src/contexts/EscrowContext.tsx": {
-    "mtime": 1788382006.8700042,
+    "mtime": 1788384592.429443,
     "ast_hash": "27ee63592185ba6addc23ab031134c17",
     "semantic_hash": ""
   },
@@ -1240,7 +1240,7 @@
     "semantic_hash": ""
   },
   "src/payments/PaymentProvider.tsx": {
-    "mtime": 1788382006.8759274,
+    "mtime": 1788384592.4343908,
     "ast_hash": "0422a8b5aaf712fc4339f63c2dff9289",
     "semantic_hash": ""
   },
@@ -1255,12 +1255,12 @@
     "semantic_hash": ""
   },
   "src/payments/components/PaymentForm.tsx": {
-    "mtime": 1788382006.8773108,
+    "mtime": 1788384592.4355338,
     "ast_hash": "a76baa88f04bfc421864042398c5869a",
     "semantic_hash": ""
   },
   "src/payments/components/PaymentForm.web.tsx": {
-    "mtime": 1788382006.878336,
+    "mtime": 1788384592.4365366,
     "ast_hash": "9ea2c396439b52624a6a34061301552b",
     "semantic_hash": ""
   },
@@ -1300,7 +1300,7 @@
     "semantic_hash": ""
   },
   "src/screens/BusinessDashboardScreen.tsx": {
-    "mtime": 1788382006.8830605,
+    "mtime": 1788384592.4385314,
     "ast_hash": "d81003fa427d4fd66e12a05a9bcffafc",
     "semantic_hash": ""
   },
@@ -1350,7 +1350,7 @@
     "semantic_hash": ""
   },
   "src/screens/HistoryScreen.tsx": {
-    "mtime": 1788382006.8857515,
+    "mtime": 1788384592.4402978,
     "ast_hash": "374bb8fa287023ffc60ab91953c679dc",
     "semantic_hash": ""
   },
@@ -1360,7 +1360,7 @@
     "semantic_hash": ""
   },
   "src/screens/InfluencerDashboardScreen.tsx": {
-    "mtime": 1788382006.886754,
+    "mtime": 1788384592.4414225,
     "ast_hash": "d6dc0572fe38382b14b2271a3fa7b281",
     "semantic_hash": ""
   },
@@ -1490,7 +1490,7 @@
     "semantic_hash": ""
   },
   "src/screens/WithdrawalScreen.tsx": {
-    "mtime": 1788382006.8877661,
+    "mtime": 1788384592.44249,
     "ast_hash": "55909468593b8f317e3f97e203200308",
     "semantic_hash": ""
   },
@@ -1540,7 +1540,7 @@
     "semantic_hash": ""
   },
   "src/screens/marketplace/OrderDetailScreen.tsx": {
-    "mtime": 1788382006.8918433,
+    "mtime": 1788384592.4444609,
     "ast_hash": "2d9f8aef36e521451ec0a25b0a1f5588",
     "semantic_hash": ""
   },
@@ -1550,7 +1550,7 @@
     "semantic_hash": ""
   },
   "src/screens/marketplace/QRScannerScreen.tsx": {
-    "mtime": 1788382006.8928573,
+    "mtime": 1788384592.44576,
     "ast_hash": "b72ebf28f497986566ca8046be55c625",
     "semantic_hash": ""
   },
@@ -2125,7 +2125,7 @@
     "semantic_hash": "988833bf34d92eba3d536029cd9e1bc6"
   },
   "src/contexts/PaymentModeContext.tsx": {
-    "mtime": 1788382006.8709693,
+    "mtime": 1788384592.4303682,
     "ast_hash": "d3ed76245100b1b172acd488ed6028f9",
     "semantic_hash": ""
   },
@@ -2505,8 +2505,8 @@
     "semantic_hash": ""
   },
   "docs/PAYMENTS_SETUP.md": {
-    "mtime": 1788382006.8654451,
-    "ast_hash": "8f7ed15e44c5b46a272a86e9574ad8ce",
+    "mtime": 1788388557.4883676,
+    "ast_hash": "da7c0ec7c827a7841fa994f96a1e2820",
     "semantic_hash": ""
   },
   "docs/PENDIENTES_FRONT_BACK.md": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788382436.4733388,
-    "ast_hash": "1370d2477c5fdcbab7716faa7e68692b",
+    "mtime": 1788388691.3152652,
+    "ast_hash": "064874c12c8903cf96a80482fc2d4b02",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -2685,12 +2685,12 @@
     "semantic_hash": ""
   },
   "docs/ARQUITECTURA_ESCROW.md": {
-    "mtime": 1788382006.8619416,
+    "mtime": 1788384592.3652375,
     "ast_hash": "a80afe815458e1f415c1963d0f969c85",
     "semantic_hash": ""
   },
   "docs/ARQUITECTURA_SOCIAL_COMMERCE.md": {
-    "mtime": 1788382006.8631012,
+    "mtime": 1788384592.366824,
     "ast_hash": "42adbc09fb285fe853006e929b89665e",
     "semantic_hash": ""
   },
@@ -2820,7 +2820,7 @@
     "semantic_hash": ""
   },
   "src/payments/components/PaymentModeToggle.tsx": {
-    "mtime": 1788382006.8805177,
+    "mtime": 1788384592.4375436,
     "ast_hash": "7b24d929dbd1aaefe5f108eb2f304458",
     "semantic_hash": ""
   },
@@ -3475,7 +3475,7 @@
     "semantic_hash": ""
   },
   "PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788382006.828671,
+    "mtime": 1788384592.3374472,
     "ast_hash": "e9ae0aeb61d9ac1a5c160677f999874e",
     "semantic_hash": ""
   },
@@ -3490,7 +3490,7 @@
     "semantic_hash": ""
   },
   "convex/__tests__/escrowStates.test.ts": {
-    "mtime": 1788382006.8296719,
+    "mtime": 1788384592.3385034,
     "ast_hash": "8c84a751a92de313d6fa19c481b17d07",
     "semantic_hash": ""
   },
@@ -3535,12 +3535,12 @@
     "semantic_hash": ""
   },
   "convex/__tests__/split.test.ts": {
-    "mtime": 1788382006.8309476,
+    "mtime": 1788384592.3385034,
     "ast_hash": "c2a4990165f552ceaf16a21e127fe2de",
     "semantic_hash": ""
   },
   "convex/__tests__/stripeEnv.test.ts": {
-    "mtime": 1788382006.831948,
+    "mtime": 1788384592.339578,
     "ast_hash": "ddef042b021b88f05d4a0d227c31dd18",
     "semantic_hash": ""
   },
@@ -3575,12 +3575,12 @@
     "semantic_hash": ""
   },
   "convex/_split.ts": {
-    "mtime": 1788382006.8352542,
+    "mtime": 1788384592.3415806,
     "ast_hash": "781057b1e7af18ee05a7464a228d45fb",
     "semantic_hash": ""
   },
   "convex/_stripeEnv.ts": {
-    "mtime": 1788382006.836262,
+    "mtime": 1788384592.3427463,
     "ast_hash": "a5d784e13d450a0fe46a87131be9434b",
     "semantic_hash": ""
   },
@@ -3605,12 +3605,12 @@
     "semantic_hash": ""
   },
   "convex/migrations/reconciliationCursorScopeSplit.ts": {
-    "mtime": 1788382062.0525823,
-    "ast_hash": "c1993c15bcbeb0ca5a616aba952134f1",
+    "mtime": 1788384592.3549225,
+    "ast_hash": "0c21a1e4848ea06c7223573f014bac1c",
     "semantic_hash": ""
   },
   "convex/orders/_escrowStates.ts": {
-    "mtime": 1788382006.851818,
+    "mtime": 1788384592.3571274,
     "ast_hash": "56e5548f33ae5539cf307f49993a19e2",
     "semantic_hash": ""
   },
@@ -3660,7 +3660,7 @@
     "semantic_hash": ""
   },
   "convex/stripeClient.ts": {
-    "mtime": 1788382006.857934,
+    "mtime": 1788384592.36137,
     "ast_hash": "8c0a0ea0b5ddd854c33b10a639d4ea04",
     "semantic_hash": ""
   },
@@ -3785,7 +3785,7 @@
     "semantic_hash": ""
   },
   "src/hooks/useConnectOnboarding.ts": {
-    "mtime": 1788382006.871944,
+    "mtime": 1788384592.4303682,
     "ast_hash": "fbc511ac17d8e5a9d9d64559ae3c3760",
     "semantic_hash": ""
   },
@@ -3820,12 +3820,12 @@
     "semantic_hash": ""
   },
   "src/navigation/__tests__/getStateFromPath.test.ts": {
-    "mtime": 1788382006.8724532,
+    "mtime": 1788384592.4318242,
     "ast_hash": "bc445be8871927893bb0f8549607df9f",
     "semantic_hash": ""
   },
   "src/navigation/getStateFromPath.ts": {
-    "mtime": 1788382006.874926,
+    "mtime": 1788384592.4333599,
     "ast_hash": "253ae324cf2627b0cc0396ec782d11c5",
     "semantic_hash": ""
   },
@@ -3840,7 +3840,7 @@
     "semantic_hash": ""
   },
   "src/screens/ConnectReturnScreen.tsx": {
-    "mtime": 1788382006.8830605,
+    "mtime": 1788384592.4393387,
     "ast_hash": "307c9c0ce732c46de1698786695551be",
     "semantic_hash": ""
   },
@@ -3850,7 +3850,7 @@
     "semantic_hash": ""
   },
   "src/screens/admin/AdminOrderDetailsScreen.tsx": {
-    "mtime": 1788382006.8888505,
+    "mtime": 1788384592.4434526,
     "ast_hash": "2838dc50fbf2ce7fbd7cf47a2e56b68e",
     "semantic_hash": ""
   },
@@ -3937,6 +3937,16 @@
   "docs/DEEPLINKS.md": {
     "mtime": 1787599019.638908,
     "ast_hash": "963a6f18932671b045bb1ef815c9e0c7",
+    "semantic_hash": ""
+  },
+  "convex/__tests__/connectCaps.test.ts": {
+    "mtime": 1788388549.9489694,
+    "ast_hash": "b2ad28fdf33431b6e2525a5631df56c8",
+    "semantic_hash": ""
+  },
+  "convex/_connectCaps.ts": {
+    "mtime": 1788388499.7175055,
+    "ast_hash": "5f8d4a1c66062e6f7057dd21b1cbd316",
     "semantic_hash": ""
   }
 }
