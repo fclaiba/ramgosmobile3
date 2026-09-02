@@ -100,7 +100,7 @@ Para potenciar la presencialidad y la vida nocturna o social, la red integra un 
 ## 8. Arquitectura de Software
 * **Frontend:** React Native (Expo). Uso de `@shopify/flash-list` para el feed continuo de alto rendimiento y `expo-video` para el streaming y pre-caching agresivo de multimedia.
 * **Backend:** Convex. Estructura Serverless NoSQL, ideal para manejar alta concurrencia de lecturas en el feed (WebSockets) y transacciones seguras (Mutations).
-* **Infraestructura de Pagos (Monetización Real):** **Stripe Connect es la única pasarela.** Transacciones reales y Split Payments automáticos entre negocio, influencer y plataforma. *(MercadoPago figuraba antes en este documento; existía sólo como un proveedor simulado del lado del cliente y fue eliminado del código — ver `src/services/fintech/paymentProviders.ts`.)*
+* **Infraestructura de Pagos (Monetización Real):** **Stripe Connect es la única pasarela.** Transacciones reales y Split Payments automáticos entre negocio, influencer y plataforma. *(MercadoPago figuraba antes en este documento; existía sólo como un proveedor simulado del lado del cliente y fue eliminado del código, junto con el simulador `paymentProviders.ts`. Setup y flujo real en `docs/PAYMENTS_SETUP.md`.)*
 * **Motor de Gamificación (Economía Interna):** Paralelo al sistema de pagos, la app cuenta con un **Sistema de Puntos**. Las interacciones (likes, matchings, compras) generan puntos individuales que pueden canjearse por descuentos. **Importante: Los puntos son intransferibles y no suplen al dinero real para el pago de comisiones.**
 
 ## 9. Módulos, Componentes y Funciones

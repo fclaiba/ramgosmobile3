@@ -156,15 +156,32 @@ if (convexEnv === null) {
   console.warn(`   Motivo: ${convexEnvError}`);
 }
 
-console.log('\n--- 2. Stripe ---');
-checkConvexVar('STRIPE_SECRET_KEY');
-checkConvexVar('STRIPE_WEBHOOK_SECRET');
-// El código lee `EXPO_PUBLIC_STRIPE_KEY_TEST` / `_LIVE` con fallback a
-// `EXPO_PUBLIC_STRIPE_KEY` (ver `src/contexts/PaymentModeContext.tsx`). La
-// versión anterior de este script chequeaba `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY`,
-// un nombre que no lee ningún archivo del repo: daba un ✅ que no significaba nada.
+console.log('\n--- 2. Stripe (bi-modal: test y/o live) ---');
+// Backend (Convex): al menos un modo con secret key + secret de webhook.
+//   live → STRIPE_SECRET_KEY (sk_live_) + STRIPE_WEBHOOK_SECRET (+ STRIPE_WEBHOOK_SECRET_THIN)
+//   test → STRIPE_SECRET_KEY_TEST (sk_test_) + STRIPE_WEBHOOK_SECRET_TEST (+ _THIN_TEST)
+// Ver convex/_stripeEnv.ts (resolveStripeEnv) y docs/PAYMENTS_SETUP.md.
+const hasLive = convexEnv ? /^STRIPE_SECRET_KEY=/m.test(convexEnv) : false;
+const hasTest = convexEnv ? /^STRIPE_SECRET_KEY_TEST=/m.test(convexEnv) : false;
+if (convexEnv && !hasLive && !hasTest) {
+  console.error('❌ [ERROR] Falta STRIPE_SECRET_KEY (live) o STRIPE_SECRET_KEY_TEST (test) en Convex.');
+  issues++;
+}
+if (hasLive) {
+  checkConvexVar('STRIPE_WEBHOOK_SECRET');
+  checkConvexVar('STRIPE_WEBHOOK_SECRET_THIN');
+}
+if (hasTest) {
+  checkConvexVar('STRIPE_WEBHOOK_SECRET_TEST');
+  checkConvexVar('STRIPE_WEBHOOK_SECRET_THIN_TEST');
+}
+if (convexEnv && /^ALLOW_STRIPE_MOCK=true/m.test(convexEnv)) {
+  console.warn('⚠️ [ADVERTENCIA] ALLOW_STRIPE_MOCK=true: el modo test puede simular pagos. Debe ser false en producción.');
+}
+// Cliente: una clave publicable por modo (o EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+// asignada por prefijo pk_test_/pk_live_). Ver src/contexts/PaymentModeContext.tsx.
 checkClientVarAny(
-  ['EXPO_PUBLIC_STRIPE_KEY_TEST', 'EXPO_PUBLIC_STRIPE_KEY_LIVE', 'EXPO_PUBLIC_STRIPE_KEY'],
+  ['EXPO_PUBLIC_STRIPE_KEY_TEST', 'EXPO_PUBLIC_STRIPE_KEY_LIVE', 'EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'EXPO_PUBLIC_STRIPE_KEY'],
   'Clave publicable de Stripe',
 );
 

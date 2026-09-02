@@ -41,3 +41,20 @@ El sistema de Escrow de Ramgos es **adaptativo**, mutando sus reglas de liberaci
 Si hay un quiebre en cualquier tipo de contrato (el inquilino dice que la casa está sucia, el comprador dice que le llegó otra cosa), los fondos quedan congelados en "Dispute Mode". 
 Un moderador de Ramgos (Admin) puede intervenir, solicitar fotos por el chat asociado, y usar la función de `adminForceReleaseEscrow` o `adminRefundEscrow` para liquidar o devolver el pago.
 
+
+
+## 4. Implementación (2026-09-02, Stripe Connect SCT)
+
+Estados de escrow (`convex/orders/_escrowStates.ts`):
+
+| Estado | Significado |
+| --- | --- |
+| `held` | Plata retenida en la cuenta plataforma. |
+| `release_pending` | Transfer al vendedor en curso (o falló: `escrowReleaseError`). |
+| `released` | Transferida al vendedor (`stripeTransferId`). El influencer cobra a los 10 días. |
+| `refund_pending` | Reembolso en curso (o falló: `escrowRefundError`). |
+| `refunded` | Devuelta al comprador (total). Parciales vuelven al estado previo. |
+| `disputed` | Disputa interna (moderador de Ramgos). |
+| `frozen` | Chargeback en Stripe: nadie puede mover la plata hasta que cierre. |
+
+Ventanas de auto-liberación: productos 10 días, bonos 1 día, alquileres 10 días (`marketplace-auto-release`); eventos +24h de la fecha (`events-auto-release`); servicios 7 días entregados (`services-auto-release`). Todo confluye en `internal.stripe.internalReleaseOrderEscrow`. Detalle operativo en `docs/PAYMENTS_SETUP.md`.
