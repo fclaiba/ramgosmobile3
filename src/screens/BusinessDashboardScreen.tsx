@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useConnectOnboarding } from "../hooks/useConnectOnboarding";
 import {
   View,
   Text,
@@ -107,28 +108,17 @@ function BusinessDashboardScreen({
   const { openCart, items: cartItems } = useCart();
   const { isDesktop } = useResponsive();
 
-  // Stripe Connect V2 — onboarding to receive marketplace payouts.
-  // Flow:
-  //   1) ensureConnectAccount — creates a V2 account if user has none, else returns existing id.
-  //   2) createOnboardingLink — returns a Stripe-hosted KYC URL we open in browser.
-  //   3) On return, poll getAccountStatus to refresh the banner state.
-  const _api = api as any;
-  const ensureConnectAccountAction = useAction(
-    _api.connect?.ensureConnectAccount as any,
-  );
-  const createOnboardingLinkAction = useAction(
-    _api.connect?.createOnboardingLink as any,
-  );
-  const getAccountStatusAction = useAction(
-    _api.connect?.getAccountStatus as any,
-  );
-  const [connectLoading, setConnectLoading] = useState(false);
-  const [connectStatus, setConnectStatus] = useState<{
-    readyToReceivePayments: boolean;
-    onboardingComplete: boolean;
-  } | null>(null);
-  const stripeConnectAccountId: string | undefined = (user as any)
-    ?.stripeConnectAccountId;
+  // Stripe Connect — único camino: hook compartido (estado reactivo por modo,
+  // onboarding hosted con retorno a la app). Ver src/hooks/useConnectOnboarding.ts.
+  const connect = useConnectOnboarding({ displayName: businessInfo?.name });
+  const connectLoading = connect.loading;
+  const stripeConnectAccountId: string | undefined = connect.accountId ?? undefined;
+  const connectStatus = connect.status
+    ? {
+        readyToReceivePayments: connect.status.readyToReceivePayments,
+        onboardingComplete: !!connect.status.caps?.onboardingComplete,
+      }
+    : null;
 
   // ─── Influencer campaigns (server-backed) ──────────────────────────
   // List the campaigns where this business is the counterparty plus
@@ -334,70 +324,9 @@ function BusinessDashboardScreen({
     }
   };
 
-  // Refresh status whenever we have an account id (cheap; reads live from Stripe).
-  useEffect(() => {
-    let cancelled = false;
-    if (!stripeConnectAccountId) {
-      setConnectStatus(null);
-      return;
-    }
-    (async () => {
-      try {
-        const status = await getAccountStatusAction({
-          accountId: stripeConnectAccountId,
-          sessionToken,
-        });
-        if (!cancelled && status) {
-          setConnectStatus({
-            readyToReceivePayments: !!(status as any).readyToReceivePayments,
-            onboardingComplete: !!(status as any).onboardingComplete,
-          });
-        }
-      } catch (err) {
-        console.warn("[Connect V2] status fetch failed", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [stripeConnectAccountId, getAccountStatusAction, user?.id]);
-
   const handleStripeConnectOnboarding = async () => {
-    // Convex tira "ArgumentValidationError: missing required field userId"
-    // cuando este valor resuelve a `undefined` — el cliente directamente
-    // omite la clave del payload. `user` mezcla formas (`_id` de Convex,
-    // `id` mapeado en AuthContext, y alguna sesión vieja con `uid`); cubrir
-    // las tres en vez de las dos que dejaban pasar el caso roto.
-    const businessUserId =
-      (user as any)?._id || (user as any)?.id || (user as any)?.uid;
-    if (!user || !businessUserId) {
-      show("Inicia sesión primero", "error");
-      return;
-    }
-    setConnectLoading(true);
-    try {
-      // Step 1: ensure account exists (idempotent — creates only if missing).
-      const ensured = await ensureConnectAccountAction({
-        userId: businessUserId,
-        sessionToken,
-        displayName: businessInfo?.name || user.name || "Ramgos seller",
-        contactEmail: user.email,
-      });
-      const accountId = (ensured as any)?.accountId;
-      if (!accountId) throw new Error("No se obtuvo accountId de Stripe.");
-
-      // Step 2: open Stripe-hosted onboarding URL.
-      const link = await createOnboardingLinkAction({
-        accountId,
-        sessionToken,
-      });
-      const url = (link as any)?.url;
-      if (url) await Linking.openURL(url);
-    } catch (e: any) {
-      show(e.message || "Error al iniciar onboarding de Stripe", "error");
-    } finally {
-      setConnectLoading(false);
-    }
+    const ok = await connect.start();
+    if (!ok && connect.error) show(connect.error, "error");
   };
 
   useEffect(() => {

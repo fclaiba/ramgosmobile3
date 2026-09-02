@@ -28,8 +28,7 @@ export default function QRScannerScreen() {
     const [torchOn, setTorchOn] = useState(false);
 
     // Mutation to confirm receipt and release escrow
-    const _api = api as any;
-    const confirmReceiptMutation = useMutation(_api.orders?.confirmReceipt as any);
+    const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
 
     // Handle scan event
     const handleBarCodeScanned = async ({ data }: any) => {
@@ -63,7 +62,7 @@ export default function QRScannerScreen() {
 
             setLoading(false);
             setResult('success');
-            setResultMessage('Entrega confirmada. El pago ha sido liberado al vendedor.');
+            setResultMessage('Entrega confirmada. El pago se está liberando al vendedor.');
         } catch (e: any) {
             setLoading(false);
             setResult('error');

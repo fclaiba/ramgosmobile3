@@ -1,10 +1,17 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useAction } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from './AuthContext';
-import { usePaymentMode } from './PaymentModeContext';
 
-export type EscrowState = 'held' | 'release_scheduled' | 'released' | 'disputed' | 'refunded';
+export type EscrowState =
+    | 'held'
+    | 'release_scheduled'
+    | 'release_pending'
+    | 'released'
+    | 'refund_pending'
+    | 'disputed'
+    | 'frozen'
+    | 'refunded';
 export type EscrowPhase = 'status' | 'dispute_init' | 'chat';
 
 export interface EscrowOrderItem {
@@ -73,7 +80,16 @@ const EscrowContext = createContext<EscrowContextValue>({
 
 function normalizeEscrowState(raw?: string): EscrowState {
     const s = String(raw || 'held').toLowerCase();
-    if (s === 'release_scheduled' || s === 'released' || s === 'disputed' || s === 'refunded' || s === 'held') {
+    if (
+        s === 'release_scheduled' ||
+        s === 'release_pending' ||
+        s === 'released' ||
+        s === 'refund_pending' ||
+        s === 'disputed' ||
+        s === 'frozen' ||
+        s === 'refunded' ||
+        s === 'held'
+    ) {
         return s;
     }
     if (s === 'dispute') return 'disputed';
@@ -139,7 +155,6 @@ export function toEscrowOrder(raw: any): EscrowOrder | null {
 
 export function EscrowProvider({ children }: { children: React.ReactNode }) {
     const { user, sessionToken } = useAuth();
-    const { isTest } = usePaymentMode();
 
     const [isOpen, setIsOpen] = useState(false);
     const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
@@ -163,7 +178,6 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
 
     const confirmReceiptMutation = useMutation(api.orders.confirmReceipt);
     const openDisputeMutation = useMutation(api.orders.openDispute);
-    const releaseEscrowMutation = useAction(api.stripe.releaseEscrowFunds);
 
     const resolveRawOrder = useCallback(
         (orderOrId?: any) => {
@@ -205,10 +219,9 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
         await openDisputeMutation({ orderId: orderId as any, reason, sessionToken, userId: user.id });
     };
 
-    const releaseEscrow = async (orderId: string) => {
-        if (!user?.id) throw new Error('Sesión no válida');
-        await releaseEscrowMutation({ orderId: orderId as any, sessionToken, userId: user.id });
-    };
+    // "Liberar" desde el comprador ES confirmar la recepción: el backend
+    // hace el transfer y deja la orden en `released` (o `held` con error).
+    const releaseEscrow = confirmReceipt;
 
     const openEscrow = (orderOrId?: any, r?: 'buyer' | 'seller', options?: OpenEscrowOptions) => {
         const raw = resolveRawOrder(orderOrId) ?? (typeof orderOrId === 'object' ? orderOrId : null);
@@ -244,7 +257,8 @@ export function EscrowProvider({ children }: { children: React.ReactNode }) {
         releaseEscrow,
         confirmReceipt,
         openDispute,
-        isEscrowEnabled: isTest,
+        // El escrow es el modelo de pago, en test y en live por igual.
+        isEscrowEnabled: true,
         isOpen,
         openEscrow,
         closeEscrow,

@@ -84,6 +84,33 @@ const ESCROW_STATE_META: Record<EscrowState, StateMeta> = {
         gradientDark: ['rgba(5, 150, 105, 0.25)', 'rgba(17, 24, 39, 0.0)'],
         step: 4,
     },
+    release_pending: {
+        label: 'Liberando fondos al vendedor',
+        shortLabel: 'Liberando',
+        tone: 'info',
+        Icon: CalendarClock,
+        gradientLight: ['#DBEAFE', '#EFF6FF'],
+        gradientDark: ['rgba(37, 99, 235, 0.25)', 'rgba(17, 24, 39, 0.0)'],
+        step: 2,
+    },
+    refund_pending: {
+        label: 'Reembolso en proceso',
+        shortLabel: 'Reembolsando',
+        tone: 'info',
+        Icon: RefreshCcw,
+        gradientLight: ['#DBEAFE', '#EFF6FF'],
+        gradientDark: ['rgba(37, 99, 235, 0.25)', 'rgba(17, 24, 39, 0.0)'],
+        step: 3,
+    },
+    frozen: {
+        label: 'Fondos congelados (disputa en Stripe)',
+        shortLabel: 'Congelado',
+        tone: 'danger',
+        Icon: Lock,
+        gradientLight: ['#FEE2E2', '#FEF2F2'],
+        gradientDark: ['rgba(220, 38, 38, 0.25)', 'rgba(17, 24, 39, 0.0)'],
+        step: 3,
+    },
     disputed: {
         label: 'En disputa',
         shortLabel: 'Disputa',
@@ -298,6 +325,9 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
         order.paymentStatus === 'paid' &&
         order.escrow.state !== 'released' &&
         order.escrow.state !== 'refunded' &&
+        order.escrow.state !== 'refund_pending' &&
+        order.escrow.state !== 'release_pending' &&
+        order.escrow.state !== 'frozen' &&
         order.escrow.state !== 'disputed' &&
         order.status !== 'disputed';
     const hasActiveDispute =
@@ -313,7 +343,7 @@ export function EscrowSheet(props: EscrowSheetProps = {}) {
                 userId: user.id,
             });
             if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            show('Recepción confirmada. Fondos liberados.', 'success');
+            show('Recepción confirmada. Estamos liberando los fondos al vendedor.', 'success');
         } catch (e: any) {
             show(e.message || 'Error al confirmar', 'error');
         }
