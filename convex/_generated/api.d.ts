@@ -58,6 +58,7 @@ import type * as mediaUrl from "../mediaUrl.js";
 import type * as migrateUsernames from "../migrateUsernames.js";
 import type * as migrations_loopsTierBackfill from "../migrations/loopsTierBackfill.js";
 import type * as migrations_pointsUnification from "../migrations/pointsUnification.js";
+import type * as migrations_reconciliationCursorScopeSplit from "../migrations/reconciliationCursorScopeSplit.js";
 import type * as migrations_userDirectory from "../migrations/userDirectory.js";
 import type * as notifications from "../notifications.js";
 import type * as oauthGoogle from "../oauthGoogle.js";
@@ -164,6 +165,7 @@ declare const fullApi: ApiFromModules<{
   migrateUsernames: typeof migrateUsernames;
   "migrations/loopsTierBackfill": typeof migrations_loopsTierBackfill;
   "migrations/pointsUnification": typeof migrations_pointsUnification;
+  "migrations/reconciliationCursorScopeSplit": typeof migrations_reconciliationCursorScopeSplit;
   "migrations/userDirectory": typeof migrations_userDirectory;
   notifications: typeof notifications;
   oauthGoogle: typeof oauthGoogle;

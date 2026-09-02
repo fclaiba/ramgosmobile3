@@ -1105,30 +1105,36 @@ export const internalReleaseOrderEscrow = internalAction({
             trigger: args.trigger,
         });
         if (begin.alreadyReleased) return { released: true, alreadyReleased: true };
+        // `begin` viaja a través de ctx.runMutation (function reference), y el
+        // convex/tsconfig.json (strict: false) del CLI de Convex no narrowea el
+        // discriminated union tras el early-return de arriba como sí lo hace
+        // tsc con el tsconfig.json del proyecto. Cast explícito, seguro porque
+        // ya descartamos la rama `alreadyReleased: true` en la línea anterior.
+        const release = begin as Extract<ReleaseBegin, { alreadyReleased: false }>;
 
         try {
             let transferId: string;
-            if (begin.isMock) {
+            if (release.isMock) {
                 assertMockAllowed();
                 transferId = mockTransferId(String(args.orderId), "seller");
             } else {
-                const stripe = getStripe(begin.mode);
+                const stripe = getStripe(release.mode);
                 const transfer = await withStripeBreadcrumb(
-                    { api: "transfers.create", orderId: String(args.orderId), mode: begin.mode, trigger: args.trigger },
+                    { api: "transfers.create", orderId: String(args.orderId), mode: release.mode, trigger: args.trigger },
                     () =>
                         stripe.transfers.create(
                             {
-                                amount: begin.sellerNetCents,
+                                amount: release.sellerNetCents,
                                 currency: "usd",
-                                destination: begin.destination,
-                                transfer_group: begin.transferGroup,
-                                ...(begin.chargeId && !args.skipSourceTransaction
-                                    ? { source_transaction: begin.chargeId }
+                                destination: release.destination,
+                                transfer_group: release.transferGroup,
+                                ...(release.chargeId && !args.skipSourceTransaction
+                                    ? { source_transaction: release.chargeId }
                                     : {}),
                                 metadata: {
                                     orderId: String(args.orderId),
                                     kind: "seller",
-                                    mode: begin.mode,
+                                    mode: release.mode,
                                     trigger: args.trigger,
                                 },
                             },
@@ -1139,7 +1145,7 @@ export const internalReleaseOrderEscrow = internalAction({
             }
             await ctx.runMutation(internal.stripe.internalCompleteEscrowRelease, {
                 orderId: args.orderId,
-                payoutId: begin.payoutId,
+                payoutId: release.payoutId,
                 transferId,
                 actorUserId: args.actorUserId,
             });
@@ -1149,7 +1155,7 @@ export const internalReleaseOrderEscrow = internalAction({
             console.error(`[Stripe Escrow] Falló la liberación de ${args.orderId}: ${reason}`);
             await ctx.runMutation(internal.stripe.internalFlagEscrowReleaseFailed, {
                 orderId: args.orderId,
-                payoutId: begin.payoutId,
+                payoutId: release.payoutId,
                 reason,
             });
             throw new Error(`No se pudo liberar el pago: ${reason}`);

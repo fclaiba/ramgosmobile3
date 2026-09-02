@@ -248,10 +248,22 @@ async function handleSnapshotEvent(ctx: any, mode: StripeMode, event: Stripe.Eve
         case "refund.updated":
         case "refund.failed":
         case "payout.paid":
-        case "payout.failed":
-        case "account.updated": {
+        case "payout.failed": {
             // Informativos: quedan registrados en paymentEvents para auditoría.
             console.log(`[Webhook ${mode}] ${event.type} registrado.`);
+            break;
+        }
+
+        // El estado real de Connect fluye por el webhook thin V2
+        // (v2.core.account[...].updated -> internal.connect.internalApplyV2AccountUpdate).
+        // Si Stripe llega a mandar este evento V1 igual, no lo persistimos -- pero
+        // no debe pasar inadvertido: alertamos para poder investigar por qué llegó.
+        case "account.updated": {
+            console.warn(
+                `[Webhook ${mode}] account.updated (V1) recibido para cuenta ${
+                    (event.data.object as { id?: string })?.id ?? "desconocida"
+                } -- no persiste nada, el estado real se maneja por el webhook thin V2. Investigar por qué Stripe mandó V1.`,
+            );
             break;
         }
 
