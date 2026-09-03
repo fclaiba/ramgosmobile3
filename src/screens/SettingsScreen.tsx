@@ -12,6 +12,7 @@ import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { Radius, colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
+import { canUseTestMode } from '../../convex/_paymentModeAccess';
 
 
 export default function SettingsScreen({ navigation }: any) {
@@ -69,7 +70,7 @@ export default function SettingsScreen({ navigation }: any) {
     const { logout, deleteMyAccount, user } = useAuth();
     // El switch de modo test/live no es para cualquier usuario logueado:
     // reservado a admin y a cuentas `isTest`.
-    const canChangePaymentMode = user?.role === 'admin' || (user as any)?.isTest === true;
+    const canChangePaymentMode = canUseTestMode(user as any);
     const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 

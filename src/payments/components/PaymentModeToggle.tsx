@@ -5,6 +5,7 @@ import { usePaymentMode, type PaymentMode } from '../../contexts/PaymentModeCont
 import { useAuth } from '../../contexts/AuthContext';
 import { glassTokens } from '../../utils/glass';
 import { Radius, Type, colors, glassShadow } from '../../theme/tokens';
+import { canUseTestMode } from '../../../convex/_paymentModeAccess';
 
 type Props = {
     isDark?: boolean;
@@ -22,7 +23,7 @@ type Props = {
 export function PaymentModeToggle({ isDark = false }: Props) {
     const { mode, setMode, isLive, availableModes, mockAllowed } = usePaymentMode();
     const { user } = useAuth();
-    const canChangeMode = user?.role === 'admin' || (user as any)?.isTest === true;
+    const canChangeMode = canUseTestMode(user as any);
     const glass = glassTokens(isDark);
     const c = colors(isDark);
 

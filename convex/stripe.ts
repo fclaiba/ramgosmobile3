@@ -34,7 +34,8 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { requireActor } from "./authHelpers";
+import { getActorOrNull, requireActor } from "./authHelpers";
+import { canUseTestMode, publicStripeModes, TEST_MODE_DENIED_MESSAGE } from "./_paymentModeAccess";
 import { decrementStock, hasEnoughStock, outOfStockMessage, shortfallFor } from "./_inventory";
 import { can, denialMessage } from "./_roles";
 import { buildAuditRecord } from "./_audit";
@@ -116,12 +117,24 @@ const stripeErrorMessage = (error: any): string =>
 // ===========================================================================
 // Config pública (el cliente decide qué modos mostrar en el toggle)
 // ===========================================================================
+/**
+ * Qué modos de Stripe se le ofrecen a QUIEN pregunta.
+ *
+ * `sessionToken` es **opcional a propósito**: los clientes ya publicados la
+ * llaman con `{}`, y volverlo obligatorio los dejaría inutilizables por error
+ * de validación de argumentos. La forma de la respuesta tampoco cambia, que es
+ * lo único que esos clientes leen.
+ */
 export const getPublicConfig = query({
-    args: {},
-    handler: async (): Promise<{ modes: { test: boolean; live: boolean }; mockAllowed: boolean }> => {
+    args: { sessionToken: v.optional(v.string()) },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{ modes: { test: boolean; live: boolean }; mockAllowed: boolean }> => {
         const env = stripeEnv();
+        const actor = await getActorOrNull(ctx, args.sessionToken);
         return {
-            modes: { test: !!env.keys.test, live: !!env.keys.live },
+            modes: publicStripeModes(env.keys, actor),
             mockAllowed: env.mockAllowed,
         };
     },
@@ -337,12 +350,8 @@ export const createPaymentIntent = action({
          * stock, otorga puntos y deja al vendedor con un cobro pendiente que
          * nadie va a poder pagar. Sólo admin/developer o cuentas de prueba.
          */
-        if (mode === "test") {
-            const canUseTestMode =
-                actor.role === "admin" || actor.role === "developer" || actor.isTest === true;
-            if (!canUseTestMode) {
-                throw new Error("El modo de prueba está restringido a cuentas de test y administradores.");
-            }
+        if (mode === "test" && !canUseTestMode(actor)) {
+            throw new Error(TEST_MODE_DENIED_MESSAGE);
         }
 
         const useMock = !!args.simulate;

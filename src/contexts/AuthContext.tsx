@@ -486,9 +486,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // FASE 3: publicar el sessionToken para consumidores fuera del árbol de
     // AuthProvider (CartContext envuelve a AuthProvider en App.tsx).
     useEffect(() => {
-        sessionTokenStore.set(
-            state.status === 'authenticated' ? state.session?.sessionToken : undefined,
-        );
+        if (state.status === 'authenticated') {
+            sessionTokenStore.set(state.session?.sessionToken);
+        } else if (state.status !== 'loading') {
+            sessionTokenStore.set(undefined);
+        }
+        /**
+         * Durante `loading` NO se publica `undefined`: eso significa "todavía no
+         * sé", no "no hay sesión". Publicarlo hacía oscilar a los consumidores en
+         * cada remontaje del árbol — y `App.tsx` remonta por `key` cuando cambia
+         * la clave de Stripe, así que un admin entraba en bucle:
+         * token → modo test → cambia la clave → remonta → loading publica
+         * undefined → modo live → cambia la clave → remonta → …
+         */
     }, [state.status, state.session?.sessionToken]);
 
     const signUpWithEmail = async (payload: SignUpInput) => {

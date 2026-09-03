@@ -46,3 +46,24 @@ describe('resolveEffectiveMode', () => {
         }
     });
 });
+
+/**
+ * Contrato entre el servidor y la app YA PUBLICADA.
+ *
+ * El servidor le reporta `{test:false, live:true}` a los compradores comunes
+ * (ver `convex/_paymentModeAccess.ts`), y de que esta función devuelva `live`
+ * ante eso depende que la app instalada cobre de verdad, sin release. Si
+ * alguien "simplifica" esta función y hace que la preferencia guardada gane,
+ * rompe el cobro en producción sin que ningún otro test se entere.
+ */
+describe('contrato con la app publicada', () => {
+    it('si el servidor sólo ofrece live, una preferencia guardada de "test" NO gana', () => {
+        expect(resolveEffectiveMode('test', ['live'])).toBe('live');
+    });
+
+    it('el comprador común nunca termina en test aunque su dispositivo lo tenga guardado', () => {
+        for (const stored of ['test', 'none', null] as const) {
+            expect(resolveEffectiveMode(stored, ['live'])).toBe('live');
+        }
+    });
+});

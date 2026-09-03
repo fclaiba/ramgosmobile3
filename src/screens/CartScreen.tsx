@@ -16,6 +16,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useActionGate } from '../utils/useActionGate';
 import { glassShadow, Radius, colors } from '../theme/tokens';
 import { useTranslation } from 'react-i18next';
+import { canUseTestMode } from '../../convex/_paymentModeAccess';
 
 
 function CartScreen({ navigation }: any) {
@@ -29,7 +30,7 @@ function CartScreen({ navigation }: any) {
     const { user } = useAuth();
     // Reservado a admin / cuentas isTest — el checkout no es lugar para que
     // un comprador cualquiera cambie el modo de cobro.
-    const canChangePaymentMode = user?.role === 'admin' || (user as any)?.isTest === true;
+    const canChangePaymentMode = canUseTestMode(user as any);
     const { t } = useTranslation();
     const { gateCheckout } = useActionGate();
 

@@ -14,6 +14,7 @@ import type * as _connectReturnUrl from "../_connectReturnUrl.js";
 import type * as _fees from "../_fees.js";
 import type * as _inventory from "../_inventory.js";
 import type * as _kyc from "../_kyc.js";
+import type * as _paymentModeAccess from "../_paymentModeAccess.js";
 import type * as _phone from "../_phone.js";
 import type * as _reconciliationRules from "../_reconciliationRules.js";
 import type * as _roles from "../_roles.js";
@@ -124,6 +125,7 @@ declare const fullApi: ApiFromModules<{
   _fees: typeof _fees;
   _inventory: typeof _inventory;
   _kyc: typeof _kyc;
+  _paymentModeAccess: typeof _paymentModeAccess;
   _phone: typeof _phone;
   _reconciliationRules: typeof _reconciliationRules;
   _roles: typeof _roles;

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { sessionTokenStore } from '../services/auth/sessionTokenStore';
 import { modeFromPublishableKey } from '../../convex/_stripeEnv';
 import { resolveEffectiveMode, type StoredMode } from '../payments/resolvePaymentMode';
 
@@ -82,7 +83,25 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
     // `null` = sin leer todavía · `'none'` = leído, sin preferencia guardada.
     const [storedMode, setStoredMode] = useState<StoredMode>(null);
     const publishableKeys = useMemo(resolvePublishableKeys, []);
-    const publicConfig = useQuery(api.stripe.getPublicConfig, {});
+    /**
+     * El servidor decide qué modos ofrecernos según quién es el actor: `test`
+     * sólo para admin/developer/cuentas de prueba. Por eso hay que mandarle el
+     * token — sin él responde "sólo live", que es justo lo que corresponde a un
+     * comprador común.
+     *
+     * `PaymentModeProvider` está por ENCIMA de `AuthProvider` en el árbol, así
+     * que no puede usar `useAuth()`. El puente es `sessionTokenStore`, el mismo
+     * que ya usa `CartContext` por el mismo motivo (E-017).
+     */
+    const sessionToken = useSyncExternalStore(
+        sessionTokenStore.subscribe,
+        sessionTokenStore.get,
+        sessionTokenStore.get,
+    );
+    const publicConfig = useQuery(
+        api.stripe.getPublicConfig,
+        sessionToken ? { sessionToken } : {},
+    );
 
     // `null` = todavía no sabemos qué eligió este dispositivo. NO se cae a
     // 'test': el modo por defecto lo decide `mode` según lo que haya
