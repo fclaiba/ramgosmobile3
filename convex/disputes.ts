@@ -313,15 +313,23 @@ export const internalApplyDisputeResolution = internalMutation({
 
         /**
          * Sólo se deja la orden lista para que el camino de Stripe haga el
-         * movimiento real: a favor del comprador → `refund_pending` (y
-         * `internalRefundOrder` reembolsa); a favor del vendedor → vuelve a
-         * `held` y `internalReleaseOrderEscrow` transfiere. Antes se marcaba
-         * `refunded`/`released` sin mover un peso.
+         * movimiento real: a favor del comprador reembolsa `internalRefundOrder`;
+         * a favor del vendedor vuelve a `held` y transfiere
+         * `internalReleaseOrderEscrow`. Antes se marcaba `refunded`/`released`
+         * sin mover un peso.
+         *
+         * A favor del comprador NO se pre-setea `refund_pending`: esa transición
+         * la hace `internalBeginOrderRefund`, que es quien sabe si se puede.
+         * Pre-setearla dejaba la orden en el único estado del que `isRefundable`
+         * no deja salir (`refund_pending` sin error), y como el reembolso
+         * arrancaba fuera del `try`, el fallo no marcaba `escrowRefundError`:
+         * el comprador ganaba la disputa, nunca cobraba, y la orden quedaba
+         * trabada para siempre. Es el mismo defecto que E-141 #1, del lado del
+         * refund.
          */
         const order = await ctx.db.get(args.orderId);
         if (args.resolveInFavorOf === 'buyer') {
             await ctx.db.patch(args.orderId, {
-                escrowState: 'refund_pending',
                 escrowPrevState: order?.escrowState ?? 'disputed',
                 escrowRefundError: undefined,
                 updatedAt: now,

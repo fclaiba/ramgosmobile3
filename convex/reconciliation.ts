@@ -211,75 +211,243 @@ async function reconcileMode(
         let lastSeenId: string | undefined = startingAfter;
 
         try {
-            // Stripe API is paginated; we walk forward in batches of 100.
-            const list = await stripe.balanceTransactions.list({
-                limit: Math.min(max, 100),
+            // Paginación REAL. Antes era un solo `list()` de 100 y `has_more`
+            // se ignoraba, pese a que el comentario decía lo contrario: con más
+            // de ~100 movimientos por día el cursor se atrasaba de forma
+            // acumulativa e irreversible, y las discrepancias viejas no se
+            // miraban nunca. Ojo que cada cobro genera 2 movimientos (cargo +
+            // comisión) y cada liberación 1 más, así que el techo real era de
+            // ~30-40 órdenes diarias.
+            const pager = stripe.balanceTransactions.list({
+                limit: 100,
                 starting_after: startingAfter,
             });
 
-            for (const bt of list.data) {
+            for await (const bt of pager) {
+                if (scanned >= max) break;
                 scanned++;
-                lastSeenId = bt.id;
-                const sourceId =
-                    typeof bt.source === "string" ? bt.source : bt.source?.id;
+                /**
+                 * `lastSeenId` se confirma en el `finally`, NO al entrar: sólo se
+                 * marca como visto lo que se procesó entero. Antes se asignaba al
+                 * principio, así que un movimiento que fallaba a mitad quedaba
+                 * registrado como revisado sin haberlo sido, y no se volvía a mirar.
+                 * El `finally` es necesario porque el cuerpo tiene varios `continue`
+                 * (que son salidas exitosas y sí deben avanzar el cursor).
+                 */
+                let btFailed = false;
+                try {
+                        const sourceId =
+                            typeof bt.source === "string" ? bt.source : bt.source?.id;
 
-                // Cheap idempotency check — skip if we've flagged this BT id
-                // already (we don't re-process flagged rows).
-                const already: boolean = await ctx.runQuery(
-                    internal.reconciliation.internalFlagAlreadyExists,
-                    { stripeBalanceTransactionId: bt.id },
-                );
-                if (already) continue;
-
-                // Charge / refund → look up the underlying PaymentIntent.
-                if (
-                    (bt.type === "charge" ||
-                        bt.type === "refund" ||
-                        bt.type === "payment") &&
-                    sourceId
-                ) {
-                    // For a Charge, retrieve to grab payment_intent id.
-                    let paymentIntentId: string | null = null;
-                    try {
-                        const charge = await stripe.charges.retrieve(sourceId);
-                        paymentIntentId =
-                            typeof charge.payment_intent === "string"
-                                ? charge.payment_intent
-                                : (charge.payment_intent as any)?.id ?? null;
-                    } catch {
-                        // For refunds, source is a refund id, not a charge.
-                        try {
-                            const refund = await stripe.refunds.retrieve(sourceId);
-                            const chargeId =
-                                typeof refund.charge === "string"
-                                    ? refund.charge
-                                    : (refund.charge as any)?.id;
-                            if (chargeId) {
-                                const ch = await stripe.charges.retrieve(chargeId);
-                                paymentIntentId =
-                                    typeof ch.payment_intent === "string"
-                                        ? ch.payment_intent
-                                        : (ch.payment_intent as any)?.id ?? null;
-                            }
-                        } catch {
-                            // Best-effort — fall through to "no match" flag below.
-                        }
-                    }
-
-                    if (paymentIntentId) {
-                        const local: any = await ctx.runQuery(
-                            internal.reconciliation.internalFindPaymentByPI,
-                            { stripePaymentIntentId: paymentIntentId },
+                        // Cheap idempotency check — skip if we've flagged this BT id
+                        // already (we don't re-process flagged rows).
+                        const already: boolean = await ctx.runQuery(
+                            internal.reconciliation.internalFlagAlreadyExists,
+                            { stripeBalanceTransactionId: bt.id },
                         );
-                        if (!local) {
+                        if (already) continue;
+
+                        // Charge / refund → look up the underlying PaymentIntent.
+                        if (
+                            (bt.type === "charge" ||
+                                bt.type === "refund" ||
+                                bt.type === "payment") &&
+                            sourceId
+                        ) {
+                            // For a Charge, retrieve to grab payment_intent id.
+                            let paymentIntentId: string | null = null;
+                            try {
+                                const charge = await stripe.charges.retrieve(sourceId);
+                                paymentIntentId =
+                                    typeof charge.payment_intent === "string"
+                                        ? charge.payment_intent
+                                        : (charge.payment_intent as any)?.id ?? null;
+                            } catch {
+                                // For refunds, source is a refund id, not a charge.
+                                try {
+                                    const refund = await stripe.refunds.retrieve(sourceId);
+                                    const chargeId =
+                                        typeof refund.charge === "string"
+                                            ? refund.charge
+                                            : (refund.charge as any)?.id;
+                                    if (chargeId) {
+                                        const ch = await stripe.charges.retrieve(chargeId);
+                                        paymentIntentId =
+                                            typeof ch.payment_intent === "string"
+                                                ? ch.payment_intent
+                                                : (ch.payment_intent as any)?.id ?? null;
+                                    }
+                                } catch {
+                                    // Best-effort — fall through to "no match" flag below.
+                                }
+                            }
+
+                            if (paymentIntentId) {
+                                const local: any = await ctx.runQuery(
+                                    internal.reconciliation.internalFindPaymentByPI,
+                                    { stripePaymentIntentId: paymentIntentId },
+                                );
+                                if (!local) {
+                                    await ctx.runMutation(
+                                        internal.reconciliation.internalCreateFlag,
+                                        {
+                                            stripeBalanceTransactionId: bt.id,
+                                            mode,
+                                            sourceType: bt.type,
+                                            sourceId,
+                                            reason: "no_local_payment",
+                                            amountInCents: bt.amount,
+                                            currency: bt.currency,
+                                        },
+                                    );
+                                    flagged++;
+                                    continue;
+                                }
+                                /**
+                                 * Cobrado y sin orden. Dos causas distintas, ver
+                                 * `_reconciliationRules.ts`: el pago marcado como
+                                 * cobrado que falló creando órdenes, y el que quedó
+                                 * `pending` porque el webhook nunca llegó (E-140) —
+                                 * este último se colaba entre las tres reglas.
+                                 */
+                                const verdict = classifyOrphanCharge({
+                                    btType: bt.type,
+                                    btCreatedSec: bt.created,
+                                    nowSec: Math.floor(Date.now() / 1000),
+                                    localStatus: local.status,
+                                    hasOrder: !!local.orderId,
+                                    graceSeconds,
+                                });
+
+                                if (verdict.kind !== "ok" && verdict.kind !== "too_soon") {
+                                    // Antes de alarmar, intentar recuperarlo solo: es
+                                    // la misma jugada que reenviar el evento desde el
+                                    // Dashboard, y el handler es idempotente.
+                                    let recovered = false;
+                                    if (shouldAttemptRemediation(verdict)) {
+                                        try {
+                                            await ctx.runAction(
+                                                internal.stripe.internalHandlePaymentIntentSucceeded,
+                                                { mode, paymentIntentId },
+                                            );
+                                            const after: any = await ctx.runQuery(
+                                                internal.reconciliation.internalFindPaymentByPI,
+                                                { stripePaymentIntentId: paymentIntentId },
+                                            );
+                                            recovered = !!after?.orderId;
+                                            if (recovered) {
+                                                remediated++;
+                                                console.log(
+                                                    `[Reconciliación ${mode}] ${paymentIntentId} recuperado: el webhook nunca había llegado.`,
+                                                );
+                                            }
+                                        } catch (err: any) {
+                                            console.error(
+                                                `[Reconciliación ${mode}] Falló recuperar ${paymentIntentId}: ${err?.message ?? err}`,
+                                            );
+                                        }
+                                    }
+
+                                    // Sólo se alarma si el reintento no alcanzó.
+                                    if (!recovered) {
+                                        await ctx.runMutation(
+                                            internal.reconciliation.internalCreateFlag,
+                                            {
+                                                stripeBalanceTransactionId: bt.id,
+                                                mode,
+                                                sourceType: bt.type,
+                                                sourceId,
+                                                relatedPaymentId: String(local._id),
+                                                reason: verdict.kind,
+                                                amountInCents: bt.amount,
+                                                currency: bt.currency,
+                                            },
+                                        );
+                                        flagged++;
+                                    }
+                                }
+
+                                // Amount sanity check — Stripe BT.amount is in cents.
+                                // local.amount is in USD (float). Coerce to cents.
+                                const localCents = local.amountCents ?? Math.round(local.amount * 100);
+                                if (
+                                    bt.type === "charge" &&
+                                    Math.abs(bt.amount - localCents) > 1
+                                ) {
+                                    await ctx.runMutation(
+                                        internal.reconciliation.internalCreateFlag,
+                                        {
+                                            stripeBalanceTransactionId: bt.id,
+                                            mode,
+                                            sourceType: bt.type,
+                                            sourceId,
+                                            relatedPaymentId: String(local._id),
+                                            reason: "amount_mismatch",
+                                            amountInCents: bt.amount,
+                                            currency: bt.currency,
+                                        },
+                                    );
+                                    flagged++;
+                                }
+                            } else {
+                                // No PI we could resolve — flag as orphan.
+                                await ctx.runMutation(
+                                    internal.reconciliation.internalCreateFlag,
+                                    {
+                                        stripeBalanceTransactionId: bt.id,
+                                            mode,
+                                        sourceType: bt.type,
+                                        sourceId,
+                                        reason: "no_payment_intent",
+                                        amountInCents: bt.amount,
+                                        currency: bt.currency,
+                                    },
+                                );
+                                flagged++;
+                            }
+                            continue;
+                        }
+
+                        // Transfer → look up local payout.
+                        if (bt.type === "transfer" && sourceId) {
+                            const local: any = await ctx.runQuery(
+                                internal.reconciliation.internalFindPayoutByTransfer,
+                                { stripeTransferId: sourceId },
+                            );
+                            if (!local) {
+                                await ctx.runMutation(
+                                    internal.reconciliation.internalCreateFlag,
+                                    {
+                                        stripeBalanceTransactionId: bt.id,
+                                            mode,
+                                        sourceType: bt.type,
+                                        sourceId,
+                                        reason: "no_local_payout",
+                                        amountInCents: bt.amount,
+                                        currency: bt.currency,
+                                    },
+                                );
+                                flagged++;
+                            }
+                            continue;
+                        }
+
+                        // Stripe-side adjustments / disputes / fees with no local
+                        // counterpart — flag for visibility but mark as low severity
+                        // (the operator may resolve them as "ignored" once reviewed).
+                        if (
+                            bt.type === "adjustment" ||
+                            bt.type === "stripe_fee" ||
+                            bt.type === "application_fee"
+                        ) {
                             await ctx.runMutation(
                                 internal.reconciliation.internalCreateFlag,
                                 {
                                     stripeBalanceTransactionId: bt.id,
-                                    mode,
+                                            mode,
                                     sourceType: bt.type,
-                                    sourceId,
-                                    reason: "no_local_payment",
+                                    sourceId: sourceId ?? undefined,
+                                    reason: `stripe_${bt.type}`,
                                     amountInCents: bt.amount,
                                     currency: bt.currency,
                                 },
@@ -287,158 +455,16 @@ async function reconcileMode(
                             flagged++;
                             continue;
                         }
-                        /**
-                         * Cobrado y sin orden. Dos causas distintas, ver
-                         * `_reconciliationRules.ts`: el pago marcado como
-                         * cobrado que falló creando órdenes, y el que quedó
-                         * `pending` porque el webhook nunca llegó (E-140) —
-                         * este último se colaba entre las tres reglas.
-                         */
-                        const verdict = classifyOrphanCharge({
-                            btType: bt.type,
-                            btCreatedSec: bt.created,
-                            nowSec: Math.floor(Date.now() / 1000),
-                            localStatus: local.status,
-                            hasOrder: !!local.orderId,
-                            graceSeconds,
-                        });
-
-                        if (verdict.kind !== "ok" && verdict.kind !== "too_soon") {
-                            // Antes de alarmar, intentar recuperarlo solo: es
-                            // la misma jugada que reenviar el evento desde el
-                            // Dashboard, y el handler es idempotente.
-                            let recovered = false;
-                            if (shouldAttemptRemediation(verdict)) {
-                                try {
-                                    await ctx.runAction(
-                                        internal.stripe.internalHandlePaymentIntentSucceeded,
-                                        { mode, paymentIntentId },
-                                    );
-                                    const after: any = await ctx.runQuery(
-                                        internal.reconciliation.internalFindPaymentByPI,
-                                        { stripePaymentIntentId: paymentIntentId },
-                                    );
-                                    recovered = !!after?.orderId;
-                                    if (recovered) {
-                                        remediated++;
-                                        console.log(
-                                            `[Reconciliación ${mode}] ${paymentIntentId} recuperado: el webhook nunca había llegado.`,
-                                        );
-                                    }
-                                } catch (err: any) {
-                                    console.error(
-                                        `[Reconciliación ${mode}] Falló recuperar ${paymentIntentId}: ${err?.message ?? err}`,
-                                    );
-                                }
-                            }
-
-                            // Sólo se alarma si el reintento no alcanzó.
-                            if (!recovered) {
-                                await ctx.runMutation(
-                                    internal.reconciliation.internalCreateFlag,
-                                    {
-                                        stripeBalanceTransactionId: bt.id,
-                                        mode,
-                                        sourceType: bt.type,
-                                        sourceId,
-                                        relatedPaymentId: String(local._id),
-                                        reason: verdict.kind,
-                                        amountInCents: bt.amount,
-                                        currency: bt.currency,
-                                    },
-                                );
-                                flagged++;
-                            }
-                        }
-
-                        // Amount sanity check — Stripe BT.amount is in cents.
-                        // local.amount is in USD (float). Coerce to cents.
-                        const localCents = local.amountCents ?? Math.round(local.amount * 100);
-                        if (
-                            bt.type === "charge" &&
-                            Math.abs(bt.amount - localCents) > 1
-                        ) {
-                            await ctx.runMutation(
-                                internal.reconciliation.internalCreateFlag,
-                                {
-                                    stripeBalanceTransactionId: bt.id,
-                                    mode,
-                                    sourceType: bt.type,
-                                    sourceId,
-                                    relatedPaymentId: String(local._id),
-                                    reason: "amount_mismatch",
-                                    amountInCents: bt.amount,
-                                    currency: bt.currency,
-                                },
-                            );
-                            flagged++;
-                        }
-                    } else {
-                        // No PI we could resolve — flag as orphan.
-                        await ctx.runMutation(
-                            internal.reconciliation.internalCreateFlag,
-                            {
-                                stripeBalanceTransactionId: bt.id,
-                                    mode,
-                                sourceType: bt.type,
-                                sourceId,
-                                reason: "no_payment_intent",
-                                amountInCents: bt.amount,
-                                currency: bt.currency,
-                            },
-                        );
-                        flagged++;
-                    }
-                    continue;
-                }
-
-                // Transfer → look up local payout.
-                if (bt.type === "transfer" && sourceId) {
-                    const local: any = await ctx.runQuery(
-                        internal.reconciliation.internalFindPayoutByTransfer,
-                        { stripeTransferId: sourceId },
+                } catch (error: any) {
+                    console.error(
+                        `[Reconciliación ${mode}] Falló procesando ${bt.id}: ${error?.message ?? error}`,
                     );
-                    if (!local) {
-                        await ctx.runMutation(
-                            internal.reconciliation.internalCreateFlag,
-                            {
-                                stripeBalanceTransactionId: bt.id,
-                                    mode,
-                                sourceType: bt.type,
-                                sourceId,
-                                reason: "no_local_payout",
-                                amountInCents: bt.amount,
-                                currency: bt.currency,
-                            },
-                        );
-                        flagged++;
-                    }
-                    continue;
+                    btFailed = true;
+                } finally {
+                    if (!btFailed) lastSeenId = bt.id;
                 }
-
-                // Stripe-side adjustments / disputes / fees with no local
-                // counterpart — flag for visibility but mark as low severity
-                // (the operator may resolve them as "ignored" once reviewed).
-                if (
-                    bt.type === "adjustment" ||
-                    bt.type === "stripe_fee" ||
-                    bt.type === "application_fee"
-                ) {
-                    await ctx.runMutation(
-                        internal.reconciliation.internalCreateFlag,
-                        {
-                            stripeBalanceTransactionId: bt.id,
-                                    mode,
-                            sourceType: bt.type,
-                            sourceId: sourceId ?? undefined,
-                            reason: `stripe_${bt.type}`,
-                            amountInCents: bt.amount,
-                            currency: bt.currency,
-                        },
-                    );
-                    flagged++;
-                    continue;
-                }
+                // Si uno falla, se corta: el próximo run lo reintenta desde acá.
+                if (btFailed) break;
             }
         } catch (error: any) {
             console.error("[Reconciliation] cron run error:", error);
@@ -450,6 +476,26 @@ async function reconcileMode(
             mode,
             lastBalanceTransactionId: lastSeenId,
         });
+
+        /**
+         * Aviso a admins, UNO por corrida y no uno por flag: una discrepancia
+         * suele venir acompañada de varias, y notificar por cada una llenaría
+         * el teléfono. Antes esto era completamente silencioso — el flag
+         * quedaba en la base y sólo existía si alguien abría la pantalla de
+         * admin por su cuenta, a diferencia de las disputas y los pagos
+         * fallidos, que sí notifican.
+         */
+        if (flagged > 0) {
+            await ctx.scheduler.runAfter(0, internal.notifications.internalNotifyAdmins, {
+                title: `Reconciliación ${mode}: ${flagged} discrepancia(s)`,
+                body:
+                    `Se revisaron ${scanned} movimientos de Stripe y ${flagged} no cuadran` +
+                    (remediated > 0 ? ` (${remediated} se recuperaron solos)` : "") +
+                    `. Revisalos en Admin → Finanzas → Reconciliación.`,
+                category: "payment",
+                data: { mode, flagged, scanned, remediated },
+            });
+        }
 
         console.log(
             `[Reconciliation ${mode}] scanned=${scanned} flagged=${flagged} recuperados=${remediated} cursor=${lastSeenId ?? "—"}`,

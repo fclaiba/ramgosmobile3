@@ -506,6 +506,12 @@ export default defineSchema({
          * haya movido un peso.
          */
         escrowReleaseError: v.optional(v.string()),
+        // Reintento acotado del cron de auto-liberación: una orden que falló
+        // una vez ya no queda excluida para siempre (ver
+        // internalGetOrdersDueForRelease). La causa típica es transitoria —
+        // el vendedor todavía no vinculó su cuenta.
+        escrowReleaseAttempts: v.optional(v.number()),
+        escrowReleaseFailedAtMs: v.optional(v.number()),
         /**
          * Sobreventa detectada al descontar inventario.
          *

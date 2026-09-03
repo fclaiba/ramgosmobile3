@@ -1,5 +1,8 @@
 import {
     AUTO_RELEASE_DAYS,
+    INFLUENCER_PAYOUT_MAX_ATTEMPTS,
+    RELEASE_MAX_ATTEMPTS,
+    retryPayoutAtMs,
     canTransition,
     DAY_MS,
     INFLUENCER_PAYOUT_DELAY_DAYS,
@@ -76,5 +79,72 @@ describe("recuperabilidad tras una liberación fallida", () => {
             expect(isReleasable(st, true)).toBe(false);
             expect(isReleasable(st, false)).toBe(false);
         }
+    });
+});
+
+/**
+ * El espejo del bloque anterior, del lado del REEMBOLSO (E-146 #A1).
+ *
+ * El mismo defecto de E-141 quedó vivo acá: al resolver una disputa a favor
+ * del comprador se pre-seteaba `refund_pending` sin error, y el reembolso
+ * arrancaba fuera del `try`. Resultado: el comprador ganaba la disputa, nunca
+ * cobraba, y la orden quedaba en el único estado del que no se puede salir.
+ */
+describe("recuperabilidad tras un reembolso fallido", () => {
+    it("refund_pending SIN error es el estado trabado del lado del refund", () => {
+        expect(isRefundable("refund_pending", false)).toBe(false);
+    });
+
+    it("refund_pending CON error sí deja reintentar", () => {
+        expect(isRefundable("refund_pending", true)).toBe(true);
+    });
+
+    it("los estados desde los que SÍ se puede reembolsar", () => {
+        for (const st of ["held", "released", "disputed", "frozen", undefined]) {
+            expect(isRefundable(st, false)).toBe(true);
+        }
+    });
+
+    it("una orden ya reembolsada no se reembolsa de nuevo, ni marcándola con error", () => {
+        expect(isRefundable("refunded", false)).toBe(false);
+        expect(isRefundable("refunded", true)).toBe(false);
+    });
+});
+
+/**
+ * Reintento de pagos fallidos (E-146 #A2/#A3).
+ *
+ * Antes, un payout de influencer sin cuenta Connect iba derecho a `failed`
+ * (terminal, el cron sólo levanta `scheduled`) y una orden cuya liberación
+ * falló quedaba excluida del cron para siempre. En los dos casos la causa
+ * típica es transitoria, así que se reintenta — pero con espera creciente,
+ * porque un fallo determinístico si no genera un intento por día eternamente.
+ */
+describe("espera creciente entre reintentos", () => {
+    const t0 = 1_700_000_000_000;
+
+    it("crece al doble: 1, 2, 4 días", () => {
+        expect(retryPayoutAtMs(t0, 1)).toBe(t0 + 1 * DAY_MS);
+        expect(retryPayoutAtMs(t0, 2)).toBe(t0 + 2 * DAY_MS);
+        expect(retryPayoutAtMs(t0, 3)).toBe(t0 + 4 * DAY_MS);
+    });
+
+    it("tiene techo de 7 días — no se va a meses", () => {
+        for (const intentos of [4, 5, 6, 10, 50]) {
+            expect(retryPayoutAtMs(t0, intentos)).toBe(t0 + 7 * DAY_MS);
+        }
+    });
+
+    it("siempre agenda hacia adelante", () => {
+        for (const intentos of [0, 1, 5, 99]) {
+            expect(retryPayoutAtMs(t0, intentos)).toBeGreaterThan(t0);
+        }
+    });
+
+    it("los topes son finitos: lo que falla termina dándose por perdido", () => {
+        expect(INFLUENCER_PAYOUT_MAX_ATTEMPTS).toBeGreaterThan(1);
+        expect(RELEASE_MAX_ATTEMPTS).toBeGreaterThan(1);
+        expect(Number.isFinite(INFLUENCER_PAYOUT_MAX_ATTEMPTS)).toBe(true);
+        expect(Number.isFinite(RELEASE_MAX_ATTEMPTS)).toBe(true);
     });
 });

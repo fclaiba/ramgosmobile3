@@ -36,6 +36,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getActorOrNull, requireActor } from "./authHelpers";
 import { canUseTestMode, publicStripeModes, TEST_MODE_DENIED_MESSAGE } from "./_paymentModeAccess";
+import { classifyPayoutClaim, shouldRetryRelease } from "./_payoutRetry";
 import { decrementStock, hasEnoughStock, outOfStockMessage, shortfallFor } from "./_inventory";
 import { can, denialMessage } from "./_roles";
 import { buildAuditRecord } from "./_audit";
@@ -66,6 +67,9 @@ import {
 } from "./stripeClient";
 import {
     influencerPayoutDueAt,
+    INFLUENCER_PAYOUT_MAX_ATTEMPTS,
+    RELEASE_MAX_ATTEMPTS,
+    retryPayoutAtMs,
     isRefundable,
     isReleasable,
     releaseDueAtFor,
@@ -1006,6 +1010,9 @@ export const internalCompleteEscrowRelease = internalMutation({
             stripeTransferId: args.transferId,
             escrowReleasedAt: nowStr,
             escrowReleaseError: undefined,
+            // Se limpia el rastro de los reintentos: la orden se liberó.
+            escrowReleaseAttempts: undefined,
+            escrowReleaseFailedAtMs: undefined,
             updatedAt: nowStr,
         });
         await ctx.db.patch(args.payoutId, {
@@ -1093,10 +1100,19 @@ export const internalFlagEscrowReleaseFailed = internalMutation({
         const order = await ctx.db.get(args.orderId);
         if (!order) return;
         const now = nowIso();
+        // El contador y la marca de tiempo son lo que permite al cron
+        // reintentar con espera creciente en vez de descartar la orden.
+        const intentos = (order.escrowReleaseAttempts ?? 0) + 1;
+        // Nunca revertir un estado terminal: si la orden ya se liberó o se
+        // reembolsó, un intento fallido posterior no debe devolverla a `held`.
+        const terminal = order.escrowState === "released" || order.escrowState === "refunded";
         await ctx.db.patch(order._id, {
-            escrowState: "held",
-            status: (order.escrowPrevStatus as any) ?? order.status,
+            ...(terminal
+                ? {}
+                : { escrowState: "held", status: (order.escrowPrevStatus as any) ?? order.status }),
             escrowReleaseError: args.reason,
+            escrowReleaseAttempts: intentos,
+            escrowReleaseFailedAtMs: Date.now(),
             updatedAt: now,
         });
         if (args.payoutId) {
@@ -1206,6 +1222,18 @@ export const internalReleaseOrderEscrow = internalAction({
     },
 });
 
+/**
+ * Órdenes que el cron debe liberar.
+ *
+ * Antes se excluía a cualquiera con `escrowReleaseError`, así que una orden que
+ * falló UNA vez quedaba fuera del cron para siempre y sólo salía con
+ * intervención manual — plata del vendedor quieta sin que nadie lo notara. La
+ * causa más común es transitoria (el vendedor todavía no vinculó su cuenta), o
+ * sea justo el caso que conviene reintentar.
+ *
+ * Se reintenta con espera creciente en vez de sacar el filtro sin más: un fallo
+ * determinístico generaría un intento y un aviso por día, para siempre.
+ */
 export const internalGetOrdersDueForRelease = internalQuery({
     args: { now: v.number(), limit: v.optional(v.number()) },
     handler: async (ctx, args): Promise<Id<"orders">[]> => {
@@ -1215,7 +1243,7 @@ export const internalGetOrdersDueForRelease = internalQuery({
                 q.eq("escrowState", "held").lte("releaseDueAt", args.now),
             )
             .take(args.limit ?? 100);
-        return rows.filter((o) => o.releaseDueAt !== undefined && !o.escrowReleaseError).map((o) => o._id);
+        return rows.filter((o) => shouldRetryRelease({ ...o, nowMs: args.now })).map((o) => o._id);
     },
 });
 
@@ -1273,28 +1301,76 @@ export const internalClaimScheduledPayout = internalMutation({
         const orderId = ctx.db.normalizeId("orders", payout.orderId);
         const order = orderId ? await ctx.db.get(orderId) : null;
         const now = nowIso();
-        if (!order || order.escrowState !== "released" || payout.amountInCents <= 0) {
-            await ctx.db.patch(payout._id, { status: "cancelled", error: "orden no liberada al vencer", updatedAt: now });
-            return null;
-        }
-        const mode: StripeMode = payout.mode ?? order.mode ?? "test";
-        const isMock = isMockPaymentIntentId(order.stripePaymentIntentId);
+        const mode: StripeMode = payout.mode ?? order?.mode ?? "test";
+        const isMock = isMockPaymentIntentId(order?.stripePaymentIntentId);
         const influencerUserId = ctx.db.normalizeId("users", payout.sellerId);
         const influencer = influencerUserId ? await ctx.db.get(influencerUserId) : null;
         const destination = isMock ? `mock_acct_${payout.sellerId}` : connectAccountFor(influencer, mode);
-        if (!destination) {
-            await ctx.db.patch(payout._id, {
-                status: "failed",
-                error: `El influencer no tiene cuenta Stripe Connect (modo ${mode}).`,
-                attempts: (payout.attempts ?? 0) + 1,
-                updatedAt: now,
-            });
+
+        // La decisión vive en `_payoutRetry.ts` para poder testearla.
+        const verdict = classifyPayoutClaim({
+            payoutStatus: payout.status,
+            amountInCents: payout.amountInCents,
+            orderEscrowState: order?.escrowState,
+            hasDestination: !!destination,
+            attempts: payout.attempts,
+            nowMs: Date.now(),
+            maxAttempts: INFLUENCER_PAYOUT_MAX_ATTEMPTS,
+            mode,
+        });
+
+        if (verdict.kind === "cancel") {
+            await ctx.db.patch(payout._id, { status: "cancelled", error: verdict.reason, updatedAt: now });
             return null;
         }
+        if (verdict.kind !== "proceed") {
+            /**
+             * Que el influencer todavía no haya vinculado su cuenta NO es un
+             * fallo definitivo: puede vincularla mañana. Antes esto lo mandaba
+             * derecho a `failed`, que es terminal — el cron sólo levanta
+             * `scheduled` y no hay forma de revivirlo, así que la comisión se
+             * perdía en silencio. Ahora se reprograma con espera creciente y
+             * recién se da por perdida al agotar los intentos, avisando.
+             */
+            const agotado = verdict.kind === "give_up";
+            const attempts = verdict.attempts;
+            await ctx.db.patch(payout._id, {
+                status: agotado ? "failed" : "scheduled",
+                error: verdict.reason,
+                attempts,
+                ...(verdict.kind === "reschedule" ? { scheduledAtMs: verdict.nextAtMs } : {}),
+                updatedAt: now,
+            });
+            if (agotado) {
+                await ctx.scheduler.runAfter(0, internal.notifications.internalNotifyAdmins, {
+                    title: "Comisión de influencer sin pagar",
+                    body: `El influencer no vinculó su cuenta tras ${attempts} intentos. Payout ${String(payout._id).slice(-6)} por ${payout.amountInCents}¢ quedó sin pagar.`,
+                    category: "payment",
+                    data: { payoutId: String(payout._id), orderId: payout.orderId },
+                });
+            } else {
+                // Aviso al influencer: es accionable de su lado.
+                await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                    userId: payout.sellerId,
+                    title: "Vinculá tu cuenta para cobrar",
+                    body: "Tenés una comisión lista para acreditarse, pero falta que conectes tu cuenta de pagos.",
+                    category: "payment",
+                    data: { payoutId: String(payout._id) },
+                });
+            }
+            return null;
+        }
+        /**
+         * A esta altura el veredicto es `proceed`, lo que implica orden
+         * liberada y destino presente. TypeScript no puede deducirlo del
+         * clasificador, así que se explicita — y de paso queda como red si
+         * alguien cambia las reglas de `classifyPayoutClaim`.
+         */
+        if (!order || !destination) return null;
         await ctx.db.patch(payout._id, {
             status: "processing",
             destinationAccountId: destination,
-            attempts: (payout.attempts ?? 0) + 1,
+            attempts: verdict.attempts,
             updatedAt: now,
         });
         return {
@@ -1399,6 +1475,8 @@ type RefundBegin = {
     paymentIntentId: string;
     refundCents: number;
     n: number;
+    /** Base de la clave de idempotencia: `refundedCents` antes de este intento. */
+    idemBase: number;
     grossCents: number;
     sellerNetCents: number;
     influencerCents: number;
@@ -1444,6 +1522,19 @@ export const internalBeginOrderRefund = internalMutation({
             paymentIntentId: order.stripePaymentIntentId,
             refundCents,
             n,
+            /**
+             * Clave de idempotencia del reembolso. Va atada a **cuánto se
+             * había reembolsado antes**, no al contador de intentos.
+             *
+             * El contador avanza aunque el intento falle, así que usarlo hacía
+             * que el reintento presentara una clave distinta: Stripe emitía un
+             * SEGUNDO reembolso y una SEGUNDA reversión, cobrándole dos veces
+             * al vendedor. `refundedCents` en cambio sólo cambia cuando el
+             * reembolso se completó, o sea: reintentar la misma operación
+             * repite la clave (Stripe la deduplica), y un reembolso parcial
+             * posterior genera una nueva.
+             */
+            idemBase: order.refundedCents ?? 0,
             grossCents,
             sellerNetCents: order.sellerNetCents ?? order.netAmountCents ?? 0,
             influencerCents: order.influencerCents ?? 0,
@@ -1600,8 +1691,17 @@ export const internalFlagOrderRefundFailed = internalMutation({
     handler: async (ctx, args): Promise<void> => {
         const order = await ctx.db.get(args.orderId);
         if (!order) return;
+        /**
+         * Sólo se revierte el estado si el reembolso estaba EN VUELO
+         * (`refund_pending`). Antes se revertía a ciegas, así que un intento
+         * fallido sobre una orden ya `refunded` la devolvía a `held` — la
+         * des-reembolsaba. Si el fallo ocurrió antes de mover el estado (por
+         * ejemplo, la orden ya estaba en un estado terminal), no hay nada que
+         * restaurar: sólo se deja constancia del intento.
+         */
+        const enVuelo = order.escrowState === "refund_pending";
         await ctx.db.patch(order._id, {
-            escrowState: order.escrowPrevState ?? "held",
+            ...(enVuelo ? { escrowState: order.escrowPrevState ?? "held" } : {}),
             escrowRefundError: args.reason,
             updatedAt: nowIso(),
         });
@@ -1629,17 +1729,36 @@ export const internalRefundOrder = internalAction({
         actorUserId: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<{ refunded: boolean; refundCents: number; refundId?: string }> => {
-        const begin = await ctx.runMutation(internal.stripe.internalBeginOrderRefund, {
-            orderId: args.orderId,
-            amountCents: args.amountCents,
-        });
+        /**
+         * Igual que en `internalReleaseOrderEscrow`: el inicio puede lanzar
+         * (estado no reembolsable, sin PaymentIntent, monto inválido) y ese
+         * throw tiene que dejar la orden RECUPERABLE. Sin este catch, una
+         * orden que entrara en `refund_pending` sin `escrowRefundError`
+         * quedaba trabada — `isRefundable` rechaza ese estado, así que ni el
+         * reintento ni `adminRefundEscrow` podían rescatarla.
+         */
+        let begin: Awaited<ReturnType<typeof ctx.runMutation<typeof internal.stripe.internalBeginOrderRefund>>>;
+        try {
+            begin = await ctx.runMutation(internal.stripe.internalBeginOrderRefund, {
+                orderId: args.orderId,
+                amountCents: args.amountCents,
+            });
+        } catch (error: any) {
+            const reason = stripeErrorMessage(error);
+            console.error(`[Stripe Refund] No se pudo iniciar el reembolso de ${args.orderId}: ${reason}`);
+            await ctx.runMutation(internal.stripe.internalFlagOrderRefundFailed, {
+                orderId: args.orderId,
+                reason,
+            });
+            throw new Error(`No se pudo reembolsar: ${reason}`);
+        }
         try {
             let refundId: string | undefined;
             const pointsOnly = isPointsOnlyPaymentId(begin.paymentIntentId);
             if (!args.externalRefund && !pointsOnly) {
                 if (begin.isMock) {
                     assertMockAllowed();
-                    refundId = mockRefundId(String(args.orderId), begin.n);
+                    refundId = mockRefundId(String(args.orderId), begin.idemBase);
                 } else {
                     const stripe = getStripe(begin.mode);
                     const refund = await withStripeBreadcrumb(
@@ -1652,7 +1771,7 @@ export const internalRefundOrder = internalAction({
                                     reason: "requested_by_customer",
                                     metadata: { orderId: String(args.orderId), n: String(begin.n), source: args.source },
                                 },
-                                { idempotencyKey: `refund:${args.orderId}:${begin.n}` },
+                                { idempotencyKey: `refund:${args.orderId}:${begin.idemBase}` },
                             ),
                     );
                     refundId = refund.id;
@@ -1682,13 +1801,13 @@ export const internalRefundOrder = internalAction({
                 if (!p.transferId || amount <= 0) continue;
                 let reversalId: string;
                 if (begin.isMock || p.transferId.startsWith("mock_")) {
-                    reversalId = mockReversalId(String(args.orderId), p.kind, begin.n);
+                    reversalId = mockReversalId(String(args.orderId), p.kind, begin.idemBase);
                 } else {
                     const stripe = getStripe(begin.mode);
                     const rev = await stripe.transfers.createReversal(
                         p.transferId,
                         { amount, metadata: { orderId: String(args.orderId), kind: p.kind, n: String(begin.n) } },
-                        { idempotencyKey: `reversal:${args.orderId}:${p.kind}:${begin.n}` },
+                        { idempotencyKey: `reversal:${args.orderId}:${p.kind}:${begin.idemBase}` },
                     );
                     reversalId = rev.id;
                 }

@@ -268,9 +268,16 @@ export default function AdminFinanceScreen() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
                         {f.reason} · {f.sourceType}
+                        {/* El modo decide en qué dashboard de Stripe hay que
+                            buscar. Se persistía y no se mostraba, así que el
+                            flag no era investigable. */}
+                        {f.mode ? ` · ${String(f.mode).toUpperCase()}` : ''}
                     </Text>
-                    <Text style={styles.rowMeta} numberOfLines={2}>
+                    <Text style={styles.rowMeta} numberOfLines={3}>
                         {formatCurrency(f.amountInCents, f.currency)} · BT {f.stripeBalanceTransactionId.slice(0, 22)}…
+                        {f.relatedPaymentId ? `\nPago ${String(f.relatedPaymentId).slice(-8)}` : ''}
+                        {f.relatedPayoutId ? `\nPayout ${String(f.relatedPayoutId).slice(-8)}` : ''}
+                        {f.sourceId ? `\nOrigen ${String(f.sourceId).slice(0, 22)}…` : ''}
                     </Text>
                     <View style={styles.flagActions}>
                         <TouchableOpacity

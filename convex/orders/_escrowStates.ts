@@ -104,6 +104,25 @@ export function influencerPayoutDueAt(releasedAtMs: number): number {
     return releasedAtMs + INFLUENCER_PAYOUT_DELAY_DAYS * DAY_MS;
 }
 
+/**
+ * Cuántas veces se reintenta un payout antes de darlo por perdido.
+ *
+ * El caso típico no es un error de Stripe sino un influencer que todavía no
+ * vinculó su cuenta — algo que puede resolver cualquier día. Por eso se
+ * reintenta con espera creciente en vez de fallar de una: antes iba derecho a
+ * `failed`, que es terminal, y la comisión se perdía sin que nadie se enterara.
+ */
+export const INFLUENCER_PAYOUT_MAX_ATTEMPTS = 6;
+
+/** Ídem para la auto-liberación al vendedor: mismo razonamiento. */
+export const RELEASE_MAX_ATTEMPTS = 6;
+
+/** Espera creciente y acotada: 1, 2, 4, 8… días, con techo de 7. */
+export function retryPayoutAtMs(nowMs: number, attempts: number): number {
+    const dias = Math.min(2 ** Math.max(0, attempts - 1), 7);
+    return nowMs + dias * DAY_MS;
+}
+
 /** ¿Se puede iniciar una liberación desde este estado? */
 export function isReleasable(escrowState: string | undefined, hasReleaseError = false): boolean {
     if (escrowState === "held" || escrowState === undefined) return true;
