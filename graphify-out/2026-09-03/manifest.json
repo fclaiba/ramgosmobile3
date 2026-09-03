@@ -2465,18 +2465,18 @@
     "semantic_hash": ""
   },
   "docs/DEV_COMPLETENESS.md": {
-    "mtime": 1780898520.248228,
-    "ast_hash": "2e36a0e3e181daa39c5c8337df6958fc",
+    "mtime": 1788414632.476614,
+    "ast_hash": "4243ecbfb70dfec4a3fa5e86b8ee0481",
     "semantic_hash": ""
   },
   "docs/DIAGNOSTICO_APP_ESTADO_ACTUAL.md": {
-    "mtime": 1783698753.6000688,
-    "ast_hash": "52f69fe972afc636255d9bd80e230ed7",
+    "mtime": 1788414643.3186662,
+    "ast_hash": "9979bc977a62b9fede18afaf6495e110",
     "semantic_hash": ""
   },
   "docs/DOCUMENTACION_ARQUITECTURA.md": {
-    "mtime": 1786395905.4664035,
-    "ast_hash": "a455c33ce11e5d313c8f71f4f3d8bffe",
+    "mtime": 1788414607.587698,
+    "ast_hash": "419e8f02b64439a9eb2d1b07c3dff0cf",
     "semantic_hash": ""
   },
   "docs/FINANCIAL_OPERATIONS_VALIDATION.md": {
@@ -2485,8 +2485,8 @@
     "semantic_hash": ""
   },
   "docs/FIN_DE_TURNO_REPORTE.md": {
-    "mtime": 1783698753.6010854,
-    "ast_hash": "ce6c918530aefa5b9c2bbf8c187c3237",
+    "mtime": 1788414607.587698,
+    "ast_hash": "bfa9439beeeafdcbb584681081abb7a2",
     "semantic_hash": ""
   },
   "docs/IOS_RELEASE_ENABLEMENT.md": {
@@ -2505,8 +2505,8 @@
     "semantic_hash": ""
   },
   "docs/PAYMENTS_SETUP.md": {
-    "mtime": 1788389564.99024,
-    "ast_hash": "1e2f665df2f0297087094d184cfda59f",
+    "mtime": 1788414607.5866978,
+    "ast_hash": "2e40ee2ee45434e2e40a11406cc0cafd",
     "semantic_hash": ""
   },
   "docs/PENDIENTES_FRONT_BACK.md": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788410180.460824,
-    "ast_hash": "a74cb912c2302e7ca5d972d75303079f",
+    "mtime": 1788414731.921504,
+    "ast_hash": "fe6202974ea93a6212a58d1e64e05930",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -2685,13 +2685,13 @@
     "semantic_hash": ""
   },
   "docs/ARQUITECTURA_ESCROW.md": {
-    "mtime": 1788384592.3652375,
-    "ast_hash": "a80afe815458e1f415c1963d0f969c85",
+    "mtime": 1788414632.4791183,
+    "ast_hash": "f599afd5a4bb41f97fcec627b9e8578d",
     "semantic_hash": ""
   },
   "docs/ARQUITECTURA_SOCIAL_COMMERCE.md": {
-    "mtime": 1788384592.366824,
-    "ast_hash": "42adbc09fb285fe853006e929b89665e",
+    "mtime": 1788414632.4776142,
+    "ast_hash": "010ac8979cb3d343250492187a44f9a2",
     "semantic_hash": ""
   },
   "docs/DISE\u00d1O_RED_SOCIAL_COMMERCE.md": {
@@ -3929,11 +3929,6 @@
     "ast_hash": "549660d8454245fd64aec8468f48cc7a",
     "semantic_hash": ""
   },
-  "docs/ARQUITECTURA_STRIPE_CONNECT_SPLIT.md": {
-    "mtime": 1788293347.3660042,
-    "ast_hash": "c9f2c0c34437d962f8848768af436f5a",
-    "semantic_hash": ""
-  },
   "docs/DEEPLINKS.md": {
     "mtime": 1787599019.638908,
     "ast_hash": "963a6f18932671b045bb1ef815c9e0c7",
@@ -3982,6 +3977,16 @@
   "src/payments/resolvePaymentMode.ts": {
     "mtime": 1788404467.5058188,
     "ast_hash": "d6e1609c09db5e3d34ba2072dfe439fd",
+    "semantic_hash": ""
+  },
+  "_archive/ARQUITECTURA_STRIPE_CONNECT_SPLIT_2026-09-01.md": {
+    "mtime": 1788414588.1113808,
+    "ast_hash": "a70b9a885eae2c3c5b0868ad1e000749",
+    "semantic_hash": ""
+  },
+  "docs/PAGOS.md": {
+    "mtime": 1788414570.9671905,
+    "ast_hash": "fd747fc6d5e29038257823f15013f862",
     "semantic_hash": ""
   }
 }

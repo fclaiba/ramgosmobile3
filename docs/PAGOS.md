@@ -10,24 +10,54 @@
 
 ## 1. ¿Puedo pasar a otra cosa?
 
-**El sistema funciona y está probado de punta a punta, pero sólo en modo prueba.**
-Para cobrarle a un cliente real falta **una sola cosa que bloquea**: publicar una
-versión nueva de la app en las tiendas.
+**Sí: desde la web ya se puede cobrar dinero real y repartirlo en comisiones.**
 
-El motivo es concreto: la decisión de cobrar "de verdad" o "en modo prueba" vive
-**dentro de la app**, no en el servidor. Los celulares que ya tienen la app
-instalada tienen el código viejo, que elige modo prueba. Ningún despliegue de
-backend los alcanza.
+El circuito completo está probado y la configuración quedó coherente. Quien entra
+por `ramgos.app` paga en modo **live** — el servidor le ofrece sólo ese modo — y el
+split de comisiones se aplica igual que en las pruebas.
 
 | | Estado |
 |---|---|
-| Código de pagos | ✅ Completo y desplegado en producción |
+| Código de pagos | ✅ Completo y desplegado |
 | Circuito probado contra Stripe | ✅ Cobro, split, escrow, liberación, reembolso, disputa |
-| Webhooks de producción | ✅ Configurados y apuntando al servidor correcto |
-| App publicada con el arreglo | ❌ **Bloqueante** — hay que buildear y publicar |
-| Compra real de validación | ❌ Pendiente |
+| Webhooks live | ✅ Apuntando al deployment donde vive la web (ver §1-bis) |
+| El cliente común cobra en live | ✅ Lo decide el servidor, sin depender de la versión de la app |
+| Compra real de validación | ❌ **Pendiente — hacela vos antes de difundirlo** |
+| Vendedores con cuenta Connect **live** | ❌ Los que se vincularon en prueba tienen que rehacerlo |
+
+**Lo que NO bloquea cobrar**: publicar la app. Se resolvió del lado del servidor
+(E-144): es el servidor el que decide qué modo le corresponde a cada usuario, así
+que hasta una app vieja cobra en live. La publicación sigue siendo deseable para
+que lleguen las mejoras de pantalla, pero ya no frena el dinero.
+
+**Lo que SÍ conviene hacer antes de difundirlo**: una compra real de monto chico
+de punta a punta, y avisarles a los vendedores que revinculen su cuenta.
 
 ---
+
+## 1-bis. Dónde vive todo (leer antes de tocar configuración)
+
+> [!IMPORTANT]
+> **El deployment llamado "dev" ES producción en los hechos.**
+>
+> La web publicada (`ramgos.app`) apunta a `academic-lapwing-311`, no a
+> `deafening-turtle-227`. Ahí están los usuarios, los carritos y las órdenes
+> reales. El deployment llamado "producción" está vacío: nunca pasó un pago
+> por él.
+>
+> Además ese deployment tiene cargada la clave **`sk_live`**, así que **los
+> cobros desde la web son reales**.
+>
+> Consecuencia práctica: **los webhooks live tienen que apuntar a
+> `academic-lapwing-311`**. Si apuntan al otro, Stripe cobra y la orden no se
+> crea nunca, porque el pago se registró en un deployment y el aviso llega a
+> otro. Pasó exactamente eso (E-145) y está corregido.
+>
+> Nunca se hizo un build de producción en EAS: los únicos son `development` y
+> `preview`, ambos apuntando también a `academic-lapwing-311`.
+>
+> Ordenar esto (mover la web a `deafening-turtle-227`) implica migrar todos los
+> datos. Mientras no se haga, **tratá a `academic-lapwing-311` como producción**.
 
 ## 2. Cómo funciona, en una página
 
@@ -145,13 +175,15 @@ atribución se descarta entera. Es una regla deliberada, no un bug.
 
 ## 4. Qué falta para cobrar de verdad
 
-### Bloqueante
+### Antes de difundirlo
 
-**Publicar la app.** `eas build --profile production` y subirla a las tiendas.
-Marca el calendario porque la revisión tarda días. Sin esto, los usuarios que ya
-tienen la app siguen pagando en modo prueba — y eso no es inofensivo: la orden se
-crea igual, se descuenta stock y queda una deuda con el vendedor respaldada por
-plata que nunca entró.
+**Una compra real de monto chico**, de punta a punta, verificando que la orden se
+crea y que el cargo aparece en el panel de Stripe en modo live.
+
+**Que los vendedores revinculen su cuenta.** Los que hicieron el onboarding en
+modo prueba **no tienen cuenta Connect en live**. El cobro no se rompe (la plata
+entra y queda en escrow), pero la transferencia al vendedor falla cuando llegue el
+momento de liberarla. Conviene resolverlo antes de la primera liberación.
 
 ### Antes de abrir a clientes
 

@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "convex/_generated/api.d.ts": {
-    "mtime": 1788410120.779598,
-    "ast_hash": "4d9836d203636f4b2aedeb828adafd08",
+    "mtime": 1788418438.236398,
+    "ast_hash": "dd0aad564390a98ff7c96319a3875cd2",
     "semantic_hash": ""
   },
   "convex/_generated/api.js": {
@@ -320,8 +320,8 @@
     "semantic_hash": ""
   },
   "convex/stripe.ts": {
-    "mtime": 1788404467.459163,
-    "ast_hash": "3f6d1121f558b85af521206e6df50660",
+    "mtime": 1788418270.344965,
+    "ast_hash": "40f24f0aca16a900e76171c8fca6eb7c",
     "semantic_hash": ""
   },
   "convex/subscriptions.ts": {
@@ -1120,8 +1120,8 @@
     "semantic_hash": "2a5afdb1fc1bc89a33d7ad51e5273556"
   },
   "src/contexts/AuthContext.tsx": {
-    "mtime": 1787633347.1218245,
-    "ast_hash": "c5d6372fdeac1702f118cc5b1ff73151",
+    "mtime": 1788418301.7937107,
+    "ast_hash": "20d87e4cd95c752a9503982f0dd1a3a6",
     "semantic_hash": ""
   },
   "src/contexts/BusinessContext.tsx": {
@@ -1310,8 +1310,8 @@
     "semantic_hash": ""
   },
   "src/screens/CartScreen.tsx": {
-    "mtime": 1787650698.7695327,
-    "ast_hash": "0dc7c5313c48d46b66bc4cf7a7ce6b65",
+    "mtime": 1788418318.1184306,
+    "ast_hash": "ea5d015779e23148ec3c2bda4bfbe84b",
     "semantic_hash": ""
   },
   "src/screens/ChangePasswordScreen.tsx": {
@@ -1450,8 +1450,8 @@
     "semantic_hash": ""
   },
   "src/screens/SettingsScreen.tsx": {
-    "mtime": 1787650670.2171416,
-    "ast_hash": "beb586c49cc466196ec6a17eb3c4f05d",
+    "mtime": 1788418318.1184306,
+    "ast_hash": "cd867f2e4a01ff0b8d088def7e175543",
     "semantic_hash": ""
   },
   "src/screens/SocialAuthCompleteScreen.tsx": {
@@ -2125,8 +2125,8 @@
     "semantic_hash": "988833bf34d92eba3d536029cd9e1bc6"
   },
   "src/contexts/PaymentModeContext.tsx": {
-    "mtime": 1788404467.5048163,
-    "ast_hash": "4c642528d8aac9057d54e647ed9a2927",
+    "mtime": 1788418289.3694465,
+    "ast_hash": "0310b1c83ff08bacb897c5bccc03deff",
     "semantic_hash": ""
   },
   "scripts/superscript_audit.py": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788414731.921504,
-    "ast_hash": "fe6202974ea93a6212a58d1e64e05930",
+    "mtime": 1788423140.5036874,
+    "ast_hash": "c7721eb9584b372b59afafc98fab03ad",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -2820,8 +2820,8 @@
     "semantic_hash": ""
   },
   "src/payments/components/PaymentModeToggle.tsx": {
-    "mtime": 1788384592.4375436,
-    "ast_hash": "7b24d929dbd1aaefe5f108eb2f304458",
+    "mtime": 1788418335.879234,
+    "ast_hash": "7e9cc33e03134bf4874cd1318255a8da",
     "semantic_hash": ""
   },
   "src/payments/components/StripeCardElement.tsx": {
@@ -3970,8 +3970,8 @@
     "semantic_hash": ""
   },
   "src/payments/__tests__/resolvePaymentMode.test.ts": {
-    "mtime": 1788404467.5058188,
-    "ast_hash": "51ffb78887efd01ce6f09c5f6239a8f4",
+    "mtime": 1788418365.4490328,
+    "ast_hash": "de123bd41cf904dafe3c283484d98025",
     "semantic_hash": ""
   },
   "src/payments/resolvePaymentMode.ts": {
@@ -3985,8 +3985,18 @@
     "semantic_hash": ""
   },
   "docs/PAGOS.md": {
-    "mtime": 1788414570.9671905,
-    "ast_hash": "fd747fc6d5e29038257823f15013f862",
+    "mtime": 1788423106.7069569,
+    "ast_hash": "03e9da211c8f5000d8268683f686c7f4",
+    "semantic_hash": ""
+  },
+  "convex/__tests__/paymentModeAccess.test.ts": {
+    "mtime": 1788418353.5063448,
+    "ast_hash": "27704b2b909ae95d9fdfea6dce616171",
+    "semantic_hash": ""
+  },
+  "convex/_paymentModeAccess.ts": {
+    "mtime": 1788418248.2433033,
+    "ast_hash": "aca7851b332ea71794527ef4af4a6e81",
     "semantic_hash": ""
   }
 }
