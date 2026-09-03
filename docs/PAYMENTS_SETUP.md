@@ -110,7 +110,7 @@ npx convex run stripe:getPublicConfig   # → { modes: { test: true, live: false
 ```
 
 E2E en test (app con `EXPO_PUBLIC_STRIPE_KEY_TEST`, toggle "Prueba", `ALLOW_STRIPE_MOCK=false`):
-1. Vendedor: Dashboard → "Conectar cuenta de pagos" → onboarding hosted → vuelve por `ramgos://connect/return?mode=test` → banner "Cuenta de pagos lista". En `paymentEvents` aparece `v2.core.account_link.returned` procesado.
+1. Vendedor: Dashboard → "Conectar cuenta de pagos" → onboarding hosted → vuelve por `https://ramgos.app/connect/return?mode=test` (https obligatorio; ver §2 — Stripe rechaza esquemas custom) → banner "Cuenta de pagos lista". En `paymentEvents` aparece `v2.core.account_link.returned` procesado.
 2. Comprador: carrito con un producto y un bono del mismo vendedor + `?ref=` de influencer → `4242 4242 4242 4242` → una orden por vendedor con `mode: 'test'`, `grossCents`, `providerFeeCents` (fee real), bono 30% / producto 10%, `influencerCents`. Reenviar el evento desde Workbench → sin duplicados.
 3. Confirmar recepción → `release_pending` → `released`, `tr_…` en Dashboard → Connect → Transfers (con `source_transaction`); `payouts` seller `completed`, influencer `scheduled` (+10 días). Repetir → sin segundo transfer.
 4. Vendedor sin Connect → confirmar → vuelve a `held` con `escrowReleaseError`; admin notificado. Onboardear → admin "forzar liberación" → OK.

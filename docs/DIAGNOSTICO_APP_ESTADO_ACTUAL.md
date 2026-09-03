@@ -1,5 +1,12 @@
 # Diagnostico Integral - ramgos-mobile v1.0.0
 
+> [!CAUTION]
+> **SNAPSHOT HISTÓRICO DEL 2026-06-16 — desactualizado en pagos.**
+> Sus puntajes de "Pagos/Escrow/Comisiones 100.0" y los PASS asociados ya no
+> son ciertos, y menciona `EXPO_PUBLIC_STRIPE_KEY` (variable eliminada por ser
+> un fallback peligroso, ver E-135). El estado real de pagos está en
+> [`PAGOS.md`](./PAGOS.md).
+
 Fecha: `2026-06-16T12:14:12-03:00`  
 Generado por: `scripts/app_integral_audit.py`  
 Modo: `run_checks=False online_checks=False`

@@ -1,3 +1,17 @@
+> [!CAUTION]
+> **DOCUMENTO HISTÓRICO — NO USAR COMO REFERENCIA.**
+>
+> Es la auditoría del **2026-09-01**, anterior al rewrite completo de Stripe
+> Connect y a los arreglos E-137 a E-142. **Hoy la mayor parte es falsa**:
+> describe funciones que ya no existen (`internalProcessMultiVendorCart`,
+> `internalReleasePaymentAction`, `createConnectAccount`) y presenta como
+> problemas abiertos cinco cosas que se resolvieron — el fallback mock
+> silencioso, el pago a influencers, el stub del webhook V1, `connectV2.ts` y
+> la falta de tests.
+>
+> Se conserva sólo como registro de qué se sabía en ese momento.
+> **El estado real está en [`docs/PAGOS.md`](../docs/PAGOS.md).**
+
 
 # Arquitectura: Stripe Connect + Split de Pagos
 

@@ -2,7 +2,7 @@
 
 > **Versión:** 1.0 · **Fecha:** 2026-07-15  
 > **Repo:** `ramgos-mobile`  
-> **Stack:** Expo (React Native) + Convex + Stripe (TEST)  
+> **Stack:** Expo (React Native) + Convex + Stripe (bi-modal test/live; el default es **live** cuando está configurado)  
 > **Fuente de análisis:** código actual + Graphify (`graphify-out/`) + `PLAN_ESTRATEGICO_MAESTRO.md`
 
 Este documento es el **mapa completo** del software: qué es, cómo está armado, cómo fluyen los datos, dónde está cada dominio y dónde leer más.
@@ -274,7 +274,7 @@ KYC: estados `unverified | pending | approved | rejected` (negocio y usuario).
 | `orders.ts` | Órdenes + estados escrow |
 | `disputes.ts` | Disputas + evidencia + chat |
 | `stripe.ts` | PaymentIntents, webhooks handlers internos |
-| `connect.ts` / `connectV2.ts` | Stripe Connect onboarding |
+| `connect.ts` | Stripe Connect onboarding (`connectV2.ts` fue borrado) |
 | `finance.ts` | Wallet ledger, payouts, withdrawals |
 | `bonos.ts` | Emisión / canje QR / economics |
 | `campaigns.ts` | Influencer ↔ business |
@@ -418,13 +418,13 @@ Login, Register (consumer/business/influencer), Verification, ForgotPassword, Ch
 ```
 
 ### Escrow
-- Estados típicos: `held` → `release_scheduled` → `released` | `disputed` | `refunded`
+- Estados reales (`convex/orders/_escrowStates.ts`): `held` → `release_pending` → `released`; `held`/`released` → `refund_pending` → `refunded`; más `disputed` y `frozen`. **No existe `release_scheduled`.**
 - UI: `EscrowSheet` + `EscrowContext`
 - Cron puede auto-liberar
 - Bonos: al canjear QR se puede auto-completar orden (fulfillment en POS)
 
 ### Connect
-- `connect.ts` / `connectV2.ts` — onboarding vendedor
+- `connect.ts` — onboarding vendedor
 - Payouts / withdrawals en `finance.ts`
 
 Docs relacionadas: `PAYMENTS_SETUP.md`, `FINANCIAL_OPERATIONS_VALIDATION.md`, `_archive/MÓDULO_PAGOS_RESPALDO.md`.

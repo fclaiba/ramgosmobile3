@@ -16,8 +16,8 @@ Generado por: `scripts/dev_completeness_audit.py`
 | Auth / KYC | 100% | 0 | GO |
 | Social (posts, stories, DMs, follows, grupos, highlights) | 100% | 0 | GO |
 | Marketplace / Listings | 100% | 0 | GO |
-| Orders / Escrow / Disputas | 100% | 0 | GO |
-| Pagos / Stripe / Escrow financiero | 100% | 0 | GO |
+| Orders / Escrow / Disputas | 92% | 1 | 🟡 falta compra real |
+| Pagos / Stripe / Escrow financiero | 92% | 2 | 🟡 **NO-GO hasta publicar la app**: el arreglo de test-vs-live vive en el cliente. Falta también el payout a influencer sin ejercitar. Ver [`PAGOS.md`](./PAGOS.md) |
 | IAP — In-App Purchases (Apple + Google) | 100% | 0 | GO |
 | Push Notifications (backend-triggered) | 100% | 0 | GO |
 | Wallet / Puntos / Rewards | 100% | 0 | GO |

@@ -8,6 +8,13 @@
 Dado que Ramgos es un ecosistema híbrido donde se puede comprar desde una taza hasta reservar un Airbnb o pagar una entrada a una discoteca, **un solo tipo de Escrow no sirve**. 
 El sistema de Escrow de Ramgos es **adaptativo**, mutando sus reglas de liberación de fondos dependiendo de la naturaleza del ítem transaccionado.
 
+> [!WARNING]
+> **Las secciones 1 a 3 son visión de producto, NO lo implementado.** No existen
+> hoy: el tracking de Andreani/Correo, los hitos por fases en servicios, el tipo
+> "infoproducto", ni la liberación instantánea por QR (el check-in marca
+> `checked_in` y explícitamente **no** libera fondos).
+> **Lo realmente implementado está en la §4** y en `convex/orders/_escrowStates.ts`.
+
 ## 2. Tipología de Escrows y Reglas de Liberación
 
 ### A. Productos Físicos (Bienes Tangibles)

@@ -248,7 +248,7 @@ Para ejecutar esta visión de forma clínica, dividiremos el trabajo en 5 Sprint
   - Slider interactivo para "Usar mis Puntos como Descuento".
   - Animaciones de partículas/haptics al ganar puntos por likes o compras.
 * **Backend (Convex):**
-  - Mutación `processSimulatedPayment(postId, mockToken)` ejecutando el **Split Payment**: % Influencer, % Negocio, % Plataforma. *(Aclaración: Por ahora los pagos de dinero real son SIMULADOS para testear el flujo sin fricción bancaria)*.
+  - ~~Mutación `processSimulatedPayment(postId, mockToken)` con pagos simulados~~ → **YA IMPLEMENTADO Y SUPERADO**: los pagos son reales vía Stripe Connect, el split se calcula en `convex/_split.ts` y no existe ninguna mutación de pago simulado. Ver [`PAGOS.md`](./PAGOS.md).
   - Motor de Gamificación: `awardPoints(userId, actionType)`. (Ej: +5 puntos por dar 10 likes).
 * **Criterio de Éxito:** Desde un video, un toque deja el producto en el carrito con la atribución correcta; al completar el checkout, el dinero se reparte en los dashboards. Los puntos jamás se transfieren entre usuarios.
 

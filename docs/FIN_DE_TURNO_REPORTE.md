@@ -5,7 +5,7 @@ He completado la auditoría de Stripe y la preparación del Plan de Lanzamiento 
 ## 1. Auditoría de Stripe (100% OK) ✅
 He verificado la integración de pagos y es robusta y completa:
 - **Backend (Convex):**
-    - `convex/stripe.ts` maneja la creación de PaymentIntents con cálculo automático de comisiones (12% plataforma).
+    - `convex/stripe.ts` maneja la creación de PaymentIntents con cálculo automático de comisiones (10% plataforma, 30% en bonos — ver `convex/_fees.ts`).
     - `convex/http.ts` tiene un router de webhooks completo que soporta eventos V1 (pagos, suscripciones) y V2 (Stripe Connect).
     - Implementada la lógica de **Escrow**: los fondos se retienen y se liberan mediante `internalReleasePaymentAction` solo después de validaciones de entrega.
 - **Frontend (Mobile):**
