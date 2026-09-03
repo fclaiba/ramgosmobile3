@@ -9,10 +9,13 @@
  */
 
 import type * as _audit from "../_audit.js";
+import type * as _connectCaps from "../_connectCaps.js";
+import type * as _connectReturnUrl from "../_connectReturnUrl.js";
 import type * as _fees from "../_fees.js";
 import type * as _inventory from "../_inventory.js";
 import type * as _kyc from "../_kyc.js";
 import type * as _phone from "../_phone.js";
+import type * as _reconciliationRules from "../_reconciliationRules.js";
 import type * as _roles from "../_roles.js";
 import type * as _split from "../_split.js";
 import type * as _stripeEnv from "../_stripeEnv.js";
@@ -116,10 +119,13 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   _audit: typeof _audit;
+  _connectCaps: typeof _connectCaps;
+  _connectReturnUrl: typeof _connectReturnUrl;
   _fees: typeof _fees;
   _inventory: typeof _inventory;
   _kyc: typeof _kyc;
   _phone: typeof _phone;
+  _reconciliationRules: typeof _reconciliationRules;
   _roles: typeof _roles;
   _split: typeof _split;
   _stripeEnv: typeof _stripeEnv;

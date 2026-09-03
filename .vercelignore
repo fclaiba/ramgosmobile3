@@ -1,3 +1,13 @@
+# OJO: teniendo este archivo, el CLI de Vercel DEJA de aplicar .gitignore.
+# Sin la línea de abajo, un `vercel deploy` desde una máquina de desarrollo
+# sube .env.local — y `expo export` lo lee, horneando en el bundle de
+# producción el Convex de DEV y STRIPE_MOCK_MODE=true, pisando lo que esté
+# configurado en el dashboard. Los valores de producción tienen que venir
+# siempre de las env vars del proyecto en Vercel.
+.env
+.env.local
+.env*.local
+
 .git
 node_modules
 android

@@ -30,10 +30,19 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "ramgos.app" },
-            { "scheme": "https", "host": "www.ramgos.app" }
+            {
+              "scheme": "https",
+              "host": "ramgos.app"
+            },
+            {
+              "scheme": "https",
+              "host": "www.ramgos.app"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "config": {
@@ -82,6 +91,13 @@
         "projectId": "49ae7444-e479-4437-be05-fa5fdf9cf6db"
       }
     },
-    "owner": "fclaiba"
+    "owner": "fclaiba",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/49ae7444-e479-4437-be05-fa5fdf9cf6db",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }
