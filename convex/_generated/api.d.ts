@@ -61,6 +61,7 @@ import type * as listings from "../listings.js";
 import type * as locations from "../locations.js";
 import type * as mediaUrl from "../mediaUrl.js";
 import type * as migrateUsernames from "../migrateUsernames.js";
+import type * as migrations_connectAccountModeFix from "../migrations/connectAccountModeFix.js";
 import type * as migrations_loopsTierBackfill from "../migrations/loopsTierBackfill.js";
 import type * as migrations_pointsUnification from "../migrations/pointsUnification.js";
 import type * as migrations_reconciliationCursorScopeSplit from "../migrations/reconciliationCursorScopeSplit.js";
@@ -173,6 +174,7 @@ declare const fullApi: ApiFromModules<{
   locations: typeof locations;
   mediaUrl: typeof mediaUrl;
   migrateUsernames: typeof migrateUsernames;
+  "migrations/connectAccountModeFix": typeof migrations_connectAccountModeFix;
   "migrations/loopsTierBackfill": typeof migrations_loopsTierBackfill;
   "migrations/pointsUnification": typeof migrations_pointsUnification;
   "migrations/reconciliationCursorScopeSplit": typeof migrations_reconciliationCursorScopeSplit;

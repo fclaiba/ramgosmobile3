@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "convex/_generated/api.d.ts": {
-    "mtime": 1788425889.9061272,
-    "ast_hash": "ef8437c6548ffe251da9a8dab595c4cb",
+    "mtime": 1788435846.5797837,
+    "ast_hash": "988c3f6564085ca4a135df9e302a9821",
     "semantic_hash": ""
   },
   "convex/_generated/api.js": {
@@ -205,8 +205,8 @@
     "semantic_hash": ""
   },
   "convex/finance.ts": {
-    "mtime": 1788384592.351922,
-    "ast_hash": "2b2fef86339b05ef99cd9e0fd0385716",
+    "mtime": 1788435809.1213732,
+    "ast_hash": "57632069e78c48b9a5fcfe90d280bdf6",
     "semantic_hash": ""
   },
   "convex/fixKyc.ts": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788425922.905473,
-    "ast_hash": "102bebda1d222bc61ca8179d8aa99132",
+    "mtime": 1788436030.3173308,
+    "ast_hash": "f678af49cce43444d6e9e67c1610dcc5",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -4007,6 +4007,11 @@
   "convex/_payoutRetry.ts": {
     "mtime": 1788425889.9066365,
     "ast_hash": "a53effb00e42b682f609abe385af9495",
+    "semantic_hash": ""
+  },
+  "convex/migrations/connectAccountModeFix.ts": {
+    "mtime": 1788435787.3867238,
+    "ast_hash": "7af9cabbd60557bd2cd682c9b7fde192",
     "semantic_hash": ""
   }
 }

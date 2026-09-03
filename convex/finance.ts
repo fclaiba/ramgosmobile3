@@ -656,6 +656,45 @@ export const listFailedTransfers = query({
     },
 });
 
+/**
+ * Órdenes cuya liberación falló y siguen esperando.
+ *
+ * Antes esto sólo se veía si la orden tenía una fila `payouts` en `failed`, y
+ * cuando el fallo ocurre al INICIAR la liberación esa fila no llega a
+ * existir — así que la orden quedaba invisible salvo en `listStuckEscrows`,
+ * que recién barre a los 30 días y las entierra entre todas las viejas.
+ * Ahora se ven en cuanto fallan, con el motivo y los intentos.
+ */
+export const listOrdersWithReleaseError = query({
+    args: {
+        sessionToken: v.optional(v.string()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const actor = await requireActor(ctx, (args as any).sessionToken);
+        assertAdminOrDeveloper(actor);
+
+        const cap = Math.min(args.limit ?? 100, 500);
+        const rows = await ctx.db
+            .query("orders")
+            .withIndex("by_escrow_state_and_release_due", (q) => q.eq("escrowState", "held"))
+            .take(1000);
+        return rows
+            .filter((o) => !!o.escrowReleaseError)
+            .slice(0, cap)
+            .map((o) => ({
+                orderId: String(o._id),
+                sellerId: o.sellerId,
+                mode: o.mode,
+                sellerNetCents: o.sellerNetCents ?? o.netAmountCents,
+                error: o.escrowReleaseError,
+                attempts: o.escrowReleaseAttempts ?? 0,
+                failedAtMs: o.escrowReleaseFailedAtMs,
+                stripePaymentIntentId: o.stripePaymentIntentId,
+            }));
+    },
+});
+
 // 2) Stuck escrows — orders that have been in escrow > 30d without a
 //    `confirmReceipt`. We approximate "in escrow" as orders in
 //    payment_received / awaiting_shipment / in_transit / delivered status
