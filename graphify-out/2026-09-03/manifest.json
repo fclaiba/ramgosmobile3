@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "convex/_generated/api.d.ts": {
-    "mtime": 1788389638.4585264,
-    "ast_hash": "6800d9254fc6761c7beed39e8df0cf47",
+    "mtime": 1788404200.1862147,
+    "ast_hash": "d53a9f148bc67e8e29d2000674248183",
     "semantic_hash": ""
   },
   "convex/_generated/api.js": {
@@ -265,8 +265,8 @@
     "semantic_hash": "1e5099f5051bbffd3dccd7a4101d4ea2"
   },
   "convex/orders.ts": {
-    "mtime": 1788384592.3561242,
-    "ast_hash": "78fd17766a3bd1465ee47e0580838580",
+    "mtime": 1788404061.0768375,
+    "ast_hash": "0b59856c88f7698f6b6c77aed43508a9",
     "semantic_hash": ""
   },
   "convex/points.ts": {
@@ -275,8 +275,8 @@
     "semantic_hash": ""
   },
   "convex/reconciliation.ts": {
-    "mtime": 1788384592.3578176,
-    "ast_hash": "e8fe9d4525e96aaefcc85fd11cde4bfa",
+    "mtime": 1788403912.5066688,
+    "ast_hash": "90790549ae3de3bbb6928beb8587b34f",
     "semantic_hash": ""
   },
   "convex/reviews.ts": {
@@ -320,8 +320,8 @@
     "semantic_hash": ""
   },
   "convex/stripe.ts": {
-    "mtime": 1788384592.3603678,
-    "ast_hash": "81825ba4eec85c328fdcbc768d4620a6",
+    "mtime": 1788403987.5337,
+    "ast_hash": "3f6d1121f558b85af521206e6df50660",
     "semantic_hash": ""
   },
   "convex/subscriptions.ts": {
@@ -1415,8 +1415,8 @@
     "semantic_hash": ""
   },
   "src/screens/PaymentScreen.tsx": {
-    "mtime": 1787635041.082579,
-    "ast_hash": "b4e2b414307e4ac132fbfe2edb5fcf7a",
+    "mtime": 1788404124.5318317,
+    "ast_hash": "bf74d03ad360cea5ffb0185f3781fa59",
     "semantic_hash": ""
   },
   "src/screens/PrivacyScreen.tsx": {
@@ -2125,8 +2125,8 @@
     "semantic_hash": "988833bf34d92eba3d536029cd9e1bc6"
   },
   "src/contexts/PaymentModeContext.tsx": {
-    "mtime": 1788384592.4303682,
-    "ast_hash": "d3ed76245100b1b172acd488ed6028f9",
+    "mtime": 1788404024.4872003,
+    "ast_hash": "4c642528d8aac9057d54e647ed9a2927",
     "semantic_hash": ""
   },
   "scripts/superscript_audit.py": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/PLAN_ESTRATEGICO_MAESTRO.md": {
-    "mtime": 1788393485.8290684,
-    "ast_hash": "3a0fe49a10eb0e6cc27e5d7df1bd15c8",
+    "mtime": 1788404428.2815795,
+    "ast_hash": "71fbf6c39ecc507f803ae4fbcc84a982",
     "semantic_hash": ""
   },
   "docs/PLAY_CONSOLE_RELEASE_CHECKLIST.md": {
@@ -3490,8 +3490,8 @@
     "semantic_hash": ""
   },
   "convex/__tests__/escrowStates.test.ts": {
-    "mtime": 1788384592.3385034,
-    "ast_hash": "8c84a751a92de313d6fa19c481b17d07",
+    "mtime": 1788403805.6445906,
+    "ast_hash": "a02a8e6f3a25bdd34563cde1830e24c7",
     "semantic_hash": ""
   },
   "convex/__tests__/fees.test.ts": {
@@ -3962,6 +3962,26 @@
   "convex/__tests__/checkoutSnapshotShape.test.ts": {
     "mtime": 1788393367.5932786,
     "ast_hash": "651bdb68f7171af0c652778cdbda87c5",
+    "semantic_hash": ""
+  },
+  "convex/__tests__/reconciliationRules.test.ts": {
+    "mtime": 1788403931.1494825,
+    "ast_hash": "fa419f0d4cc0af3b307ac9c585f4aced",
+    "semantic_hash": ""
+  },
+  "convex/_reconciliationRules.ts": {
+    "mtime": 1788403848.7522871,
+    "ast_hash": "124e9340a88830b73bb6534f2e9199d4",
+    "semantic_hash": ""
+  },
+  "src/payments/__tests__/resolvePaymentMode.test.ts": {
+    "mtime": 1788404036.568416,
+    "ast_hash": "be36e67f900bf7b847982cf9530f470f",
+    "semantic_hash": ""
+  },
+  "src/payments/resolvePaymentMode.ts": {
+    "mtime": 1788404006.7981763,
+    "ast_hash": "272009e7709c656032128e2699bc93e7",
     "semantic_hash": ""
   }
 }
