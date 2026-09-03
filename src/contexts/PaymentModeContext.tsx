@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { modeFromPublishableKey } from '../../convex/_stripeEnv';
+import { resolveEffectiveMode, type StoredMode } from '../payments/resolvePaymentMode';
 
 export type PaymentMode = 'test' | 'live';
 
@@ -40,7 +41,13 @@ const PaymentModeContext = createContext<PaymentModeContextValue>({
     configLoading: true,
 });
 
-const STORAGE_KEY = '@ramgos_payment_mode';
+/**
+ * v2: invalida a propósito el modo guardado por la versión anterior, que
+ * escribía `'test'` en todos los dispositivos. Sin el bump, cualquiera que ya
+ * hubiera abierto la app seguiría clavado en modo prueba aunque live esté
+ * disponible — o sea, comprando sin que entre plata.
+ */
+const STORAGE_KEY = '@ramgos_payment_mode_v2';
 
 /**
  * Claves publicables por modo.
@@ -72,18 +79,22 @@ function resolvePublishableKeys(): Record<PaymentMode, string | undefined> {
 }
 
 export function PaymentModeProvider({ children }: { children: React.ReactNode }) {
-    const [storedMode, setStoredMode] = useState<PaymentMode | null>(null);
+    // `null` = sin leer todavía · `'none'` = leído, sin preferencia guardada.
+    const [storedMode, setStoredMode] = useState<StoredMode>(null);
     const publishableKeys = useMemo(resolvePublishableKeys, []);
     const publicConfig = useQuery(api.stripe.getPublicConfig, {});
 
+    // `null` = todavía no sabemos qué eligió este dispositivo. NO se cae a
+    // 'test': el modo por defecto lo decide `mode` según lo que haya
+    // disponible, y elegir 'test' acá haría que un usuario real pague en
+    // modo prueba.
     useEffect(() => {
         (async () => {
             try {
                 const stored = await AsyncStorage.getItem(STORAGE_KEY);
-                if (stored === 'test' || stored === 'live') setStoredMode(stored);
-                else setStoredMode('test');
+                setStoredMode(stored === 'test' || stored === 'live' ? stored : 'none');
             } catch {
-                setStoredMode('test');
+                setStoredMode('none');
             }
         })();
     }, []);
@@ -95,12 +106,11 @@ export function PaymentModeProvider({ children }: { children: React.ReactNode })
         );
     }, [publishableKeys, publicConfig]);
 
-    // Modo efectivo: el guardado si está disponible; si no, el primero disponible.
-    const mode: PaymentMode = useMemo(() => {
-        const wanted = storedMode ?? 'test';
-        if (availableModes.includes(wanted)) return wanted;
-        return availableModes[0] ?? wanted;
-    }, [storedMode, availableModes]);
+    // Default a `live` cuando está configurado. Ver `resolvePaymentMode.ts`.
+    const mode: PaymentMode = useMemo(
+        () => resolveEffectiveMode(storedMode, availableModes),
+        [storedMode, availableModes],
+    );
 
     const setMode = useCallback((newMode: PaymentMode) => {
         setStoredMode(newMode);

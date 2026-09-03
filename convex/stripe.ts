@@ -328,6 +328,23 @@ export const createPaymentIntent = action({
         const actor = await requireActor(ctx, args.sessionToken);
         const userId = actor.idString;
         const mode = args.mode;
+
+        /**
+         * El modo llega COMO ARGUMENTO DEL CLIENTE, así que acá se autoriza:
+         * el toggle de `PaymentModeToggle` es sólo de UI y un cliente
+         * modificado puede pedir `test` igual. Y cobrar en test no es
+         * inofensivo — el webhook de test crea la orden real, descuenta
+         * stock, otorga puntos y deja al vendedor con un cobro pendiente que
+         * nadie va a poder pagar. Sólo admin/developer o cuentas de prueba.
+         */
+        if (mode === "test") {
+            const canUseTestMode =
+                actor.role === "admin" || actor.role === "developer" || actor.isTest === true;
+            if (!canUseTestMode) {
+                throw new Error("El modo de prueba está restringido a cuentas de test y administradores.");
+            }
+        }
+
         const useMock = !!args.simulate;
         if (useMock) assertMockAllowed();
         if (args.lineItems.length === 0) throw new Error("El carrito está vacío.");
@@ -1100,10 +1117,27 @@ export const internalReleaseOrderEscrow = internalAction({
         ctx,
         args,
     ): Promise<{ released: boolean; transferId?: string; alreadyReleased?: boolean }> => {
-        const begin = await ctx.runMutation(internal.stripe.internalBeginEscrowRelease, {
-            orderId: args.orderId,
-            trigger: args.trigger,
-        });
+        // `internalBeginEscrowRelease` valida y puede lanzar (vendedor sin cuenta
+        // Connect, neto <= 0, sin PaymentIntent). Ese throw tiene que dejar la
+        // orden RECUPERABLE: `confirmReceipt` ya la puso en `release_pending`
+        // con `escrowReleaseError: undefined`, y `isReleasable` rechaza ese
+        // estado — sin este catch la orden quedaba trabada para siempre, sin
+        // que ni el reintento ni `adminForceReleaseEscrow` pudieran rescatarla.
+        let begin: Awaited<ReturnType<typeof ctx.runMutation<typeof internal.stripe.internalBeginEscrowRelease>>>;
+        try {
+            begin = await ctx.runMutation(internal.stripe.internalBeginEscrowRelease, {
+                orderId: args.orderId,
+                trigger: args.trigger,
+            });
+        } catch (error: any) {
+            const reason = stripeErrorMessage(error);
+            console.error(`[Stripe Escrow] No se pudo iniciar la liberación de ${args.orderId}: ${reason}`);
+            await ctx.runMutation(internal.stripe.internalFlagEscrowReleaseFailed, {
+                orderId: args.orderId,
+                reason,
+            });
+            throw new Error(`No se pudo liberar el pago: ${reason}`);
+        }
         if (begin.alreadyReleased) return { released: true, alreadyReleased: true };
         // `begin` viaja a través de ctx.runMutation (function reference), y el
         // convex/tsconfig.json (strict: false) del CLI de Convex no narrowea el

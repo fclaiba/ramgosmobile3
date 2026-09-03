@@ -27,6 +27,7 @@ import { internal } from "./_generated/api";
 import { getStripe, stripeEnv } from "./stripeClient";
 import { stripeModeValidator } from "./schema";
 import type { StripeMode } from "./_stripeEnv";
+import { classifyOrphanCharge, shouldAttemptRemediation } from "./_reconciliationRules";
 
 // Bi-modal: se reconcilia cada modo con clave configurada, con su propio
 // cursor (`scope = stripe-bt:<mode>`). El cliente se resuelve perezosamente.
@@ -169,17 +170,24 @@ export const internalReconcileStripeBalanceTransactions = internalAction({
         // future. For backfills, raise it temporarily via the dashboard.
         maxEntries: v.optional(v.number()),
         mode: v.optional(stripeModeValidator),
+        /** Margen antes de juzgar un cobro sin orden. Bajarlo sirve para probar. */
+        graceSeconds: v.optional(v.number()),
     },
-    handler: async (ctx, args): Promise<{ scanned: number; flagged: number }> => {
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{ scanned: number; flagged: number; remediated: number }> => {
         const modes: StripeMode[] = args.mode ? [args.mode] : stripeEnv().availableModes;
         let scanned = 0;
         let flagged = 0;
+        let remediated = 0;
         for (const mode of modes) {
-            const r = await reconcileMode(ctx, mode, args.maxEntries);
+            const r = await reconcileMode(ctx, mode, args.maxEntries, args.graceSeconds);
             scanned += r.scanned;
             flagged += r.flagged;
+            remediated += r.remediated;
         }
-        return { scanned, flagged };
+        return { scanned, flagged, remediated };
     },
 });
 
@@ -187,7 +195,8 @@ async function reconcileMode(
     ctx: any,
     mode: StripeMode,
     maxEntries?: number,
-): Promise<{ scanned: number; flagged: number }> {
+    graceSeconds?: number,
+): Promise<{ scanned: number; flagged: number; remediated: number }> {
     {
         const stripe = getStripe(mode);
         const max = Math.min(maxEntries ?? 200, 1000);
@@ -198,6 +207,7 @@ async function reconcileMode(
 
         let scanned = 0;
         let flagged = 0;
+        let remediated = 0;
         let lastSeenId: string | undefined = startingAfter;
 
         try {
@@ -278,36 +288,67 @@ async function reconcileMode(
                             continue;
                         }
                         /**
-                         * Pago exitoso SIN orden asociada.
-                         *
-                         * Es exactamente lo que deja un webhook perdido: el
-                         * registro de pago existe (se crea al crear el
-                         * PaymentIntent), así que NO cae en `no_local_payment`,
-                         * y el monto coincide, así que tampoco en
-                         * `amount_mismatch`. Se colaba entre las dos reglas y
-                         * nadie se enteraba de que había plata cobrada sin nada
-                         * entregado.
+                         * Cobrado y sin orden. Dos causas distintas, ver
+                         * `_reconciliationRules.ts`: el pago marcado como
+                         * cobrado que falló creando órdenes, y el que quedó
+                         * `pending` porque el webhook nunca llegó (E-140) —
+                         * este último se colaba entre las tres reglas.
                          */
-                        if (
-                            bt.type === "charge" &&
-                            !local.orderId &&
-                            (local.status === "succeeded" ||
-                                local.status === "succeeded_in_escrow")
-                        ) {
-                            await ctx.runMutation(
-                                internal.reconciliation.internalCreateFlag,
-                                {
-                                    stripeBalanceTransactionId: bt.id,
-                                    mode,
-                                    sourceType: bt.type,
-                                    sourceId,
-                                    relatedPaymentId: String(local._id),
-                                    reason: "paid_without_order",
-                                    amountInCents: bt.amount,
-                                    currency: bt.currency,
-                                },
-                            );
-                            flagged++;
+                        const verdict = classifyOrphanCharge({
+                            btType: bt.type,
+                            btCreatedSec: bt.created,
+                            nowSec: Math.floor(Date.now() / 1000),
+                            localStatus: local.status,
+                            hasOrder: !!local.orderId,
+                            graceSeconds,
+                        });
+
+                        if (verdict.kind !== "ok" && verdict.kind !== "too_soon") {
+                            // Antes de alarmar, intentar recuperarlo solo: es
+                            // la misma jugada que reenviar el evento desde el
+                            // Dashboard, y el handler es idempotente.
+                            let recovered = false;
+                            if (shouldAttemptRemediation(verdict)) {
+                                try {
+                                    await ctx.runAction(
+                                        internal.stripe.internalHandlePaymentIntentSucceeded,
+                                        { mode, paymentIntentId },
+                                    );
+                                    const after: any = await ctx.runQuery(
+                                        internal.reconciliation.internalFindPaymentByPI,
+                                        { stripePaymentIntentId: paymentIntentId },
+                                    );
+                                    recovered = !!after?.orderId;
+                                    if (recovered) {
+                                        remediated++;
+                                        console.log(
+                                            `[Reconciliación ${mode}] ${paymentIntentId} recuperado: el webhook nunca había llegado.`,
+                                        );
+                                    }
+                                } catch (err: any) {
+                                    console.error(
+                                        `[Reconciliación ${mode}] Falló recuperar ${paymentIntentId}: ${err?.message ?? err}`,
+                                    );
+                                }
+                            }
+
+                            // Sólo se alarma si el reintento no alcanzó.
+                            if (!recovered) {
+                                await ctx.runMutation(
+                                    internal.reconciliation.internalCreateFlag,
+                                    {
+                                        stripeBalanceTransactionId: bt.id,
+                                        mode,
+                                        sourceType: bt.type,
+                                        sourceId,
+                                        relatedPaymentId: String(local._id),
+                                        reason: verdict.kind,
+                                        amountInCents: bt.amount,
+                                        currency: bt.currency,
+                                    },
+                                );
+                                flagged++;
+                            }
                         }
 
                         // Amount sanity check — Stripe BT.amount is in cents.
@@ -411,8 +452,8 @@ async function reconcileMode(
         });
 
         console.log(
-            `[Reconciliation ${mode}] scanned=${scanned} flagged=${flagged} cursor=${lastSeenId ?? "—"}`,
+            `[Reconciliation ${mode}] scanned=${scanned} flagged=${flagged} recuperados=${remediated} cursor=${lastSeenId ?? "—"}`,
         );
-        return { scanned, flagged };
+        return { scanned, flagged, remediated };
     }
 }

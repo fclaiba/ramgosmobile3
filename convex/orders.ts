@@ -90,6 +90,54 @@ export const getMyOrders = query({
     },
 });
 
+/**
+ * ¿Ya aterrizó el checkout? Reactiva, para que la pantalla de pago espere a
+ * que la orden EXISTA en vez de cantar éxito apenas Stripe confirma la
+ * tarjeta.
+ *
+ * La orden la crea el webhook, segundos después y fuera del control del
+ * cliente. Sin esto, el comprador veía confeti aunque del lado del servidor
+ * no hubiera pasado nada — y ni siquiera se quedaba con un identificador
+ * para reclamar (E-141 #4).
+ */
+export const getCheckoutStatus = query({
+    args: { sessionToken: v.optional(v.string()), stripePaymentIntentId: v.string() },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{ found: boolean; paymentStatus: string | null; orderIds: string[] }> => {
+        const empty = { found: false, paymentStatus: null, orderIds: [] as string[] };
+        let actor;
+        try {
+            actor = await requireActor(ctx, args.sessionToken);
+        } catch {
+            return empty;
+        }
+
+        const payment = await ctx.db
+            .query("payments")
+            .withIndex("by_stripe_intent", (q) =>
+                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
+            )
+            .first();
+        // Sólo el dueño del pago. No se filtra información de checkouts ajenos.
+        if (!payment || payment.userId !== actor.idString) return empty;
+
+        const orders = await ctx.db
+            .query("orders")
+            .withIndex("by_stripe_payment_intent", (q) =>
+                q.eq("stripePaymentIntentId", args.stripePaymentIntentId),
+            )
+            .collect();
+
+        return {
+            found: true,
+            paymentStatus: payment.status ?? null,
+            orderIds: orders.map((o) => String(o._id)),
+        };
+    },
+});
+
 export const getOrdersBySeller = query({
     args: {
         sessionToken: v.optional(v.string()),

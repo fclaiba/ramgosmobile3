@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
-import { ArrowLeft, Shield, FlaskConical, Zap, Lock } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { ArrowLeft, Shield, FlaskConical, Zap, Lock, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { PaymentForm } from '../payments/components/PaymentForm';
 import { PaymentSuccessBurst } from '../payments/components/PaymentSuccessBurst';
 import { useTheme } from '../contexts/ThemeContext';
@@ -11,8 +13,11 @@ import { usePaymentMode } from '../contexts/PaymentModeContext';
 import { glassGradient, glassTokens } from '../utils/glass';
 import { Radius, Type, atmosphere, colors, glassShadow } from '../theme/tokens';
 
+/** Cuánto esperamos a que el webhook cree la orden antes de dar la cara. */
+const CONFIRM_TIMEOUT_MS = 30_000;
+
 export default function PaymentScreen({ navigation, route }: any) {
-    const { user } = useAuth();
+    const { user, sessionToken } = useAuth();
     const { isLive, isTest } = usePaymentMode();
     const insets = useSafeAreaInsets();
     const userId = (user as any)?.id || (user as any)?._id;
@@ -49,9 +54,35 @@ export default function PaymentScreen({ navigation, route }: any) {
         referralCode: item.referralCode,
     }));
 
-    const [isSuccess, setIsSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const cartId = useMemo(() => `cart_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, []);
+
+    /**
+     * Confirmación real del checkout.
+     *
+     * Que Stripe acepte la tarjeta NO significa que la compra exista: la orden
+     * la crea el webhook, segundos después. Antes se mostraba el confeti
+     * apenas el SDK no devolvía error y se descartaba el `paymentIntentId`, así
+     * que un webhook perdido dejaba al comprador convencido de haber comprado,
+     * sin nada y sin un identificador con el que reclamar (E-141 #4).
+     *
+     * La query es reactiva: cuando el webhook escribe la orden, esto se entera
+     * solo. No hace falta polling.
+     */
+    const [paidIntentId, setPaidIntentId] = useState<string | null>(null);
+    const [confirmTimedOut, setConfirmTimedOut] = useState(false);
+
+    const checkout = useQuery(
+        api.orders.getCheckoutStatus,
+        paidIntentId ? { sessionToken, stripePaymentIntentId: paidIntentId } : 'skip',
+    );
+    const orderConfirmed = !!checkout?.orderIds?.length;
+
+    useEffect(() => {
+        if (!paidIntentId || orderConfirmed) return;
+        const t = setTimeout(() => setConfirmTimedOut(true), CONFIRM_TIMEOUT_MS);
+        return () => clearTimeout(t);
+    }, [paidIntentId, orderConfirmed]);
 
     const { colorScheme } = useTheme();
     const dark = colorScheme === 'dark';
@@ -70,13 +101,45 @@ export default function PaymentScreen({ navigation, route }: any) {
 
     const fmt = (v: number) => `$${v.toFixed(2)}`;
 
-    if (isSuccess) {
+    // Confeti SÓLO con la orden ya creada del lado del servidor.
+    if (paidIntentId && orderConfirmed) {
         return (
             <PaymentSuccessBurst
                 amount={finalAmount}
                 dark={dark}
                 onDone={() => navigation.navigate('Marketplace')}
             />
+        );
+    }
+
+    // Cobrado, pero la orden todavía no aparece.
+    if (paidIntentId) {
+        return (
+            <View style={[st.confirmWrap, { backgroundColor: c.bg }]}>
+                {confirmTimedOut ? <Clock size={40} color={C.muted} /> : <ActivityIndicator size="large" color={C.accent} />}
+                <Text style={[st.confirmTitle, { color: C.text }]}>
+                    {confirmTimedOut ? 'Tu pago se registró' : 'Confirmando tu pago…'}
+                </Text>
+                <Text style={[st.confirmBody, { color: C.muted }]}>
+                    {confirmTimedOut
+                        ? 'El cobro salió bien, pero la confirmación está demorando. No vuelvas a pagar: te avisamos apenas se acredite.'
+                        : 'Ya cobramos. Estamos creando tu pedido, no cierres la app.'}
+                </Text>
+                {confirmTimedOut && (
+                    <>
+                        {/* El identificador es lo que hace reclamable el pago. */}
+                        <Text style={[st.confirmRef, { color: C.muted, borderColor: C.border }]} selectable>
+                            {paidIntentId}
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Marketplace')}
+                            style={[st.confirmBtn, { backgroundColor: C.accent }]}
+                        >
+                            <Text style={st.confirmBtnText}>Entendido</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
+            </View>
         );
     }
 
@@ -198,7 +261,7 @@ export default function PaymentScreen({ navigation, route }: any) {
                     shippingMethod={shippingMethod}
                     shippingCost={shippingCost}
                     userId={userId}
-                    onSuccess={() => setIsSuccess(true)}
+                    onSuccess={(paymentIntentId: string) => setPaidIntentId(paymentIntentId)}
                     onError={setError}
                     theme={{
                         dark,
@@ -338,4 +401,20 @@ const st = StyleSheet.create({
         paddingBottom: 8,
     },
     trustText: { fontSize: 12, fontWeight: '500' },
+
+    // Pantalla de "confirmando" / "demorado" entre el cobro y la orden.
+    confirmWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
+    confirmTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
+    confirmBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 320 },
+    confirmRef: {
+        fontSize: 12,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        borderWidth: 1,
+        borderRadius: Radius.sm,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        marginTop: 4,
+    },
+    confirmBtn: { marginTop: 8, paddingHorizontal: 28, paddingVertical: 12, borderRadius: Radius.md },
+    confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

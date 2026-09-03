@@ -48,3 +48,33 @@ describe("plazos", () => {
         expect(influencerPayoutDueAt(t0)).toBe(t0 + 10 * DAY_MS);
     });
 });
+
+/**
+ * El invariante que causó E-141 #1: `confirmReceipt` deja la orden en
+ * `release_pending` con `escrowReleaseError: undefined` ANTES de agendar la
+ * acción de Stripe. Si la liberación falla, alguien tiene que devolverla a
+ * `held` CON el error puesto — si no, cae en el único estado del que no se
+ * puede salir, y ni el reintento del comprador ni el forzado de admin la
+ * rescatan.
+ */
+describe("recuperabilidad tras una liberación fallida", () => {
+    it("release_pending SIN error es el estado trabado: nadie puede reintentar", () => {
+        expect(isReleasable("release_pending", false)).toBe(false);
+    });
+
+    it("held CON error sí es reintentable — es a donde debe volver la orden", () => {
+        expect(isReleasable("held", true)).toBe(true);
+        expect(isReleasable("held", false)).toBe(true);
+    });
+
+    it("release_pending CON error también deja reintentar", () => {
+        expect(isReleasable("release_pending", true)).toBe(true);
+    });
+
+    it("un estado terminal no se reintenta ni marcándolo con error", () => {
+        for (const st of ["released", "refunded", "disputed", "frozen"]) {
+            expect(isReleasable(st, true)).toBe(false);
+            expect(isReleasable(st, false)).toBe(false);
+        }
+    });
+});
