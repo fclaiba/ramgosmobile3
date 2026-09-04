@@ -276,7 +276,12 @@ export const resetAndSeedListings = internalMutation({
     }
 });
 
-export const seed5Bonos = mutation({
+// Era `mutation` pública sin `requireActor`: cualquier cliente con la URL del
+// deployment podía invocarla y emitir bonos `issued` a nombre de
+// "business@test.com"/"consumer@test.com" si esos usuarios existían en el
+// deployment (E-149, TRV-01). `internalMutation` sólo desde el dashboard o
+// `npx convex run`.
+export const seed5Bonos = internalMutation({
     args: {},
     handler: async (ctx) => {
         const business = await ctx.db

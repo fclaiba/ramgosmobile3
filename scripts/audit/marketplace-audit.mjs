@@ -10,8 +10,13 @@
  *
  *   node scripts/audit/marketplace-audit.mjs [--section stock|agenda|pagos|bonos|todo]
  *        [--evidence-budget N] [--since <git-ref>] [--no-json] [--no-md]
+ *        [--strict-seeds] [--out-dir <dir>]
  *
  * Salidas: docs/audit/audit-report.json (fuente de verdad) y audit-report.md (≤60 KB).
+ * `--out-dir` las redirige (usado por convex/__tests__/publicWriteAuth.test.ts
+ * para no pisar el reporte versionado en cada corrida de CI).
+ * `--strict-seeds` saca la exención por nombre "seed*"/"fix*"/etc. de la señal
+ * TRV-01: es lo que permite endurecer el hallazgo de E-149 en un test.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,11 +39,18 @@ const OPTS = {
     section: String(flag('--section', 'todo')),
     evidenceBudget: Number(flag('--evidence-budget', 8)),
     since: flag('--since', null),
+    // El TRV-01 por defecto exime funciones "seed*" (mucho ruido en el
+    // narrador humano del reporte). `--strict-seeds` saca esa exención: la
+    // usa el test de regresión de H1 (E-149), que necesita que un seed
+    // público sin auth SÍ cuente como hallazgo — es justo el bug que
+    // encontró la auditoría (seedMockBonos/seed5Bonos).
+    strictSeeds: argv.includes('--strict-seeds'),
+    outDir: flag('--out-dir', null),
 };
 
 const ROOT = process.cwd();
 const CONVEX = path.join(ROOT, 'convex');
-const OUT_DIR = path.join(ROOT, 'docs', 'audit');
+const OUT_DIR = OPTS.outDir ? path.resolve(ROOT, String(OPTS.outDir)) : path.join(ROOT, 'docs', 'audit');
 const EXCLUDE_DIRS = new Set(['_generated', 'node_modules', '.git', 'dist', 'build', 'coverage', 'graphify-out']);
 
 // ---------------------------------------------------------------------------
@@ -82,6 +94,8 @@ const snippetAt = (file, line, n = 3) => {
 // AST: límites transaccionales
 // ---------------------------------------------------------------------------
 const BOUNDARY_KINDS = new Set(['mutation', 'internalMutation', 'action', 'internalAction', 'query', 'internalQuery', 'httpAction']);
+/** Funciones que resuelven al actor por dentro (llaman a requireActor/getActorOrNull ellas mismas). */
+const AUTH_WRAPPER_CALLS = new Set(['requireActor', 'getActorOrNull', 'assertSocialActor', 'resolveTargetUser']);
 
 function propChain(node) {
     // ctx.db.patch → ['ctx','db','patch']
@@ -145,7 +159,11 @@ function analyzeHandler(handlerNode, sf) {
             const tail = chain[chain.length - 1];
             const joined = chain.join('.');
             if (ts.isIdentifier(node.expression)) calls.add(node.expression.text);
-            if (tail === 'requireActor' || tail === 'getActorOrNull') hasRequireActor = true;
+            // `assertSocialActor` y `resolveTargetUser` llaman a `requireActor`
+            // por dentro (verificado: `social/_helpers.ts:60`, `connect.ts:187`);
+            // sin este whitelist el scanner marca como "sin auth" a todo el
+            // módulo social y a `connect.ts`, que sí autentican.
+            if (AUTH_WRAPPER_CALLS.has(tail)) hasRequireActor = true;
             if (joined.endsWith('db.query') || joined.endsWith('db.get')) {
                 const a = node.arguments[0];
                 events.push({ kind: 'read', pos: node.getStart(sf), table: a && ts.isStringLiteral(a) ? a.text : inferTable(a, []) });
@@ -332,8 +350,30 @@ sig('BON-09', 'Código único / no adivinable / rate limit', hitsFor(/Math\.rand
 sig('BON-10', 'Nominativo: ownerUserId verificado al canjear', redeem ? hitsFor(/ownerUserId ===|=== bono\.ownerUserId/, { files: [redeem.file] }) : []);
 
 // --- TRV
-const publicNoAuth = boundaries.filter((b) => b.isPublic && /mutation|action/i.test(b.kind) && !b.hasRequireActor && !/^(seed|debug|fix|migrate|clean|approveAll|createAdmin)/i.test(b.name) && !/^convex\/(seed|fix|clean|approveAll|createAdmin|migrate)/.test(b.file));
-sig('TRV-01', 'Mutation/action pública sin requireActor', publicNoAuth.map((b) => bHit(b, `escribe: ${b.tablesWritten.join(',') || '—'}`)), [], publicNoAuth.length ? 'media' : 'alta');
+const isSeedNamed = (b) =>
+    /^(seed|debug|fix|migrate|clean|approveAll|createAdmin)/i.test(b.name) ||
+    /^convex\/(seed|fix|clean|approveAll|createAdmin|migrate)/.test(b.file);
+const publicNoAuth = boundaries.filter(
+    (b) =>
+        b.isPublic &&
+        /mutation|action/i.test(b.kind) &&
+        !b.hasRequireActor &&
+        (OPTS.strictSeeds || !isSeedNamed(b)),
+);
+sig(
+    'TRV-01',
+    'Mutation/action pública sin requireActor',
+    publicNoAuth.map((b) => ({
+        file: b.file,
+        line: b.line,
+        snippet: `${b.kind} ${b.name} — escribe: ${b.tablesWritten.join(',') || '—'} — campos: ${b.fieldsPatched.join(',') || '—'}`,
+        writes: b.tablesWritten,
+        fields: b.fieldsPatched,
+        seedNamed: isSeedNamed(b),
+    })),
+    [],
+    publicNoAuth.length ? 'media' : 'alta',
+);
 const concurrencyTests = hitsFor(/Promise\.all(Settled)?\(/, { files: testFiles.map(rel) });
 sig('TRV-02', 'Tests de concurrencia (Promise.all en __tests__)', concurrencyTests);
 sig('TRV-03', 'Precio recalculado server-side', hitsFor(/DESDE LA BASE|listing\.price|unitCents:|priceCents:/, { files: ['convex/stripe.ts'] }).slice(0, 6),

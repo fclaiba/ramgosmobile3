@@ -27,6 +27,7 @@
 
 import { v } from 'convex/values';
 import {
+    internalMutation,
     internalQuery,
     mutation,
     query,
@@ -742,8 +743,13 @@ export const internalResolveCartAttribution = internalQuery({
 /**
  * Dev seed: business@test.com → @influencer_test with an **active** campaign
  * so the influencer can create bonos. Safe to re-run (idempotent).
+ *
+ * Era `mutation` pública sin `requireActor`: cualquier cliente con la URL del
+ * deployment podía invocarla y activar una campaña (con role patch incluido)
+ * sobre `business@test.com`/`influencer_test` si esas cuentas existían
+ * (E-149/TRV-01, mismo patrón que seedMockBonos/seed5Bonos).
  */
-export const seedBusinessInviteInfluencer1 = mutation({
+export const seedBusinessInviteInfluencer1 = internalMutation({
     args: {},
     handler: async (ctx) => {
         const business = await ctx.db

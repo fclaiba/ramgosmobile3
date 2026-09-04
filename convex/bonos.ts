@@ -689,8 +689,13 @@ export const lookupBono = query({
 
 // ---------------------------------------------------------------------------
 // Dev/Testing: seedMockBonos
+//
+// Era `mutation` pública sin `requireActor`: cualquier cliente con la URL del
+// deployment (pública en el bundle) podía invocarla y crear bonos `issued`
+// sobre un negocio real, canjeables como crédito de verdad (E-149, TRV-01).
+// `internalMutation` sólo se invoca desde el dashboard o `npx convex run`.
 // ---------------------------------------------------------------------------
-export const seedMockBonos = mutation({
+export const seedMockBonos = internalMutation({
     args: {},
     handler: async (ctx) => {
         // Find a business user
