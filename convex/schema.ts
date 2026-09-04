@@ -993,7 +993,12 @@ export default defineSchema({
         .index("by_owner", ["ownerUserId"])
         .index("by_seller", ["sellerId"])
         .index("by_listing", ["listingId"])
-        .index("by_status", ["status"]),
+        .index("by_status", ["status"])
+        // H2 (E-149 BON-07): el refund necesita leer "los bonos de ESTA
+        // orden y nada más" dentro de internalBeginOrderRefund — sin este
+        // índice tendría que escanear por by_owner/by_listing, que conflictúa
+        // con cualquier otro canje del mismo comprador o listing.
+        .index("by_order", ["orderId"]),
 
     // Event reservations — emitted at payment success, redeemed at the event entrance.
     eventReservations: defineTable({

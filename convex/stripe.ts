@@ -1491,7 +1491,19 @@ type RefundBegin = {
 };
 
 export const internalBeginOrderRefund = internalMutation({
-    args: { orderId: v.id("orders"), amountCents: v.optional(v.number()) },
+    args: {
+        orderId: v.id("orders"),
+        amountCents: v.optional(v.number()),
+        /**
+         * Saltea la guarda de bono `redeemed` (ver más abajo). Sólo la pasan
+         * `adminRefundEscrow` (admin explícito) y los refunds que reflejan
+         * plata que Stripe YA movió afuera de nuestro control (disputa
+         * perdida, refund hecho desde el dashboard) — bloquear esos dejaría
+         * el ledger interno desincronizado con una pérdida que ya ocurrió.
+         */
+        force: v.optional(v.boolean()),
+        actorUserId: v.optional(v.string()),
+    },
     handler: async (ctx, args): Promise<RefundBegin> => {
         const order = await ctx.db.get(args.orderId);
         if (!order) throw new Error("Orden no encontrada");
@@ -1499,6 +1511,51 @@ export const internalBeginOrderRefund = internalMutation({
             throw new Error(`La orden no admite reembolso (escrow: ${order.escrowState ?? "n/a"}).`);
         }
         if (!order.stripePaymentIntentId) throw new Error("La orden no tiene PaymentIntent.");
+
+        /**
+         * H2 (E-149 BON-07). Read set: sólo los bonos de ESTA orden, por el
+         * índice `by_order` — nada de `by_owner`/`by_listing`, que
+         * conflictuarían con cualquier otro canje del mismo comprador o del
+         * mismo listing.
+         *
+         * Un bono `redeemed` significa que el negocio YA entregó el crédito
+         * al comprador en su local: reembolsar sin avisar le devolvería la
+         * plata Y le dejaría el crédito gastado — lo paga el negocio, no la
+         * plataforma. Un bono `issued` (todavía no canjeado) se cancela
+         * siempre: no hay nada que perder, es lo mismo que reponer stock.
+         */
+        const bonos = await ctx.db
+            .query("bonoRedemptions")
+            .withIndex("by_order", (q) => q.eq("orderId", String(order._id)))
+            .collect();
+        const redeemedBono = bonos.find((b) => b.status === "redeemed");
+        if (redeemedBono && !args.force) {
+            throw new Error(
+                "Esta orden ya canjeó su bono: el negocio entregó el crédito. " +
+                    "Reembolsar de todas formas requiere confirmación de un administrador.",
+            );
+        }
+        for (const bono of bonos) {
+            if (bono.status === "issued") {
+                await ctx.db.patch(bono._id, { status: "cancelled" });
+            }
+        }
+        if (redeemedBono && args.force) {
+            await ctx.db.insert(
+                "audit_logs",
+                buildAuditRecord({
+                    actorUserId: args.actorUserId ?? `system:${args.force ? "force" : "auto"}`,
+                    targetUserId: order.userId,
+                    action: "BONO_REFUND_FORCED",
+                    metadata: {
+                        orderId: String(order._id),
+                        bonoId: String(redeemedBono._id),
+                        bonoCode: redeemedBono.bonoCode,
+                    },
+                }),
+            );
+        }
+
         const grossCents = order.grossCents ?? Math.round(order.total * 100);
         const remaining = grossCents - (order.refundedCents ?? 0);
         if (remaining <= 0) throw new Error("La orden ya fue reembolsada por completo.");
@@ -1727,6 +1784,8 @@ export const internalRefundOrder = internalAction({
         source: refundSourceValidator,
         externalRefund: v.optional(v.boolean()),
         actorUserId: v.optional(v.string()),
+        /** Ver el comentario en `internalBeginOrderRefund`. Sólo `adminRefundEscrow` lo pasa hoy. */
+        force: v.optional(v.boolean()),
     },
     handler: async (ctx, args): Promise<{ refunded: boolean; refundCents: number; refundId?: string }> => {
         /**
@@ -1742,6 +1801,11 @@ export const internalRefundOrder = internalAction({
             begin = await ctx.runMutation(internal.stripe.internalBeginOrderRefund, {
                 orderId: args.orderId,
                 amountCents: args.amountCents,
+                // `externalRefund` = la plata ya se movió afuera (disputa
+                // perdida, refund desde el dashboard de Stripe): no es
+                // negociable, así que también saltea la guarda del bono.
+                force: args.force === true || args.externalRefund === true,
+                actorUserId: args.actorUserId,
             });
         } catch (error: any) {
             const reason = stripeErrorMessage(error);
@@ -2020,6 +2084,13 @@ export const adminRefundEscrow = action({
         orderId: v.id("orders"),
         returnFeeAmountCents: v.optional(v.number()),
         reason: v.optional(v.string()),
+        /**
+         * H2 (E-149 BON-07). Sin esto, un bono ya `redeemed` bloquea el
+         * refund (el negocio ya entregó el crédito). El admin lo confirma
+         * explícitamente sabiendo que el comprador se queda con las dos
+         * cosas — queda en `audit_logs` como `BONO_REFUND_FORCED`.
+         */
+        force: v.optional(v.boolean()),
     },
     handler: async (ctx, args): Promise<{ success: boolean; refundId?: string; refundCents: number }> => {
         const actor = await requireActor(ctx, args.sessionToken);
@@ -2036,6 +2107,7 @@ export const adminRefundEscrow = action({
             reason: args.reason ?? "admin_refund",
             source: "admin",
             actorUserId: actor.idString,
+            force: args.force,
         });
         return { success: result.refunded, refundId: result.refundId, refundCents: result.refundCents };
     },

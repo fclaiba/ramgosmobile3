@@ -23,7 +23,14 @@ export type AuditAction =
     | "RECONCILIATION_RESOLVED"
     | "USER_ROLE_CHANGED"
     | "USER_DELETED"
-    | "GLOBAL_SETTING_CHANGED";
+    | "GLOBAL_SETTING_CHANGED"
+    /**
+     * H2 (E-149 BON-07): un admin reembolsó una orden cuyo bono ya estaba
+     * `redeemed` (el negocio entregó el crédito). Sólo se emite cuando el
+     * refund saltea la guarda con `force` — es la traza de "alguien decidió
+     * a mano devolverle la plata a un comprador que ya gastó el crédito".
+     */
+    | "BONO_REFUND_FORCED";
 
 export type AuditParams = {
     actorUserId: string;

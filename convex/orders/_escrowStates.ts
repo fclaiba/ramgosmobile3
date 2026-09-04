@@ -130,7 +130,22 @@ export function isReleasable(escrowState: string | undefined, hasReleaseError = 
     return false;
 }
 
-/** ¿Se puede iniciar un reembolso desde este estado? */
+/**
+ * ¿Se puede iniciar un reembolso desde este estado?
+ *
+ * `released` está permitido a propósito: es el estado de una orden de bono
+ * ya canjeado (`bonos.redeemBono` hace auto-release al escanear el QR). Este
+ * módulo NO sabe nada de bonos — la máquina de estados no distingue "se
+ * envió el producto" de "se entregó el crédito", y no debería: ese
+ * conocimiento vive en el dominio de negocio, no en el estado del dinero.
+ *
+ * La guarda de negocio ("no reembolses un bono ya canjeado sin que un admin
+ * lo confirme") vive en `stripe.internalBeginOrderRefund` (H2, E-149 BON-07),
+ * que lee `bonoRedemptions by_order` antes de avanzar. Acá no se toca nada:
+ * bloquear `released` en esta función rompería el 90% de los refunds
+ * legítimos (productos ya liberados, servicios completados) para resolver
+ * un caso que es específico de un solo tipo de listing.
+ */
 export function isRefundable(escrowState: string | undefined, hasRefundError = false): boolean {
     if (
         escrowState === "held" ||

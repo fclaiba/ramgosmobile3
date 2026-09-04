@@ -65,12 +65,22 @@ hasta tener reserva atómica. Agenda de turnos: no existe, no aplica.
 - **Corrección mínima:** llamar `internalIssueEventReservationsForPayment` desde `internalProcessPaidCheckout` junto al bono (L778, mismo patrón); y unificar el aforo con la reserva de stock del hallazgo anterior (`eventCapacity - eventSoldCount` es el mismo problema que `stock`). Hasta entonces, no vender eventos.
 
 ### [TRV-01] Mutations públicas sin autenticación escriben bonos sobre negocios reales
-- **Nivel:** 2
+- **Nivel:** 2 → **4 (H1, 2026-09-04)**
 - **Evidencia:** `convex/bonos.ts:693` (`seedMockBonos`, `mutation` pública, sin `requireActor`, escribe `listings` + `bonoRedemptions` con `status: "issued"` y `stock: 9999`) · `convex/developer.ts:279` (`seed5Bonos`, ídem) · scanner TRV-01 y tabla de límites (`**NO**` en la columna requireActor)
 - **Qué pasa hoy:** cualquier cliente con la URL del deployment (pública en el bundle de la app) puede llamarlas. `seedMockBonos` elige un negocio real por `role: "business"` y le crea bonos emitidos a nombre de un usuario.
 - **Escenario de falla concreto:** `npx convex run bonos:seedMockBonos --url https://academic-lapwing-311.convex.cloud` desde cualquier máquina → bonos `issued` redimibles en un negocio real. El código lo devuelve o lo lee `lookupBono`.
 - **Impacto económico:** crédito falso canjeable; además contamina `listings` activos en producción.
 - **Corrección mínima:** convertirlas a `internalMutation` (se siguen pudiendo correr desde el dashboard) o, si tienen que ser públicas para el panel de developer, `requireActor` + `role === 'developer'` + rechazo cuando `mode === 'live'`.
+- **✅ H1 (2026-09-04):** `seedMockBonos`, `seed5Bonos` y un tercer hallazgo del mismo patrón encontrado al barrer (`convex/campaigns.ts:746 seedBusinessInviteInfluencer1`, activa campañas con patch de rol) convertidas a `internalMutation`. Test de regresión `convex/__tests__/publicWriteAuth.test.ts`: corre el scanner con `--strict-seeds` (saca la exención por nombre que dejó pasar el bug originalmente) y falla si una función pública sin auth escribe una tabla o campo sensible. Verde, en `npm test`.
+
+### 🔴 [Hallazgo nuevo, no en el alcance original — H1] Escalación de privilegios en `syncUser`
+- **Nivel:** No auditado originalmente (fuera del catálogo STK/AGD/PAY/BON/TRV — es un hallazgo de auth, no de integridad transaccional)
+- **Evidencia:** `convex/users.ts:702-759`. `args.role: v.string()` (no el union de roles) se escribe sin validar: `role: args.role as any`; la función es `mutation` pública, sin `requireActor` (correcto para un endpoint de login/signup por OAuth — el problema no es la ausencia de auth, es el campo sin validar).
+- **Qué pasa hoy:** si el email no existe todavía, `syncUser` crea una cuenta **nueva** con el rol que mande el cliente y devuelve un `sessionToken` ya autenticado para esa cuenta.
+- **Escenario de falla concreto:** `syncUser({ uid: "x", name: "x", email: "nueva@dominio.com", role: "admin" })` sin sesión previa → sesión de administrador de arranque, cero verificación.
+- **Impacto:** total — es la puerta de entrada a cualquier capacidad `admin` del sistema (`_roles.ts` `OWNER_ONLY`: refund, release_escrow, withdraw_funds, change_role, delete_user...).
+- **Por qué no se resuelve en H1:** toca el núcleo de autenticación/altas de cuenta, no el patrón de bonos/campañas que motivó H1. Necesita decidir la política correcta para altas por OAuth (¿sólo `consumer` por defecto? ¿validar contra el union?) antes de tocar `convex/users.ts`. Documentado y excluido explícitamente (no silenciado) en `publicWriteAuth.test.ts` como `KNOWN_UNFIXED_CRITICAL`.
+- **Corrección mínima:** en la rama de alta nueva de `syncUser`, ignorar `args.role` y asignar siempre `role: "consumer"`; la promoción a `business`/`influencer` ya tiene su propio camino verificado (`SELF_ASSIGNABLE_ROLES` en `_roles.ts`, sin `admin`/`developer`). Requiere su propio hito — no decidir de paso.
 
 ### [TRV-02] Cero tests de concurrencia
 - **Nivel:** 0
@@ -115,7 +125,7 @@ hasta tener reserva atómica. Agenda de turnos: no existe, no aplica.
 |---|---|---|---|---|
 | STK-01 / STK-03 | `invariants.pure.test.ts` — modelo puro de la secuencia action→pago→mutation, 5 compradores, stock 1 | 1 orden | **5 órdenes, 4 con shortfall** (`expect(r.orders).toHaveLength(5)` pasa) | **ROTO** (modelo fiel de `stripe.ts:233` y `:713-723`; no es ejecución contra Convex) |
 | STK-02 | ídem | stock ≥ 0 | stock 0 | Cumplido |
-| BON-07 | `invariants.pure.test.ts` — `isRefundable('released')` | false para bono canjeado | `true` | **ROTO** (política ausente) |
+| BON-07 | `invariants.pure.test.ts` — `isRefundable('released')` | false para bono canjeado | `true` (sin cambios: la máquina no se tocó, ver `_escrowStates.ts`) | Ya no es el veredicto vigente — la guarda vive en `internalBeginOrderRefund`, ver H2 abajo |
 | PAY-04 | ídem — `isRefundable('refund_pending')` | false | false | Cumplido |
 | BON-01 | `concurrency.integration.test.ts` — 5 canjes simultáneos contra `oceanic-goose-862` | 1 éxito | **1 éxito, 4 rechazos** | ✅ **Cumplido — sube a nivel 4** (H0, 2026-09-04) |
 | AGD-02 / STK-04 | ídem — 5 `createPaymentIntent` simultáneos sobre un evento con capacidad 1 (re-apuntado al checkout real) | 1 éxito | **5 éxitos** | ❌ **ROTO, verificado empíricamente** (H0). Cierra en H3+H4 |
@@ -125,6 +135,16 @@ hasta tener reserva atómica. Agenda de turnos: no existe, no aplica.
 Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed · 4 skipped, 7 passed`.
 
 **H0 (2026-09-04, deployment `ramgos-audit` / `oceanic-goose-862`)** — `npm run test:audit`: `2 failed, 2 passed, 4 total`. STK-03 y AGD-02 en rojo con **5 de 5 éxitos** cada uno: la sobreventa dejó de ser una inferencia. BON-01 y PAY-01 verdes → nivel 4. Los `NO_VERIFICADO` de la tabla quedaron cerrados; ver `tests/audit/README.md`.
+
+**H2 (2026-09-04, mismo deployment)** — `bonoRefund.integration.test.ts`, 3 escenarios secuenciales, **los 3 verdes**:
+
+| Escenario | Esperado | Obtenido |
+|---|---|---|
+| Bono `issued` (nunca canjeado) → refund | se cancela solo; `redeemBono` lo rechaza después | ✅ |
+| Bono `redeemed` → refund **sin** `force` | bloqueado; orden y bono sin tocar | ✅ (`refundedCents` sigue en 0) |
+| Bono `redeemed` → refund **con** `force` de admin | pasa; queda `audit_logs` `BONO_REFUND_FORCED` | ✅ |
+
+**BON-07 → nivel 4.** La guarda vive en `stripe.internalBeginOrderRefund` (lee `bonoRedemptions by_order`, índice nuevo); `isRefundable` de `_escrowStates.ts` no se tocó — sigue permitiendo `released`/`held`, como debe, porque la máquina de estados del dinero no distingue tipos de listing. `redeemBono` no cambió: el estado `cancelled` ya estaba contemplado en su guard.
 
 ## 6. Zonas no verificadas
 
@@ -138,14 +158,15 @@ Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed 
 
 | # | Tarea | Invariantes | Impacto | Esfuerzo | Bloquea lanzamiento |
 |---|---|---|---|---|---|
-| 1 | `seedMockBonos` y `seed5Bonos` → `internalMutation` (o gate developer + `mode !== 'live'`) | TRV-01 | Alto: crédito falso en negocios reales | 30 min | **Sí** |
-| 2 | Cancelar bono `issued` en `internalBeginOrderRefund`; rechazar refund de bono `redeemed` sin `force` | BON-07, PAY-05 | Alto: $100 por bono, lo paga el negocio | 1-2 h | **Sí** |
+| 1 | ✅ **Hecho (H1)** `seedMockBonos`, `seed5Bonos` y `seedBusinessInviteInfluencer1` → `internalMutation` + test de regresión | TRV-01 | Alto: crédito falso en negocios reales | 30 min | **Sí** |
+| 1b | 🔴 **Nuevo, no resuelto**: `syncUser` permite altas con `role` arbitrario (escalación a admin) | — (fuera del catálogo original) | **Crítico** | ~1 h, requiere decisión de política | **Sí** |
+| 2 | ✅ **Hecho (H2)** Cancelar bono `issued` en `internalBeginOrderRefund`; rechazar refund de bono `redeemed` sin `force` | BON-07, PAY-05 | Alto: $100 por bono, lo paga el negocio | 1-2 h | **Sí** |
 | 3 | Refund automático + aviso a admins cuando `shortfalls.length > 0` en `internalProcessPaidCheckout` (reusar `internalRefundOrder` y el patrón de notificación de E-146) | STK-01, TRV-04 | Alto: hoy la orden sobrevendida se libera al vendedor por cron | 2 h | **Sí** si venden unidades únicas |
 | 4 | Reserva atómica: `reserveStock` (check-and-decrement + TTL) desde `createPaymentIntent`; el webhook consume; cron libera vencidas | STK-01, STK-03, STK-04 | Alto | 1-2 días | Sí para usados / unidad única |
 | 5 | Conectar eventos: emitir `eventReservations` desde `internalProcessPaidCheckout` (junto al bono, L778) y aforo vía la reserva del #4 | AGD-06, STK-04 | Alto para eventos | 1 día (con #4) | **Sí** para vender eventos |
 | 6 | No aplicar check de stock a `bono`/`service` sin inventario (o default 9999 en el cliente y guard por tipo en `stripe.ts:233` como en `cart.ts:92`) | STK-* nuevo | Medio: subventa silenciosa | 1 h | No |
 | 7 | Query admin + fila en `AdminFinanceScreen` para órdenes con `stockShortfall` | TRV-04 | Medio | 2 h | No (cubierto por #3) |
-| 8 | Correr `tests/audit/concurrency.integration.test.ts` en un preview y dejarlo en CI | TRV-02 | Medio: evita la próxima E-146 | 3 h | No |
+| 8 | 🟡 **H0 hecho**: corre contra `ramgos-audit`/`oceanic-goose-862`, sin skip. Falta cargar los 4 secrets en GitHub para que el job `audit-concurrency` de CI se ejecute (ver `tests/audit/README.md`) | TRV-02 | Medio: evita la próxima E-146 | 15 min restantes | No |
 | 9 | Restock proporcional en refund parcial (requiere refund por ítem, hoy es por monto) | STK-06 | Bajo | 1 día | No |
 | 10 | `bonoCode` con `crypto.randomUUID()` + `rateLimits` en `redeemBono` | BON-09 | Bajo | 1 h | No |
 | 11 | Verificar `cartId` en la idempotency key del PI | §6 | Desconocido | 30 min | No |

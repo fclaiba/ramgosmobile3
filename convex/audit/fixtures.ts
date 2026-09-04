@@ -27,7 +27,7 @@ function assertAuditDeployment() {
 
 const nowIso = () => new Date().toISOString();
 
-async function seedUser(ctx: any, role: "business" | "consumer", tag: string, suffix: string) {
+async function seedUser(ctx: any, role: "business" | "consumer" | "admin", tag: string, suffix: string) {
     const username = `${MARK}-${tag}-${suffix}`.replace(/[^a-z0-9-]/g, "");
     const name = `Audit ${tag}`;
     const id = await ctx.db.insert("users", {
@@ -155,22 +155,113 @@ export const seed = internalMutation({
     },
 });
 
+/**
+ * Escenario para `bonoRefund.integration.test.ts` (H2, E-149 BON-07):
+ * una orden pagada de tipo bono, `escrowState: "held"`, con su bono
+ * `issued` — todo lo que `internalBeginOrderRefund` necesita leer para
+ * decidir si cancela el bono o bloquea el refund. `stripePaymentIntentId`
+ * usa el prefijo `mock_pi_` (`_stripeEnv.ts:109`) para que el refund corra
+ * sin pegarle a Stripe de verdad; requiere `ALLOW_STRIPE_MOCK=true` en el
+ * deployment de audit.
+ */
+export const seedRefundScenario = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        assertAuditDeployment();
+        const suffix = Date.now().toString(36);
+        const business = await seedUser(ctx, "business", "refund-business", suffix);
+        const buyer = await seedUser(ctx, "consumer", "refund-buyer", suffix);
+        const admin = await seedUser(ctx, "admin", "refund-admin", suffix);
+
+        const bonoListingId = String(
+            await ctx.db.insert("listings", {
+                ...listingBase(business.id, "bono", `${MARK} bono refund`, suffix),
+                stock: 9999,
+                discountValue: 100,
+                validityDays: 30,
+            }),
+        );
+
+        const grossCents = 5000;
+        const now = nowIso();
+        const orderId = String(
+            await ctx.db.insert("orders", {
+                userId: buyer.id,
+                sellerId: business.id,
+                items: [{ listingId: bonoListingId, title: `${MARK} bono refund`, quantity: 1, price: 50 }],
+                total: 50,
+                currency: "USD" as const,
+                status: "paid_escrow" as const,
+                listingType: "bono",
+                mode: "test" as const,
+                escrowState: "held",
+                grossCents,
+                stripePaymentIntentId: `mock_pi_${MARK}_${suffix}`,
+                createdAt: now,
+                updatedAt: now,
+            }),
+        );
+
+        const bonoCode = `AUDREF-${suffix}`.toUpperCase();
+        const bonoId = String(
+            await ctx.db.insert("bonoRedemptions", {
+                bonoCode,
+                listingId: bonoListingId,
+                ownerUserId: buyer.id,
+                sellerId: business.id,
+                orderId,
+                validUntil: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
+                paidAmount: 50,
+                creditTotal: 100,
+                creditRemaining: 100,
+                usesTotal: 1,
+                usesRemaining: 1,
+                status: "issued",
+                createdAt: now,
+            }),
+        );
+
+        return { suffix, business, buyer, admin, orderId, bonoId, bonoCode, bonoListingId };
+    },
+});
+
 /** Estado actual de los documentos que los tests afirman. */
 export const inspect = internalQuery({
-    args: { productId: v.optional(v.string()), eventId: v.optional(v.string()), bonoId: v.optional(v.string()), stripeEventId: v.optional(v.string()) },
+    args: {
+        productId: v.optional(v.string()),
+        eventId: v.optional(v.string()),
+        bonoId: v.optional(v.string()),
+        orderId: v.optional(v.string()),
+        stripeEventId: v.optional(v.string()),
+    },
     handler: async (ctx, args) => {
-        const get = async (id?: string) => (id ? await ctx.db.get(ctx.db.normalizeId("listings", id) as any) : null);
-        const product: any = await get(args.productId);
-        const event: any = await get(args.eventId);
-        const bono: any = args.bonoId ? await ctx.db.get(ctx.db.normalizeId("bonoRedemptions", args.bonoId) as any) : null;
+        const get = async (table: string, id?: string) => (id ? await ctx.db.get(ctx.db.normalizeId(table as any, id) as any) : null);
+        const product: any = await get("listings", args.productId);
+        const event: any = await get("listings", args.eventId);
+        const bono: any = await get("bonoRedemptions", args.bonoId);
+        const order: any = await get("orders", args.orderId);
         const paymentEvents = args.stripeEventId
             ? await ctx.db.query("paymentEvents").withIndex("by_stripe_event", (q: any) => q.eq("stripeEventId", args.stripeEventId)).collect()
+            : [];
+        // Sin índice por orderId (audit_logs no lo tiene): aceptable acá
+        // porque esto es un helper de test, nunca una query de producto.
+        const auditLogs = args.orderId
+            ? (await ctx.db.query("audit_logs").collect()).filter((l: any) => l.metadata?.orderId === args.orderId)
             : [];
         return {
             product: product ? { stock: product.stock, available: product.available ?? null } : null,
             event: event ? { stock: event.stock, eventCapacity: event.eventCapacity, eventSoldCount: event.eventSoldCount } : null,
             bono: bono ? { status: bono.status } : null,
+            order: order
+                ? {
+                      escrowState: order.escrowState ?? null,
+                      refundedCents: order.refundedCents ?? 0,
+                      status: order.status,
+                      escrowRefundError: order.escrowRefundError ?? null,
+                  }
+                : null,
             paymentEvents: paymentEvents.map((e: any) => ({ processed: e.processed, error: e.error ?? null })),
+            auditLogs: auditLogs.map((l: any) => ({ action: l.action, metadata: l.metadata ?? null })),
         };
     },
 });
@@ -207,6 +298,11 @@ export const reset = internalMutation({
         }
         for (const e of (await ctx.db.query("paymentEvents").collect()).filter((e: any) => String(e.stripeEventId).startsWith("evt_audit_"))) {
             await ctx.db.delete(e._id); deleted++;
+        }
+        for (const l of (await ctx.db.query("audit_logs").collect()).filter(
+            (l: any) => userIds.has(String(l.actorUserId)) || userIds.has(String(l.targetUserId)),
+        )) {
+            await ctx.db.delete(l._id); deleted++;
         }
         return { deleted };
     },
