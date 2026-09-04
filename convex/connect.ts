@@ -183,7 +183,7 @@ const resolveTargetUser = async (
     ctx: any,
     sessionToken: string | undefined,
     userId?: string,
-): Promise<{ actorId: string; targetId: Id<"users">; user: Doc<"users"> }> => {
+): Promise<{ actorId: string; actorIsAdmin: boolean; targetId: Id<"users">; user: Doc<"users"> }> => {
     const actor = await requireActor(ctx, sessionToken);
     const targetStr = userId ?? actor.idString;
     const isSelf = targetStr === actor.idString;
@@ -191,7 +191,7 @@ const resolveTargetUser = async (
     if (!isSelf && !isAdmin) throw new Error("No autorizado.");
     const user = await ctx.runQuery(internal.users.internalGetUserById, { id: targetStr });
     if (!user) throw new Error("Usuario no encontrado.");
-    return { actorId: actor.idString, targetId: user._id as Id<"users">, user };
+    return { actorId: actor.idString, actorIsAdmin: isAdmin, targetId: user._id as Id<"users">, user };
 };
 
 // ---------------------------------------------------------------------------
@@ -552,6 +552,190 @@ export const requestInstantPayout = action({
         } catch (error: any) {
             console.error(`[Connect ${args.mode}] payouts.create error:`, error);
             throw new Error(`No se pudo solicitar el payout: ${stripeErrorMessage(error)}`);
+        }
+    },
+});
+
+// ---------------------------------------------------------------------------
+// Historial de retiros
+// ---------------------------------------------------------------------------
+
+/**
+ * Degrada igual que `getPayoutSchedule`: si la API V1 no atiende a esta cuenta
+ * V2 devuelve `unsupported` en vez de tirar. El historial nunca debe tumbar la
+ * pantalla de saldo.
+ */
+export const listRecentPayouts = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        mode: stripeModeValidator,
+        userId: v.optional(v.string()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{
+        accountId: string | null;
+        unsupported: boolean;
+        payouts: Array<{
+            id: string;
+            amountCents: number;
+            currency: string;
+            status: string;
+            method: string;
+            createdAt: number;
+            arrivalDate: number | null;
+            failureMessage: string | null;
+        }>;
+    }> => {
+        const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) return { accountId: null, unsupported: false, payouts: [] };
+        assertStripeConfigured(args.mode);
+        const limit = Math.min(Math.max(args.limit ?? 10, 1), 25);
+        try {
+            const list: any = await withStripeBreadcrumb(
+                { api: "payouts.list", accountId, mode: args.mode, limit },
+                () => getStripe(args.mode).payouts.list({ limit }, { stripeAccount: accountId }),
+            );
+            return {
+                accountId,
+                unsupported: false,
+                payouts: (list?.data ?? []).map((p: any) => ({
+                    id: String(p.id),
+                    amountCents: p.amount ?? 0,
+                    currency: p.currency ?? "usd",
+                    status: p.status ?? "unknown",
+                    method: p.method ?? "standard",
+                    createdAt: p.created ?? 0,
+                    arrivalDate: p.arrival_date ?? null,
+                    failureMessage: p.failure_message ?? null,
+                })),
+            };
+        } catch (error: any) {
+            console.warn(`[Connect ${args.mode}] payouts.list error:`, stripeErrorMessage(error));
+            return { accountId, unsupported: true, payouts: [] };
+        }
+    },
+});
+
+// ---------------------------------------------------------------------------
+// Administración de la cuenta: desvincular / cambiar / dashboard Express
+// ---------------------------------------------------------------------------
+
+/**
+ * Borra el puntero a la cuenta conectada de este modo. NO borra nada en
+ * Stripe: las cuentas V2 no se eliminan, así que la cuenta sigue existiendo
+ * con su KYC y su historial; sólo dejamos de usarla para cobrar.
+ *
+ * Efecto secundario a tener presente: desde acá los webhooks de ese `acct_`
+ * pasan a ser no-ops silenciosos, porque `internalSaveConnectFlags` busca al
+ * usuario por índice y ya no lo va a encontrar. Es el mismo modo de falla que
+ * dejó E-147, pero acá es intencional; el `audit_log` es la única traza.
+ */
+export const internalClearConnectAccount = internalMutation({
+    args: {
+        userId: v.id("users"),
+        mode: stripeModeValidator,
+        accountId: v.string(),
+        actorUserId: v.string(),
+    },
+    handler: async (ctx, args): Promise<void> => {
+        const f = fieldsFor(args.mode);
+        await ctx.db.patch(args.userId, {
+            [f.idField]: undefined,
+            [f.statusField]: undefined,
+            [f.capsField]: undefined,
+        } as any);
+        await ctx.db.insert("audit_logs", {
+            actorUserId: args.actorUserId,
+            targetUserId: String(args.userId),
+            action: "STRIPE_CONNECT_UNLINKED",
+            timestamp: new Date().toISOString(),
+            metadata: { accountId: args.accountId, mode: args.mode },
+        });
+    },
+});
+
+export const unlinkConnectAccount = action({
+    args: {
+        sessionToken: v.optional(v.string()),
+        mode: stripeModeValidator,
+        userId: v.optional(v.string()),
+        /** Sólo admin/developer: desvincula aunque quede saldo en la cuenta. */
+        force: v.optional(v.boolean()),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<{ unlinked: boolean; previousAccountId: string | null; reason?: string }> => {
+        const { actorId, actorIsAdmin, targetId, user } = await resolveTargetUser(
+            ctx,
+            args.sessionToken,
+            args.userId,
+        );
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) return { unlinked: false, previousAccountId: null, reason: "no-account" };
+
+        // Guarda de plata: si Stripe todavía le debe algo a esa cuenta y
+        // soltamos el puntero, el usuario pierde el camino para retirarlo.
+        const skipGuard = args.force === true && actorIsAdmin;
+        if (!skipGuard) {
+            assertStripeConfigured(args.mode);
+            let heldCents = 0;
+            try {
+                const balance: any = await withStripeBreadcrumb(
+                    { api: "balance.retrieve", accountId, mode: args.mode },
+                    () => getStripe(args.mode).balance.retrieve(undefined, { stripeAccount: accountId }),
+                );
+                const sum = (arr?: Array<{ amount: number }>) =>
+                    (arr ?? []).reduce((acc, b) => acc + (b?.amount ?? 0), 0);
+                heldCents = sum(balance?.available) + sum(balance?.pending);
+            } catch (error: any) {
+                throw new Error(
+                    `No pudimos verificar el saldo antes de desvincular: ${stripeErrorMessage(error)}`,
+                );
+            }
+            if (heldCents > 0) {
+                throw new Error(
+                    `Todavía hay USD $${(heldCents / 100).toFixed(2)} en esa cuenta. Retiralo antes de desvincularla.`,
+                );
+            }
+        }
+
+        await ctx.runMutation(internal.connect.internalClearConnectAccount, {
+            userId: targetId,
+            mode: args.mode,
+            accountId,
+            actorUserId: actorId,
+        });
+        return { unlinked: true, previousAccountId: accountId };
+    },
+});
+
+/**
+ * Link al dashboard Express, donde el vendedor administra su banco y su
+ * calendario de payouts (cosas que la plataforma no puede tocar en V2).
+ * Degrada a `unsupported` porque no está garantizado que el login link V1
+ * acepte cuentas creadas con `v2.core.accounts.create`.
+ */
+export const createExpressLoginLink = action({
+    args: { sessionToken: v.optional(v.string()), mode: stripeModeValidator, userId: v.optional(v.string()) },
+    handler: async (ctx, args): Promise<{ url: string | null; unsupported: boolean }> => {
+        const { user } = await resolveTargetUser(ctx, args.sessionToken, args.userId);
+        const accountId = readStatus(user, args.mode).accountId;
+        if (!accountId) return { url: null, unsupported: false };
+        assertStripeConfigured(args.mode);
+        try {
+            const link: any = await withStripeBreadcrumb(
+                { api: "accounts.createLoginLink", accountId, mode: args.mode },
+                () => (getStripe(args.mode) as any).accounts.createLoginLink(accountId),
+            );
+            return { url: link?.url ?? null, unsupported: !link?.url };
+        } catch (error: any) {
+            console.warn(`[Connect ${args.mode}] accounts.createLoginLink error:`, stripeErrorMessage(error));
+            return { url: null, unsupported: true };
         }
     },
 });

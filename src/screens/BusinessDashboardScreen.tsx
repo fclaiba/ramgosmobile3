@@ -9,7 +9,6 @@ import {
   useWindowDimensions,
   Platform,
   Linking,
-  ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation } from "@react-navigation/native";
@@ -29,15 +28,13 @@ import {
   MoreHorizontal,
   ShieldAlert,
   AlertTriangle,
-  CreditCard,
-  CheckCircle2,
-  ExternalLink,
   ListTodo,
   CalendarDays,
   MessageCircle,
   ShoppingCart,
 } from "lucide-react-native";
 import { MobileHeader } from "../components/MobileHeader";
+import { ConnectStatusBanner } from "../components/connect/ConnectStatusBanner";
 import { GlobalHeaderActions } from "../components/GlobalHeaderActions";
 import { Badge } from "../components/ui/badge";
 import { Coupon } from "../contexts/BusinessContext";
@@ -110,15 +107,9 @@ function BusinessDashboardScreen({
 
   // Stripe Connect — único camino: hook compartido (estado reactivo por modo,
   // onboarding hosted con retorno a la app). Ver src/hooks/useConnectOnboarding.ts.
+  // El branching de estados lo resuelve `ConnectStatusBanner` a partir de
+  // `connect.phase`; acá NO se ramifica por `accountId` (ver E-148).
   const connect = useConnectOnboarding({ displayName: businessInfo?.name });
-  const connectLoading = connect.loading;
-  const stripeConnectAccountId: string | undefined = connect.accountId ?? undefined;
-  const connectStatus = connect.status
-    ? {
-        readyToReceivePayments: connect.status.readyToReceivePayments,
-        onboardingComplete: !!connect.status.caps?.onboardingComplete,
-      }
-    : null;
 
   // ─── Influencer campaigns (server-backed) ──────────────────────────
   // List the campaigns where this business is the counterparty plus
@@ -324,9 +315,17 @@ function BusinessDashboardScreen({
     }
   };
 
+  // `start()` devuelve un objeto, no un booleano: `!resultado` sería siempre
+  // false y el toast de error se perdía en silencio (E-148).
   const handleStripeConnectOnboarding = async () => {
-    const ok = await connect.start();
-    if (!ok && connect.error) show(connect.error, "error");
+    const result = await connect.start();
+    if (result.outcome === "error" || result.outcome === "unauthenticated") {
+      show(result.message || "No se pudo abrir el onboarding de Stripe.", "error");
+    } else if (result.ready) {
+      show("Tu cuenta de pagos quedó habilitada.", "success");
+    } else {
+      show("El onboarding quedó a medias. Podés continuarlo cuando quieras.", "info");
+    }
   };
 
   useEffect(() => {
@@ -628,98 +627,14 @@ function BusinessDashboardScreen({
             </TouchableOpacity>
           )}
 
-          {/* Stripe Connect — seller bank onboarding (V2) */}
-          {(() => {
-            // Banner state has 3 modes:
-            //  - no account: prompt onboarding (creates V2 account on click)
-            //  - account but onboarding incomplete: prompt to finish KYC
-            //  - account with payouts active: show "Cuenta lista para recibir pagos"
-            const hasAccount = !!stripeConnectAccountId;
-            const ready = !!connectStatus?.readyToReceivePayments;
-            const onboardingDone = !!connectStatus?.onboardingComplete;
-            const isReadyState = hasAccount && ready;
-            const isPendingState = hasAccount && !ready;
-
-            const palette = isReadyState
-              ? {
-                  border: isDark ? "#064E3B" : "#A7F3D0",
-                  bg: isDark ? "rgba(5,150,105,0.15)" : "#ECFDF5",
-                  icoBg: isDark ? "#065F46" : "#D1FAE5",
-                  text: isDark ? "#6EE7B7" : "#065F46",
-                  desc: isDark ? "#A7F3D0" : "#047857",
-                }
-              : isPendingState
-                ? {
-                    border: isDark ? "#78350F" : "#FEF3C7",
-                    bg: isDark ? "rgba(120,53,15,0.15)" : "#FFFBEB",
-                    icoBg: isDark ? "#92400E" : "#FDE68A",
-                    text: isDark ? "#FCD34D" : "#92400E",
-                    desc: isDark ? "#FDE68A" : "#B45309",
-                  }
-                : {
-                    border: isDark ? "#1E3A5F" : "#BFDBFE",
-                    bg: isDark ? "rgba(37,99,235,0.15)" : "#EFF6FF",
-                    icoBg: isDark ? "#1E40AF" : "#DBEAFE",
-                    text: isDark ? "#93C5FD" : "#1D4ED8",
-                    desc: isDark ? "#BFDBFE" : "#1E40AF",
-                  };
-
-            const title = isReadyState
-              ? "Cuenta de pagos lista"
-              : isPendingState
-                ? "Completa tu onboarding de Stripe"
-                : "Conectar cuenta de pagos";
-
-            const desc = isReadyState
-              ? `Stripe Connect activo · ${stripeConnectAccountId!.slice(0, 16)}...`
-              : isPendingState
-                ? onboardingDone
-                  ? "Stripe está revisando tu cuenta. Te avisamos cuando esté lista."
-                  : "Faltan datos para activar tus pagos. Continúa el onboarding."
-                : "Vincula tu cuenta bancaria para recibir tus pagos vía Stripe Connect.";
-
-            const Icon = isReadyState ? CheckCircle2 : CreditCard;
-
-            return (
-              <TouchableOpacity
-                activeOpacity={isReadyState ? 1 : 0.85}
-                onPress={
-                  isReadyState ? undefined : handleStripeConnectOnboarding
-                }
-                style={[
-                  styles.kycBanner,
-                  { borderColor: palette.border, backgroundColor: palette.bg },
-                ]}
-              >
-                <View
-                  style={[styles.kycIcon, { backgroundColor: palette.icoBg }]}
-                >
-                  <Icon size={18} color={palette.text} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    style={[styles.kycTitle, { color: palette.text }]}
-                    numberOfLines={1}
-                  >
-                    {title}
-                  </Text>
-                  <Text
-                    style={[styles.kycDesc, { color: palette.desc }]}
-                    numberOfLines={2}
-                  >
-                    {desc}
-                  </Text>
-                </View>
-                {connectLoading ? (
-                  <ActivityIndicator size="small" color={palette.text} />
-                ) : (
-                  !isReadyState && (
-                    <ExternalLink size={18} color={palette.text} />
-                  )
-                )}
-              </TouchableOpacity>
-            );
-          })()}
+          {/* Stripe Connect — estado de la cuenta + CTA. El branching vive en
+              ConnectStatusBanner: duplicarlo a mano fue el bug de E-148. */}
+          <ConnectStatusBanner
+            connect={connect}
+            variant="banner"
+            returnTo={{ screen: 'Withdrawal', params: { ownerId: user?.id } }}
+            containerStyle={styles.kycBanner}
+          />
 
           {/* Tabs */}
           <View style={{ marginBottom: 20 }}>

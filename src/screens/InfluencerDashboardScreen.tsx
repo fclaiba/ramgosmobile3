@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useConnectOnboarding } from '../hooks/useConnectOnboarding';
+import { ConnectStatusBanner } from '../components/connect/ConnectStatusBanner';
 import { View, ScrollView, Text, StyleSheet, useWindowDimensions, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -39,17 +40,10 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
     const wallet = getWalletByOwner(influencerId) ?? getWalletByOwner('influencer_demo');
     const { show } = useToast();
 
-    // Stripe Connect — hook compartido con BusinessDashboardScreen.
+    // Stripe Connect — hook compartido con BusinessDashboardScreen. El estado
+    // y su CTA los resuelve `ConnectStatusBanner` a partir de `connect.phase`;
+    // acá NO se ramifica por `accountId` (ver E-148).
     const connect = useConnectOnboarding({ displayName: influencerName });
-    const connectLoading = connect.loading;
-    const stripeConnectAccountId: string | undefined = connect.accountId ?? undefined;
-    const connectStatus = connect.status
-        ? { readyToReceivePayments: connect.status.readyToReceivePayments, onboardingComplete: !!connect.status.caps?.onboardingComplete }
-        : null;
-    const handleInfluencerConnectOnboarding = async () => {
-        const ok = await connect.start();
-        if (!ok && connect.error) show(connect.error, 'error');
-    };
 
     // UI State
     const [modalVisible, setModalVisible] = useState(false);
@@ -161,35 +155,20 @@ export default function InfluencerDashboardScreen({ isTabMode, onMenuPress }: an
                     <Text style={[styles.bonusTitle, { color: isDark ? '#fff' : '#111827' }]}>
                         Cuenta de pagos
                     </Text>
-                    {stripeConnectAccountId ? (
-                        <>
-                            <Text style={[styles.bonusSubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>
-                                {connectStatus?.readyToReceivePayments
-                                    ? 'Tu cuenta está lista para recibir comisiones.'
-                                    : 'Tu cuenta está conectada, pero Stripe todavía necesita datos para habilitar los cobros.'}
-                            </Text>
-                            <Button
-                                onPress={() => navigation.navigate('Withdrawal', { ownerId: user?.id })}
-                                style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
-                            >
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Ver saldo y retiros</Text>
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <Text style={[styles.bonusSubtitle, { color: isDark ? 'rgba(255,255,255,0.7)' : '#6B7280' }]}>
-                                Conectá tu cuenta de Stripe para poder cobrar tus comisiones de influencer.
-                            </Text>
-                            <Button
-                                onPress={handleInfluencerConnectOnboarding}
-                                isLoading={connectLoading}
-                                disabled={connectLoading}
-                                style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
-                            >
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Conectar cuenta de pagos</Text>
-                            </Button>
-                        </>
-                    )}
+                    <ConnectStatusBanner
+                        connect={connect}
+                        variant="banner"
+                        returnTo={{ screen: 'Withdrawal', params: { ownerId: user?.id } }}
+                        containerStyle={{ marginTop: 12 }}
+                    />
+                    {/* Siempre visible: la pantalla de saldo se banca los tres
+                        estados y es el mejor lugar para retomar la conexión. */}
+                    <Button
+                        onPress={() => navigation.navigate('Withdrawal', { ownerId: user?.id })}
+                        style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
+                    >
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Ver saldo y retiros</Text>
+                    </Button>
                 </View>
 
                 {/* Negocios autorizados (whitelist + campañas) */}

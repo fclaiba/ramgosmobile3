@@ -115,12 +115,10 @@ import MyListingsScreen from './src/screens/MyListingsScreen';
 import MyBookingsScreen from './src/screens/MyBookingsScreen';
 import FormFillScreen from './src/screens/FormFillScreen';
 import ProductDetailScreen from './src/screens/marketplace/ProductDetailScreen';
-import WalletScreen from './src/screens/finance/WalletScreen';
 import CampaignManagerScreen from './src/screens/marketing/CampaignManagerScreen';
 import OrderDetailScreen from './src/screens/marketplace/OrderDetailScreen';
 import DisputeReasonScreen from './src/screens/marketplace/DisputeReasonScreen';
 import DisputeChatScreen from './src/screens/marketplace/DisputeChatScreen';
-import SellerWalletScreen from './src/screens/marketplace/SellerWalletScreen';
 import DisputeScreen from './src/screens/marketplace/DisputeScreen';
 
 // Business Screens
@@ -265,13 +263,11 @@ const AppNavigator = () => {
                     <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
                     <Stack.Screen name="CreateListing" component={CreateListingScreen} />
                     <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
-                    <Stack.Screen name="Wallet" component={WalletScreen} />
                     <Stack.Screen name="CampaignManager" component={CampaignManagerScreen} />
                     <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
                     <Stack.Screen name="Cart" component={CartScreen} />
                                         <Stack.Screen name="DisputeReason" component={DisputeReasonScreen} />
                     <Stack.Screen name="DisputeChat" component={DisputeChatScreen} />
-                    <Stack.Screen name="SellerWallet" component={SellerWalletScreen} />
                     <Stack.Screen name="MiMascota" component={MiMascotaScreen} />
                     <Stack.Screen name="Profile" component={ProfileScreen} />
                     <Stack.Screen name="Saved" component={SavedScreen} />
