@@ -46,3 +46,6 @@ yarn-error.*
 /backups/
 dist/
 .vercel
+
+# Deployment de audit (tests de concurrencia) — nunca commitear
+.env.audit

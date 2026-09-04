@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "lint": "eslint . --fix || true",
     "test": "jest",
+    "test:audit": "jest -c jest.audit.config.js --runInBand",
     "test:constitution": "jest src/contexts/__tests__/constitution.test.tsx src/contexts/__tests__/RewardsContext.test.tsx src/utils/__tests__/referralAlias.test.ts src/utils/__tests__/bonoEconomics.test.ts src/utils/__tests__/bonoDeepLink.test.ts",
     "check-readiness": "node scripts/check-readiness.js",
     "db:seed": "npx convex run seed:seedE2E"

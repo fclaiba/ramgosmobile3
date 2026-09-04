@@ -24,6 +24,7 @@ import type * as _stripeEnv from "../_stripeEnv.js";
 import type * as admin from "../admin.js";
 import type * as adminQueries from "../adminQueries.js";
 import type * as approveAll from "../approveAll.js";
+import type * as audit_fixtures from "../audit/fixtures.js";
 import type * as auth from "../auth.js";
 import type * as authHelpers from "../authHelpers.js";
 import type * as bonoEconomics from "../bonoEconomics.js";
@@ -137,6 +138,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   adminQueries: typeof adminQueries;
   approveAll: typeof approveAll;
+  "audit/fixtures": typeof audit_fixtures;
   auth: typeof auth;
   authHelpers: typeof authHelpers;
   bonoEconomics: typeof bonoEconomics;

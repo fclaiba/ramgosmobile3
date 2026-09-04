@@ -55,6 +55,42 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
+  audit-concurrency:
+    # Tests de concurrencia contra el deployment de audit (proyecto ramgos-audit,
+    # nunca producción). Un invariante sin este job en verde cuenta como roto.
+    # Secrets necesarios: CONVEX_AUDIT_DEPLOY_KEY (deploy key del deployment
+    # oceanic-goose-862), AUDIT_CONVEX_URL, AUDIT_CONVEX_SITE_URL,
+    # AUDIT_STRIPE_WEBHOOK_SECRET_TEST (el mismo valor cargado en ese deployment).
+    name: Concurrency invariants (audit deployment)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy current code to the audit deployment
+        run: npx convex deploy --yes
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_AUDIT_DEPLOY_KEY }}
+
+      - name: Run concurrency tests
+        run: npm run test:audit
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_AUDIT_DEPLOY_KEY }}
+          AUDIT_CONVEX_URL: ${{ secrets.AUDIT_CONVEX_URL }}
+          AUDIT_CONVEX_SITE_URL: ${{ secrets.AUDIT_CONVEX_SITE_URL }}
+          STRIPE_WEBHOOK_SECRET_TEST: ${{ secrets.AUDIT_STRIPE_WEBHOOK_SECRET_TEST }}
+          AUDIT_CONCURRENCY: '5'
+
   build-expo:
     name: Build Expo App (EAS)
     needs: test
