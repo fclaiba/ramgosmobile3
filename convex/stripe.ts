@@ -39,6 +39,8 @@ import { canUseTestMode, publicStripeModes, TEST_MODE_DENIED_MESSAGE } from "./_
 import { classifyPayoutClaim, shouldRetryRelease } from "./_payoutRetry";
 import { decrementStock, outOfStockMessage, remainingToDecrement, shortfallFor } from "./_inventory";
 import { consumeReservation, loadReservationForCart } from "./stock";
+import { confirmAppointmentForOrder, loadAppointmentForCart, releaseAppointment, type SlotReservationResult } from "./agenda";
+import { canCancelFreely, DEFAULT_CANCELLATION_HOURS } from "./_agenda";
 import { can, denialMessage } from "./_roles";
 import { buildAuditRecord } from "./_audit";
 import { stripeFeeCentsFor } from "./_fees";
@@ -322,6 +324,18 @@ export const createPaymentIntent = action({
             }),
         ),
         expectedTotalCents: v.number(),
+        /**
+         * H5: turno elegido, para servicios de un negocio con agenda en modo
+         * `paid`. El horario se reserva ANTES de cobrar, igual que el stock.
+         */
+        appointmentSlot: v.optional(
+            v.object({
+                businessId: v.string(),
+                listingId: v.string(),
+                slotDate: v.string(),
+                slotTime: v.string(),
+            }),
+        ),
         pointsToRedeem: v.optional(v.number()),
         shipping: v.optional(shippingValidator),
         simulate: v.optional(v.boolean()),
@@ -405,6 +419,38 @@ export const createPaymentIntent = action({
             lineItems: args.lineItems.map((l) => ({ listingId: l.listingId, quantity: l.quantity })),
         });
         if (!reservation.ok) throw new Error(outOfStockMessage(reservation.shortfalls));
+
+        /**
+         * H5 (AGD) — el HORARIO se reserva igual que el stock: en una mutation
+         * que chequea y escribe, antes de tocar Stripe. Sin esto dos
+         * compradores pagaban el mismo turno.
+         */
+        let appointment: { appointmentId: Id<"appointments">; reused: boolean } | null = null;
+        if (args.appointmentSlot) {
+            const slot = args.appointmentSlot;
+            const reserved: SlotReservationResult = await ctx.runMutation(internal.agenda.internalReserveAppointmentSlot, {
+                businessId: slot.businessId,
+                buyerUserId: userId,
+                listingId: slot.listingId,
+                cartId: args.cartId,
+                slotDate: slot.slotDate,
+                slotTime: slot.slotTime,
+                paymentMode: "paid" as const,
+                nowMs: Date.now(),
+            });
+            if (!reserved.ok) {
+                // El stock ya se descontó: se devuelve antes de rechazar, o el
+                // comprador se queda sin turno Y sin stock.
+                if (!reservation.reused) {
+                    await ctx.runMutation(internal.stock.internalReleaseReservationById, {
+                        reservationId: reservation.reservationId,
+                        reason: "appointment_unavailable",
+                    });
+                }
+                throw new Error(reserved.reason);
+            }
+            appointment = { appointmentId: reserved.appointmentId, reused: reserved.reused };
+        }
 
         let paymentIntentId: string;
         let clientSecret: string | null;
@@ -524,6 +570,12 @@ export const createPaymentIntent = action({
             if (!reservation.reused) {
                 await ctx.runMutation(internal.stock.internalReleaseReservationById, {
                     reservationId: reservation.reservationId,
+                    reason: "checkout_failed",
+                });
+            }
+            if (appointment && !appointment.reused) {
+                await ctx.runMutation(internal.agenda.internalReleaseAppointmentById, {
+                    appointmentId: appointment.appointmentId,
                     reason: "checkout_failed",
                 });
             }
@@ -852,6 +904,17 @@ export const internalProcessPaidCheckout = internalMutation({
         // órdenes: si esto falla, el stock sigue reservado y el cron lo
         // devuelve. Nunca queda descontado sin orden ni al revés.
         if (reservation) await consumeReservation(ctx, reservation, args.stripePaymentIntentId);
+
+        // H5: mismo momento, misma transacción — el turno reservado pasa a
+        // `confirmed` y queda atado a la orden. Si esto falla, el turno sigue
+        // en `held` y el cron lo devuelve a la grilla.
+        if (payment.cartId && firstOrderId) {
+            const appointment = await loadAppointmentForCart(ctx, {
+                buyerUserId: payment.userId,
+                cartId: payment.cartId,
+            });
+            if (appointment) await confirmAppointmentForOrder(ctx, appointment, String(firstOrderId));
+        }
 
         const totalSellerNet = snapshot.sellers.reduce((a, s) => a + s.sellerNetCents, 0);
         await ctx.db.patch(payment._id, {
@@ -1665,6 +1728,62 @@ export const internalBeginOrderRefund = internalMutation({
                         orderId: String(order._id),
                         reservationId: String(checkedInReservation._id),
                         qrCode: checkedInReservation.qrCode,
+                    },
+                }),
+            );
+        }
+
+        /**
+         * H5 (E-149 AGD). Tercera pieza del mismo criterio que los bonos (H2) y
+         * las entradas (H4): el negocio ya entregó lo que vendió, o está a
+         * punto de hacerlo y no llega a llenar el hueco.
+         *
+         *   - turno `completed` o `no_show` → el turno ocurrió (o el comprador
+         *     no apareció): reembolsar es una pérdida del negocio.
+         *   - turno dentro de la ventana de cancelación (24 h por defecto) →
+         *     mismo motivo: a esa altura el horario ya no se revende.
+         *
+         * En los dos casos hace falta `force` de admin, y queda la traza.
+         * Fuera de la ventana se cancela y el horario vuelve a la grilla.
+         */
+        const appointments = await ctx.db
+            .query("appointments")
+            .withIndex("by_order", (q) => q.eq("orderId", String(order._id)))
+            .collect();
+        const nowMs = Date.now();
+        const blockingAppointment = appointments.find(
+            (a) =>
+                a.status === "completed" ||
+                a.status === "no_show" ||
+                (a.status === "confirmed" &&
+                    !canCancelFreely(a.startsAtMs, nowMs, DEFAULT_CANCELLATION_HOURS)),
+        );
+        if (blockingAppointment && !args.force) {
+            throw new Error(
+                blockingAppointment.status === "confirmed"
+                    ? "Faltan menos de 24 h para el turno: ya no se puede cancelar solo. " +
+                          "Reembolsar de todas formas requiere confirmación de un administrador."
+                    : "El turno de esta orden ya ocurrió. " +
+                          "Reembolsar de todas formas requiere confirmación de un administrador.",
+            );
+        }
+        for (const appointment of appointments) {
+            if (appointment.status === "held" || appointment.status === "requested" || appointment.status === "confirmed") {
+                await releaseAppointment(ctx, appointment, "order_refunded");
+            }
+        }
+        if (blockingAppointment && args.force) {
+            await ctx.db.insert(
+                "audit_logs",
+                buildAuditRecord({
+                    actorUserId: args.actorUserId ?? "system:force",
+                    targetUserId: order.userId,
+                    action: "APPOINTMENT_REFUND_FORCED",
+                    metadata: {
+                        orderId: String(order._id),
+                        appointmentId: String(blockingAppointment._id),
+                        startsAtMs: blockingAppointment.startsAtMs,
+                        appointmentStatus: blockingAppointment.status,
                     },
                 }),
             );

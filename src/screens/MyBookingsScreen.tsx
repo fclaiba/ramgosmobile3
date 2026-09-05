@@ -43,8 +43,10 @@ export default function MyBookingsScreen({ navigation }: any) {
 
         while (days.length < 14) { // Get next 14 available days
             const jsDay = cursor.getDay();
-            const mappedDay = jsDay === 0 ? 7 : jsDay;
-            if (businessSettings.workingDays.includes(mappedDay)) {
+            // H5: acá se mapeaba domingo a 7, pero `AgendaConfigTab` lo guarda
+            // como 0 (convención de `getDay`). Un negocio que atendía domingos
+            // no los veía nunca en esta pantalla.
+            if (businessSettings.workingDays.includes(jsDay)) {
                 const year = cursor.getFullYear();
                 const month = String(cursor.getMonth() + 1).padStart(2, '0');
                 const date = String(cursor.getDate()).padStart(2, '0');
@@ -61,26 +63,19 @@ export default function MyBookingsScreen({ navigation }: any) {
         return days;
     }, [businessSettings, today.getTime()]);
 
-    // Compute time slots
-    const availableSlots = React.useMemo(() => {
-        if (!businessSettings || !selectedDate) return [];
-        const slots = [];
-        const [startH, startM] = businessSettings.startHour.split(':').map(Number);
-        const [endH, endM] = businessSettings.endHour.split(':').map(Number);
-        const duration = businessSettings.slotDurationMinutes || 60;
-        
-        let currentMins = startH * 60 + startM;
-        const endMins = endH * 60 + endM;
-
-        while (currentMins + duration <= endMins) {
-            const h = Math.floor(currentMins / 60);
-            const m = currentMins % 60;
-            const timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-            slots.push(timeStr);
-            currentMins += duration;
-        }
-        return slots;
-    }, [businessSettings, selectedDate]);
+    /**
+     * H5: los horarios los da el servidor, ya sin los que están ocupados.
+     * Antes esta pantalla recalculaba la grilla por su cuenta y ofrecía
+     * reprogramar a horarios que ya tenían a otra persona.
+     */
+    const [nowMs] = useState(() => Date.now());
+    const slotsResult = useQuery(
+        api.agenda.getAvailableSlots,
+        selectedBusinessId && selectedDate
+            ? { businessId: selectedBusinessId, date: selectedDate, nowMs }
+            : 'skip',
+    );
+    const availableSlots: string[] = (slotsResult?.slots ?? []).map((s: any) => s.slotTime);
 
     const handleCancel = (leadId: string) => {
         Alert.alert('Cancelar Turno', '¿Estás seguro de que querés cancelar esta consulta/turno?', [

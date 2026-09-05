@@ -21,6 +21,7 @@ import type * as _reconciliationRules from "../_reconciliationRules.js";
 import type * as _roles from "../_roles.js";
 import type * as _split from "../_split.js";
 import type * as _stripeEnv from "../_stripeEnv.js";
+import type * as agenda from "../agenda.js";
 import type * as admin from "../admin.js";
 import type * as adminQueries from "../adminQueries.js";
 import type * as approveAll from "../approveAll.js";
@@ -136,6 +137,7 @@ declare const fullApi: ApiFromModules<{
   _roles: typeof _roles;
   _split: typeof _split;
   _stripeEnv: typeof _stripeEnv;
+  agenda: typeof agenda;
   admin: typeof admin;
   adminQueries: typeof adminQueries;
   approveAll: typeof approveAll;

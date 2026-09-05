@@ -550,25 +550,6 @@ export default defineSchema({
         value: v.any(),
     }).index("by_key", ["key"]),
 
-    // PHASE 5: Rentals and Bookings
-    bookings: defineTable({
-        listingId: v.string(),
-        orderId: v.string(), // linked to an order
-        buyerId: v.string(),
-        sellerId: v.string(),
-        checkInDate: v.string(),
-        checkOutDate: v.string(),
-        status: v.union(v.literal('pending'), v.literal('confirmed'), v.literal('cancelled'), v.literal('completed')),
-        guests: v.number(),
-        totalPrice: v.number(),
-        createdAt: v.string(),
-    })
-        .index("by_listing", ["listingId"])
-        .index("by_seller", ["sellerId"])
-        .index("by_buyer", ["buyerId"])
-        .index("by_order", ["orderId"])
-        .index("by_status", ["status"]),
-
     // PHASE 1: User Profile Tables
     savedAddresses: defineTable({
         userId: v.string(),
@@ -2041,9 +2022,80 @@ export default defineSchema({
         startHour: v.string(),
         endHour: v.string(),
         slotDurationMinutes: v.number(),
+        /** Convención de `Date.getDay()`: 0 = domingo … 6 = sábado. */
         workingDays: v.array(v.number()),
+        /**
+         * H5 (E-149 AGD). Los tres son opcionales porque las filas que ya
+         * existen no los tienen; `convex/agenda.ts` aplica los defaults de
+         * `_agenda.ts` al leer.
+         *
+         * `timezone` es la zona del NEGOCIO y es la única que manda: sin esto
+         * los horarios se interpretaban en la zona del dispositivo del
+         * comprador (`FormFillScreen.tsx:95`).
+         */
+        timezone: v.optional(v.string()),
+        /** `paid` = el turno se cobra al reservarlo; `request` = solicitud sin plata. */
+        appointmentMode: v.optional(v.union(v.literal('paid'), v.literal('request'))),
+        /** Horas de anticipación para cancelar sin costo. Default 24. */
+        cancellationHours: v.optional(v.number()),
         updatedAt: v.string(),
     }).index("by_business", ["businessId"]),
+
+    /**
+     * Turnos (H5, E-149 AGD-01/02/05/08).
+     *
+     * Fuente de verdad de "alguien ocupa el horario X del negocio Y". Antes el
+     * turno vivía en `businessFormLeads` — una tabla de CONTACTO, sin orden, sin
+     * plata y sin estados de cita — y nada chequeaba si el horario estaba
+     * tomado: dos compradores elegían el mismo y los dos quedaban agendados.
+     *
+     * `by_business_and_start` es la clave de todo: es el índice contra el que
+     * `internalReserveAppointmentSlot` chequea y escribe DENTRO DE UNA MISMA
+     * mutation, que es lo que hace imposible la doble reserva (mismo mecanismo
+     * que `stockReservations` en H3).
+     */
+    appointments: defineTable({
+        businessId: v.string(),
+        buyerUserId: v.string(),
+        /** El servicio comprado. Ausente en una solicitud sin listing. */
+        listingId: v.optional(v.string()),
+        orderId: v.optional(v.string()),
+        /** Checkout que lo reservó; clave de idempotencia junto al comprador. */
+        cartId: v.optional(v.string()),
+        startsAtMs: v.number(),
+        endsAtMs: v.number(),
+        /** Reloj de pared del negocio, para mostrar sin recalcular. */
+        slotDate: v.string(),
+        slotTime: v.string(),
+        /**
+         * Zona congelada al reservar: si el negocio cambia su zona después, los
+         * turnos ya tomados no se mueven de hora.
+         */
+        timezone: v.string(),
+        status: v.union(
+            v.literal('held'),      // reservado durante el checkout, sin pagar aún
+            v.literal('requested'), // solicitado, esperando al negocio
+            v.literal('confirmed'),
+            v.literal('completed'),
+            v.literal('cancelled'),
+            v.literal('no_show'),
+        ),
+        paymentMode: v.union(v.literal('paid'), v.literal('request')),
+        /** Vencimiento del `held` (sólo modo pago). */
+        holdExpiresAt: v.optional(v.number()),
+        postponementsCount: v.optional(v.number()),
+        cancelReason: v.optional(v.string()),
+        createdAt: v.number(),
+        updatedAt: v.number(),
+    })
+        .index("by_business_and_start", ["businessId", "startsAtMs"])
+        .index("by_buyer", ["buyerUserId"])
+        .index("by_order", ["orderId"])
+        .index("by_cart_and_buyer", ["cartId", "buyerUserId"])
+        .index("by_status_and_hold_expires", ["status", "holdExpiresAt"])
+        // Barrido del cron que libera el escrow cuando el turno ya pasó.
+        .index("by_status_and_ends", ["status", "endsAtMs"])
+        .index("by_business_and_status", ["businessId", "status"]),
 
     businessForms: defineTable({
         businessId: v.string(),
@@ -2063,12 +2115,22 @@ export default defineSchema({
         email: v.string(),
         phone: v.optional(v.string()),
         message: v.optional(v.string()),
+        /**
+         * Copia para mostrar. La AUTORIDAD del horario es `appointments`
+         * (H5): sin esto había dos tablas que podían decir cosas distintas
+         * sobre el mismo turno.
+         */
         scheduledDate: v.optional(v.string()),
         scheduledTime: v.optional(v.string()),
+        /** Turno reservado por esta consulta, cuando eligió horario. */
+        appointmentId: v.optional(v.string()),
         postponementsCount: v.optional(v.number()),
         status: v.union(v.literal('new'), v.literal('contacted'), v.literal('resolved'), v.literal('cancelled')),
         createdAt: v.string(),
-    }).index("by_business", ["businessId"]).index("by_form", ["formId"]),
+    }).index("by_business", ["businessId"])
+        .index("by_form", ["formId"])
+        // H5: `getMyLeads` recorría la tabla entera con `.filter()`.
+        .index("by_user", ["userId"]),
 
     // mediaAssets — propiedad de los archivos subidos a Convex Storage.
     // Sin esto, `attachments[].url` es un string libre: cualquiera podía

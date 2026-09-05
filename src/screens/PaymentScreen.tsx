@@ -95,17 +95,21 @@ export default function PaymentScreen({ navigation, route }: any) {
      * caso en que la app se cierre de golpe y este cleanup no llegue a correr.
      */
     const releaseReservation = useMutation(api.stock.releaseMyCheckoutReservation);
-    const abandonRef = useRef({ paid: false, sessionToken, cartId, release: releaseReservation });
-    abandonRef.current = { paid: !!paidIntentId, sessionToken, cartId, release: releaseReservation };
+    // H5: el turno reservado se devuelve por el mismo camino y por el mismo
+    // motivo — si no, el comprador que se arrepiente se choca con su propio
+    // horario durante los 30 min del hold.
+    const releaseAppointment = useMutation(api.agenda.releaseMyAppointmentHold);
+    const abandonRef = useRef({ paid: false, sessionToken, cartId, release: releaseReservation, releaseSlot: releaseAppointment });
+    abandonRef.current = { paid: !!paidIntentId, sessionToken, cartId, release: releaseReservation, releaseSlot: releaseAppointment };
     useEffect(() => {
         // Sin dependencias a propósito: corre SÓLO al desmontar, y lee el
         // estado más reciente por ref.
         return () => {
-            const { paid, sessionToken: token, cartId: cart, release } = abandonRef.current;
+            const { paid, sessionToken: token, cartId: cart, release, releaseSlot } = abandonRef.current;
             if (paid) return; // pagó: la reserva la consume el webhook
-            release({ sessionToken: token, cartId: cart }).catch(() => {
-                // Best-effort: si falla, el cron la devuelve al vencer el TTL.
-            });
+            // Best-effort las dos: si fallan, el cron las devuelve al vencer el TTL.
+            release({ sessionToken: token, cartId: cart }).catch(() => {});
+            releaseSlot({ sessionToken: token, cartId: cart }).catch(() => {});
         };
     }, []);
 

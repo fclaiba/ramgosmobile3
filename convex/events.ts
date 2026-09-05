@@ -258,23 +258,62 @@ export const internalAutoReleaseEvents = internalMutation({
 
 // ---------------------------------------------------------------------------
 // internalAutoReleaseServices — runs once daily.
-// Services have no event date, so we use a 7-day delivery rule:
-// any order with at least one service line item, in 'delivered' status,
-// older than 7 days, gets auto-released.
+//
+// H5 (E-149): antes esto liberaba 7 días después de que la orden pasara a
+// `delivered` — y NADIE marca `delivered` un servicio, así que en la práctica
+// no liberaba nunca y la plata del vendedor se quedaba en escrow para siempre.
+//
+// Con turnos hay una fecha real: el escrow se libera 24 h después de que el
+// turno TERMINÓ, igual que los eventos. La regla vieja se conserva para los
+// servicios vendidos sin turno (no todos los negocios usan agenda).
 // ---------------------------------------------------------------------------
+const SERVICE_GRACE_MS = 24 * 60 * 60 * 1000;
+
 export const internalAutoReleaseServices = internalMutation({
     args: {},
     handler: async (ctx, args) => {
-        const cutoffMs = 7 * 24 * 60 * 60 * 1000;
-        const cutoffISO = new Date(Date.now() - cutoffMs).toISOString();
+        const now = Date.now();
+        const dueOrderIds = new Set<string>();
 
+        // 1. Servicios con turno: el turno ya terminó hace más de 24 h.
+        //    Se deduplica por orden — una orden puede tener más de un turno.
+        for (const status of ["confirmed", "completed", "no_show"] as const) {
+            const past = await ctx.db
+                .query("appointments")
+                .withIndex("by_status_and_ends", (q) =>
+                    q.eq("status", status).lte("endsAtMs", now - SERVICE_GRACE_MS),
+                )
+                .take(200);
+            for (const appointment of past) {
+                if (appointment.orderId) dueOrderIds.add(appointment.orderId);
+            }
+        }
+
+        let released = 0;
+        for (const orderId of dueOrderIds) {
+            const orderNormId = ctx.db.normalizeId("orders", orderId);
+            if (!orderNormId) continue;
+            const order = await ctx.db.get(orderNormId);
+            if (!order) continue;
+            if (order.escrowState !== "held" || order.escrowReleaseError) continue;
+            if (order.status !== "paid_escrow" && order.status !== "payment_received" && order.status !== "delivered") {
+                continue;
+            }
+            await ctx.scheduler.runAfter(0, internal.stripe.internalReleaseOrderEscrow, {
+                orderId: orderNormId,
+                trigger: "service_auto",
+            });
+            released++;
+        }
+
+        // 2. Camino histórico: servicios sin turno, 7 días desde `delivered`.
+        const cutoffISO = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
         const orders = await ctx.db
             .query("orders")
             .withIndex("by_status", (q) => q.eq("status", "delivered"))
             .collect();
-
-        let released = 0;
         for (const order of orders) {
+            if (dueOrderIds.has(String(order._id))) continue;
             if (order.updatedAt > cutoffISO) continue;
             if (order.listingType !== "service") continue;
             if (order.escrowState !== "held" || order.escrowReleaseError) continue;
@@ -285,6 +324,7 @@ export const internalAutoReleaseServices = internalMutation({
             });
             released++;
         }
+
         if (released > 0) {
             console.log(`[Services cron] Auto-released ${released} order(s)`);
         }

@@ -1,4 +1,4 @@
-# Estado del marketplace — 2026-09-04 (208ab3c), actualizado 2026-09-05 (H3, H4)
+# Estado del marketplace — 2026-09-04 (208ab3c), actualizado 2026-09-05 (H3, H4, H5)
 
 Auditoría de integridad transaccional. Evidencia estática en `docs/audit/audit-report.{json,md}`
 (scanner `scripts/audit/marketplace-audit.mjs`, 124 archivos, 543 límites transaccionales);
@@ -33,15 +33,16 @@ de webhooks y canje de bonos. Es el módulo con más tests y el único con máqu
 (H1), bono cancelado en el refund (H2) y reserva atómica de stock (H3) — con eso, productos de
 unidad única incluidos. **Eventos ya venden con aforo real y QR (H4)**. **Queda un bloqueante fuera
 del catálogo original**: la escalación de privilegios de `syncUser` (§3, hallazgo nuevo de H1), que no
-es de integridad transaccional pero sí de apertura al público — es lo único que falta. Agenda de
-turnos: no existe, no aplica.
+es de integridad transaccional pero sí de apertura al público — es lo único que falta.
+**Turnos: cerrado en H5** (ver §3), con una corrección de diagnóstico: la agenda no era una feature
+ausente, era una feature enchufada sobre el sustrato equivocado.
 
 ## 2. Tablero de madurez
 
 | Área | Nivel | Invariantes críticos rotos | Riesgo |
 |---|---|---|---|
 | Stock | **4** (H3, 2026-09-05) — antes 2 | ninguno crítico (STK-06 y STK-10 siguen en su nivel) | Bajo. La sobreventa por diseño está cerrada: reserva atómica antes de cobrar |
-| Agenda | **0-1** — Inexistente (turnos) / **4** (eventos, H4) | AGD-01, AGD-05, AGD-08 (turnos: feature no construida) | Bajo (turnos, no se ofrece) / Bajo (eventos, resuelto) |
+| Agenda | **4** (H5, 2026-09-05) — antes 0-1 | ninguno crítico | Bajo. El horario se reserva atómicamente antes de cobrar, igual que el stock |
 | Pagos y reembolsos | **3** — Robusto | PAY-05 (efectos colaterales) | Medio |
 | Bonos | **3** con un agujero | BON-07 | **Alto** (pérdida directa del negocio) |
 | Transversal | **2** | TRV-01 (seeds públicos), TRV-02 (0 tests de concurrencia) | **Alto** |
@@ -83,6 +84,66 @@ turnos: no existe, no aplica.
   - Reembolso: `internalBeginOrderRefund` lee `eventReservations by_order` (índice nuevo) con el mismo criterio que BON-07 — `checked_in` (el asistente ya entró) bloquea sin `force` de admin (`audit_logs EVENT_REFUND_FORCED`), `confirmed` se cancela siempre. `internalCompleteOrderRefund` extiende el restock de stock (antes sólo `product`) a incluir `event`.
   - **Defecto de mi propio diseño, encontrado en la revisión y corregido antes de commitear:** `internalAutoReleaseEvents` asumía una fila `eventReservations` por orden (así era antes de H4); con una fila por unidad, una compra de 3 entradas habría programado `internalReleaseOrderEscrow` 3 veces para la misma orden. Se agregó deduplicación por `orderId` antes de agendar el release.
   - Verificado con 3 tests de integración nuevos (`tests/audit/eventRefund.integration.test.ts`, mismo molde que `bonoRefund.integration.test.ts`) contra `ramgos-audit`: confirmed→refund cancela sola; checked_in sin force→bloquea; checked_in con force→pasa y audita. **Pendiente de deploy del usuario para correrlos** (ver §8).
+
+### [AGD-01 / AGD-02 / AGD-05 / AGD-07] Agenda de turnos: no era una feature ausente → resuelto en H5
+- **Nivel:** 0-1 (según esta auditoría) → **4 (H5, 2026-09-05)**
+- **Corrección de diagnóstico.** Esta auditoría concluyó que "la agenda de turnos no está construida.
+  No es un bug: es una feature ausente". Es inexacto, y la diferencia importa: la agenda **existía y
+  estaba enchufada de punta a punta** — sólo que sobre el sustrato equivocado, y por eso el scanner no
+  la vio (buscaba escrituras en `bookings`, que efectivamente está muerta).
+- **Lo que había, con evidencia:** `src/screens/FormFillScreen.tsx:92-105` generaba la grilla de
+  horarios **en el cliente** desde `businessSettings` (que sí tiene `startHour`/`endHour`/
+  `slotDurationMinutes`/`workingDays`, y su propia pantalla de configuración en
+  `src/components/dashboard/AgendaConfigTab.tsx`); el turno se guardaba con
+  `businessForms.submitLead` en `businessFormLeads` — una tabla de CONTACTO, sin orden ni plata —, y
+  `src/screens/MyBookingsScreen.tsx` (registrada en `App.tsx:292`) los listaba como turnos.
+- **Qué pasaba de verdad:** `submitLead` (`businessForms.ts:82`) aceptaba `scheduledDate` y
+  `scheduledTime` como strings libres **sin validar nada**: ni día laboral, ni horario de atención,
+  ni fecha pasada, y sobre todo **sin chequear si el horario ya estaba tomado**. Su único guard era
+  "un lead pendiente por usuario y negocio", que es anti-spam, no anti-doble-reserva. Dos compradores
+  elegían el mismo turno y los dos quedaban agendados; el negocio se enteraba cuando llegaban los dos.
+  `postponeLead` (`:225`) tenía el mismo agujero y encima movía el turno a cualquier fecha.
+- **Es la misma causa raíz que STK-01**: el chequeo vivía donde no podía escribir.
+- **Segundo defecto, transversal:** cero manejo de zonas horarias en todo el repo (0 hits de
+  `timeZone`/`timezone` en `convex/` y `src/`, sin librería de fechas en `package.json`).
+  `FormFillScreen.tsx:95` hacía `new Date(\`${'${fecha}'}T${'${hora}'}:00\`)`, que parsea en la zona **del
+  dispositivo**: un comprador en otra zona veía horarios que el negocio no ofrecía. Y `:78` usaba
+  `toISOString()` para el string de fecha, que convierte a UTC y de noche en NY devolvía el día
+  siguiente.
+- **✅ H5 (2026-09-05) — nivel 4:**
+  - `convex/_agenda.ts` (módulo puro, molde de `_inventory.ts`): grilla de horarios, conversión de
+    reloj de pared a instante con `Intl` (única forma de respetar DST sin dependencias), y la ventana
+    de cancelación. 28 tests, incluidos los dos días del año donde esto se rompe: la hora que **no
+    existe** al adelantar el reloj devuelve `null` y se saltea de la grilla, y la que ocurre **dos
+    veces** al atrasarlo resuelve determinista.
+  - Tabla `appointments` con `by_business_and_start` como clave de colisión, y
+    `internal.agenda.internalReserveAppointmentSlot` que chequea y escribe en UNA mutation —
+    calcado de `internalReserveStock` (H3). De N reservas simultáneas del mismo horario entra una.
+  - `getAvailableSlots` es ahora la única autoridad: el cliente muestra lo que el servidor ofrece.
+    `FormFillScreen` y `MyBookingsScreen` dejaron de calcular grillas.
+  - Modo por negocio (`paid` / `request`, decisión del usuario): el turno pago pasa por el checkout
+    con reserva antes de cobrar y confirmación en el webhook, en la misma transacción que crea la
+    orden. La solicitud sin plata usa la misma reserva atómica.
+  - Cancelación a 24 h (configurable): fuera de la ventana se cancela y se reembolsa; dentro, hace
+    falta `force` de admin y queda `audit_logs APPOINTMENT_REFUND_FORCED` — **tercera pieza del mismo
+    criterio** que un bono `redeemed` (H2) y una entrada `checked_in` (H4).
+  - **`businessFormLeads` deja de ser una fuente de verdad paralela**: si la consulta elige horario,
+    el horario se reserva en `appointments` y el lead sólo guarda una copia para mostrar.
+  - **Arregla además un agujero que no era de esta auditoría:** `internalAutoReleaseServices` liberaba
+    el escrow 7 días después de que la orden pasara a `delivered`, y **nadie marca `delivered` un
+    servicio** — o sea, no liberaba nunca y la plata del vendedor se quedaba retenida para siempre.
+    Ahora libera 24 h después de que el turno terminó, con la regla vieja como respaldo para
+    servicios vendidos sin turno.
+  - **Tres bugs adyacentes encontrados en el camino:** el `try/catch` de `submitLead:144-146` se
+    tragaba todos los errores salvo uno por su mensaje — anulaba el guard de "no te agendes con tu
+    propio negocio" y convertía una sesión inválida en un lead anónimo; `getMyLeads` y `submitLead`
+    recorrían la tabla entera (ahora índice `by_user`); y `MyBookingsScreen:47` mapeaba domingo a `7`
+    mientras `AgendaConfigTab` lo guarda como `0`, así que un negocio que atendía domingos no los
+    veía nunca en esa pantalla.
+  - **Defecto de mi propio diseño, corregido antes de commitear:** reprogramar al MISMO horario
+    chocaba contra la reserva del propio comprador y devolvía "ese horario acaba de ser reservado".
+  - Se borró la tabla `bookings` (0 escritores, 0 lectores, forma de alquiler): su nombre hacía creer
+    que era la agenda.
 
 ### [TRV-01] Mutations públicas sin autenticación escriben bonos sobre negocios reales
 - **Nivel:** 2 → **4 (H1, 2026-09-04)**
@@ -190,7 +251,7 @@ Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed 
 | 9 | Restock proporcional en refund parcial (requiere refund por ítem, hoy es por monto) | STK-06 | Bajo | 1 día | No |
 | 10 | `bonoCode` con `crypto.randomUUID()` + `rateLimits` en `redeemBono` | BON-09 | Bajo | 1 h | No |
 | 11 | Verificar `cartId` en la idempotency key del PI | §6 | Desconocido | 30 min | No |
-| 12 | Agenda de turnos (slots, solapamiento, tz, estados) | AGD-* | — | Feature entera | No: no se ofrece hoy |
+| 12 | ✅ **Hecho (H5)** Agenda de turnos: grilla server-side, reserva atómica por `by_business_and_start`, zonas horarias con DST, modo pago/solicitud, cancelación a 24 h | AGD-01/02/05/07/08 | Alto: dos compradores tomaban el mismo turno | Feature entera | **Ya no** |
 
 ## 8. Suite de tests pendiente
 

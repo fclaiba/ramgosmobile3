@@ -48,7 +48,7 @@ async function seedUser(ctx: any, role: "business" | "consumer" | "admin", tag: 
     return { id: String(id), sessionToken };
 }
 
-function listingBase(sellerId: string, type: "product" | "event" | "bono", title: string, suffix: string) {
+function listingBase(sellerId: string, type: "product" | "event" | "bono" | "service", title: string, suffix: string) {
     const now = nowIso();
     return {
         title,
@@ -287,6 +287,128 @@ export const seedEventRefundScenario = internalMutation({
     },
 });
 
+/**
+ * H5 (E-149 AGD). Un negocio con agenda configurada y dos compradores, para
+ * probar que dos personas NO pueden quedarse con el mismo horario.
+ *
+ * `startsInHours` corre el turno en el tiempo para ejercitar la ventana de
+ * cancelación desde los dos lados sin esperar un día.
+ */
+export const seedAgendaScenario = internalMutation({
+    args: {
+        appointmentMode: v.optional(v.union(v.literal("paid"), v.literal("request"))),
+        cancellationHours: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        assertAuditDeployment();
+        const suffix = Date.now().toString(36);
+        const business = await seedUser(ctx, "business", "agenda-business", suffix);
+        const buyerA = await seedUser(ctx, "consumer", "agenda-buyer-a", suffix);
+        const buyerB = await seedUser(ctx, "consumer", "agenda-buyer-b", suffix);
+        const admin = await seedUser(ctx, "admin", "agenda-admin", suffix);
+
+        // Agenda amplia y todos los días, para que el único motivo posible de
+        // rechazo sea que el horario ya está tomado.
+        await ctx.db.insert("businessSettings", {
+            businessId: business.id,
+            startHour: "00:00",
+            endHour: "23:00",
+            slotDurationMinutes: 60,
+            workingDays: [0, 1, 2, 3, 4, 5, 6],
+            timezone: "America/New_York",
+            appointmentMode: args.appointmentMode ?? "request",
+            cancellationHours: args.cancellationHours ?? 24,
+            updatedAt: nowIso(),
+        });
+
+        const serviceListingId = String(
+            await ctx.db.insert("listings", {
+                ...listingBase(business.id, "service", `${MARK} servicio agenda`, suffix),
+                stock: 9999,
+            }),
+        );
+
+        return { suffix, business, buyerA, buyerB, admin, serviceListingId };
+    },
+});
+
+/**
+ * Turno ya confirmado y atado a una orden, para probar la guarda del refund
+ * (dentro / fuera de la ventana de cancelación). `startsInHours` decide de qué
+ * lado de la ventana cae.
+ */
+export const seedAppointmentRefundScenario = internalMutation({
+    args: { startsInHours: v.number() },
+    handler: async (ctx, args) => {
+        assertAuditDeployment();
+        const suffix = Date.now().toString(36);
+        const business = await seedUser(ctx, "business", "appt-refund-business", suffix);
+        const buyer = await seedUser(ctx, "consumer", "appt-refund-buyer", suffix);
+        const admin = await seedUser(ctx, "admin", "appt-refund-admin", suffix);
+
+        await ctx.db.insert("businessSettings", {
+            businessId: business.id,
+            startHour: "00:00",
+            endHour: "23:00",
+            slotDurationMinutes: 60,
+            workingDays: [0, 1, 2, 3, 4, 5, 6],
+            timezone: "America/New_York",
+            appointmentMode: "paid" as const,
+            cancellationHours: 24,
+            updatedAt: nowIso(),
+        });
+
+        const serviceListingId = String(
+            await ctx.db.insert("listings", {
+                ...listingBase(business.id, "service", `${MARK} servicio refund`, suffix),
+                stock: 9999,
+            }),
+        );
+
+        const now = Date.now();
+        const nowStr = nowIso();
+        const startsAtMs = now + args.startsInHours * 3600_000;
+        const orderId = String(
+            await ctx.db.insert("orders", {
+                userId: buyer.id,
+                sellerId: business.id,
+                items: [{ listingId: serviceListingId, title: `${MARK} servicio refund`, quantity: 1, price: 10 }],
+                total: 10,
+                currency: "USD" as const,
+                status: "paid_escrow" as const,
+                listingType: "service",
+                mode: "test" as const,
+                escrowState: "held",
+                grossCents: 1000,
+                stripePaymentIntentId: `mock_pi_${MARK}_${suffix}`,
+                createdAt: nowStr,
+                updatedAt: nowStr,
+            }),
+        );
+
+        const appointmentId = String(
+            await ctx.db.insert("appointments", {
+                businessId: business.id,
+                buyerUserId: buyer.id,
+                listingId: serviceListingId,
+                orderId,
+                startsAtMs,
+                endsAtMs: startsAtMs + 3600_000,
+                slotDate: new Date(startsAtMs).toISOString().slice(0, 10),
+                slotTime: "12:00",
+                timezone: "America/New_York",
+                status: "confirmed" as const,
+                paymentMode: "paid" as const,
+                postponementsCount: 0,
+                createdAt: now,
+                updatedAt: now,
+            }),
+        );
+
+        return { suffix, business, buyer, admin, orderId, appointmentId, serviceListingId, startsAtMs };
+    },
+});
+
 /** Estado actual de los documentos que los tests afirman. */
 export const inspect = internalQuery({
     args: {
@@ -296,6 +418,7 @@ export const inspect = internalQuery({
         orderId: v.optional(v.string()),
         stripeEventId: v.optional(v.string()),
         reservationUserId: v.optional(v.string()),
+        appointmentBusinessId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const get = async (table: string, id?: string) => (id ? await ctx.db.get(ctx.db.normalizeId(table as any, id) as any) : null);
@@ -325,7 +448,25 @@ export const inspect = internalQuery({
             ? await ctx.db.query("eventReservations").withIndex("by_order", (q: any) => q.eq("orderId", args.orderId)).collect()
             : [];
 
+        // Turnos del negocio (H5): sin índice por sólo businessId, se usa el
+        // compuesto con un rango abierto de tiempo.
+        const appointments = args.appointmentBusinessId
+            ? (await ctx.db.query("appointments").collect()).filter(
+                  (a: any) => String(a.businessId) === args.appointmentBusinessId,
+              )
+            : args.orderId
+              ? await ctx.db.query("appointments").withIndex("by_order", (q: any) => q.eq("orderId", args.orderId)).collect()
+              : [];
+
         return {
+            appointments: appointments.map((a: any) => ({
+                status: a.status,
+                slotDate: a.slotDate,
+                slotTime: a.slotTime,
+                startsAtMs: a.startsAtMs,
+                buyerUserId: a.buyerUserId,
+                cancelReason: a.cancelReason ?? null,
+            })),
             reservations: reservations.map((r: any) => ({
                 status: r.status,
                 lines: r.lines,
@@ -372,12 +513,15 @@ export const reset = internalMutation({
         for (const b of (await ctx.db.query("bonoRedemptions").collect()).filter((b: any) => userIds.has(String(b.sellerId)) || String(b.bonoCode).startsWith("AUD-"))) {
             await ctx.db.delete(b._id); deleted++;
         }
-        for (const t of ["orders", "payments", "eventReservations", "stockReservations"] as const) {
+        for (const t of ["orders", "payments", "eventReservations", "stockReservations", "appointments"] as const) {
             try {
                 for (const d of (await (ctx.db as any).query(t).collect()).filter((d: any) => userIds.has(String(d.userId ?? d.buyerId ?? d.ownerUserId ?? "")))) {
                     await ctx.db.delete(d._id); deleted++;
                 }
             } catch { /* tabla ausente en un deployment viejo: no es motivo para abortar el reset */ }
+        }
+        for (const bs of (await ctx.db.query("businessSettings").collect()).filter((b: any) => userIds.has(String(b.businessId)))) {
+            await ctx.db.delete(bs._id); deleted++;
         }
         for (const e of (await ctx.db.query("paymentEvents").collect()).filter((e: any) => String(e.stripeEventId).startsWith("evt_audit_"))) {
             await ctx.db.delete(e._id); deleted++;

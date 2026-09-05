@@ -35,6 +35,11 @@ crons.cron(
 // próximo comprador ve como agotado.
 crons.interval("expire-stock-reservations", { minutes: 5 }, internal.stock.internalReleaseExpiredReservations, {});
 
+// Turnos reservados en un checkout que nunca se pagó (H5). Mismo intervalo que
+// el de stock y por el mismo motivo: cada minuto de más es un horario que el
+// próximo comprador ve ocupado sin estarlo.
+crons.interval("expire-appointment-holds", { minutes: 5 }, internal.agenda.internalReleaseExpiredHolds, {});
+
 crons.interval("expire-stories", { hours: 1 }, internal.social.internalExpireStories, {});
 
 crons.interval("dm-sweep-ephemeral", { minutes: 15 }, internal.social.dm.cleanupEphemeral, {});

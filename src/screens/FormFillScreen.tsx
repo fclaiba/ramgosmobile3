@@ -37,6 +37,10 @@ export default function FormFillScreen({
     const { width } = useWindowDimensions();
     const styles = getStyles(isDark, width);
     
+    // Fecha local en YYYY-MM-DD, sin pasar por UTC.
+    const fmtLocalDate = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
     const params = route?.params || {};
     const businessId = propBusinessId || params.businessId;
     const businessName = propBusinessName || params.businessName;
@@ -51,6 +55,17 @@ export default function FormFillScreen({
     const directForm = useQuery(api.businessForms.getForm, { formId: initialFormId });
     const businessSettings = useQuery(api.businessSettings.getSettings, { businessId });
     const submitLead = useMutation(api.businessForms.submitLead);
+
+    /**
+     * H5: los horarios los da el SERVIDOR.
+     *
+     * Antes esta pantalla armaba la grilla sola (día por día, hora por hora) y
+     * el backend guardaba lo que le mandaran: nadie chequeaba si el horario ya
+     * estaba tomado, así que dos personas reservaban el mismo. Además la
+     * armaba con la zona horaria DEL TELÉFONO, así que un comprador de otra
+     * zona veía horarios que el negocio no ofrecía.
+     */
+    const [nowMs] = useState(() => Date.now());
 
     // States
     const [step, setStep] = useState(initialFormId || initialQueryType ? 2 : 1);
@@ -68,41 +83,35 @@ export default function FormFillScreen({
 
     const isVisit = selectedForm ? selectedForm.type === 'visit' : queryType === 'visit';
 
-    // Generar días disponibles si es visita
+    // Días candidatos. Qué horarios tiene cada uno lo decide el servidor.
     const nextDays = useMemo(() => {
         if (!businessSettings || !businessSettings.workingDays.length) return [];
-        const days = [];
-        let d = new Date();
-        while (days.length < 14) { 
-            if (businessSettings.workingDays.includes(d.getDay())) {
-                const dateString = d.toISOString().split('T')[0];
+        const days: Array<{ dateString: string; label: string; isToday: boolean }> = [];
+        const cursor = new Date();
+        const today = fmtLocalDate(new Date());
+        for (let i = 0; days.length < 14 && i < 60; i++) {
+            if (businessSettings.workingDays.includes(cursor.getDay())) {
+                // `toISOString()` acá corría el día: convierte a UTC, así que a
+                // la noche en NY devolvía la fecha de mañana.
+                const dateString = fmtLocalDate(cursor);
                 days.push({
                     dateString,
-                    label: d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }),
-                    isToday: new Date().toDateString() === d.toDateString()
+                    label: cursor.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }),
+                    isToday: dateString === today,
                 });
             }
-            d.setDate(d.getDate() + 1);
+            cursor.setDate(cursor.getDate() + 1);
         }
         return days;
     }, [businessSettings]);
 
-    // Generar horas disponibles según el día elegido
-    const availableSlots = useMemo(() => {
-        if (!businessSettings || !selectedDate) return [];
-        const slots = [];
-        try {
-            let start = new Date(`${selectedDate}T${businessSettings.startHour}:00`);
-            const end = new Date(`${selectedDate}T${businessSettings.endHour}:00`);
-            while (start < end) {
-                slots.push(start.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
-                start.setMinutes(start.getMinutes() + businessSettings.slotDurationMinutes);
-            }
-        } catch(e) {
-            console.log(e);
-        }
-        return slots;
-    }, [businessSettings, selectedDate]);
+    // La grilla real, ya sin los horarios ocupados.
+    const slotsResult = useQuery(
+        api.agenda.getAvailableSlots,
+        selectedDate ? { businessId, date: selectedDate, nowMs } : 'skip',
+    );
+    const availableSlots = (slotsResult?.slots ?? []).map((s: any) => s.slotTime);
+    const slotsLoading = !!selectedDate && slotsResult === undefined;
 
     useEffect(() => {
         if (initialFormId && directForm !== undefined) {
@@ -126,6 +135,12 @@ export default function FormFillScreen({
             setSelectedDate(nextDays[0].dateString);
         }
     }, [isVisit, nextDays]);
+
+    // Si el horario elegido ya no está en la grilla (cambió el día, o alguien
+    // lo reservó mientras tanto), se deselecciona en vez de mandarlo igual.
+    useEffect(() => {
+        if (selectedTime && !availableSlots.includes(selectedTime)) setSelectedTime('');
+    }, [availableSlots, selectedTime]);
 
     const handleBack = () => {
         if (isSuccess) {
@@ -356,7 +371,11 @@ export default function FormFillScreen({
                                                     </Text>
                                                 </TouchableOpacity>
                                             )) : (
-                                                <Text style={{ color: colors(isDark).textMuted, fontStyle: 'italic' }}>No hay turnos para este día.</Text>
+                                                <Text style={{ color: colors(isDark).textMuted, fontStyle: 'italic' }}>
+                                                    {slotsLoading
+                                                        ? 'Buscando horarios disponibles…'
+                                                        : 'No quedan turnos libres para este día.'}
+                                                </Text>
                                             )}
                                         </View>
                                     </>

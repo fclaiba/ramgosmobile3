@@ -35,7 +35,12 @@ export type AuditAction =
      * H4 (E-149 AGD-06): mismo criterio que BONO_REFUND_FORCED, para
      * entradas de evento ya `checked_in` (el asistente ya entró).
      */
-    | "EVENT_REFUND_FORCED";
+    | "EVENT_REFUND_FORCED"
+    /**
+     * H5 (E-149 AGD): mismo criterio, para un turno ya ocurrido o dentro de la
+     * ventana de cancelación.
+     */
+    | "APPOINTMENT_REFUND_FORCED";
 
 export type AuditParams = {
     actorUserId: string;

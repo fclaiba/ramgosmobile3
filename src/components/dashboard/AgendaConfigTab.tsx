@@ -2,11 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import { DEFAULT_CANCELLATION_HOURS, DEFAULT_TIMEZONE } from '../../../convex/_agenda';
 import { Clock, CalendarDays, CheckCircle2 } from 'lucide-react-native';
 import { Radius, colors, glassShadow } from '../../theme/tokens';
 import { useToast } from '../../contexts/ToastContext';
 
 const HOURS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
+/**
+ * Zonas ofrecidas. Se dejan explícitas en vez de un texto libre: `Intl` valida
+ * en el servidor, pero un desplegable evita el error antes de que ocurra.
+ */
+const TIMEZONES = [
+    { id: 'America/New_York', label: 'Nueva York' },
+    { id: 'America/Chicago', label: 'Chicago' },
+    { id: 'America/Denver', label: 'Denver' },
+    { id: 'America/Los_Angeles', label: 'Los Ángeles' },
+    { id: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires' },
+    { id: 'America/Mexico_City', label: 'Ciudad de México' },
+    { id: 'Europe/Madrid', label: 'Madrid' },
+];
+
 const DAYS = [
     { id: 1, label: "Lun" },
     { id: 2, label: "Mar" },
@@ -27,6 +42,11 @@ export function AgendaConfigTab({ isDark, sessionToken, businessId }: any) {
     const [endHour, setEndHour] = useState("18:00");
     const [slotDuration, setSlotDuration] = useState(60);
     const [workingDays, setWorkingDays] = useState<number[]>([1,2,3,4,5]);
+    // H5: la zona horaria del negocio es la que manda para todos los
+    // compradores; antes cada teléfono interpretaba los horarios a su manera.
+    const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
+    const [appointmentMode, setAppointmentMode] = useState<'paid' | 'request'>('request');
+    const [cancellationHours, setCancellationHours] = useState(DEFAULT_CANCELLATION_HOURS);
     
     const [isSaving, setIsSaving] = useState(false);
 
@@ -36,6 +56,9 @@ export function AgendaConfigTab({ isDark, sessionToken, businessId }: any) {
             setEndHour(settings.endHour);
             setSlotDuration(settings.slotDurationMinutes);
             setWorkingDays(settings.workingDays);
+            setTimezone(settings.timezone || DEFAULT_TIMEZONE);
+            setAppointmentMode(settings.appointmentMode ?? 'request');
+            setCancellationHours(settings.cancellationHours ?? DEFAULT_CANCELLATION_HOURS);
         }
     }, [settings]);
 
@@ -59,11 +82,16 @@ export function AgendaConfigTab({ isDark, sessionToken, businessId }: any) {
                 startHour,
                 endHour,
                 slotDurationMinutes: slotDuration,
-                workingDays
+                workingDays,
+                timezone,
+                appointmentMode,
+                cancellationHours,
             });
             show("Configuración de agenda guardada exitosamente.", "success");
-        } catch (error) {
-            show("Error al guardar la configuración.", "error");
+        } catch (error: any) {
+            // El servidor valida y explica por qué; mostrarlo es más útil que
+            // un "error al guardar" que no dice nada.
+            show(error?.message || "Error al guardar la configuración.", "error");
         } finally {
             setIsSaving(false);
         }
@@ -176,6 +204,80 @@ export function AgendaConfigTab({ isDark, sessionToken, businessId }: any) {
                             }}
                         >
                             <Text style={{ color: slotDuration === mins ? '#fff' : colors(isDark).text, fontWeight: '600' }}>{mins} min</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
+
+            {/* Zona horaria — H5 */}
+            <View style={{ backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 20, borderWidth: 1, borderColor: colors(isDark).border, marginBottom: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors(isDark).text, marginBottom: 4 }}>Zona Horaria</Text>
+                <Text style={{ fontSize: 13, color: colors(isDark).textMuted, marginBottom: 12 }}>
+                    Tus horarios se muestran en esta zona a todos tus clientes, estén donde estén.
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {TIMEZONES.map(tz => {
+                        const active = timezone === tz.id;
+                        return (
+                            <TouchableOpacity
+                                key={tz.id}
+                                onPress={() => setTimezone(tz.id)}
+                                style={{
+                                    paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.full,
+                                    backgroundColor: active ? '#3b82f6' : (isDark ? 'rgba(255,255,255,0.05)' : '#f3f4f6'),
+                                    borderWidth: 1, borderColor: active ? '#2563eb' : 'transparent',
+                                }}
+                            >
+                                <Text style={{ color: active ? '#fff' : colors(isDark).textMuted, fontWeight: active ? '700' : '500' }}>{tz.label}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+
+            {/* Modo de turno — H5 */}
+            <View style={{ backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 20, borderWidth: 1, borderColor: colors(isDark).border, marginBottom: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors(isDark).text, marginBottom: 12 }}>¿Cómo se reservan tus turnos?</Text>
+                {[
+                    { id: 'request' as const, title: 'Solicitud', body: 'El cliente pide un horario y vos lo confirmás. Sin pago por adelantado.' },
+                    { id: 'paid' as const, title: 'Pago por adelantado', body: 'El cliente paga al reservar. La plata queda retenida hasta después del turno.' },
+                ].map(opt => {
+                    const active = appointmentMode === opt.id;
+                    return (
+                        <TouchableOpacity
+                            key={opt.id}
+                            onPress={() => setAppointmentMode(opt.id)}
+                            style={{
+                                padding: 14, borderRadius: Radius.md, marginBottom: 8,
+                                backgroundColor: active ? (isDark ? 'rgba(59,130,246,0.15)' : '#dbeafe') : 'transparent',
+                                borderWidth: 1, borderColor: active ? '#3b82f6' : colors(isDark).border,
+                            }}
+                        >
+                            <Text style={{ color: active ? '#3b82f6' : colors(isDark).text, fontWeight: '700', marginBottom: 2 }}>{opt.title}</Text>
+                            <Text style={{ color: colors(isDark).textMuted, fontSize: 13 }}>{opt.body}</Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+
+            {/* Ventana de cancelación — H5 */}
+            <View style={{ backgroundColor: colors(isDark).glass, borderRadius: Radius.lg, padding: 20, borderWidth: 1, borderColor: colors(isDark).border, marginBottom: 24 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors(isDark).text, marginBottom: 4 }}>Cancelación sin costo</Text>
+                <Text style={{ fontSize: 13, color: colors(isDark).textMuted, marginBottom: 12 }}>
+                    Hasta cuánto antes puede cancelar el cliente y recuperar su dinero. Pasado ese punto, sólo vos o un administrador.
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                    {[12, 24, 48].map(hours => (
+                        <TouchableOpacity
+                            key={hours}
+                            onPress={() => setCancellationHours(hours)}
+                            style={{
+                                flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: Radius.md,
+                                backgroundColor: cancellationHours === hours ? '#3b82f6' : (isDark ? 'rgba(255,255,255,0.05)' : '#f3f4f6'),
+                                borderWidth: 1, borderColor: cancellationHours === hours ? '#2563eb' : 'transparent',
+                            }}
+                        >
+                            <Text style={{ color: cancellationHours === hours ? '#fff' : colors(isDark).text, fontWeight: '600' }}>{hours} h</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
