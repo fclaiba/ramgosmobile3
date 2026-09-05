@@ -20,6 +20,7 @@
 | Cuentas conectadas | **V2** (`v2.core.accounts.create`): `dashboard: express`, `losses_collector: application`, capacidad `stripe_balance.stripe_transfers` (recibir) — es la única solicitable en `configuration.recipient`; `stripe_balance.payouts` sólo se **lee** de la respuesta (pedirla da "Unknown field"), y el retiro al banco lo administra el vendedor desde su dashboard Express. Onboarding hosted (`v2.core.accountLinks.create`) con retorno a la app. Estado reactivo en `users.stripeConnectCaps[Test]`. |
 | Bi-modal | El toggle test/live del app se respeta de punta a punta: cada pago/orden/payout guarda `mode`; cuentas conectadas y webhooks separados por modo. |
 | Puntos | Descuento por puntos absorbido por la comisión de la plataforma (máximo = comisión). El servidor debita los puntos al procesar el pago. |
+| Eventos | Pagar un evento reserva `listings.stock` igual que un producto (H3): sin aforo por separado, porque `eventCapacity`/`eventSoldCount` no tienen escritor en la app hoy. El webhook emite una entrada con QR **por unidad** (`internal.events.internalIssueEventReservationsForOrder`); el host la escanea con `checkInReservation`. Reembolsar una entrada ya escaneada exige `force` de admin, igual que un bono `redeemed`. |
 
 Estados de escrow (`convex/orders/_escrowStates.ts`): `held → release_pending → released`, `held|released → refund_pending → refunded`, `disputed` (interna), `frozen` (Stripe).
 

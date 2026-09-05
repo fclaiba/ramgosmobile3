@@ -374,8 +374,12 @@ export default defineSchema({
         validUntil: v.optional(v.string()), // ISO for bonos (display / legacy absolute)
         /** Days the purchased bono stays redeemable from purchase time. Default 7. */
         validityDays: v.optional(v.number()),
-        // Event-only: total capacity and atomically-decremented soldCount.
-        // We update soldCount transactionally inside `events.holdEventCapacity`.
+        // Event-only. NINGUNA pantalla escribe estos dos campos hoy (H4,
+        // E-149): `CreateListingScreen` no tiene UI para aforo, así que la
+        // reserva real de un evento pasa por `stock`, igual que un producto
+        // (`internal.stock.internalReserveStock`, H3). Quedan documentados
+        // como aspiracionales — el día que exista un formulario de aforo,
+        // ahí hay que decidir si conviven con `stock` o lo reemplazan.
         eventCapacity: v.optional(v.number()),
         eventSoldCount: v.optional(v.number()),
         discountValue: v.optional(v.number()),
@@ -1057,7 +1061,9 @@ export default defineSchema({
         .index("by_listing", ["listingId"])
         .index("by_user", ["userId"])
         .index("by_seller", ["sellerId"])
-        .index("by_qr", ["qrCode"]),
+        .index("by_qr", ["qrCode"])
+        // H4 (E-149 AGD-06): cancelar/leer las entradas de UNA orden al reembolsar.
+        .index("by_order", ["orderId"]),
 
     // Stripe Subscriptions — mirror of business merchant subscriptions on Stripe.
     stripeSubscriptions: defineTable({

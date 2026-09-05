@@ -842,6 +842,10 @@ export const internalProcessPaidCheckout = internalMutation({
             if (lines.some((l) => l.type === "bono")) {
                 await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, { orderId });
             }
+            // H4 (E-149 AGD-06): emite una entrada con QR por unidad comprada.
+            if (lines.some((l) => l.type === "event")) {
+                await ctx.scheduler.runAfter(0, internal.events.internalIssueEventReservationsForOrder, { orderId });
+            }
         }
 
         // La reserva pasa a `consumed` en la MISMA transacción que crea las
@@ -1626,6 +1630,46 @@ export const internalBeginOrderRefund = internalMutation({
             );
         }
 
+        /**
+         * H4 (E-149 AGD-06). Mismo criterio que el bloque de bonos de arriba,
+         * read set acotado al mismo índice `by_order`: una entrada ya
+         * `checked_in` significa que el asistente entró al evento — el
+         * negocio ya entregó lo que vendió, reembolsar sin avisar es la misma
+         * pérdida que un bono `redeemed`. `confirmed` (nadie la usó todavía)
+         * se cancela siempre, es lo mismo que reponer stock.
+         */
+        const eventReservations = await ctx.db
+            .query("eventReservations")
+            .withIndex("by_order", (q) => q.eq("orderId", String(order._id)))
+            .collect();
+        const checkedInReservation = eventReservations.find((r) => r.status === "checked_in");
+        if (checkedInReservation && !args.force) {
+            throw new Error(
+                "Esta orden tiene una entrada ya escaneada en la puerta. " +
+                    "Reembolsar de todas formas requiere confirmación de un administrador.",
+            );
+        }
+        for (const reservation of eventReservations) {
+            if (reservation.status === "confirmed") {
+                await ctx.db.patch(reservation._id, { status: "cancelled" });
+            }
+        }
+        if (checkedInReservation && args.force) {
+            await ctx.db.insert(
+                "audit_logs",
+                buildAuditRecord({
+                    actorUserId: args.actorUserId ?? "system:force",
+                    targetUserId: order.userId,
+                    action: "EVENT_REFUND_FORCED",
+                    metadata: {
+                        orderId: String(order._id),
+                        reservationId: String(checkedInReservation._id),
+                        qrCode: checkedInReservation.qrCode,
+                    },
+                }),
+            );
+        }
+
         const grossCents = order.grossCents ?? Math.round(order.total * 100);
         const remaining = grossCents - (order.refundedCents ?? 0);
         if (remaining <= 0) throw new Error("La orden ya fue reembolsada por completo.");
@@ -1728,7 +1772,10 @@ export const internalCompleteOrderRefund = internalMutation({
             updatedAt: now,
         });
 
-        if (full && (order.listingType ?? "product") === "product") {
+        // H4: un evento reserva `listings.stock` igual que un producto (H3),
+        // así que el refund total tiene que devolverlo igual. Las entradas ya
+        // se cancelaron arriba (o bloquearon el refund si había `checked_in`).
+        if (full && ["product", "event"].includes(order.listingType ?? "product")) {
             for (const item of order.items) {
                 const listingId = ctx.db.normalizeId("listings", item.listingId);
                 if (!listingId) continue;

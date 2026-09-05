@@ -1,23 +1,34 @@
 /**
  * convex/events.ts — Event ticket lifecycle.
  *
- * Lifecycle:
- *   1. Buyer adds an event listing to cart, hits checkout.
- *   2. CheckoutScreen (or PaymentIntent action) calls `holdEventCapacity`
- *      atomically BEFORE the PaymentIntent is created. If capacity check
- *      fails (oversold), the PI never gets created → buyer sees a
- *      friendly "Sold out" toast instead of a charge that has to be refunded.
- *   3. PaymentIntent succeeds → webhook calls `internalIssueEventReservationsForPayment`
- *      → emits one `eventReservations` row per quantity unit, status = 'confirmed',
- *      with a QR code.
- *   4. At the event entrance, the host scans the QR via `checkInReservation`.
- *   5. A daily cron auto-confirms (releases escrow) for events whose date
- *      has passed by 24h+ — see `cronAutoReleaseEvents`.
+ * H4 (E-149 AGD-06 / STK-04) — POR QUÉ SE REESCRIBIÓ
  *
- * Capacity model:
- *   `listings.eventCapacity` = total seats; `listings.eventSoldCount` =
- *   currently-held seats. We mutate `eventSoldCount` directly inside a
- *   single mutation so concurrent buyers can't oversell.
+ * Este módulo tenía tres funciones bien escritas y con CERO call sites:
+ * `holdEventCapacity`/`releaseEventCapacity` (aforo vía `eventCapacity`, un
+ * campo que ninguna pantalla llena — `CreateListingScreen` nunca lo escribe) y
+ * `internalIssueEventReservationsForPayment`, diseñada para un checkout de UN
+ * ítem por pago (`payment.metadata.listingId`) que dejó de existir con el
+ * checkout multi-vendedor de `_split.ts`. El comentario de cabecera decía que
+ * "CheckoutScreen llama a `holdEventCapacity`": nunca fue cierto.
+ *
+ * Lifecycle vigente:
+ *   1. `createPaymentIntent` reserva stock ATÓMICAMENTE antes de cobrar
+ *      (`internal.stock.internalReserveStock`, H3) — un evento con `stock: 1`
+ *      no se sobrevende, igual que un producto. Es el mismo mecanismo, no uno
+ *      paralelo: `eventCapacity`/`eventSoldCount` no tienen escritor en la app
+ *      hoy, así que no son la fuente de verdad del aforo.
+ *   2. El webhook crea la orden (`internalProcessPaidCheckout`) y, si hay
+ *      líneas de tipo `event`, agenda `internalIssueEventReservationsForOrder`
+ *      — mismo patrón que `bonos.internalIssueBonosForOrder` (línea 778 de
+ *      `stripe.ts`): una fila `eventReservations` con QR **por unidad**
+ *      comprada, para que cada asistente escanee la suya.
+ *   3. En la entrada, el host escanea con `checkInReservation`.
+ *   4. Un cron diario libera el escrow 24h después de `eventDate`
+ *      (`internalAutoReleaseEvents`).
+ *   5. Reembolso (`stripe.internalBeginOrderRefund`/`internalCompleteOrderRefund`):
+ *      una entrada ya escaneada (`checked_in`) bloquea el refund sin `force`
+ *      de admin — el asistente ya usó lo que pagó, mismo criterio que un bono
+ *      `redeemed` (H2). Las que siguen `confirmed` se cancelan sin objeción.
  */
 
 import { v } from "convex/values";
@@ -32,137 +43,65 @@ const generateQrCode = (): string => {
 };
 
 // ---------------------------------------------------------------------------
-// holdEventCapacity — atomic check-and-decrement of `eventSoldCount`.
-// Throws if the requested quantity would exceed eventCapacity.
+// internalIssueEventReservationsForOrder — disparada desde el webhook cuando
+// la orden tiene al menos una línea de tipo `event` (mismo trigger que los
+// bonos, ver `stripe.ts` `internalProcessPaidCheckout`).
 //
-// CALL THIS BEFORE creating the PaymentIntent for an event line item.
+// Idempotente por `(orderId, listingId)`: un reintento del webhook no emite
+// QR de más. Una fila por unidad — quantity=3 son 3 QR, no uno reusable.
 // ---------------------------------------------------------------------------
-export const holdEventCapacity = mutation({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        listingId: v.id("listings"),
-        quantity: v.number(),
-    },
+export const internalIssueEventReservationsForOrder = internalMutation({
+    args: { orderId: v.id("orders") },
     handler: async (ctx, args) => {
-        // Auth: any logged-in user may hold capacity for themselves.
-        await requireActor(ctx, (args as any).sessionToken);
-        if (args.quantity <= 0) throw new Error("Cantidad inválida.");
+        const order = await ctx.db.get(args.orderId);
+        if (!order) return;
 
-        const listing = await ctx.db.get(args.listingId);
-        if (!listing) throw new Error("Evento no encontrado.");
-        if ((listing as any).type !== "event") {
-            throw new Error("Esta función solo aplica a eventos.");
+        for (const item of order.items) {
+            const listingNormId = ctx.db.normalizeId("listings", item.listingId);
+            const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
+            if (!listing || (listing as any).type !== "event") continue;
+
+            const existing = await ctx.db
+                .query("eventReservations")
+                .withIndex("by_order", (q) => q.eq("orderId", String(args.orderId)))
+                .filter((q) => q.eq(q.field("listingId"), item.listingId))
+                .collect();
+            if (existing.length > 0) {
+                console.log(`[Events] Ya emitidas ${existing.length} entrada(s) para orden ${args.orderId} / ${item.listingId}`);
+                continue;
+            }
+
+            const sellerId = String((listing as any).sellerId || order.sellerId || "");
+            if (!sellerId) continue;
+            const eventDate = (listing as any).eventDate as string | undefined;
+            const quantity = Math.max(1, Math.floor(item.quantity));
+
+            for (let i = 0; i < quantity; i++) {
+                const qrCode = generateQrCode();
+                await ctx.db.insert("eventReservations", {
+                    listingId: item.listingId,
+                    userId: order.userId,
+                    sellerId,
+                    orderId: String(args.orderId),
+                    quantity: 1,
+                    qrCode,
+                    status: "confirmed",
+                    eventDate,
+                    createdAt: new Date().toISOString(),
+                });
+            }
+
+            await ctx.scheduler.runAfter(0, internal.notifications.notifyUser, {
+                userId: order.userId,
+                title: quantity > 1 ? "Tus entradas están listas" : "Tu entrada está lista",
+                body: `${item.title || "Evento"}: ${quantity} entrada${quantity > 1 ? "s" : ""} confirmada${quantity > 1 ? "s" : ""}. Mostrá el QR en la puerta.`,
+                category: "order" as const,
+                data: { type: "event_reservation_issued", listingId: item.listingId, orderId: String(args.orderId) },
+            });
         }
-
-        const capacity = (listing as any).eventCapacity as number | undefined;
-        const sold = ((listing as any).eventSoldCount as number | undefined) ?? 0;
-
-        // If capacity is undefined we treat it as unlimited (open-air event,
-        // free flow). Most ticketed events SHOULD have a capacity though.
-        if (typeof capacity === "number" && sold + args.quantity > capacity) {
-            throw new Error(
-                `Capacidad agotada. Quedan ${Math.max(0, capacity - sold)} entradas.`,
-            );
-        }
-
-        await ctx.db.patch(args.listingId, {
-            eventSoldCount: sold + args.quantity,
-        } as any);
-
-        return { ok: true, newSoldCount: sold + args.quantity };
     },
 });
 
-// ---------------------------------------------------------------------------
-// releaseEventCapacity — reverse holdEventCapacity, e.g. when a PI fails
-// or the buyer cancels before paying.
-// ---------------------------------------------------------------------------
-export const releaseEventCapacity = mutation({
-    args: {
-        sessionToken: v.optional(v.string()),
-        actorId: v.optional(v.any()),
-        listingId: v.id("listings"),
-        quantity: v.number(),
-    },
-    handler: async (ctx, args) => {
-        await requireActor(ctx, (args as any).sessionToken);
-        const listing = await ctx.db.get(args.listingId);
-        if (!listing) return;
-        const sold = ((listing as any).eventSoldCount as number | undefined) ?? 0;
-        await ctx.db.patch(args.listingId, {
-            eventSoldCount: Math.max(0, sold - args.quantity),
-        } as any);
-    },
-});
-
-// ---------------------------------------------------------------------------
-// internalIssueEventReservationsForPayment — webhook-driven.
-// ---------------------------------------------------------------------------
-export const internalIssueEventReservationsForPayment = internalMutation({
-    args: {
-        paymentId: v.id("payments"),
-    },
-    handler: async (ctx, args) => {
-        const payment = await ctx.db.get(args.paymentId);
-        if (!payment) return;
-        if (!payment.sellerId) return;
-
-        const meta = (payment.metadata ?? {}) as any;
-        const listingId: string | undefined = meta.listingId;
-        const type: string | undefined = meta.type;
-        if (type !== "event" || !listingId) return;
-
-        const listingNormId = ctx.db.normalizeId("listings", listingId);
-        const listing = listingNormId ? await ctx.db.get(listingNormId) : null;
-        if (!listing) {
-            console.warn(
-                `[Events] Listing not found for payment ${args.paymentId}`,
-            );
-            return;
-        }
-        if ((listing as any).type !== "event") {
-            console.warn(`[Events] Listing ${listingId} is not an event`);
-            return;
-        }
-
-        // Idempotency — skip if reservations already exist for this payment.
-        const existing = await ctx.db
-            .query("eventReservations")
-            .withIndex("by_listing", (q) => q.eq("listingId", listingId))
-            .filter((q) => q.eq(q.field("paymentId"), String(args.paymentId)))
-            .collect();
-        if (existing.length > 0) {
-            console.log(
-                `[Events] ${existing.length} reservations already issued for payment ${args.paymentId}; skipping`,
-            );
-            return;
-        }
-
-        // We persist ONE reservation per payment row (buyers can choose
-        // quantity inside the reservation). For per-seat QR codes, we'd
-        // emit `quantity` rows here — kept as a single row for simplicity
-        // since one QR can be presented to scan all attendees together.
-        const quantity = Number((meta.quantity as number) ?? 1) || 1;
-
-        await ctx.db.insert("eventReservations", {
-            listingId,
-            userId: payment.userId,
-            sellerId: payment.sellerId,
-            paymentId: String(args.paymentId),
-            orderId: payment.orderId ?? undefined,
-            quantity,
-            qrCode: generateQrCode(),
-            status: "confirmed",
-            eventDate: (listing as any).eventDate,
-            createdAt: new Date().toISOString(),
-        });
-
-        console.log(
-            `[Events] Confirmed reservation (qty=${quantity}) for payment ${args.paymentId}`,
-        );
-    },
-});
 
 // ---------------------------------------------------------------------------
 // checkInReservation — entrance scanner.
@@ -260,6 +199,10 @@ export const getReservationsByListing = query({
 // associated orders that are still in 'payment_received' / 'delivered'
 // state and releases escrow. This is the auto-confirm equivalent of the
 // buyer pressing "Confirm receipt" on a product order.
+//
+// H4: una orden ahora tiene UNA fila `eventReservations` POR ENTRADA (antes
+// era una por orden). Sin deduplicar por `orderId`, una compra de 3 entradas
+// programaría `internalReleaseOrderEscrow` 3 veces para la misma orden.
 // ---------------------------------------------------------------------------
 export const internalAutoReleaseEvents = internalMutation({
     args: {},
@@ -275,16 +218,17 @@ export const internalAutoReleaseEvents = internalMutation({
             )
             .collect();
 
-        let released = 0;
-
+        const dueOrderIds = new Set<string>();
         for (const res of reservations) {
-            if (!res.eventDate) continue;
+            if (!res.eventDate || !res.orderId) continue;
             const eventTs = new Date(res.eventDate).getTime();
-            if (!Number.isFinite(eventTs)) continue;
-            if (eventTs > cutoff) continue; // event hasn't passed yet
-            if (!res.orderId) continue;
+            if (!Number.isFinite(eventTs) || eventTs > cutoff) continue; // event hasn't passed yet
+            dueOrderIds.add(res.orderId);
+        }
 
-            const orderNormId = ctx.db.normalizeId("orders", res.orderId);
+        let released = 0;
+        for (const orderId of dueOrderIds) {
+            const orderNormId = ctx.db.normalizeId("orders", orderId);
             if (!orderNormId) continue;
             const order = await ctx.db.get(orderNormId);
             if (!order) continue;

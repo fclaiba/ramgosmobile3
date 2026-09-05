@@ -21,13 +21,18 @@
  * Estado tras H3 (2026-09-05) — `internal.stock.internalReserveStock` chequea y
  * descuenta en la misma mutation, antes de cobrar:
  *   STK-03 → VERDE
- *   AGD-02 → VERDE **por el stock, no por el aforo**. El fixture siembra el
- *            evento con `stock = eventCapacity`, así que la reserva lo frena
- *            igual que a un producto. Lo que sigue faltando es H4: usar
- *            `eventCapacity`/`eventSoldCount` como fuente real y emitir
- *            `eventReservations` (el comprador todavía no recibe QR). Un
- *            evento con `stock` alto y `eventCapacity` bajo se sigue
- *            sobrevendiendo, y ese caso lo cubre H4.
+ *   AGD-02 → VERDE por el stock. El fixture siembra el evento con
+ *            `stock = eventCapacity`, así que la reserva lo frena igual que a
+ *            un producto.
+ *
+ * H4 (2026-09-05) investigó si hacía falta unificar `eventCapacity`/
+ * `eventSoldCount` como una fuente de aforo aparte de `stock` — y encontró que
+ * NINGUNA pantalla escribe esos dos campos (`CreateListingScreen` no tiene UI
+ * de aforo). No son una fuente paralela sin conectar: son schema muerto, y el
+ * escenario "stock alto + eventCapacity bajo" no puede ocurrir hoy porque nada
+ * pone `eventCapacity`. Lo que sí faltaba y H4 cerró: emitir `eventReservations`
+ * con QR al pagar y bloquear el refund de una entrada ya escaneada — ver
+ * `tests/audit/eventRefund.integration.test.ts`.
  */
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
@@ -96,8 +101,8 @@ describe('STK-03 / STK-01 — N checkouts simultáneos sobre un producto con sto
 
 describe('AGD-02 / EVT — N checkouts simultáneos sobre un evento con capacidad 1', () => {
     test(`exactamente 1 de ${N} createPaymentIntent tiene éxito`, async () => {
-        // Verde por la reserva de `listings.stock` (H3), no por el aforo:
-        // el fixture siembra stock = eventCapacity. Ver la cabecera.
+        // Verde por la reserva de `listings.stock` (H3) — que resultó ser la
+        // única fuente de aforo real hoy, ver la cabecera (H4).
         const r = await raceCheckout(fx.buyerEvent, fx.eventId);
         expect(r.ok).toBe(1);
     }, 90_000);

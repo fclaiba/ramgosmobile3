@@ -225,6 +225,68 @@ export const seedRefundScenario = internalMutation({
     },
 });
 
+/**
+ * H4 (E-149 AGD-06). Mismo molde que `seedRefundScenario`, para la orden con
+ * una entrada de evento en vez de un bono. `reservationStatus` deja elegir el
+ * escenario sin duplicar la función: `confirmed` (nadie usó la entrada) o
+ * `checked_in` (el asistente ya entró).
+ */
+export const seedEventRefundScenario = internalMutation({
+    args: { reservationStatus: v.union(v.literal("confirmed"), v.literal("checked_in")) },
+    handler: async (ctx, args) => {
+        assertAuditDeployment();
+        const suffix = Date.now().toString(36);
+        const business = await seedUser(ctx, "business", "event-refund-business", suffix);
+        const buyer = await seedUser(ctx, "consumer", "event-refund-buyer", suffix);
+        const admin = await seedUser(ctx, "admin", "event-refund-admin", suffix);
+
+        const eventListingId = String(
+            await ctx.db.insert("listings", {
+                ...listingBase(business.id, "event", `${MARK} evento refund`, suffix),
+                stock: 5,
+                eventDate: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+            }),
+        );
+
+        const grossCents = 1000;
+        const now = nowIso();
+        const orderId = String(
+            await ctx.db.insert("orders", {
+                userId: buyer.id,
+                sellerId: business.id,
+                items: [{ listingId: eventListingId, title: `${MARK} evento refund`, quantity: 1, price: 10 }],
+                total: 10,
+                currency: "USD" as const,
+                status: "paid_escrow" as const,
+                listingType: "event",
+                mode: "test" as const,
+                escrowState: "held",
+                grossCents,
+                stripePaymentIntentId: `mock_pi_${MARK}_${suffix}`,
+                createdAt: now,
+                updatedAt: now,
+            }),
+        );
+
+        const qrCode = `EVT-AUDREF-${suffix}`.toUpperCase();
+        const reservationId = String(
+            await ctx.db.insert("eventReservations", {
+                listingId: eventListingId,
+                userId: buyer.id,
+                sellerId: business.id,
+                orderId,
+                quantity: 1,
+                qrCode,
+                status: args.reservationStatus,
+                ...(args.reservationStatus === "checked_in" ? { checkedInAt: now } : {}),
+                createdAt: now,
+            }),
+        );
+
+        return { suffix, business, buyer, admin, orderId, reservationId, qrCode, eventListingId };
+    },
+});
+
 /** Estado actual de los documentos que los tests afirman. */
 export const inspect = internalQuery({
     args: {
@@ -257,6 +319,11 @@ export const inspect = internalQuery({
                   (r: any) => String(r.userId) === args.reservationUserId,
               )
             : [];
+        // Entradas de evento de la orden (H4): por el índice `by_order` que
+        // usa `internalBeginOrderRefund` para bloquear/cancelar.
+        const eventReservations = args.orderId
+            ? await ctx.db.query("eventReservations").withIndex("by_order", (q: any) => q.eq("orderId", args.orderId)).collect()
+            : [];
 
         return {
             reservations: reservations.map((r: any) => ({
@@ -264,6 +331,7 @@ export const inspect = internalQuery({
                 lines: r.lines,
                 releaseReason: r.releaseReason ?? null,
             })),
+            eventReservations: eventReservations.map((r: any) => ({ status: r.status, qrCode: r.qrCode })),
             product: product ? { stock: product.stock, available: product.available ?? null } : null,
             event: event ? { stock: event.stock, eventCapacity: event.eventCapacity, eventSoldCount: event.eventSoldCount } : null,
             bono: bono ? { status: bono.status } : null,

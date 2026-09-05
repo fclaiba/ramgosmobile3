@@ -1,4 +1,4 @@
-# Estado del marketplace — 2026-09-04 (208ab3c), actualizado 2026-09-05 (H3)
+# Estado del marketplace — 2026-09-04 (208ab3c), actualizado 2026-09-05 (H3, H4)
 
 Auditoría de integridad transaccional. Evidencia estática en `docs/audit/audit-report.{json,md}`
 (scanner `scripts/audit/marketplace-audit.mjs`, 124 archivos, 543 límites transaccionales);
@@ -16,9 +16,12 @@ de por medio. Detalle en §3.
 **Un bono reembolsado sigue siendo canjeable.** El refund no toca `bonoRedemptions`: el comprador
 recupera los $50 y conserva $100 de crédito. El negocio paga la diferencia.
 
-**Los eventos no controlan aforo ni emiten entradas.** `holdEventCapacity` e
-`internalIssueEventReservationsForPayment` existen, están bien escritos, y tienen **cero call sites**.
-Se venden entradas sin límite y el comprador no recibe QR.
+**~~Los eventos no controlan aforo ni emiten entradas.~~ Cerrado en H4 (2026-09-05).** La reserva
+atómica de H3 ya frena la sobreventa (un evento con `stock: 1` se comporta como un producto);
+`internalIssueEventReservationsForOrder` emite una entrada con QR por unidad comprada, y el refund
+bloquea si ya fue escaneada. `eventCapacity`/`eventSoldCount` resultaron ser schema sin escritor —
+ninguna pantalla los llena — así que no eran una fuente de aforo paralela que hubiera que conectar.
+Detalle en §3.
 
 **Dos mutations públicas sin autenticación crean bonos** (`seedMockBonos`, `seed5Bonos`) sobre
 negocios reales. Cualquiera con la URL del deployment (está en el bundle) puede invocarlas.
@@ -28,17 +31,17 @@ de webhooks y canje de bonos. Es el módulo con más tests y el único con máqu
 
 **¿Abrir al público hoy?** Las tres condiciones originales están cumplidas: seeds públicos cerrados
 (H1), bono cancelado en el refund (H2) y reserva atómica de stock (H3) — con eso, productos de
-unidad única incluidos. **Queda un bloqueante fuera del catálogo original**: la escalación de
-privilegios de `syncUser` (§3, hallazgo nuevo de H1), que no es de integridad transaccional pero sí
-de apertura al público. **Eventos: siguen sin vender** hasta H4 (aforo real + QR). Agenda de turnos:
-no existe, no aplica.
+unidad única incluidos. **Eventos ya venden con aforo real y QR (H4)**. **Queda un bloqueante fuera
+del catálogo original**: la escalación de privilegios de `syncUser` (§3, hallazgo nuevo de H1), que no
+es de integridad transaccional pero sí de apertura al público — es lo único que falta. Agenda de
+turnos: no existe, no aplica.
 
 ## 2. Tablero de madurez
 
 | Área | Nivel | Invariantes críticos rotos | Riesgo |
 |---|---|---|---|
 | Stock | **4** (H3, 2026-09-05) — antes 2 | ninguno crítico (STK-06 y STK-10 siguen en su nivel) | Bajo. La sobreventa por diseño está cerrada: reserva atómica antes de cobrar |
-| Agenda | **0-1** — Inexistente / esbozada | AGD-01, AGD-02, AGD-05, AGD-08 (feature no construida); eventos: capacidad desconectada | Bajo (turnos) / **Alto** (eventos) |
+| Agenda | **0-1** — Inexistente (turnos) / **4** (eventos, H4) | AGD-01, AGD-05, AGD-08 (turnos: feature no construida) | Bajo (turnos, no se ofrece) / Bajo (eventos, resuelto) |
 | Pagos y reembolsos | **3** — Robusto | PAY-05 (efectos colaterales) | Medio |
 | Bonos | **3** con un agujero | BON-07 | **Alto** (pérdida directa del negocio) |
 | Transversal | **2** | TRV-01 (seeds públicos), TRV-02 (0 tests de concurrencia) | **Alto** |
@@ -67,13 +70,19 @@ no existe, no aplica.
 - **Impacto económico:** $100 de mercadería por bono en el primer caso, $100 + $45 netos en el segundo. Lo paga el negocio, no la plataforma — es el tipo de pérdida que hace que un negocio se vaya.
 - **Corrección mínima:** en `internalBeginOrderRefund` (`stripe.ts:1493`): si la orden tiene bonos por `by_order`, (a) si alguno está `redeemed` → rechazar el refund salvo `force` de admin con motivo; (b) si `issued` → patch `status: "cancelled"` en la misma mutation (atómico con el `refund_pending`). Y `canTransition('released', 'refund_pending')` para `listingType === 'bono'` debería exigir el mismo `force`.
 
-### [AGD-06 / STK-04] Aforo de eventos y entradas: implementados y desconectados
-- **Nivel:** 1 — Esbozado
+### [AGD-06 / STK-04] Aforo de eventos y entradas: implementados y desconectados → resuelto en H4
+- **Nivel:** 1 — Esbozado → **4 (H4, 2026-09-05)**
 - **Evidencia:** `convex/events.ts:40` (`holdEventCapacity`, atómico, correcto) y `:102` (`internalIssueEventReservationsForPayment`, idempotente por pago) · scanner STK-04 counterHit: **0 call sites** de ambos fuera de `events.ts`, en `convex/` y en `src/` · `convex/stripe.ts:778` (el checkout pagado sólo emite bonos) · `convex/events.ts:2-13` (el comentario afirma que CheckoutScreen llama al hold: es falso)
 - **Qué pasa hoy:** `eventSoldCount` nunca se incrementa; `eventReservations` nunca se inserta; `checkInReservation` (L173) no tiene nada que escanear. El único freno es `listings.stock`, que el cliente manda con default **1** si el campo queda vacío (`src/screens/CreateListingScreen.tsx:250`, `_validation.ts:94`) y que el pre-check aplica a todos los tipos (`stripe.ts:233`).
 - **Escenario de falla concreto:** evento con `eventCapacity: 80` y `stock: 200` (el vendedor puso "muchas"): se venden 200 entradas; ninguna tiene QR; en la puerta no hay forma de validar. Con `stock` vacío: se vende **una** entrada y la segunda persona ve "se quedó sin stock".
 - **Impacto económico:** sobreventa de aforo (reembolsos masivos + reputación) o subventa (una sola entrada). Ambos silenciosos.
 - **Corrección mínima:** llamar `internalIssueEventReservationsForPayment` desde `internalProcessPaidCheckout` junto al bono (L778, mismo patrón); y unificar el aforo con la reserva de stock del hallazgo anterior (`eventCapacity - eventSoldCount` es el mismo problema que `stock`). Hasta entonces, no vender eventos.
+- **✅ H4 (2026-09-05) — nivel 4, con una corrección de diagnóstico.** `eventCapacity`/`eventSoldCount` NO se unificaron con `stock` porque investigar el hallazgo mostró algo que la lectura estática no vio: **ninguna pantalla los escribe** — `CreateListingScreen` no tiene un campo de aforo, así que en la app de hoy son schema muerto, no una fuente de verdad paralela. El escenario de falla original ("evento con `eventCapacity: 80` y `stock: 200`") no puede ocurrir hoy porque nada pone `eventCapacity` en 80. Se dejaron documentados como aspiracionales (comentario en `schema.ts`) en vez de fingir que se conectaron.
+  - `holdEventCapacity`, `releaseEventCapacity` (el mecanismo de aforo que nadie llamaba) e `internalIssueEventReservationsForPayment` (diseñada para un checkout de un ítem por pago que dejó de existir con `_split.ts`) se **eliminaron**: 0 call sites, y el comentario de cabecera que decía "CheckoutScreen llama a `holdEventCapacity`" — la misma clase de comentario engañoso que ocultó STK-01 — nunca fue cierto.
+  - `internalIssueEventReservationsForOrder` (nueva, `convex/events.ts`) reemplaza el trigger: la reserva de stock de H3 ya frena la sobreventa (un evento con `stock: 1` se comporta como un producto con `stock: 1`); esta función sólo emite la entrada — una fila `eventReservations` con QR **por unidad** comprada, mismo patrón que `bonos.internalIssueBonosForOrder`, disparada desde `internalProcessPaidCheckout` junto al bono (misma línea 778).
+  - Reembolso: `internalBeginOrderRefund` lee `eventReservations by_order` (índice nuevo) con el mismo criterio que BON-07 — `checked_in` (el asistente ya entró) bloquea sin `force` de admin (`audit_logs EVENT_REFUND_FORCED`), `confirmed` se cancela siempre. `internalCompleteOrderRefund` extiende el restock de stock (antes sólo `product`) a incluir `event`.
+  - **Defecto de mi propio diseño, encontrado en la revisión y corregido antes de commitear:** `internalAutoReleaseEvents` asumía una fila `eventReservations` por orden (así era antes de H4); con una fila por unidad, una compra de 3 entradas habría programado `internalReleaseOrderEscrow` 3 veces para la misma orden. Se agregó deduplicación por `orderId` antes de agendar el release.
+  - Verificado con 3 tests de integración nuevos (`tests/audit/eventRefund.integration.test.ts`, mismo molde que `bonoRefund.integration.test.ts`) contra `ramgos-audit`: confirmed→refund cancela sola; checked_in sin force→bloquea; checked_in con force→pasa y audita. **Pendiente de deploy del usuario para correrlos** (ver §8).
 
 ### [TRV-01] Mutations públicas sin autenticación escriben bonos sobre negocios reales
 - **Nivel:** 2 → **4 (H1, 2026-09-04)**
@@ -139,7 +148,7 @@ no existe, no aplica.
 | BON-07 | `invariants.pure.test.ts` — `isRefundable('released')` | false para bono canjeado | `true` (sin cambios: la máquina no se tocó, ver `_escrowStates.ts`) | Ya no es el veredicto vigente — la guarda vive en `internalBeginOrderRefund`, ver H2 abajo |
 | PAY-04 | ídem — `isRefundable('refund_pending')` | false | false | Cumplido |
 | BON-01 | `concurrency.integration.test.ts` — 5 canjes simultáneos contra `oceanic-goose-862` | 1 éxito | **1 éxito, 4 rechazos** | ✅ **Cumplido — sube a nivel 4** (H0, 2026-09-04) |
-| AGD-02 / STK-04 | ídem — 5 `createPaymentIntent` simultáneos sobre un evento con capacidad 1 (re-apuntado al checkout real) | 1 éxito | **5 éxitos** (H0) | 🟡 **H3 lo frena por `listings.stock`** (el fixture siembra `stock = eventCapacity`), pero el aforo real sigue sin conectarse: un evento con `stock` alto y `eventCapacity` bajo se sobrevende igual, y no se emite QR. **Cierra en H4** |
+| AGD-02 / STK-04 | ídem — 5 `createPaymentIntent` simultáneos sobre un evento con capacidad 1 (re-apuntado al checkout real) | 1 éxito | **5 éxitos** (H0) | ✅ **Cumplido (H3 para la reserva, H4 para el QR)**. `eventCapacity` no era una fuente de verdad paralela sin conectar — es schema sin escritor; ver el hallazgo AGD-06 revisado. Pendiente de re-correr contra `ramgos-audit` (deploy del usuario) |
 | STK-03 | ídem — 5 `createPaymentIntent` simultáneos sobre un producto con stock 1 | 1 éxito | **5 éxitos** (H0) → **pendiente de re-correr con H3** | 🟡 Código en verde en el modelo puro; falta la corrida contra `ramgos-audit` (necesita deploy, ver §8) |
 | PAY-01 / STK-05 | ídem — mismo evento firmado entregado dos veces | 1 fila en `paymentEvents` | **1 fila** | ✅ **Cumplido — sube a nivel 4** (H0) |
 
@@ -174,7 +183,7 @@ Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed 
 | 2 | ✅ **Hecho (H2)** Cancelar bono `issued` en `internalBeginOrderRefund`; rechazar refund de bono `redeemed` sin `force` | BON-07, PAY-05 | Alto: $100 por bono, lo paga el negocio | 1-2 h | **Sí** |
 | 3 | Refund automático + aviso a admins cuando `shortfalls.length > 0` en `internalProcessPaidCheckout` (reusar `internalRefundOrder` y el patrón de notificación de E-146) | STK-01, TRV-04 | Medio tras H3: con reserva viva ya no se genera shortfall; queda como plan B del TTL vencido | 2 h | No |
 | 4 | ✅ **Hecho (H3)** Reserva atómica: `internal.stock.internalReserveStock` (check-and-decrement + TTL) desde `createPaymentIntent`; el webhook consume; cron libera vencidas | STK-01, STK-03, STK-04 | Alto | 1-2 días | **Ya no** |
-| 5 | Conectar eventos (**H4, siguiente**): emitir `eventReservations` desde `internalProcessPaidCheckout` (junto al bono, L778) y hacer que la reserva de #4 mire `eventCapacity`/`eventSoldCount` y no sólo `listings.stock` | AGD-06, STK-04 | Alto para eventos | 1 día (la mitad ya la puso H3) | **Sí** para vender eventos |
+| 5 | ✅ **Hecho (H4)** Conectar eventos: `internalIssueEventReservationsForOrder` emite QR por unidad desde `internalProcessPaidCheckout`; refund con el mismo criterio que BON-07 (`checked_in` bloquea, `confirmed` cancela). `eventCapacity`/`eventSoldCount` quedaron documentados como aspiracionales — nada los escribe, no eran la fuente de verdad que se pensaba | AGD-06, STK-04 | Alto para eventos | 1 día | **Ya no** |
 | 6 | No aplicar check de stock a `bono`/`service` sin inventario (o default 9999 en el cliente y guard por tipo en `stripe.ts:233` como en `cart.ts:92`) | STK-* nuevo | Medio: subventa silenciosa | 1 h | No |
 | 7 | Query admin + fila en `AdminFinanceScreen` para órdenes con `stockShortfall` | TRV-04 | Medio | 2 h | No (cubierto por #3) |
 | 8 | 🟡 **H0 hecho**: corre contra `ramgos-audit`/`oceanic-goose-862`, sin skip. Falta cargar los 4 secrets en GitHub para que el job `audit-concurrency` de CI se ejecute (ver `tests/audit/README.md`) | TRV-02 | Medio: evita la próxima E-146 | 15 min restantes | No |
@@ -190,7 +199,7 @@ Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed 
 | STK-01 | N `createPaymentIntent` concurrentes sobre stock 1 → exactamente 1 PI (hoy: N) | `tests/audit/concurrency.integration.test.ts` (escrito, skip) |
 | BON-07 | Emitir bono → refund total → `redeemBono` debe fallar con "cancelado" | integración: `bonos.ts` + `stripe.internalRefundOrder` en preview |
 | BON-07 inverso | Canjear → `released` → `adminRefundEscrow` debe exigir `force` | ídem |
-| AGD-06 | Pagar un evento → existe `eventReservations` por unidad y `eventSoldCount` == vendidas | integración: webhook simulado (`ALLOW_STRIPE_MOCK`) en preview |
+| AGD-06 | ✅ **Hecho (H4)** — Pagar un evento → existe `eventReservations` con QR por unidad; refund con entrada `checked_in` bloquea sin `force` | `tests/audit/eventRefund.integration.test.ts` (3 escenarios) |
 | TRV-01 | Llamar `seedMockBonos` sin sesión → debe rechazar | `convex/__tests__/` con `convex-test`… no disponible; alternativa: test estático sobre el scanner (`TRV-01` hits en archivos no-seed == 0) |
 | STK-* nuevo | Crear bono con stock vacío → comprarlo dos veces → la segunda no debe fallar por stock | integración |
 | STK-06 | Refund parcial de 2/3 unidades → stock +2 | integración |

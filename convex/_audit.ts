@@ -30,7 +30,12 @@ export type AuditAction =
      * refund saltea la guarda con `force` — es la traza de "alguien decidió
      * a mano devolverle la plata a un comprador que ya gastó el crédito".
      */
-    | "BONO_REFUND_FORCED";
+    | "BONO_REFUND_FORCED"
+    /**
+     * H4 (E-149 AGD-06): mismo criterio que BONO_REFUND_FORCED, para
+     * entradas de evento ya `checked_in` (el asistente ya entró).
+     */
+    | "EVENT_REFUND_FORCED";
 
 export type AuditParams = {
     actorUserId: string;
