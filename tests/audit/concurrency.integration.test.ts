@@ -11,14 +11,23 @@
  * Sin `skip`: si no hay deployment configurado, el test FALLA. Un invariante
  * sin test en verde cuenta como roto.
  *
- * Estado esperado al momento de escribirlos (H0, 2026-09-04):
+ * Estado al escribirlos (H0, 2026-09-04):
  *   BON-01 → verde  (redeemBono es una mutation: serializable por OCC)
  *   PAY-01 → verde  (paymentEvents por event.id, finance.ts:298)
  *   STK-03 → ROJO   (el chequeo vive en la action, el descuento en el webhook)
  *   AGD-02 → ROJO   (holdEventCapacity no lo llama nadie; el checkout sólo
  *                    mira `listings.stock`)
- * H3/H4 los ponen en verde. Si STK-03 o AGD-02 pasan antes de eso, el test
- * está mal, no el código.
+ *
+ * Estado tras H3 (2026-09-05) — `internal.stock.internalReserveStock` chequea y
+ * descuenta en la misma mutation, antes de cobrar:
+ *   STK-03 → VERDE
+ *   AGD-02 → VERDE **por el stock, no por el aforo**. El fixture siembra el
+ *            evento con `stock = eventCapacity`, así que la reserva lo frena
+ *            igual que a un producto. Lo que sigue faltando es H4: usar
+ *            `eventCapacity`/`eventSoldCount` como fuente real y emitir
+ *            `eventReservations` (el comprador todavía no recibe QR). Un
+ *            evento con `stock` alto y `eventCapacity` bajo se sigue
+ *            sobrevendiendo, y ese caso lo cubre H4.
  */
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../convex/_generated/api';
@@ -70,17 +79,26 @@ describe('BON-01 — N canjes simultáneos del mismo bono', () => {
 describe('STK-03 / STK-01 — N checkouts simultáneos sobre un producto con stock 1', () => {
     test(`exactamente 1 de ${N} createPaymentIntent tiene éxito`, async () => {
         const r = await raceCheckout(fx.buyerProduct, fx.productId);
-        // Predicción estática (H0): r.ok === N. Este assert está en rojo hasta H3.
         expect(r.ok).toBe(1);
         const rest = r.errors.filter((e) => !/stock/i.test(e));
         expect(rest).toEqual([]); // los rechazos deben ser "sin stock", no errores de concurrencia
     }, 90_000);
+
+    test('el stock queda en 0 y hay exactamente una reserva viva', async () => {
+        // Que sólo uno haya pasado no alcanza: hay que ver que el inventario
+        // bajó una sola vez y que las reservas rechazadas no dejaron basura.
+        const state = inspectFixture({ productId: fx.productId, reservationUserId: fx.buyerProduct.id });
+        expect(state.product.stock).toBe(0);
+        const alive = state.reservations.filter((r: any) => r.status === 'held' || r.status === 'consumed');
+        expect(alive).toHaveLength(1);
+    }, 60_000);
 });
 
 describe('AGD-02 / EVT — N checkouts simultáneos sobre un evento con capacidad 1', () => {
     test(`exactamente 1 de ${N} createPaymentIntent tiene éxito`, async () => {
+        // Verde por la reserva de `listings.stock` (H3), no por el aforo:
+        // el fixture siembra stock = eventCapacity. Ver la cabecera.
         const r = await raceCheckout(fx.buyerEvent, fx.eventId);
-        // Predicción estática (H0): r.ok === N. En rojo hasta H3+H4.
         expect(r.ok).toBe(1);
     }, 90_000);
 });

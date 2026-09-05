@@ -10,7 +10,10 @@ import {
     decrementStock,
     hasEnoughStock,
     outOfStockMessage,
+    planReservation,
+    remainingToDecrement,
     shortfallFor,
+    type ReservationLine,
     type StockShortfall,
 } from '../_inventory';
 
@@ -108,5 +111,112 @@ describe('outOfStockMessage', () => {
         ]);
         expect(message).toContain('Zapatillas');
         expect(message).toContain('Campera');
+    });
+});
+
+// ===========================================================================
+// RESERVA (H3, E-149 STK-01/STK-03)
+// ===========================================================================
+
+describe('planReservation', () => {
+    const l = (over: Partial<ReservationLine> = {}): ReservationLine => ({
+        listingId: 'l1',
+        title: 'Zapatillas',
+        quantity: 1,
+        available: 5,
+        ...over,
+    });
+
+    it('descuenta lo pedido cuando alcanza', () => {
+        const plan = planReservation([l({ quantity: 2 })]);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        expect(plan.decrements).toEqual([{ listingId: 'l1', quantity: 2, newStock: 3 }]);
+    });
+
+    it('deja el stock en cero cuando se lleva justo lo último', () => {
+        const plan = planReservation([l({ available: 1, quantity: 1 })]);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        expect(plan.decrements[0].newStock).toBe(0);
+    });
+
+    it('rechaza sin descontar nada cuando falta', () => {
+        const plan = planReservation([l({ available: 1, quantity: 2 })]);
+        expect(plan.ok).toBe(false);
+        if (plan.ok) return;
+        expect(plan.shortfalls).toEqual([
+            { listingId: 'l1', title: 'Zapatillas', requested: 2, available: 1 },
+        ]);
+    });
+
+    it('es todo-o-nada: una línea sin stock cancela la reserva entera', () => {
+        // Reservar sólo la línea que alcanza retendría inventario de una compra
+        // que igual se va a rechazar.
+        const plan = planReservation([
+            l({ listingId: 'ok', available: 10, quantity: 1 }),
+            l({ listingId: 'falla', title: 'Campera', available: 0, quantity: 1 }),
+        ]);
+        expect(plan.ok).toBe(false);
+        if (plan.ok) return;
+        expect(plan.shortfalls.map((s) => s.listingId)).toEqual(['falla']);
+    });
+
+    it('acumula las líneas repetidas del mismo listing antes de comparar', () => {
+        // 1 + 1 sobre stock 1 NO alcanza, aunque cada línea suelta sí.
+        const plan = planReservation([
+            l({ available: 1, quantity: 1 }),
+            l({ available: 1, quantity: 1 }),
+        ]);
+        expect(plan.ok).toBe(false);
+        if (plan.ok) return;
+        expect(plan.shortfalls[0].requested).toBe(2);
+    });
+
+    it('las repetidas que sí alcanzan se descuentan una sola vez, sumadas', () => {
+        const plan = planReservation([
+            l({ available: 5, quantity: 2 }),
+            l({ available: 5, quantity: 1 }),
+        ]);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        expect(plan.decrements).toEqual([{ listingId: 'l1', quantity: 3, newStock: 2 }]);
+    });
+
+    it('lo que no lleva inventario no se reserva ni falla', () => {
+        // Bonos y servicios: `available` en undefined. No entran a decrements,
+        // así que el webhook tampoco los verá como ya descontados.
+        const plan = planReservation([
+            l({ listingId: 'bono', available: undefined, quantity: 3 }),
+            l({ listingId: 'servicio', available: null, quantity: 1 }),
+        ]);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        expect(plan.decrements).toEqual([]);
+    });
+
+    it('cantidad cero no reserva', () => {
+        const plan = planReservation([l({ quantity: 0 })]);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        expect(plan.decrements).toEqual([]);
+    });
+});
+
+describe('remainingToDecrement', () => {
+    it('con la reserva cubriendo todo, el webhook no descuenta', () => {
+        expect(remainingToDecrement(2, 2)).toBe(0);
+    });
+
+    it('sin reserva (legacy, mock, o vencida) descuenta todo', () => {
+        expect(remainingToDecrement(3, 0)).toBe(3);
+    });
+
+    it('con reserva parcial descuenta sólo la diferencia', () => {
+        expect(remainingToDecrement(3, 1)).toBe(2);
+    });
+
+    it('una reserva mayor que lo pedido no genera crédito negativo', () => {
+        expect(remainingToDecrement(1, 5)).toBe(0);
     });
 });

@@ -37,7 +37,8 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getActorOrNull, requireActor } from "./authHelpers";
 import { canUseTestMode, publicStripeModes, TEST_MODE_DENIED_MESSAGE } from "./_paymentModeAccess";
 import { classifyPayoutClaim, shouldRetryRelease } from "./_payoutRetry";
-import { decrementStock, hasEnoughStock, outOfStockMessage, shortfallFor } from "./_inventory";
+import { decrementStock, outOfStockMessage, remainingToDecrement, shortfallFor } from "./_inventory";
+import { consumeReservation, loadReservationForCart } from "./stock";
 import { can, denialMessage } from "./_roles";
 import { buildAuditRecord } from "./_audit";
 import { stripeFeeCentsFor } from "./_fees";
@@ -151,9 +152,15 @@ export const getPublicConfig = query({
 type StockIssue = { listingId: string; title: string; requested: number; available: number };
 
 /**
- * Construye el checkout DESDE LA BASE: precio, vendedor, tipo, stock y
- * atribución de influencer salen de `listings`/`cart`/campañas, nunca del
- * cliente. Devuelve el split congelado que después usa el webhook.
+ * Construye el checkout DESDE LA BASE: precio, vendedor, tipo y atribución de
+ * influencer salen de `listings`/`cart`/campañas, nunca del cliente. Devuelve
+ * el split congelado que después usa el webhook.
+ *
+ * NO CHEQUEA STOCK, a propósito (H3). Acá vivía un `hasEnoughStock` que era
+ * media causa raíz de STK-01: una query no puede reservar nada, y además ahora
+ * daría un falso "sin stock" en cada reintento de pago, porque el inventario ya
+ * está descontado por la reserva del propio comprador. La única autoridad sobre
+ * el stock en el checkout es `internal.stock.internalReserveStock`.
  */
 export const internalBuildCheckout = internalQuery({
     args: {
@@ -176,9 +183,7 @@ export const internalBuildCheckout = internalQuery({
         totalCents: number;
         hasBono: boolean;
         attributionRejectedReason: string | null;
-        stockIssues: StockIssue[];
     }> => {
-        const stockIssues: StockIssue[] = [];
 
         // Puntos: se validan contra el saldo real y se convierten a centavos.
         let pointsRedeemed = 0;
@@ -229,10 +234,6 @@ export const internalBuildCheckout = internalQuery({
             const title = listing.title || "Producto";
             const type = String(listing.type || "product").toLowerCase();
             if (type === "bono") hasBono = true;
-
-            if (typeof listing.stock === "number" && !hasEnoughStock(listing.stock, quantity)) {
-                stockIssues.push({ listingId: item.listingId, title, requested: quantity, available: listing.stock });
-            }
 
             const cartRow: any = cartByListing.get(item.listingId);
             const referralCode = item.referralCode ?? cartRow?.snapshot?.referralCode ?? undefined;
@@ -298,7 +299,6 @@ export const internalBuildCheckout = internalQuery({
             totalCents: snapshot.totalCents,
             hasBono,
             attributionRejectedReason,
-            stockIssues,
         };
     },
 });
@@ -369,7 +369,6 @@ export const createPaymentIntent = action({
             shippingCents,
             pointsToRedeem: args.pointsToRedeem,
         });
-        if (built.stockIssues.length > 0) throw new Error(outOfStockMessage(built.stockIssues));
         if (built.totalCents < 0) throw new Error("El monto debe ser mayor a 0");
         if (built.totalCents !== Math.round(args.expectedTotalCents)) {
             throw new Error("El precio cambió. Actualizá el carrito y volvé a intentar.");
@@ -390,104 +389,145 @@ export const createPaymentIntent = action({
         const influencerRate = snapshot.lineItems.reduce((m, l) => Math.max(m, l.influencerRate), 0);
         const commissionRate = totalCents > 0 ? commissionCents / totalCents : 0;
 
+        /**
+         * H3 (STK-01/STK-03) — RESERVA ATÓMICA, ANTES DE COBRAR.
+         *
+         * `internalBuildCheckout` chequeó el stock, pero es una query: no
+         * escribe, y entre ese chequeo y el descuento del webhook cabían N
+         * compradores. Acá el stock se descuenta de verdad, en una mutation
+         * que Convex serializa por OCC. El que no alcanza se entera ahora,
+         * sin tarjeta de por medio.
+         */
+        const reservation = await ctx.runMutation(internal.stock.internalReserveStock, {
+            userId,
+            cartId: args.cartId,
+            mode,
+            lineItems: args.lineItems.map((l) => ({ listingId: l.listingId, quantity: l.quantity })),
+        });
+        if (!reservation.ok) throw new Error(outOfStockMessage(reservation.shortfalls));
+
         let paymentIntentId: string;
         let clientSecret: string | null;
         let status: string;
+        let pointsAwarded = 0;
 
-        if (pointsOnly) {
-            paymentIntentId = `${POINTS_PI_PREFIX}${userId}_${args.cartId}`;
-            clientSecret = null;
-            status = "succeeded";
-        } else if (useMock) {
-            paymentIntentId = mockPaymentIntentId(args.cartId);
-            clientSecret = `mock_secret_${paymentIntentId}`;
-            status = "succeeded";
-        } else {
-            const stripe = getStripe(mode);
-            const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
-            const customerId = customerIdFor(user, mode);
+        try {
+            if (pointsOnly) {
+                paymentIntentId = `${POINTS_PI_PREFIX}${userId}_${args.cartId}`;
+                clientSecret = null;
+                status = "succeeded";
+            } else if (useMock) {
+                paymentIntentId = mockPaymentIntentId(args.cartId);
+                clientSecret = `mock_secret_${paymentIntentId}`;
+                status = "succeeded";
+            } else {
+                const stripe = getStripe(mode);
+                const user = await ctx.runQuery(internal.users.internalGetUserById, { id: userId });
+                const customerId = customerIdFor(user, mode);
 
-            const metadata: Record<string, string> = {
-                userId,
-                cartId: args.cartId,
-                mode,
-                lineItemsCount: String(args.lineItems.length),
-                billingMarket: "US-NY",
-            };
-            if (built.attributionRejectedReason) metadata.attributionRejectedReason = built.attributionRejectedReason;
-            if (args.cardholderName) metadata.cardholderName = args.cardholderName.trim().slice(0, 120);
-            if (args.documentNumber) metadata.documentNumber = args.documentNumber.replace(/\D/g, "").slice(0, 20);
-            if (args.metadata && typeof args.metadata === "object") {
-                for (const [k, val] of Object.entries(args.metadata as Record<string, unknown>)) {
-                    if (val == null || k in metadata) continue;
-                    metadata[k] = String(val).slice(0, 500);
+                const metadata: Record<string, string> = {
+                    userId,
+                    cartId: args.cartId,
+                    mode,
+                    lineItemsCount: String(args.lineItems.length),
+                    billingMarket: "US-NY",
+                };
+                if (built.attributionRejectedReason) metadata.attributionRejectedReason = built.attributionRejectedReason;
+                if (args.cardholderName) metadata.cardholderName = args.cardholderName.trim().slice(0, 120);
+                if (args.documentNumber) metadata.documentNumber = args.documentNumber.replace(/\D/g, "").slice(0, 20);
+                if (args.metadata && typeof args.metadata === "object") {
+                    for (const [k, val] of Object.entries(args.metadata as Record<string, unknown>)) {
+                        if (val == null || k in metadata) continue;
+                        metadata[k] = String(val).slice(0, 500);
+                    }
+                }
+
+                const params: Stripe.PaymentIntentCreateParams = {
+                    amount: totalCents,
+                    currency: "usd",
+                    customer: customerId,
+                    payment_method_types: ["card"],
+                    // SCT: el charge entra al grupo del carrito; los transfers
+                    // posteriores referencian el mismo `transfer_group`.
+                    transfer_group: args.cartId,
+                    metadata,
+                };
+                if (args.tokenId) {
+                    const pm = await stripe.paymentMethods.create({ type: "card", card: { token: args.tokenId } });
+                    params.payment_method = pm.id;
+                    params.confirm = true;
+                }
+
+                try {
+                    const pi = await withStripeBreadcrumb(
+                        { api: "paymentIntents.create", userId, cartId: args.cartId, mode },
+                        () => stripe.paymentIntents.create(params, { idempotencyKey: `pi:${userId}:${args.cartId}` }),
+                    );
+                    paymentIntentId = pi.id;
+                    clientSecret = pi.client_secret;
+                    status = pi.status;
+                } catch (error: any) {
+                    console.error("[Stripe] paymentIntents.create failed:", error);
+                    throw new Error(`Error al procesar el pago: ${stripeErrorMessage(error)}`);
                 }
             }
 
-            const params: Stripe.PaymentIntentCreateParams = {
-                amount: totalCents,
-                currency: "usd",
-                customer: customerId,
-                payment_method_types: ["card"],
-                // SCT: el charge entra al grupo del carrito; los transfers
-                // posteriores referencian el mismo `transfer_group`.
-                transfer_group: args.cartId,
-                metadata,
-            };
-            if (args.tokenId) {
-                const pm = await stripe.paymentMethods.create({ type: "card", card: { token: args.tokenId } });
-                params.payment_method = pm.id;
-                params.confirm = true;
-            }
-
-            try {
-                const pi = await withStripeBreadcrumb(
-                    { api: "paymentIntents.create", userId, cartId: args.cartId, mode },
-                    () => stripe.paymentIntents.create(params, { idempotencyKey: `pi:${userId}:${args.cartId}` }),
-                );
-                paymentIntentId = pi.id;
-                clientSecret = pi.client_secret;
-                status = pi.status;
-            } catch (error: any) {
-                console.error("[Stripe] paymentIntents.create failed:", error);
-                throw new Error(`Error al procesar el pago: ${stripeErrorMessage(error)}`);
-            }
-        }
-
-        await ctx.runMutation(internal.finance.createPaymentRecord, {
-            userId,
-            stripePaymentIntentId: paymentIntentId,
-            status: status === "succeeded" ? "succeeded_in_escrow" : "pending",
-            provider: pointsOnly ? "points" : "stripe",
-            amount: totalCents / 100,
-            providerFee: snapshot.feeCents / 100,
-            sellerNet: sellerNetCents / 100,
-            ramgosCommission: commissionCents / 100,
-            influencerAmount: influencerCents / 100,
-            influencerId,
-            commissionRate,
-            influencerRate,
-            description: args.description || snapshot.lineItems[0]?.title || "Pago Ramgos",
-            mode,
-            cartId: args.cartId,
-            amountCents: totalCents,
-            commissionCents,
-            influencerCents,
-            providerFeeEstimatedCents: snapshot.feeCents,
-            sellerNetCents,
-            attributionRejectedReason: built.attributionRejectedReason ?? undefined,
-            shipping: args.shipping,
-            checkoutSnapshot: snapshot,
-        });
-
-        let pointsAwarded = 0;
-        if (useMock || pointsOnly) {
-            // No llega webhook: procesamos el checkout ahora mismo.
-            const result = await ctx.runMutation(internal.stripe.internalProcessPaidCheckout, {
+            await ctx.runMutation(internal.finance.createPaymentRecord, {
+                userId,
                 stripePaymentIntentId: paymentIntentId,
+                status: status === "succeeded" ? "succeeded_in_escrow" : "pending",
+                provider: pointsOnly ? "points" : "stripe",
+                amount: totalCents / 100,
+                providerFee: snapshot.feeCents / 100,
+                sellerNet: sellerNetCents / 100,
+                ramgosCommission: commissionCents / 100,
+                influencerAmount: influencerCents / 100,
+                influencerId,
+                commissionRate,
+                influencerRate,
+                description: args.description || snapshot.lineItems[0]?.title || "Pago Ramgos",
                 mode,
+                cartId: args.cartId,
+                amountCents: totalCents,
+                commissionCents,
+                influencerCents,
+                providerFeeEstimatedCents: snapshot.feeCents,
+                sellerNetCents,
+                attributionRejectedReason: built.attributionRejectedReason ?? undefined,
+                shipping: args.shipping,
+                checkoutSnapshot: snapshot,
             });
-            pointsAwarded = result.pointsAwarded;
+
+            if (useMock || pointsOnly) {
+                // No llega webhook: procesamos el checkout ahora mismo.
+                const result = await ctx.runMutation(internal.stripe.internalProcessPaidCheckout, {
+                    stripePaymentIntentId: paymentIntentId,
+                    mode,
+                });
+                pointsAwarded = result.pointsAwarded;
+            }
+        } catch (error) {
+            /**
+             * Compensación: la reserva ya descontó stock y acá no va a haber
+             * cobro. Devolverlo ahora — y no dentro de 30 minutos cuando pase
+             * el cron — es la diferencia entre "no hay stock" y "sí hay" para
+             * el próximo comprador. Si el pago del PI llegara igual (el
+             * cliente nunca recibió el clientSecret, pero no es imposible), el
+             * webhook cae al camino sin reserva: descuenta acotado en 0 y
+             * anota el faltante, que es la política de después de cobrar.
+             *
+             * `reused` marca que la reserva la creó un intento ANTERIOR del
+             * mismo carrito (tarjeta rechazada y el comprador reintenta): ese
+             * intento sigue siendo dueño del stock y su PI todavía se puede
+             * pagar. Liberarlo acá abriría la sobreventa que H3 cierra.
+             */
+            if (!reservation.reused) {
+                await ctx.runMutation(internal.stock.internalReleaseReservationById, {
+                    reservationId: reservation.reservationId,
+                    reason: "checkout_failed",
+                });
+            }
+            throw error;
         }
 
         return { clientSecret, paymentIntentId, status, isMock: useMock, mode, pointsAwarded };
@@ -694,6 +734,24 @@ export const internalProcessPaidCheckout = internalMutation({
         const shipping = payment.shipping;
         let firstOrderId: Id<"orders"> | null = null;
 
+        /**
+         * H3: lo que el checkout ya reservó NO se vuelve a descontar.
+         *
+         * Sin reserva (pago legacy sin `cartId`, o reserva vencida que el cron
+         * ya devolvió) el mapa queda vacío y esto se comporta exactamente como
+         * antes: descontar acotado en 0 y anotar el faltante. El dinero ya
+         * está cobrado; acá no se rechaza nada.
+         */
+        const reservation = payment.cartId
+            ? await loadReservationForCart(ctx, { userId: payment.userId, cartId: payment.cartId })
+            : null;
+        const reservedByListing = new Map<string, number>();
+        if (reservation?.status === "held") {
+            for (const line of reservation.lines) {
+                reservedByListing.set(line.listingId, (reservedByListing.get(line.listingId) ?? 0) + line.quantity);
+            }
+        }
+
         for (const seller of snapshot.sellers) {
             const lines = snapshot.lineItems.filter((l) => l.sellerId === seller.sellerId);
             const items: Array<{ listingId: string; title: string; quantity: number; price: number; image?: string }> = [];
@@ -711,16 +769,23 @@ export const internalProcessPaidCheckout = internalMutation({
                 if (!listingId) continue;
                 const listing: any = await ctx.db.get(listingId);
                 if (!listing || typeof listing.stock !== "number") continue;
-                const missing = shortfallFor(listing.stock, line.quantity);
+
+                // Lo reservado ya salió del inventario al crear el PI.
+                const reserved = reservedByListing.get(line.listingId) ?? 0;
+                const pending = remainingToDecrement(line.quantity, reserved);
+                reservedByListing.set(line.listingId, Math.max(0, reserved - line.quantity));
+                if (pending === 0) continue;
+
+                const missing = shortfallFor(listing.stock, pending);
                 if (missing > 0) {
                     shortfalls.push({
                         listingId: line.listingId,
                         title: line.title ?? "Producto",
-                        requested: line.quantity,
+                        requested: pending,
                         available: listing.stock,
                     });
                 }
-                await ctx.db.patch(listingId, { stock: decrementStock(listing.stock, line.quantity) });
+                await ctx.db.patch(listingId, { stock: decrementStock(listing.stock, pending) });
             }
 
             const listingType = lines[0]?.type || "product";
@@ -778,6 +843,11 @@ export const internalProcessPaidCheckout = internalMutation({
                 await ctx.scheduler.runAfter(0, internal.bonos.internalIssueBonosForOrder, { orderId });
             }
         }
+
+        // La reserva pasa a `consumed` en la MISMA transacción que crea las
+        // órdenes: si esto falla, el stock sigue reservado y el cron lo
+        // devuelve. Nunca queda descontado sin orden ni al revés.
+        if (reservation) await consumeReservation(ctx, reservation, args.stripePaymentIntentId);
 
         const totalSellerNet = snapshot.sellers.reduce((a, s) => a + s.sellerNetCents, 0);
         await ctx.db.patch(payment._id, {

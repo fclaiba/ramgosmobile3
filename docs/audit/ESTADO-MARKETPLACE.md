@@ -1,4 +1,4 @@
-# Estado del marketplace — 2026-09-04 (208ab3c)
+# Estado del marketplace — 2026-09-04 (208ab3c), actualizado 2026-09-05 (H3)
 
 Auditoría de integridad transaccional. Evidencia estática en `docs/audit/audit-report.{json,md}`
 (scanner `scripts/audit/marketplace-audit.mjs`, 124 archivos, 543 límites transaccionales);
@@ -6,10 +6,12 @@ falsación en `tests/audit/`. Toda afirmación lleva `archivo:línea`; sin evide
 
 ## 1. Veredicto ejecutivo
 
-**Se puede sobrevender un producto de unidad única, y hoy pasa por diseño.** El stock se chequea en
-`createPaymentIntent` (una action, antes de cobrar) y se descuenta en el webhook (una mutation,
-después de cobrar); entre ambos no hay reserva. N compradores concurrentes sobre stock 1 pagan los N;
-el código lo sabe, lo registra en `orders.stockShortfall` y lo loguea — pero nadie lo lee.
+**~~Se puede sobrevender un producto de unidad única, y hoy pasa por diseño.~~ Cerrado en H3
+(2026-09-05).** El stock se chequeaba en `createPaymentIntent` (una action, antes de cobrar) y se
+descontaba en el webhook (una mutation, después de cobrar); entre ambos no había reserva, así que N
+compradores concurrentes sobre stock 1 pagaban los N. Ahora `internal.stock.internalReserveStock`
+chequea y descuenta en la misma transacción antes de cobrar: el que no alcanza se entera sin tarjeta
+de por medio. Detalle en §3.
 
 **Un bono reembolsado sigue siendo canjeable.** El refund no toca `bonoRedemptions`: el comprador
 recupera los $50 y conserva $100 de crédito. El negocio paga la diferencia.
@@ -24,15 +26,18 @@ negocios reales. Cualquiera con la URL del deployment (está en el bundle) puede
 **Lo que sí está sólido:** pagos, escrow, reembolsos de dinero, reversión de transfers, idempotencia
 de webhooks y canje de bonos. Es el módulo con más tests y el único con máquina de estados aplicada.
 
-**¿Abrir al público hoy?** Sí para productos con stock > 1 y bonos, **con 3 condiciones**: cerrar los
-seeds públicos (30 min), cancelar el bono en el refund (1 h), y no vender unidades únicas ni eventos
-hasta tener reserva atómica. Agenda de turnos: no existe, no aplica.
+**¿Abrir al público hoy?** Las tres condiciones originales están cumplidas: seeds públicos cerrados
+(H1), bono cancelado en el refund (H2) y reserva atómica de stock (H3) — con eso, productos de
+unidad única incluidos. **Queda un bloqueante fuera del catálogo original**: la escalación de
+privilegios de `syncUser` (§3, hallazgo nuevo de H1), que no es de integridad transaccional pero sí
+de apertura al público. **Eventos: siguen sin vender** hasta H4 (aforo real + QR). Agenda de turnos:
+no existe, no aplica.
 
 ## 2. Tablero de madurez
 
 | Área | Nivel | Invariantes críticos rotos | Riesgo |
 |---|---|---|---|
-| Stock | **2** — Camino feliz | STK-01, STK-03 (STK-02 y STK-05 en 3) | **Alto** para unidad única; Medio para stock > 1 |
+| Stock | **4** (H3, 2026-09-05) — antes 2 | ninguno crítico (STK-06 y STK-10 siguen en su nivel) | Bajo. La sobreventa por diseño está cerrada: reserva atómica antes de cobrar |
 | Agenda | **0-1** — Inexistente / esbozada | AGD-01, AGD-02, AGD-05, AGD-08 (feature no construida); eventos: capacidad desconectada | Bajo (turnos) / **Alto** (eventos) |
 | Pagos y reembolsos | **3** — Robusto | PAY-05 (efectos colaterales) | Medio |
 | Bonos | **3** con un agujero | BON-07 | **Alto** (pérdida directa del negocio) |
@@ -47,6 +52,12 @@ hasta tener reserva atómica. Agenda de turnos: no existe, no aplica.
 - **Escenario de falla concreto:** (1) producto usado con `stock: 1`; (2) A y B tocan "Pagar" con 3 s de diferencia — ambos `createPaymentIntent` leen stock 1 y crean PI; (3) ambos confirman tarjeta; (4) llegan dos `payment_intent.succeeded`; (5) primera mutation: stock 1→0, orden A; segunda: shortfall 1, stock 0, orden B en `paid_escrow` con `stockShortfall: [{requested:1, available:0}]`; (6) el vendedor ve dos órdenes pagadas por un solo artículo.
 - **Impacto económico:** el vendedor tiene que cancelar y reembolsar B a mano (la comisión de Stripe del cobro no se recupera: ~3% + fijo por orden fallida), y hasta que alguien lo note la plata de B está en escrow. Con `marketplace-auto-release` (`crons.ts:22`) a los N días **la orden B se libera al vendedor igual**: cobra dos veces por un artículo.
 - **Corrección mínima:** una mutation `reserveStock` (check-and-decrement + fila de reserva con TTL) llamada desde `createPaymentIntent` **antes** de `paymentIntents.create`; el webhook consume la reserva en vez de descontar; un cron libera reservas vencidas (PI `canceled`/`payment_failed`). Mientras tanto: que `internalProcessPaidCheckout` programe un refund automático cuando `shortfalls.length > 0` (`internalRefundOrder` ya existe, L1722) y avise a admins.
+- **✅ H3 (2026-09-05) — nivel 4.** Implementado exactamente eso, en `convex/stock.ts` + tabla `stockReservations`:
+  - `internalReserveStock` chequea y descuenta en UNA mutation (serializable por OCC) desde `createPaymentIntent`, **antes** de `paymentIntents.create`. Idempotente por `(cartId, userId)` — el mismo par que forma la idempotency key del PI —, así que reintentar el pago con la misma pantalla reusa la reserva y extiende su TTL en vez de descontar de nuevo.
+  - El webhook ya no descuenta lo reservado: `remainingToDecrement(line.quantity, reservado)` da 0 y la reserva pasa a `consumed` **en la misma transacción** que crea las órdenes. Sin reserva (pago legacy, mock, o TTL vencido) se comporta como antes — descuenta acotado en 0 y anota `stockShortfall` —, que es la política de `_inventory.ts` para después de cobrar.
+  - Devolución del stock por cuatro caminos: salir del checkout (`stock.releaseMyCheckoutReservation`, llamada desde el unmount de `PaymentScreen`), fallo al crear el PI (compensación en el `catch`), `payment_intent.payment_failed`/`canceled`, y el cron `expire-stock-reservations` cada 5 min con TTL de 30 min.
+  - **Se eliminó el pre-check de stock de `internalBuildCheckout`** (era `stripe.ts:233`, media causa raíz del hallazgo): una query no reserva nada, y tras H3 daría un falso "sin stock" en cada reintento de pago porque el inventario ya está descontado por la reserva del propio comprador. Fuente única: la reserva.
+  - Por qué el backlog #3 (refund automático ante `shortfalls`) queda como estaba: ya no hay camino que genere `stockShortfall` en una compra con reserva viva. Sigue siendo el plan B correcto para el caso de TTL vencido, y por eso no se cierra.
 
 ### [BON-07 / PAY-05] El reembolso no cancela el bono
 - **Nivel:** 1 — Esbozado (el estado `cancelled` existe en el guard, nadie lo escribe)
@@ -123,13 +134,13 @@ hasta tener reserva atómica. Agenda de turnos: no existe, no aplica.
 
 | Invariante | Test | Esperado | Obtenido | Veredicto |
 |---|---|---|---|---|
-| STK-01 / STK-03 | `invariants.pure.test.ts` — modelo puro de la secuencia action→pago→mutation, 5 compradores, stock 1 | 1 orden | **5 órdenes, 4 con shortfall** (`expect(r.orders).toHaveLength(5)` pasa) | **ROTO** (modelo fiel de `stripe.ts:233` y `:713-723`; no es ejecución contra Convex) |
+| STK-01 / STK-03 | `invariants.pure.test.ts` — modelo puro, 5 compradores, stock 1 | 1 orden | **1 orden, 4 rechazos, 0 shortfalls** (`checkoutRaceReserved`) | ✅ **Cumplido (H3)**. El modelo de la secuencia vieja se conserva en el mismo archivo (`checkoutRaceLegacy`, 5 órdenes) como test de regresión |
 | STK-02 | ídem | stock ≥ 0 | stock 0 | Cumplido |
 | BON-07 | `invariants.pure.test.ts` — `isRefundable('released')` | false para bono canjeado | `true` (sin cambios: la máquina no se tocó, ver `_escrowStates.ts`) | Ya no es el veredicto vigente — la guarda vive en `internalBeginOrderRefund`, ver H2 abajo |
 | PAY-04 | ídem — `isRefundable('refund_pending')` | false | false | Cumplido |
 | BON-01 | `concurrency.integration.test.ts` — 5 canjes simultáneos contra `oceanic-goose-862` | 1 éxito | **1 éxito, 4 rechazos** | ✅ **Cumplido — sube a nivel 4** (H0, 2026-09-04) |
-| AGD-02 / STK-04 | ídem — 5 `createPaymentIntent` simultáneos sobre un evento con capacidad 1 (re-apuntado al checkout real) | 1 éxito | **5 éxitos** | ❌ **ROTO, verificado empíricamente** (H0). Cierra en H3+H4 |
-| STK-03 | ídem — 5 `createPaymentIntent` simultáneos sobre un producto con stock 1 | 1 éxito | **5 éxitos** | ❌ **ROTO, verificado empíricamente** (H0). La predicción estática era exacta. Cierra en H3 |
+| AGD-02 / STK-04 | ídem — 5 `createPaymentIntent` simultáneos sobre un evento con capacidad 1 (re-apuntado al checkout real) | 1 éxito | **5 éxitos** (H0) | 🟡 **H3 lo frena por `listings.stock`** (el fixture siembra `stock = eventCapacity`), pero el aforo real sigue sin conectarse: un evento con `stock` alto y `eventCapacity` bajo se sobrevende igual, y no se emite QR. **Cierra en H4** |
+| STK-03 | ídem — 5 `createPaymentIntent` simultáneos sobre un producto con stock 1 | 1 éxito | **5 éxitos** (H0) → **pendiente de re-correr con H3** | 🟡 Código en verde en el modelo puro; falta la corrida contra `ramgos-audit` (necesita deploy, ver §8) |
 | PAY-01 / STK-05 | ídem — mismo evento firmado entregado dos veces | 1 fila en `paymentEvents` | **1 fila** | ✅ **Cumplido — sube a nivel 4** (H0) |
 
 Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed · 4 skipped, 7 passed`.
@@ -161,9 +172,9 @@ Salida de `npx jest tests/audit` (auditoría, 2026-09-04): `1 skipped, 1 passed 
 | 1 | ✅ **Hecho (H1)** `seedMockBonos`, `seed5Bonos` y `seedBusinessInviteInfluencer1` → `internalMutation` + test de regresión | TRV-01 | Alto: crédito falso en negocios reales | 30 min | **Sí** |
 | 1b | 🔴 **Nuevo, no resuelto**: `syncUser` permite altas con `role` arbitrario (escalación a admin) | — (fuera del catálogo original) | **Crítico** | ~1 h, requiere decisión de política | **Sí** |
 | 2 | ✅ **Hecho (H2)** Cancelar bono `issued` en `internalBeginOrderRefund`; rechazar refund de bono `redeemed` sin `force` | BON-07, PAY-05 | Alto: $100 por bono, lo paga el negocio | 1-2 h | **Sí** |
-| 3 | Refund automático + aviso a admins cuando `shortfalls.length > 0` en `internalProcessPaidCheckout` (reusar `internalRefundOrder` y el patrón de notificación de E-146) | STK-01, TRV-04 | Alto: hoy la orden sobrevendida se libera al vendedor por cron | 2 h | **Sí** si venden unidades únicas |
-| 4 | Reserva atómica: `reserveStock` (check-and-decrement + TTL) desde `createPaymentIntent`; el webhook consume; cron libera vencidas | STK-01, STK-03, STK-04 | Alto | 1-2 días | Sí para usados / unidad única |
-| 5 | Conectar eventos: emitir `eventReservations` desde `internalProcessPaidCheckout` (junto al bono, L778) y aforo vía la reserva del #4 | AGD-06, STK-04 | Alto para eventos | 1 día (con #4) | **Sí** para vender eventos |
+| 3 | Refund automático + aviso a admins cuando `shortfalls.length > 0` en `internalProcessPaidCheckout` (reusar `internalRefundOrder` y el patrón de notificación de E-146) | STK-01, TRV-04 | Medio tras H3: con reserva viva ya no se genera shortfall; queda como plan B del TTL vencido | 2 h | No |
+| 4 | ✅ **Hecho (H3)** Reserva atómica: `internal.stock.internalReserveStock` (check-and-decrement + TTL) desde `createPaymentIntent`; el webhook consume; cron libera vencidas | STK-01, STK-03, STK-04 | Alto | 1-2 días | **Ya no** |
+| 5 | Conectar eventos (**H4, siguiente**): emitir `eventReservations` desde `internalProcessPaidCheckout` (junto al bono, L778) y hacer que la reserva de #4 mire `eventCapacity`/`eventSoldCount` y no sólo `listings.stock` | AGD-06, STK-04 | Alto para eventos | 1 día (la mitad ya la puso H3) | **Sí** para vender eventos |
 | 6 | No aplicar check de stock a `bono`/`service` sin inventario (o default 9999 en el cliente y guard por tipo en `stripe.ts:233` como en `cart.ts:92`) | STK-* nuevo | Medio: subventa silenciosa | 1 h | No |
 | 7 | Query admin + fila en `AdminFinanceScreen` para órdenes con `stockShortfall` | TRV-04 | Medio | 2 h | No (cubierto por #3) |
 | 8 | 🟡 **H0 hecho**: corre contra `ramgos-audit`/`oceanic-goose-862`, sin skip. Falta cargar los 4 secrets en GitHub para que el job `audit-concurrency` de CI se ejecute (ver `tests/audit/README.md`) | TRV-02 | Medio: evita la próxima E-146 | 15 min restantes | No |

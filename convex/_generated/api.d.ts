@@ -105,6 +105,7 @@ import type * as social_mentions from "../social/mentions.js";
 import type * as social_moderation from "../social/moderation.js";
 import type * as social_moderationText from "../social/moderationText.js";
 import type * as social_scoring from "../social/scoring.js";
+import type * as stock from "../stock.js";
 import type * as stripe from "../stripe.js";
 import type * as stripeClient from "../stripeClient.js";
 import type * as subscriptions from "../subscriptions.js";
@@ -219,6 +220,7 @@ declare const fullApi: ApiFromModules<{
   "social/moderation": typeof social_moderation;
   "social/moderationText": typeof social_moderationText;
   "social/scoring": typeof social_scoring;
+  stock: typeof stock;
   stripe: typeof stripe;
   stripeClient: typeof stripeClient;
   subscriptions: typeof subscriptions;

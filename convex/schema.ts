@@ -830,6 +830,41 @@ export default defineSchema({
         .index("by_stripe_intent", ["stripePaymentIntentId"])
         .index("by_status", ["status"]),
 
+    /**
+     * Reserva de stock del checkout (H3, E-149 STK-01/STK-03).
+     *
+     * El stock se descuenta ACÁ, en la misma transacción que lo chequea y
+     * antes de cobrar; el webhook después consume la reserva en vez de volver
+     * a descontar. Una fila por intento de checkout (no por línea): la reserva
+     * es todo-o-nada sobre el carrito.
+     *
+     * `cartId` + `userId` es la clave de idempotencia — el mismo par que usa
+     * la idempotency key del PaymentIntent (`pi:{userId}:{cartId}`), así un
+     * reintento del mismo checkout reusa la reserva en vez de duplicarla.
+     */
+    stockReservations: defineTable({
+        cartId: v.string(),
+        userId: v.string(),
+        mode: stripeModeValidator,
+        // Se completa cuando se conoce el PI; sólo traza para auditoría.
+        stripePaymentIntentId: v.optional(v.string()),
+        lines: v.array(v.object({
+            listingId: v.string(),
+            title: v.string(),
+            quantity: v.number(),
+        })),
+        status: v.union(v.literal('held'), v.literal('consumed'), v.literal('released')),
+        expiresAt: v.number(),
+        createdAt: v.number(),
+        consumedAt: v.optional(v.number()),
+        releasedAt: v.optional(v.number()),
+        releaseReason: v.optional(v.string()),
+    })
+        .index("by_cart_and_user", ["cartId", "userId"])
+        .index("by_payment_intent", ["stripePaymentIntentId"])
+        // El cron barre `held` vencidas: rango sobre expiresAt, sin full scan.
+        .index("by_status_and_expires", ["status", "expiresAt"]),
+
     paymentEvents: defineTable({
         stripeEventId: v.string(),
         eventType: v.string(),

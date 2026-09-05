@@ -10,6 +10,7 @@
 | --- | --- |
 | Cobro | `PaymentIntent` V1 en la cuenta **plataforma** (Separate Charges & Transfers). Sin `transfer_data`. `transfer_group = cartId`. |
 | Split | Calculado en el servidor desde la base (`convex/_split.ts`): comisión **por línea** (10% productos/servicios, 30% bonos), influencer por línea (campaña activa → promoción abierta → whitelist), envío al primer vendedor, fee de Stripe **real** prorrateada por mayor resto. Σ = total cobrado, siempre. |
+| Stock | **Reserva atómica antes de cobrar** (`internal.stock.internalReserveStock`): chequear y descontar ocurren en la MISMA mutation, así que N compradores simultáneos sobre stock 1 se resuelven en uno. El webhook consume la reserva; no vuelve a descontar. Sin pago vuelve al inventario: al salir del checkout (`stock.releaseMyCheckoutReservation`), con `payment_intent.payment_failed`/`canceled`, o por el cron `expire-stock-reservations` a los 30 min. |
 | Órdenes | El webhook `payment_intent.succeeded` crea **una orden por vendedor** desde el snapshot congelado al crear el PI. Idempotente por PI. |
 | Escrow | La plata queda en el balance de la plataforma (`escrowState = held`). Se libera al confirmar recepción, por admin, por disputa a favor del vendedor, o por cron (productos 10 días, bonos 1 día, eventos +24h, servicios 7 días). |
 | Transfer al vendedor | `transfers.create({ destination, source_transaction: charge, transfer_group, idempotencyKey: release:{orderId}:seller })`. Un solo camino: `internalReleaseOrderEscrow`. Si Stripe rechaza, la orden vuelve a `held` con `escrowReleaseError` visible. |
@@ -56,6 +57,7 @@ URL: `/stripe-webhook` (live) o `/stripe-webhook-test` (test). Eventos:
 ```
 payment_intent.succeeded
 payment_intent.payment_failed
+payment_intent.canceled
 charge.refunded
 charge.dispute.created
 charge.dispute.closed

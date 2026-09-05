@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { ArrowLeft, Shield, FlaskConical, Zap, Lock, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { PaymentForm } from '../payments/components/PaymentForm';
 import { PaymentSuccessBurst } from '../payments/components/PaymentSuccessBurst';
@@ -83,6 +83,31 @@ export default function PaymentScreen({ navigation, route }: any) {
         const t = setTimeout(() => setConfirmTimedOut(true), CONFIRM_TIMEOUT_MS);
         return () => clearTimeout(t);
     }, [paidIntentId, orderConfirmed]);
+
+    /**
+     * Salir del checkout sin pagar devuelve el stock reservado (H3).
+     *
+     * `createPaymentIntent` reserva el stock de verdad — lo descuenta — antes
+     * de cobrar, y `cartId` se genera de nuevo en cada montaje de esta
+     * pantalla. Sin esto, entrar al checkout de un producto de unidad única,
+     * arrepentirse y volver a entrar te choca con TU PROPIA reserva: "se quedó
+     * sin stock" durante los 30 minutos del TTL. El cron es la red para el
+     * caso en que la app se cierre de golpe y este cleanup no llegue a correr.
+     */
+    const releaseReservation = useMutation(api.stock.releaseMyCheckoutReservation);
+    const abandonRef = useRef({ paid: false, sessionToken, cartId, release: releaseReservation });
+    abandonRef.current = { paid: !!paidIntentId, sessionToken, cartId, release: releaseReservation };
+    useEffect(() => {
+        // Sin dependencias a propósito: corre SÓLO al desmontar, y lee el
+        // estado más reciente por ref.
+        return () => {
+            const { paid, sessionToken: token, cartId: cart, release } = abandonRef.current;
+            if (paid) return; // pagó: la reserva la consume el webhook
+            release({ sessionToken: token, cartId: cart }).catch(() => {
+                // Best-effort: si falla, el cron la devuelve al vencer el TTL.
+            });
+        };
+    }, []);
 
     const { colorScheme } = useTheme();
     const dark = colorScheme === 'dark';

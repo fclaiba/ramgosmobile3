@@ -196,6 +196,25 @@ async function handleSnapshotEvent(ctx: any, mode: StripeMode, event: Stripe.Eve
                 stripePaymentIntentId: pi.id,
                 status: "failed",
             });
+            // El stock reservado al crear el PI vuelve al inventario ahora, sin
+            // esperar al cron (H3).
+            await ctx.runMutation(internal.stock.internalReleaseReservationForPayment, {
+                stripePaymentIntentId: pi.id,
+                reason: "payment_failed",
+            });
+            break;
+        }
+
+        case "payment_intent.canceled": {
+            const pi = event.data.object as Stripe.PaymentIntent;
+            await ctx.runMutation(internal.finance.updatePaymentByIntentId, {
+                stripePaymentIntentId: pi.id,
+                status: "failed",
+            });
+            await ctx.runMutation(internal.stock.internalReleaseReservationForPayment, {
+                stripePaymentIntentId: pi.id,
+                reason: "payment_canceled",
+            });
             break;
         }
 

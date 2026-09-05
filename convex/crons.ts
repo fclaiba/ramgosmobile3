@@ -30,6 +30,11 @@ crons.cron(
     {},
 );
 
+// Reservas de stock sin pago (H3): el techo real de retención es TTL + este
+// intervalo. Frecuente a propósito — cada minuto de más es stock que el
+// próximo comprador ve como agotado.
+crons.interval("expire-stock-reservations", { minutes: 5 }, internal.stock.internalReleaseExpiredReservations, {});
+
 crons.interval("expire-stories", { hours: 1 }, internal.social.internalExpireStories, {});
 
 crons.interval("dm-sweep-ephemeral", { minutes: 15 }, internal.social.dm.cleanupEphemeral, {});

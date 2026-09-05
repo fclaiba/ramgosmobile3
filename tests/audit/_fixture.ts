@@ -79,8 +79,14 @@ export type Fixture = {
 export const seedFixture = (args?: { productStock?: number; eventCapacity?: number }): Fixture =>
     convexRun('audit/fixtures:seed', args ?? {});
 export const resetFixture = (): { deleted: number } => convexRun('audit/fixtures:reset');
-export const inspectFixture = (args: { productId?: string; eventId?: string; bonoId?: string; stripeEventId?: string }) =>
-    convexRun('audit/fixtures:inspect', args);
+export const inspectFixture = (args: {
+    productId?: string;
+    eventId?: string;
+    bonoId?: string;
+    orderId?: string;
+    stripeEventId?: string;
+    reservationUserId?: string;
+}) => convexRun('audit/fixtures:inspect', args);
 
 export async function settle<T>(ps: Array<Promise<T>>) {
     const r = await Promise.allSettled(ps);

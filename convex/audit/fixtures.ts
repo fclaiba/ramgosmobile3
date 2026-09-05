@@ -233,6 +233,7 @@ export const inspect = internalQuery({
         bonoId: v.optional(v.string()),
         orderId: v.optional(v.string()),
         stripeEventId: v.optional(v.string()),
+        reservationUserId: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const get = async (table: string, id?: string) => (id ? await ctx.db.get(ctx.db.normalizeId(table as any, id) as any) : null);
@@ -248,7 +249,21 @@ export const inspect = internalQuery({
         const auditLogs = args.orderId
             ? (await ctx.db.query("audit_logs").collect()).filter((l: any) => l.metadata?.orderId === args.orderId)
             : [];
+        // Reservas de stock del comprador (H3): sin índice por userId a
+        // propósito — la clave real es (cartId, userId) y esto es un helper de
+        // test sobre un deployment con cuatro filas, no una query de producto.
+        const reservations = args.reservationUserId
+            ? (await ctx.db.query("stockReservations").collect()).filter(
+                  (r: any) => String(r.userId) === args.reservationUserId,
+              )
+            : [];
+
         return {
+            reservations: reservations.map((r: any) => ({
+                status: r.status,
+                lines: r.lines,
+                releaseReason: r.releaseReason ?? null,
+            })),
             product: product ? { stock: product.stock, available: product.available ?? null } : null,
             event: event ? { stock: event.stock, eventCapacity: event.eventCapacity, eventSoldCount: event.eventSoldCount } : null,
             bono: bono ? { status: bono.status } : null,
@@ -294,7 +309,7 @@ export const reset = internalMutation({
                 for (const d of (await (ctx.db as any).query(t).collect()).filter((d: any) => userIds.has(String(d.userId ?? d.buyerId ?? d.ownerUserId ?? "")))) {
                     await ctx.db.delete(d._id); deleted++;
                 }
-            } catch { /* stockReservations llega en H3; hasta entonces no existe */ }
+            } catch { /* tabla ausente en un deployment viejo: no es motivo para abortar el reset */ }
         }
         for (const e of (await ctx.db.query("paymentEvents").collect()).filter((e: any) => String(e.stripeEventId).startsWith("evt_audit_"))) {
             await ctx.db.delete(e._id); deleted++;
